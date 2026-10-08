@@ -1,0 +1,8 @@
+sqlalchemy
+pydantic>=2.0
+pandas
+fastapi
+uvicorn
+streamlit
+pytest
+openpyxl

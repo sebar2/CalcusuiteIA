@@ -1,0 +1,391 @@
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { Sidebar } from './components/layout/Sidebar';
+import type { ActiveTab } from './components/layout/Sidebar';
+import { TopHeader } from './components/layout/TopHeader';
+import { SettingsModal } from './components/common/SettingsModal';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { apiService, setCurrentAuthContext } from './services/api';
+import { ThemeProvider } from './context/ThemeContext';
+
+const ControlRoomView = lazy(() => import('./views/ControlRoomView').then(m => ({ default: m.ControlRoomView })));
+const SupplyKanbanView = lazy(() => import('./views/SupplyKanbanView').then(m => ({ default: m.SupplyKanbanView })));
+const PricingAnalyticsView = lazy(() => import('./views/PricingAnalyticsView').then(m => ({ default: m.PricingAnalyticsView })));
+const InitiativesEvaluatorView = lazy(() => import('./views/InitiativesEvaluatorView').then(m => ({ default: m.InitiativesEvaluatorView })));
+const TendersView = lazy(() => import('./views/TendersView').then(m => ({ default: m.TendersView })));
+const CommercialKanbanView = lazy(() => import('./views/CommercialKanbanView').then(m => ({ default: m.CommercialKanbanView })));
+const MultiLocationStockView = lazy(() => import('./views/MultiLocationStockView').then(m => ({ default: m.MultiLocationStockView })));
+const VarianceScenariosView = lazy(() => import('./views/VarianceScenariosView').then(m => ({ default: m.VarianceScenariosView })));
+const ExecutiveReportsView = lazy(() => import('./views/ExecutiveReportsView').then(m => ({ default: m.ExecutiveReportsView })));
+const EtlIngestView = lazy(() => import('./views/EtlIngestView').then(m => ({ default: m.EtlIngestView })));
+
+const ViewLoading = () => (
+  <div className="h-96 flex flex-col items-center justify-center space-y-3 text-slate-400">
+    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    <span className="text-xs font-medium tracking-wide">Cargando módulo Calcu...</span>
+  </div>
+);
+import type { 
+  InventoryAlertItem, 
+  MarginSummaryItem, 
+  UserPreferences,
+  UserRole,
+  EngineMode
+} from './types';
+
+export function AppContent() {
+  // Estado de Layout & Navegación
+  const [activeTab, setActiveTab] = useState<ActiveTab>('control_room');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [currentRole, setCurrentRole] = useState<UserRole>('controller_admin');
+
+  // Modo de Inferencia (Módulo 1: Zero Fallback Silencioso)
+  const [engineMode, setEngineMode] = useState<EngineMode>('auto');
+
+  const handleRoleChange = (role: string) => {
+    setCurrentRole(role as UserRole);
+    setCurrentAuthContext(role, 'default_user');
+  };
+
+  const handleEngineModeChange = (mode: EngineMode) => {
+    setEngineMode(mode);
+    apiService.saveUserPreferences({
+      user_id: preferences.user_id || 'default_user',
+      default_engine_mode: mode,
+    }).catch((err) => console.warn('Could not auto-save engine mode preference', err));
+  };
+
+  // Filtros Globales (Sincronizados con Chips del TopHeader)
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [onlyAlerts, setOnlyAlerts] = useState<boolean>(false);
+  const [leadTimeFilter, setLeadTimeFilter] = useState<boolean>(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('2025-09');
+
+  // Datos Core del Backend
+  const [categories, setCategories] = useState<string[]>([]);
+  const [inventory, setInventory] = useState<InventoryAlertItem[]>([]);
+  const [margins, setMargins] = useState<MarginSummaryItem[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Preferencias de Usuario (Persistencia FASE 1 & MÓDULO 1)
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    user_id: 'default_user',
+    active_theme: 'light_bitrix',
+    default_engine_mode: 'auto',
+    saved_filters: {
+      categoria: 'Todas',
+      only_alerts: false,
+      lead_time_min: 0,
+      periodo: '2025-09',
+    },
+    visible_columns: [],
+    last_view: 'control_room',
+  });
+
+  // 1. Cargar Preferencias Iniciales desde FastAPI
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const pref = await apiService.getUserPreferences('default_user');
+        setPreferences(pref);
+        if (pref.default_engine_mode) {
+          setEngineMode(pref.default_engine_mode);
+        }
+        if (pref.last_view && ['control_room', 'kanban', 'stock_trace', 'pricing', 'crm', 'initiatives', 'tenders', 'variance', 'reports', 'etl'].includes(pref.last_view)) {
+          setActiveTab(pref.last_view as ActiveTab);
+        }
+        if (pref.saved_filters) {
+          if (pref.saved_filters.categoria) setSelectedCategory(pref.saved_filters.categoria);
+          if (pref.saved_filters.only_alerts !== undefined) setOnlyAlerts(Boolean(pref.saved_filters.only_alerts));
+          if (pref.saved_filters.periodo) setSelectedPeriod(pref.saved_filters.periodo);
+        }
+      } catch (err) {
+        console.warn('Backend preferences not initialized yet, using defaults', err);
+      }
+    };
+    loadPreferences();
+  }, []);
+
+  // 2. Cargar Datos del Negocio
+  const loadBusinessData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const [cats, inv, mrg] = await Promise.all([
+        apiService.getCategories().catch(() => ['Electrónica', 'Accesorios', 'Repuestos']),
+        apiService.getInventoryAlerts().catch(() => []),
+        apiService.getPricingMargins().catch(() => []),
+      ]);
+      setCategories(cats);
+      setInventory(inv);
+      setMargins(mrg);
+    } catch (err) {
+      console.error('Error loading business data', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBusinessData();
+  }, [loadBusinessData]);
+
+  // Manejo de cambio de Tab con persistencia automática de última vista
+  const handleTabChange = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    apiService.saveUserPreferences({
+      user_id: preferences.user_id || 'default_user',
+      last_view: tab,
+    }).catch((err) => console.warn('Could not auto-save tab preference', err));
+  };
+
+  // Guardar filtros en preferencias
+  const handleSaveFilterPreferences = (newFilters: any) => {
+    apiService.saveUserPreferences({
+      user_id: preferences.user_id || 'default_user',
+      saved_filters: newFilters,
+    }).catch((err) => console.warn('Could not auto-save filter preference', err));
+  };
+
+  const handleCategorySelect = (cat: string) => {
+    setSelectedCategory(cat);
+    handleSaveFilterPreferences({ ...preferences.saved_filters, categoria: cat });
+  };
+
+  const handleToggleAlerts = () => {
+    const next = !onlyAlerts;
+    setOnlyAlerts(next);
+    handleSaveFilterPreferences({ ...preferences.saved_filters, only_alerts: next });
+  };
+
+  const handleToggleLeadTime = () => {
+    setLeadTimeFilter(!leadTimeFilter);
+  };
+
+  const handlePeriodSelect = (period: string) => {
+    setSelectedPeriod(period);
+    handleSaveFilterPreferences({ ...preferences.saved_filters, periodo: period });
+  };
+
+  // Guardar configuración completa desde el Modal
+  const handleSaveSettings = async (updated: Partial<UserPreferences>) => {
+    const saved = await apiService.saveUserPreferences({
+      ...preferences,
+      ...updated,
+    });
+    setPreferences(saved);
+  };
+
+  // Exportar datos a CSV
+  const handleExportCSV = () => {
+    let headers: string[] = [];
+    let rows: (string | number)[][] = [];
+    let filename = `calcu_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if (activeTab === 'control_room') {
+      headers = ['SKU', 'Nombre', 'Categoria', 'Stock_Actual', 'ROP', 'DOH', 'Lead_Time', 'Alerta'];
+      rows = inventory.map((i) => [
+        i.sku,
+        `"${i.nombre}"`,
+        i.categoria,
+        i.stock_actual,
+        Number(i.rop).toFixed(2),
+        Number(i.doh).toFixed(2),
+        i.lead_time_dias,
+        i.is_alert ? 'QUIEBRE' : 'OK',
+      ]);
+    } else if (activeTab === 'pricing') {
+      headers = ['SKU', 'Nombre', 'Categoria', 'Precio_Venta', 'Costo_Unitario', 'Margen_Bruto_%', 'Markup_%'];
+      rows = margins.map((m) => [
+        m.sku,
+        `"${m.nombre}"`,
+        m.categoria,
+        Number(m.precio_venta).toFixed(2),
+        Number(m.costo_unitario).toFixed(2),
+        Number(m.gross_margin_pct).toFixed(2),
+        Number(m.markup_pct).toFixed(2),
+      ]);
+    } else {
+      headers = ['SKU', 'Info'];
+      rows = [['N/A', 'Exportacion disponible en Control Room y Pricing']];
+    }
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Conteo de quiebres para el badge del Sidebar
+  const alertCount = inventory.filter((i) => i.is_alert).length;
+
+  return (
+    <div className="min-h-screen bg-[#eef2f4] dark:bg-slate-950 text-[#333333] dark:text-slate-100 flex transition-colors duration-200">
+      {/* 1. Sidebar Fijo */}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        alertCount={alertCount}
+      />
+
+      {/* 2. Main Wrapper */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
+          sidebarCollapsed ? 'ml-16' : 'ml-64'
+        }`}
+      >
+        {/* Top Header Fijo */}
+        <TopHeader
+          sidebarCollapsed={sidebarCollapsed}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectCategory={handleCategorySelect}
+          onlyAlerts={onlyAlerts}
+          onToggleOnlyAlerts={handleToggleAlerts}
+          leadTimeFilter={leadTimeFilter}
+          onToggleLeadTime={handleToggleLeadTime}
+          selectedPeriod={selectedPeriod}
+          onSelectPeriod={handlePeriodSelect}
+          onRefresh={loadBusinessData}
+          onExport={handleExportCSV}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          isRefreshing={isRefreshing}
+          currentRole={currentRole}
+          onRoleChange={handleRoleChange}
+          engineMode={engineMode}
+          onEngineModeChange={handleEngineModeChange}
+        />
+
+        {/* Content Area con Padding del Header Fijo */}
+        <main className="flex-1 mt-16 p-6 overflow-y-auto">
+          <Suspense fallback={<ViewLoading />}>
+            {activeTab === 'control_room' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Sala de Control">
+                <ControlRoomView
+                  inventory={inventory}
+                  isLoading={isRefreshing}
+                  selectedCategory={selectedCategory}
+                  onlyAlerts={onlyAlerts}
+                  leadTimeFilter={leadTimeFilter}
+                  searchQuery={searchQuery}
+                  onItemUpdated={(updated) =>
+                    setInventory((prev) => prev.map((item) => (item.sku === updated.sku ? updated : item)))
+                  }
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'kanban' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Kanban de Abastecimiento">
+                <SupplyKanbanView 
+                  onlyAlerts={onlyAlerts}
+                  leadTimeFilter={leadTimeFilter}
+                  searchQuery={searchQuery}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'pricing' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Matriz de Pricing & Márgenes">
+                <PricingAnalyticsView
+                  margins={margins}
+                  selectedCategory={selectedCategory}
+                  searchQuery={searchQuery}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'stock_trace' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Trazabilidad Multi-Depósito">
+                <MultiLocationStockView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'crm' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Pipeline Comercial (CRM)">
+                <CommercialKanbanView 
+                  onNavigateToTenders={() => setActiveTab('tenders')}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'initiatives' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Evaluador de Nuevos Proyectos">
+                <InitiativesEvaluatorView 
+                  engineMode={engineMode}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Licitaciones & Proyectos B2B">
+                <TendersView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'variance' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Control Presupuestario">
+                <VarianceScenariosView
+                  selectedPeriod={selectedPeriod}
+                  selectedCategory={selectedCategory}
+                  currentRole={currentRole}
+                  engineMode={engineMode}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'reports' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Informes Ejecutivos">
+                <ExecutiveReportsView
+                  selectedPeriod={selectedPeriod}
+                  engineMode={engineMode}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'etl' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Módulo de Ingesta ETL">
+                <EtlIngestView
+                  onUploadSuccess={loadBusinessData}
+                />
+              </ErrorBoundary>
+            )}
+          </Suspense>
+        </main>
+      </div>
+
+      {/* Modal de Configuración y Preferencias */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        preferences={preferences}
+        onSave={handleSaveSettings}
+      />
+    </div>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+export default App;
