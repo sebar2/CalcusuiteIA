@@ -91,11 +91,14 @@ def upgrade() -> None:
     if 'productos' not in existing_tables:
         op.create_table(
             'productos',
-            sa.Column('sku', sa.String(50), primary_key=True),
-            sa.Column('nombre', sa.String(100), nullable=False),
-            sa.Column('precio_venta', sa.Numeric(14, 4), nullable=False),
-            sa.Column('costo_unitario', sa.Numeric(14, 4), nullable=False),
-            sa.Column('categoria_id', sa.Integer(), sa.ForeignKey('categorias.id'), nullable=True),
+            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column('sku', sa.String(50), unique=True, nullable=False),
+            sa.Column('nombre', sa.String(200), nullable=False),
+            sa.Column('categoria_id', sa.Integer(), sa.ForeignKey('categorias.id'), nullable=False),
+            sa.Column('costo_base', sa.Numeric(14, 4), nullable=False),
+            sa.Column('precio_lista', sa.Numeric(14, 4), nullable=False),
+            sa.Column('doh_seguridad', sa.Integer(), server_default='15', nullable=False),
+            sa.Column('activo', sa.Boolean(), server_default='true', nullable=False),
         )
 
     # 7. Tabla inventario

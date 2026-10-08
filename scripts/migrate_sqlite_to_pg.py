@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 scripts/migrate_sqlite_to_pg.py
-Script ETL de migración y sincronización de datos desde SQLite (calcu.db) a PostgreSQL 16.
+Script ETL de migración y sincronización de datos desde SQLite (calcu.db) a PostgreSQL 16
+utilizando el driver Pure-Python oficial pg8000 para compatibilidad corporativa con Windows AppLocker.
 
 Funcionalidades:
 1. Conecta a la base SQLite de origen y al clúster PostgreSQL de destino.
 2. Aplica las migraciones de Alembic (0001_baseline) y crea la estructura completa DDL de SQLAlchemy.
 3. Transfiere registros tabla por tabla respetando estrictamente el orden de claves foráneas.
 4. Sincroniza secuencias numéricas (pg_get_serial_sequence) para evitar conflictos de ID autoincrementales.
+5. Reporta una tabla resumen de entidades y filas transferidas.
 """
 
 import os
@@ -24,10 +26,10 @@ if str(root_dir) not in sys.path:
 
 import sqlalchemy as sa
 from sqlalchemy import create_engine, text, MetaData, Table, inspect
+from sqlalchemy.types import Boolean
 from alembic.config import Config
 from alembic import command
 
-from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL
 from app.models.base import Base
 import app.models.entities  # Registra modelos de catálogo e inventario
 import app.domain.models   # Registra modelos de dominio, CRM y auditoría
@@ -63,18 +65,18 @@ TABLE_ORDER = [
     "ordenes_compra_detalles",
     "ordenes_reposicion",
 
-    # 5. Ventas y Presupuesto Comercial
+    # 5. Licitaciones ARCE y Oportunidades CRM (Precede a órdenes de venta)
+    "tenders",
+    "tender_items",
+    "commercial_deals",
+    "commercial_deal_items",
+
+    # 6. Ventas y Presupuesto Comercial
     "transacciones_ventas",
     "sales_orders",
     "sales_order_items",
     "presupuestos_metas",
     "presupuestos_versiones",
-
-    # 6. Licitaciones ARCE y Oportunidades CRM
-    "tenders",
-    "tender_items",
-    "commercial_deals",
-    "commercial_deal_items",
 
     # 7. Auditoría, Gobernanza y Preferencias
     "user_preferences",
@@ -92,6 +94,9 @@ def apply_alembic_and_schema(pg_url: str, pg_engine: sa.Engine):
             alembic_cfg = Config(str(alembic_ini_path))
             alembic_cfg.set_main_option("sqlalchemy.url", pg_url)
             command.upgrade(alembic_cfg, "head")
+            logging.getLogger().setLevel(logging.INFO)
+            for h in logging.getLogger().handlers:
+                h.setLevel(logging.INFO)
             logger.info("Migraciones Alembic aplicadas exitosamente.")
         else:
             logger.warning("alembic.ini no encontrado en %s, recurriendo a Base.metadata.create_all.", alembic_ini_path)
@@ -121,7 +126,7 @@ def reset_pg_sequence(conn: sa.Connection, table_name: str, id_col: str = "id"):
         logger.debug("No se actualizó secuencia para %s.%s: %s", table_name, id_col, e)
 
 
-def migrate_data(sqlite_engine: sa.Engine, pg_engine: sa.Engine, dry_run: bool = False):
+def migrate_data(sqlite_engine: sa.Engine, pg_engine: sa.Engine, dry_run: bool = False) -> Dict[str, int]:
     """Ejecuta la extracción, transformación y carga (ETL) tabla por tabla."""
     sqlite_insp = inspect(sqlite_engine)
     pg_insp = inspect(pg_engine)
@@ -129,20 +134,20 @@ def migrate_data(sqlite_engine: sa.Engine, pg_engine: sa.Engine, dry_run: bool =
     sqlite_tables = set(sqlite_insp.get_table_names())
     pg_tables = set(pg_insp.get_table_names())
 
-    total_migrated_rows = 0
+    migration_report: Dict[str, int] = {}
 
     with pg_engine.begin() as pg_conn:
         for table_name in TABLE_ORDER:
             if table_name not in sqlite_tables:
-                logger.info("Tabla '%s' no presente en SQLite origen. Omitiendo.", table_name)
                 continue
 
             if table_name not in pg_tables:
                 logger.warning("Tabla '%s' no existe en PostgreSQL destino. Omitiendo.", table_name)
                 continue
 
-            # Obtener columnas válidas de la tabla destino en PostgreSQL
-            pg_columns = {col["name"] for col in pg_insp.get_columns(table_name)}
+            # Obtener columnas e información de tipos destino en PostgreSQL
+            pg_col_map = {col["name"]: col for col in pg_insp.get_columns(table_name)}
+            pg_columns = set(pg_col_map.keys())
 
             # Leer registros desde SQLite
             with sqlite_engine.connect() as sqlite_conn:
@@ -151,14 +156,33 @@ def migrate_data(sqlite_engine: sa.Engine, pg_engine: sa.Engine, dry_run: bool =
                 raw_rows = [dict(row._mapping) for row in result]
 
             if not raw_rows:
-                logger.info("Tabla '%s': 0 registros para transferir.", table_name)
+                migration_report[table_name] = 0
                 continue
 
-            # Filtrar registros para incluir solo columnas existentes en el destino
+            # Filtrar y normalizar registros
             clean_rows = []
             for row in raw_rows:
-                clean_row = {k: v for k, v in row.items() if k in pg_columns}
+                clean_row = {}
+                for k, v in row.items():
+                    if k in pg_columns:
+                        col_info = pg_col_map.get(k)
+                        # Normalizar enteros a booleanos si la columna de destino es booleana
+                        if col_info and isinstance(col_info.get("type"), Boolean) and isinstance(v, int):
+                            clean_row[k] = bool(v)
+                        else:
+                            clean_row[k] = v
                 clean_rows.append(clean_row)
+
+            # Sanitización de claves foráneas huérfanas
+            if table_name == "sales_orders":
+                existing_deals = {r[0] for r in pg_conn.execute(text("SELECT id FROM commercial_deals")).fetchall()}
+                for row in clean_rows:
+                    if row.get("deal_id") and row.get("deal_id") not in existing_deals:
+                        logger.warning("Sales Order %s referencia deal_id %s inexistente. Ajustando a NULL.", row.get("id"), row.get("deal_id"))
+                        row["deal_id"] = None
+            elif table_name == "sales_order_items":
+                existing_so = {r[0] for r in pg_conn.execute(text("SELECT id FROM sales_orders")).fetchall()}
+                clean_rows = [r for r in clean_rows if r.get("sales_order_id") in existing_so]
 
             logger.info("Migrando '%s': %d registros detectados...", table_name, len(clean_rows))
 
@@ -176,18 +200,25 @@ def migrate_data(sqlite_engine: sa.Engine, pg_engine: sa.Engine, dry_run: bool =
                 if "id" in pg_columns:
                     reset_pg_sequence(pg_conn, table_name, "id")
 
-                total_migrated_rows += len(clean_rows)
-                logger.info("✓ Tabla '%s' migrada exitosamente.", table_name)
+                migration_report[table_name] = len(clean_rows)
+                logger.info("✓ Tabla '%s' migrada exitosamente (%d filas).", table_name, len(clean_rows))
             else:
+                migration_report[table_name] = len(clean_rows)
                 logger.info("[DRY-RUN] Tabla '%s': %d filas simuladas.", table_name, len(clean_rows))
 
-    logger.info("=====================================================")
-    logger.info("Migración ETL finalizada. Total de filas migradas: %d", total_migrated_rows)
-    logger.info("=====================================================")
+    total_rows = sum(migration_report.values())
+    print("\n" + "=" * 65)
+    print(f"RESUMEN DE MIGRACIÓN ETL: {total_rows} registros transferidos a PostgreSQL 16")
+    print("=" * 65)
+    for t_name, count in migration_report.items():
+        if count > 0:
+            print(f"  • {t_name:<30} : {count:>5} filas")
+    print("=" * 65 + "\n")
+    return migration_report
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Migración ETL de SQLite (calcu.db) a PostgreSQL 16")
+    parser = argparse.ArgumentParser(description="Migración ETL de SQLite (calcu.db) a PostgreSQL 16 con pg8000")
     parser.add_argument(
         "--sqlite-path",
         default="calcu.db",
@@ -195,7 +226,7 @@ def main():
     )
     parser.add_argument(
         "--pg-url",
-        default=os.getenv("DATABASE_URL", "postgresql+psycopg://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"),
+        default=os.getenv("DATABASE_URL", "postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"),
         help="URL de conexión a PostgreSQL destino"
     )
     parser.add_argument(

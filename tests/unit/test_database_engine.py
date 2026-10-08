@@ -1,7 +1,7 @@
 """
 Tests unitarios para la configuración multi-motor de base de datos (P2.1).
 Valida:
-- Asignación de QueuePool con pool_size=20, max_overflow=30 para PostgreSQL.
+- Asignación de QueuePool con pool_size=20, max_overflow=30 para PostgreSQL (tanto pg8000 Pure-Python como psycopg).
 - Configuración para SQLite en archivo y StaticPool en memoria.
 - Comportamiento no destructivo de run_non_destructive_migrations ante motores no-SQLite.
 """
@@ -43,8 +43,21 @@ def mock_psycopg_driver():
             sys.modules[k] = orig
 
 
+def test_postgresql_pg8000_engine_queuepool_configuration():
+    """Verifica que URLs con postgresql+pg8000 (Pure-Python) configuren QueuePool sin dependencias en C."""
+    pg_url = "postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
+    pg_engine = create_app_engine(pg_url)
+
+    assert isinstance(pg_engine, Engine)
+    assert isinstance(pg_engine.pool, QueuePool)
+    assert pg_engine.pool.size() == 20
+    assert pg_engine.pool._max_overflow == 30
+    assert pg_engine.pool._recycle == 1800
+    assert pg_engine.pool._pre_ping is True
+
+
 def test_postgresql_engine_queuepool_configuration():
-    """Verifica que URLs con protocolo postgresql configuren QueuePool con parámetros de producción."""
+    """Verifica que URLs con protocolo postgresql genérico configuren QueuePool con parámetros de producción."""
     pg_url = "postgresql+psycopg://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
     pg_engine = create_app_engine(pg_url)
 
@@ -76,8 +89,8 @@ def test_sqlite_memory_engine_staticpool():
 
 def test_run_non_destructive_migrations_skips_non_sqlite():
     """Garantiza que las sentencias DDL nativas de SQLite se omitan en motores PostgreSQL."""
-    pg_url = "postgresql+psycopg://dummy:dummy@localhost:5432/dummy"
+    pg_url = "postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
     pg_engine = create_app_engine(pg_url)
 
-    # Debe retornar de inmediato sin intentar ejecutar PRAGMA ni conectar a un socket inexistente
+    # Debe retornar de inmediato sin intentar ejecutar PRAGMA
     run_non_destructive_migrations(target_engine=pg_engine)
