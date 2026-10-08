@@ -715,9 +715,50 @@ export const apiService = {
   login,
   logout,
   getStoredUser,
+
+  // Exportación Nativa de Reportes Ejecutivos (P1.3)
+  downloadExecutiveExcel,
+  downloadExecutivePdf,
 };
 
- 
+export const downloadBlobFile = (blobData: Blob, defaultFilename: string) => {
+  if (typeof window === 'undefined') return;
+  const url = window.URL.createObjectURL(blobData);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', defaultFilename);
+  document.body.appendChild(link);
+  link.click();
+  link.parentNode?.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+export async function downloadExecutiveExcel(): Promise<void> {
+  const res = await apiClient.get('/api/v1/reports/executive/excel', {
+    responseType: 'blob',
+  });
+  const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  downloadBlobFile(
+    new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    `Reporte_Ejecutivo_Calcu_${nowStr}.xlsx`
+  );
+}
+
+export async function downloadExecutivePdf(): Promise<void> {
+  const res = await apiClient.get('/api/v1/reports/executive/pdf', {
+    responseType: 'blob',
+  });
+  const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  downloadBlobFile(
+    new Blob([res.data], {
+      type: 'application/pdf',
+    }),
+    `Minuta_Ejecutiva_Calcu_${nowStr}.pdf`
+  );
+}
+
 // Exportación directa solicitada para llamadas con timeout de 10 minutos (600.000 ms)
 export const searchCompetitors = async (data: any) => {
   return apiClient.post('/api/v1/initiatives/search-competitors', data, {

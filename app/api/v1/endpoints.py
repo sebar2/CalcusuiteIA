@@ -101,7 +101,15 @@ from app.services.commercial_service import commercial_service
 from app.services.stock_trace_service import stock_trace_service
 from app.services.agents.tenders_debate_service import run_dialectical_debate
 from app.services.exchange_rate_service import ExchangeRateService
-from app.core.security import get_current_user, UserContext, record_audit_log, ROLE_CONTROLLER_ADMIN
+from app.core.security import (
+    get_current_user,
+    UserContext,
+    record_audit_log,
+    ROLE_CONTROLLER_ADMIN,
+    ROLE_ANALISTA_OPERACIONES,
+    require_roles,
+)
+from app.services.report_export_service import ReportExportService
 from app.services.etl_service import ETLService
 from app.services.ai_advisor_service import AIAdvisorService
 from app.engine.inventory import calculate_rop, calculate_doh
@@ -2442,6 +2450,60 @@ def download_etl_template(
         stream,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+# ==============================================================================
+# REPORTES EJECUTIVOS: EXPORTACIÓN NATIVA EXCEL (.XLSX) Y PDF FORMAL (P1.3)
+# ==============================================================================
+
+@router.get(
+    "/reports/executive/excel",
+    summary="Descarga del Reporte Ejecutivo en formato Microsoft Excel (.xlsx)"
+)
+def export_executive_report_excel(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_OPERACIONES]))
+):
+    """
+    Genera y descarga un libro de cálculo profesional (.xlsx) con 3 pestañas:
+    Resumen Ejecutivo, Inventario & Logística Multi-depósito y Presupuesto & OPEX.
+    """
+    buffer = ReportExportService.generate_executive_excel(db)
+    fecha_str = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"Reporte_Ejecutivo_Calcu_{fecha_str}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get(
+    "/reports/executive/pdf",
+    summary="Descarga de la Minuta Ejecutiva en formato PDF formal para Dirección"
+)
+def export_executive_report_pdf(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_OPERACIONES]))
+):
+    """
+    Genera y descarga una minuta ejecutiva formal imprimible en PDF con cabecera corporativa,
+    semáforo de abastecimiento, KPIs financieros y bloque de firmas.
+    """
+    buffer = ReportExportService.generate_executive_pdf(db)
+    fecha_str = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"Minuta_Ejecutiva_Calcu_{fecha_str}.pdf"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
     )
 
 

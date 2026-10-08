@@ -11,10 +11,12 @@ import {
   Plus,
   Zap,
   CheckCircle2,
-  Cpu
+  Cpu,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
 import type { CrossReportResponse, AccionCompromiso, EngineMode } from '../types';
-import { apiService } from '../services/api';
+import { apiService, downloadExecutiveExcel, downloadExecutivePdf } from '../services/api';
 
 interface ExecutiveReportsViewProps {
   selectedPeriod: string;
@@ -36,6 +38,45 @@ export const ExecutiveReportsView = ({
   const [isCreatingAction, setIsCreatingAction] = useState(false);
   const [isConvertingActions, setIsConvertingActions] = useState(false);
   const [conversionSuccess, setConversionSuccess] = useState<string | null>(null);
+
+  // Estados para exportación nativa de reportes (P1.3)
+  const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [downloadFeedback, setDownloadFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleDownloadExcel = async () => {
+    setIsDownloadingExcel(true);
+    setDownloadFeedback(null);
+    try {
+      await downloadExecutiveExcel();
+      setDownloadFeedback({ type: 'success', message: 'Reporte Excel (.xlsx) descargado exitosamente.' });
+      setTimeout(() => setDownloadFeedback(null), 4000);
+    } catch (err: any) {
+      setDownloadFeedback({
+        type: 'error',
+        message: err.response?.data?.detail || 'Error al generar o descargar el reporte Excel.',
+      });
+    } finally {
+      setIsDownloadingExcel(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    setDownloadFeedback(null);
+    try {
+      await downloadExecutivePdf();
+      setDownloadFeedback({ type: 'success', message: 'Minuta Ejecutiva PDF descargada exitosamente.' });
+      setTimeout(() => setDownloadFeedback(null), 4000);
+    } catch (err: any) {
+      setDownloadFeedback({
+        type: 'error',
+        message: err.response?.data?.detail || 'Error al generar o descargar la Minuta PDF.',
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   // Cargar acciones al montar
   const loadActions = async () => {
@@ -177,6 +218,77 @@ export const ExecutiveReportsView = ({
 
   return (
     <div className="space-y-6">
+      {/* Barra de Exportación Formal de Dirección & Operaciones (Excel & PDF) */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 rounded-2xl p-5 text-white shadow-md border border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#00a2e8]/20 text-[#2fc6f6] border border-[#00a2e8]/40 rounded-full uppercase tracking-wider">
+              Iniciativa P1.3
+            </span>
+            <h2 className="text-sm font-bold text-white tracking-wide">
+              Exportador Formal de Reportes y Minutas
+            </h2>
+          </div>
+          <p className="text-xs text-slate-300">
+            Descarga de libros contables auditables en Microsoft Excel (.xlsx) y minutas de aprobación en PDF para Dirección.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Botón Excel */}
+          <button
+            onClick={handleDownloadExcel}
+            disabled={isDownloadingExcel}
+            className="flex-1 md:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-emerald-900/30 transition-all disabled:opacity-50 cursor-pointer"
+            title="Descargar libro Excel con 3 hojas: Resumen, Inventario y Presupuesto OPEX"
+          >
+            {isDownloadingExcel ? (
+              <Loader2 size={15} className="animate-spin text-white" />
+            ) : (
+              <FileSpreadsheet size={15} className="text-emerald-200" />
+            )}
+            <span>{isDownloadingExcel ? 'Generando Excel...' : 'Descargar Excel (.xlsx)'}</span>
+          </button>
+
+          {/* Botón PDF */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="flex-1 md:flex-none inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-rose-900/30 transition-all disabled:opacity-50 cursor-pointer"
+            title="Exportar minuta ejecutiva formal imprimible con semáforo y firmas"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 size={15} className="animate-spin text-white" />
+            ) : (
+              <FileText size={15} className="text-rose-200" />
+            )}
+            <span>{isDownloadingPdf ? 'Generando PDF...' : 'Exportar Minuta PDF'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Toast Feedback de Descarga */}
+      {downloadFeedback && (
+        <div
+          className={`p-3 rounded-xl border text-xs flex items-center justify-between transition-all animate-in fade-in slide-in-from-top-1 ${
+            downloadFeedback.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 size={16} className={downloadFeedback.type === 'success' ? 'text-emerald-600' : 'text-rose-600'} />
+            <span className="font-medium">{downloadFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setDownloadFeedback(null)}
+            className="text-[10px] font-bold underline cursor-pointer ml-3 opacity-80 hover:opacity-100"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {/* Header and Audience Selection */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-5">
         <div>
