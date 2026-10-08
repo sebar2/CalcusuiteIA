@@ -40,6 +40,7 @@ from app.domain.schemas import (
     TenderLiveFeedResponse,
 )
 from app.services.tenders_service import tenders_service
+from app.services.cache_service import memory_cache
 
 logger = logging.getLogger(__name__)
 
@@ -811,14 +812,32 @@ class TendersFeedService:
             actualizado_al=self._last_sync or datetime.now(timezone.utc),
         )
 
-    # Alias para compatibilidad con código existente
+    # Alias y cache para compatibilidad con endpoints y controladores
     def get_live_feed(
         self,
         nicho: Optional[str] = None,
         q: Optional[str] = None,
         force_sync: bool = False,
     ) -> TenderLiveFeedResponse:
-        return self.fetch_and_filter_tenders(search_query=q, nicho_filter=nicho, force_sync=force_sync)
+        cache_key = f"tenders:live_feed:{nicho or 'TODAS'}:{q or ''}"
+        if not force_sync and memory_cache.is_valid(cache_key):
+            cached = memory_cache.get(cache_key)
+            if cached:
+                return cached
+
+        try:
+            res = self.fetch_and_filter_tenders(search_query=q, nicho_filter=nicho, force_sync=force_sync)
+            memory_cache.set(cache_key, res, ttl_seconds=900)  # 15 minutos (900s)
+            return res
+        except Exception as exc:
+            stale_cached = memory_cache.get_stale(cache_key)
+            if stale_cached:
+                logger.warning(
+                    "Fallo al actualizar feed de licitaciones: %s. Utilizando caché previo (stale) en contingencia.",
+                    exc
+                )
+                return stale_cached
+            raise
 
     def _find_item(self, feed_item_id: str) -> Optional[LiveTenderFeedItem]:
         with self._lock:

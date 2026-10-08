@@ -39,6 +39,9 @@ class Settings(BaseModel):
     local_llm_model: str = Field(default_factory=lambda: os.getenv("LOCAL_LLM_MODEL", os.getenv("OLLAMA_MODEL", "qwen2.5:7b")))
     local_llm_timeout: float = Field(default_factory=lambda: float(os.getenv("LOCAL_LLM_TIMEOUT", str(os.getenv("OLLAMA_TIMEOUT", "45.0")))))
 
+    # 4. Base de Datos Relacional
+    database_url: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///calcu.db"))
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:
@@ -51,6 +54,7 @@ class Settings(BaseModel):
 settings = Settings()
 
 # Variables a nivel de módulo para retrocompatibilidad total con la suite
+DATABASE_URL: str = settings.database_url
 JWT_SECRET_KEY: str = settings.jwt_secret_key
 JWT_ALGORITHM: str = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES: int = settings.access_token_expire_minutes

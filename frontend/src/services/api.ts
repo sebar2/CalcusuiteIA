@@ -81,15 +81,88 @@ import type {
 
 const API_BASE_URL = 'http://localhost:8000';
 
+export const TOKEN_STORAGE_KEY = 'calcu_access_token';
+export const USER_STORAGE_KEY = 'calcu_user';
+
+export interface StoredUser {
+  token: string;
+  user_id: string;
+  role: string;
+  nombre?: string;
+}
+
+export const getStoredUser = (): StoredUser | null => {
+  try {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const userJson = localStorage.getItem(USER_STORAGE_KEY);
+    if (!token || !userJson) return null;
+    const parsed = JSON.parse(userJson);
+    return {
+      token,
+      user_id: parsed.user_id,
+      role: parsed.role,
+      nombre: parsed.nombre,
+    };
+  } catch {
+    return null;
+  }
+};
+
 let currentRole: string = 'controller_admin';
 let currentUserId: string = 'default_user';
+
+// Inicializar contexto desde localStorage si existe
+const initialUser = getStoredUser();
+if (initialUser) {
+  currentRole = initialUser.role;
+  currentUserId = initialUser.user_id;
+}
 
 export const setCurrentAuthContext = (role: string, userId: string = 'default_user') => {
   currentRole = role;
   currentUserId = userId;
 };
 
-export const getCurrentRole = () => currentRole;
+export const getCurrentRole = () => {
+  const user = getStoredUser();
+  return user?.role || currentRole;
+};
+
+export const logout = () => {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+  currentRole = 'controller_admin';
+  currentUserId = 'default_user';
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('calcu:auth:logout'));
+  }
+};
+
+export const login = async (username: string, password: string): Promise<StoredUser> => {
+  const res = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, { username, password });
+  const data = res.data;
+  localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
+  localStorage.setItem(
+    USER_STORAGE_KEY,
+    JSON.stringify({
+      user_id: data.user_id,
+      role: data.role,
+      nombre: data.nombre,
+    })
+  );
+  currentRole = data.role;
+  currentUserId = data.user_id;
+  const user: StoredUser = {
+    token: data.access_token,
+    user_id: data.user_id,
+    role: data.role,
+    nombre: data.nombre,
+  };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('calcu:auth:login', { detail: user }));
+  }
+  return user;
+};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -100,10 +173,30 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  config.headers['X-User-Role'] = currentRole;
-  config.headers['X-User-Id'] = currentUserId;
+  const stored = getStoredUser();
+  if (stored?.token) {
+    config.headers['Authorization'] = `Bearer ${stored.token}`;
+    config.headers['X-User-Role'] = stored.role;
+    config.headers['X-User-Id'] = stored.user_id;
+  } else {
+    config.headers['X-User-Role'] = currentRole;
+    config.headers['X-User-Id'] = currentUserId;
+  }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const isLoginRequest = error.config?.url?.includes('/api/v1/auth/login');
+      if (!isLoginRequest) {
+        logout();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const apiService = {
   // Inventario y Abastecimiento
@@ -617,6 +710,11 @@ export const apiService = {
   getEtlTemplateDownloadUrl(tipo: string = 'inventario'): string {
     return `${API_BASE_URL}/api/v1/etl/template?tipo=${tipo}`;
   },
+
+  // Autenticación JWT y Gestión de Sesión
+  login,
+  logout,
+  getStoredUser,
 };
 
  

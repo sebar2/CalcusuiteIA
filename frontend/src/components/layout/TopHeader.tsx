@@ -12,9 +12,14 @@ import {
   Cpu,
   Zap,
   Activity,
+  Shield,
+  User,
+  LogOut,
+  Key,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { apiService } from '../../services/api';
+import { apiService, getStoredUser, login as apiLogin, logout as apiLogout } from '../../services/api';
+import type { StoredUser } from '../../services/api';
 import type { EngineMode, OllamaStatus } from '../../types';
 
 interface TopHeaderProps {
@@ -90,6 +95,53 @@ export const TopHeader = ({
     };
     fetchPeriods();
   }, []);
+
+  // Estado de Autenticación JWT y Switcher de Usuarios Demo
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
+  const [isAuthMenuOpen, setIsAuthMenuOpen] = useState<boolean>(false);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleLoginEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<StoredUser>;
+      setCurrentUser(customEvent.detail);
+      if (onRoleChange && customEvent.detail?.role) {
+        onRoleChange(customEvent.detail.role);
+      }
+    };
+    const handleLogoutEvent = () => {
+      setCurrentUser(null);
+      if (onRoleChange) {
+        onRoleChange('controller_admin');
+      }
+    };
+    window.addEventListener('calcu:auth:login', handleLoginEvent);
+    window.addEventListener('calcu:auth:logout', handleLogoutEvent);
+    return () => {
+      window.removeEventListener('calcu:auth:login', handleLoginEvent);
+      window.removeEventListener('calcu:auth:logout', handleLogoutEvent);
+    };
+  }, [onRoleChange]);
+
+  const handleQuickLogin = async (username: string, pass: string) => {
+    setIsLoggingIn(true);
+    try {
+      const user = await apiLogin(username, pass);
+      setCurrentUser(user);
+      if (onRoleChange) onRoleChange(user.role);
+      setIsAuthMenuOpen(false);
+    } catch (err) {
+      console.error('Error en autenticación rápida:', err);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    apiLogout();
+    setCurrentUser(null);
+    setIsAuthMenuOpen(false);
+  };
 
   // Atajo de teclado global Ctrl + K
   useEffect(() => {
@@ -311,35 +363,121 @@ export const TopHeader = ({
           <Settings size={16} />
         </button>
 
-        {/* Selector de Rol RBAC & Avatar Usuario Bitrix */}
-        <div className="flex items-center pl-2 ml-1 border-l border-slate-200 dark:border-slate-800 space-x-2">
-          {onRoleChange && (
-            <div className="hidden md:flex items-center">
-              <select
-                value={currentRole}
-                onChange={(e) => onRoleChange(e.target.value)}
-                className={`text-[11px] font-bold rounded-lg px-2 py-1 border transition-all cursor-pointer ${
-                  currentRole === 'controller_admin'
-                    ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
-                    : currentRole === 'analista_operaciones'
-                    ? 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-300 border-sky-200 dark:border-sky-800'
-                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                }`}
-                title="Cambiar Rol RBAC de Seguridad"
-              >
-                <option value="controller_admin">🛡️ Controller Admin</option>
-                <option value="analista_operaciones">📦 Analista Operaciones</option>
-                <option value="analista_comercial">📈 Analista Comercial</option>
-              </select>
+        {/* Indicador de Autenticación JWT & Switcher Demo en 1-Clic */}
+        <div className="relative flex items-center pl-2 ml-1 border-l border-slate-200 dark:border-slate-800 space-x-2">
+          {/* Badge de Rol y Usuario */}
+          <div 
+            onClick={() => setIsAuthMenuOpen(!isAuthMenuOpen)}
+            className="flex items-center space-x-1.5 cursor-pointer select-none group"
+            title="Click para gestionar sesión o alternar usuario demo"
+          >
+            <div className="hidden lg:flex flex-col text-right">
+              <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#00a2e8] transition-colors leading-tight">
+                {currentUser?.nombre || currentUser?.user_id || 'Modo Demo'}
+              </span>
+              <span className={`text-[9px] font-semibold uppercase tracking-wider ${
+                (currentUser?.role || currentRole) === 'controller_admin'
+                  ? 'text-purple-600 dark:text-purple-400'
+                  : (currentUser?.role || currentRole) === 'analista_operaciones'
+                  ? 'text-[#00a2e8]'
+                  : 'text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {currentUser?.role === 'controller_admin' ? '🛡️ Controller Admin' : currentUser?.role === 'analista_operaciones' ? '📦 Operaciones' : currentUser?.role === 'analista_comercial' ? '📈 Comercial' : currentRole}
+              </span>
+            </div>
+
+            <div 
+              className={`w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs transition-transform group-hover:scale-105 ${
+                (currentUser?.role || currentRole) === 'controller_admin'
+                  ? 'bg-gradient-to-tr from-purple-600 to-indigo-500'
+                  : (currentUser?.role || currentRole) === 'analista_operaciones'
+                  ? 'bg-gradient-to-tr from-[#00a2e8] to-[#2fc6f6]'
+                  : 'bg-gradient-to-tr from-emerald-600 to-teal-400'
+              }`}
+            >
+              {(currentUser?.role || currentRole) === 'controller_admin' ? 'CA' : (currentUser?.role || currentRole) === 'analista_operaciones' ? 'AO' : 'AC'}
+            </div>
+            <ChevronDown size={12} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
+          </div>
+
+          {/* Menú Desplegable de Autenticación y Acceso Rápido Demo */}
+          {isAuthMenuOpen && (
+            <div 
+              className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-3 px-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+            >
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-700">
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">Sesión RBAC</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {currentUser ? `Token JWT activo: ${currentUser.user_id}` : 'Sin token activo en navegador'}
+                  </p>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                  (currentUser?.role || currentRole) === 'controller_admin'
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                    : (currentUser?.role || currentRole) === 'analista_operaciones'
+                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300'
+                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+                }`}>
+                  {currentUser?.role || currentRole}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
+                  Acceso Rápido Demo (1-Clic)
+                </p>
+
+                <button
+                  onClick={() => handleQuickLogin('admin', 'admin123')}
+                  disabled={isLoggingIn}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-700 dark:text-slate-200 hover:text-purple-700 dark:hover:text-purple-300"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Shield size={14} className="text-purple-500" />
+                    <span>Controller Admin</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">admin123</span>
+                </button>
+
+                <button
+                  onClick={() => handleQuickLogin('operaciones', 'ops123')}
+                  disabled={isLoggingIn}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-700 dark:text-slate-200 hover:text-[#00a2e8] dark:hover:text-sky-300"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Key size={14} className="text-[#00a2e8]" />
+                    <span>Analista Operaciones</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">ops123</span>
+                </button>
+
+                <button
+                  onClick={() => handleQuickLogin('comercial', 'com123')}
+                  disabled={isLoggingIn}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300"
+                >
+                  <div className="flex items-center space-x-2">
+                    <User size={14} className="text-emerald-500" />
+                    <span>Analista Comercial</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">com123</span>
+                </button>
+              </div>
+
+              {currentUser && (
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center space-x-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                  >
+                    <LogOut size={13} />
+                    <span>Cerrar Sesión</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
-
-          <div 
-            className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#00a2e8] to-[#2fc6f6] text-white flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer"
-            title={`Usuario: default_user | Rol: ${currentRole}`}
-          >
-            {currentRole === 'controller_admin' ? 'CA' : currentRole === 'analista_operaciones' ? 'AO' : 'AC'}
-          </div>
         </div>
       </div>
     </header>

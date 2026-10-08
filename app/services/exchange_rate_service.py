@@ -7,11 +7,13 @@ from typing import Optional, Dict, Any
 import httpx
 
 from app.domain.schemas import BROUExchangeRateResponse
+from app.services.cache_service import memory_cache
 
 logger = logging.getLogger(__name__)
 
 BROU_COTIZACIONES_URL = "https://www.brou.com.uy/cotizaciones"
-CACHE_TTL_SECONDS = 4 * 3600  # 4 horas de cache en memoria
+CACHE_TTL_SECONDS = 1800  # 30 minutos (1800 segundos) de cache en memoria
+CACHE_KEY = "finance:exchange_rate:brou"
 
 # Fallback de contingencia oficial ante cortes de red o indisponibilidad del servicio externo
 FALLBACK_BUY = 41.50
@@ -23,17 +25,15 @@ class ExchangeRateService:
     """
     Servicio de cotización oficial de moneda para Uruguay.
     Consulta la cotización oficial del Dólar Estadounidense en el Banco de la República (BROU),
-    mantiene un cache en memoria por 4 horas y provee contingencia automática ante fallos de red.
+    mantiene un cache en memoria thread-safe con TTL de 30 minutos (1800s) y provee contingencia
+    automática (stale fallback) ante caídas o timeouts del servicio externo.
     """
-
     _cached_response: Optional[BROUExchangeRateResponse] = None
     _cached_timestamp: float = 0.0
 
     @classmethod
     def _is_cache_valid(cls) -> bool:
-        if cls._cached_response is None:
-            return False
-        return (time.time() - cls._cached_timestamp) < CACHE_TTL_SECONDS
+        return memory_cache.is_valid(CACHE_KEY)
 
     @classmethod
     def parse_brou_html(cls, html_content: str) -> Optional[Dict[str, float]]:
@@ -43,8 +43,6 @@ class ExchangeRateService:
         """
         try:
             # Buscar sección de Dólar estadounidense en la tabla cotizacion-portlet
-            # En la estructura oficial:
-            # <p class="moneda">Dólar</p> ... <p class="valor">Compra</p> ... <p class="valor">Venta</p>
             match = re.search(
                 r'D[\xf3o]lar.*?class=["\']valor["\']>\s*([0-9]+,[0-9]+)\s*</p>.*?class=["\']valor["\']>\s*([0-9]+,[0-9]+)\s*</p>',
                 html_content,
@@ -79,11 +77,18 @@ class ExchangeRateService:
     @classmethod
     async def fetch_brou_rate(cls, force_refresh: bool = False) -> BROUExchangeRateResponse:
         """
-        Obtiene la cotización oficial del BROU respetando el TTL de 4 horas.
-        Si la llamada remota falla, recurre al último dato en memoria o al fallback seguro.
+        Obtiene la cotización oficial del BROU respetando el TTL de 30 minutos (1800s).
+        Si la llamada remota falla, recurre al último dato en memoria (stale) o al fallback seguro.
         """
-        if not force_refresh and cls._is_cache_valid() and cls._cached_response:
-            return cls._cached_response
+        # Sincronización con tests que resetean _cached_response a None
+        if cls._cached_response is None:
+            memory_cache.delete(CACHE_KEY)
+
+        if not force_refresh and memory_cache.is_valid(CACHE_KEY):
+            cached: Optional[BROUExchangeRateResponse] = memory_cache.get(CACHE_KEY)
+            if cached:
+                cls._cached_response = cached
+                return cached
 
         rates = None
         try:
@@ -115,13 +120,16 @@ class ExchangeRateService:
             )
             cls._cached_response = response
             cls._cached_timestamp = time.time()
+            memory_cache.set(CACHE_KEY, response, ttl_seconds=CACHE_TTL_SECONDS)
             logger.info("Cotización BROU actualizada exitosamente: 1 USD = %.2f UYU", response.rate_used)
             return response
 
-        # Si falló la consulta pero teníamos una cotización previa en memoria, preservarla
-        if cls._cached_response:
-            logger.info("Utilizando cotización previa en memoria ante indisponibilidad remota.")
-            return cls._cached_response
+        # Si falló la consulta pero teníamos una cotización previa en memoria, preservarla (stale)
+        stale_response = memory_cache.get_stale(CACHE_KEY) or cls._cached_response
+        if stale_response:
+            logger.info("Utilizando cotización previa en memoria (stale) ante indisponibilidad remota.")
+            cls._cached_response = stale_response
+            return stale_response
 
         # Fallback de contingencia estricto (42.65 UYU) para no detener la operación
         logger.warning("Activando cotización de contingencia oficial: 1 USD = %.2f UYU", FALLBACK_RATE_USED)
@@ -135,6 +143,7 @@ class ExchangeRateService:
         )
         cls._cached_response = fallback_resp
         cls._cached_timestamp = time.time()
+        memory_cache.set(CACHE_KEY, fallback_resp, ttl_seconds=CACHE_TTL_SECONDS)
         return fallback_resp
 
     @classmethod
@@ -142,8 +151,9 @@ class ExchangeRateService:
         """
         Retorna sincrónicamente la tasa de cambio vigente (rate_used) para cálculos inmediatos.
         """
-        if cls._cached_response:
-            return cls._cached_response.rate_used
+        cached = memory_cache.get_stale(CACHE_KEY)
+        if cached:
+            return cached.rate_used
         return FALLBACK_RATE_USED
 
     @classmethod
