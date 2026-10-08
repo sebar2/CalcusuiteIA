@@ -8,3 +8,4 @@ pytest
 openpyxl
 alembic
 reportlab
+psycopg[binary]>=3.1.0

@@ -1,34 +1,71 @@
+import os
 import logging
 from datetime import date, timedelta
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import QueuePool, StaticPool, NullPool
 from sqlalchemy.orm import sessionmaker, Session
 from app.models.base import Base
+from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = "sqlite:///calcu.db"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+
+def create_app_engine(database_url: str) -> Engine:
+    """
+    Factoría de motor SQLAlchemy con soporte dual de infraestructura:
+    - PostgreSQL: QueuePool (pool_size=20, max_overflow=30, recycle=1800s, pre_ping=True).
+    - SQLite: Conexión monohilo desactivada y StaticPool en bases en memoria.
+    """
+    if database_url.startswith("postgresql"):
+        return create_engine(
+            database_url,
+            poolclass=QueuePool,
+            pool_size=20,
+            max_overflow=30,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+        )
+    else:
+        engine_kwargs = {
+            "connect_args": {"check_same_thread": False},
+        }
+        if ":memory:" in database_url:
+            engine_kwargs["poolclass"] = StaticPool
+        return create_engine(database_url, **engine_kwargs)
+
+
+engine = create_app_engine(DATABASE_URL)
+
 
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+    """Garantiza claves foráneas activas únicamente en conexiones de SQLite sin alterar PostgreSQL."""
+    try:
+        import sqlite3
+        if isinstance(dbapi_connection, sqlite3.Connection):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    except Exception:
+        pass
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def run_non_destructive_migrations():
+def run_non_destructive_migrations(target_engine: Engine = None):
     """
     Ejecuta migraciones no destructivas garantizando que la estructura BCNF
     esté al día sin alterar ni eliminar ningún dato previo.
+    En dialectos no-SQLite (e.g. PostgreSQL), el esquema es gobernado por Alembic.
     """
-    with engine.connect() as conn:
+    eng = target_engine or engine
+    if eng.dialect.name != "sqlite":
+        logger.info("Migraciones DDL específicas de SQLite omitidas para el motor %s.", eng.dialect.name)
+        return
+    with eng.connect() as conn:
         # 1. Asegurar tabla de categorías
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS categorias (
@@ -695,12 +732,14 @@ def run_non_destructive_migrations():
             conn.commit()
 
 
-def init_db():
+def init_db(target_engine: Engine = None):
     """Crea todas las tablas si no existen y corre migraciones seguras"""
+    eng = target_engine or engine
     from app.models import entities  # Asegurar registro de modelos
     from app.domain import models   # Asegurar registro de modelos del dominio
-    Base.metadata.create_all(bind=engine)
-    run_non_destructive_migrations()
+    Base.metadata.create_all(bind=eng)
+    if eng.dialect.name == "sqlite":
+        run_non_destructive_migrations(eng)
 
 
 def get_db():
