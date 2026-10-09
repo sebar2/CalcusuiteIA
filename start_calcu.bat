@@ -26,7 +26,7 @@ echo   [4] MIGRAR DATOS ETL (SQLite hacia PostgreSQL 16)
 echo       - Sincroniza tablas, registros y secuencias
 echo.
 echo   [5] EJECUTAR SUITE DE PRUEBAS AUTOMATIZADAS (Pytest)
-echo       - Ejecuta los 176 tests unitarios y de integracion
+echo       - Ejecuta los tests unitarios y de integracion
 echo.
 echo   [0] SALIR
 echo.
@@ -58,7 +58,7 @@ echo [*] Servidor Backend en: http://localhost:8000
 echo [*] Swagger Docs: http://localhost:8000/docs
 echo [*] Presione Ctrl+C para detener el servidor.
 echo.
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 pause
 goto MENU
 
@@ -77,14 +77,21 @@ if %ERRORLEVEL% neq 0 (
     goto MENU
 )
 echo [*] Levantando contenedores PostgreSQL y Redis...
-docker-compose up -d
-timeout /t 3 /nobreak >nul
+docker compose up -d
+echo [*] Verificando disponibilidad de PostgreSQL en Docker...
+docker exec calcu-postgres pg_isready -U calcu_user -d calcu_db >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [*] Esperando a que el motor PostgreSQL complete su arranque...
+    timeout /t 3 /nobreak >nul
+    docker exec calcu-postgres pg_isready -U calcu_user -d calcu_db
+)
 set "DATABASE_URL=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
 echo [*] DATABASE_URL = %DATABASE_URL%
 echo [*] Servidor Backend en: http://localhost:8000
+echo [*] Swagger Docs: http://localhost:8000/docs
 echo [*] Presione Ctrl+C para detener el servidor.
 echo.
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 pause
 goto MENU
 
@@ -107,8 +114,13 @@ if "%DB_CHOICE%"=="2" (
         pause
         goto MENU
     )
-    docker-compose up -d
-    timeout /t 3 /nobreak >nul
+    docker compose up -d
+    echo [*] Verificando PostgreSQL en Docker...
+    docker exec calcu-postgres pg_isready -U calcu_user -d calcu_db >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        timeout /t 3 /nobreak >nul
+        docker exec calcu-postgres pg_isready -U calcu_user -d calcu_db
+    )
     set "TARGET_DB=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
 ) else (
     set "TARGET_DB=sqlite:///calcu.db"
@@ -116,10 +128,10 @@ if "%DB_CHOICE%"=="2" (
 
 echo.
 echo [*] Abriendo Backend FastAPI (:8000)...
-start "Calcu Backend (:8000)" cmd /k "color 0A && cd /d "%~dp0" && set "DATABASE_URL=%TARGET_DB%" && python -m uvicorn app.main:app --reload --port 8000"
+start "Calcu Backend (:8000)" cmd /k "color 0A && cd /d ""%~dp0"" && set ""DATABASE_URL=%TARGET_DB%"" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo [*] Abriendo Frontend React Vite (:5173)...
-start "Calcu Frontend (:5173)" cmd /k "color 0E && cd /d "%~dp0frontend" && npm run dev"
+start "Calcu Frontend (:5173)" cmd /k "color 0E && cd /d ""%~dp0frontend"" && npm run dev"
 
 echo.
 echo [OK] Ambos servicios iniciados en terminales independientes.
@@ -141,8 +153,12 @@ if %ERRORLEVEL% neq 0 (
     pause
     goto MENU
 )
-docker-compose up -d db
-timeout /t 3 /nobreak >nul
+docker compose up -d db
+echo [*] Verificando disponibilidad de base de datos...
+docker exec calcu-postgres pg_isready -U calcu_user -d calcu_db >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    timeout /t 3 /nobreak >nul
+)
 echo [*] Ejecutando scripts/migrate_sqlite_to_pg.py...
 python scripts/migrate_sqlite_to_pg.py --sqlite-path calcu.db --pg-url "postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
 echo.

@@ -20,7 +20,7 @@ def main():
     
     # Iniciar servidor FastAPI
     backend_proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"]
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     )
 
     # Esperar para asegurar el inicio del backend

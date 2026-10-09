@@ -6,11 +6,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool, StaticPool, NullPool
 from sqlalchemy.orm import sessionmaker, Session
 from app.models.base import Base
-from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL
+from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL, settings
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL).strip()
+DATABASE_URL = (os.environ.get("DATABASE_URL") or getattr(settings, "database_url", DEFAULT_DATABASE_URL) or DEFAULT_DATABASE_URL).strip()
 
 
 def create_app_engine(database_url: str) -> Engine:
