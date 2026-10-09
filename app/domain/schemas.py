@@ -1048,24 +1048,26 @@ class BudgetCategorySuggestion(BaseModel):
     stock_actual: int
     avg_doh: Decimal
     justificacion: str
+    diagnostico_tag: Optional[str] = None
     fundamento_estrategico: Optional[str] = None
     skus_prioritarios: List[SkuPrioritarioItem] = Field(default_factory=list)
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
 
 class BudgetAISuggestResponse(BaseModel):
     periodo: str
     total_sugerido: Decimal
+    total_presupuestado_usd: Optional[Decimal] = None
     total_unidades: int
     crecimiento_global_pct: Optional[Decimal] = Decimal('5.0')
     dictamen_general: Optional[str] = None
     distribucion_unidades_negocio: List[BusinessUnitDistribution] = Field(default_factory=list)
     suggestions: List[BudgetCategorySuggestion] = Field(default_factory=list)
-    metas_categorias: Optional[List[Dict[str, Any]]] = None
+    metas_categorias: List[Union[BudgetCategorySuggestion, Dict[str, Any]]] = Field(default_factory=list)
     analisis_resumen: str
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
 
 class BudgetPeriodDeleteResponse(BaseModel):

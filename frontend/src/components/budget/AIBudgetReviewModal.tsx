@@ -39,6 +39,7 @@ interface EditableCategoryRow {
   stock_actual: number;
   avg_doh: number;
   justificacion: string;
+  diagnostico_tag?: string;
   fundamento_estrategico?: string;
   skus_prioritarios?: SkuPrioritarioItem[];
 }
@@ -71,6 +72,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
           stock_actual: Number(s.stock_actual),
           avg_doh: Number(s.avg_doh),
           justificacion: s.justificacion,
+          diagnostico_tag: s.diagnostico_tag || (Number(s.avg_doh) > 60 ? 'Inmovilización de Capital' : (s.stock_actual === 0 || s.justificacion.includes('alerta') || s.justificacion.includes('quiebre') ? 'Quiebre Inminente' : 'Operación Balanceada')),
           fundamento_estrategico: s.fundamento_estrategico,
           skus_prioritarios: s.skus_prioritarios || [],
         }))
@@ -258,8 +260,27 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
                   return (
                     <React.Fragment key={row.categoria_id}>
                       <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                        <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
-                          {row.categoria_nombre}
+                        <td className="py-2.5 px-3">
+                          <div className="flex flex-col space-y-1">
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">
+                              {row.categoria_nombre}
+                            </span>
+                            <div>
+                              {row.diagnostico_tag === 'Quiebre Inminente' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                                  🚨 Quiebre Inminente
+                                </span>
+                              ) : row.diagnostico_tag === 'Inmovilización de Capital' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                                  ⚠️ Inmovilización de Capital
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                                  ✓ Operación Balanceada
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </td>
 
                         <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">

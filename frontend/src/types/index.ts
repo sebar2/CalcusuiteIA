@@ -553,6 +553,7 @@ export interface BudgetCategorySuggestion {
   stock_actual: number;
   avg_doh: number;
   justificacion: string;
+  diagnostico_tag?: string;
   fundamento_estrategico?: string;
   skus_prioritarios?: SkuPrioritarioItem[];
 }

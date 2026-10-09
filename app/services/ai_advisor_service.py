@@ -2385,14 +2385,17 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
             if avg_doh > Decimal('60.0'):
                 growth_factor = Decimal('1.025')
                 growth_pct = Decimal('2.5')
+                diag_tag = "Inmovilización de Capital"
                 just = f"DOH elevado ({avg_doh:.0f} días). Se modera la meta a +2.5% para priorizar rotación y liberación de capital de trabajo."
             elif alert_count > 0:
                 growth_factor = Decimal('1.085')
                 growth_pct = Decimal('8.5')
+                diag_tag = "Quiebre Inminente"
                 just = f"{alert_count} SKUs en quiebre/alerta de ROP. Se acelera meta comercial a +8.5% apalancando reposición de inventario."
             else:
                 growth_factor = Decimal('1.050')
                 growth_pct = Decimal('5.0')
+                diag_tag = "Operación Balanceada"
                 just = f"DOH saludable ({avg_doh:.0f} días). Crecimiento tendencial estándar del +5.0% preservando margen objetivo."
 
             sug_monto = (hist_sales * growth_factor).quantize(Decimal('0.01'))
@@ -2405,6 +2408,7 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
                 "stock_actual": total_stock,
                 "avg_doh": float(avg_doh),
                 "alert_count": alert_count,
+                "diagnostico_tag": diag_tag,
                 "heuristic_monto": float(sug_monto),
                 "heuristic_unids": sug_unids,
                 "heuristic_growth": float(growth_pct),
@@ -2484,6 +2488,7 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
                                 stock_actual=c["stock_actual"],
                                 avg_doh=Decimal(str(c["avg_doh"])).quantize(Decimal('0.1')),
                                 justificacion=fund,
+                                diagnostico_tag=c.get("diagnostico_tag", "Operación Balanceada"),
                                 fundamento_estrategico=fund,
                                 skus_prioritarios=c["skus_prioritarios"]
                             ))
@@ -2511,6 +2516,7 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
                     stock_actual=c["stock_actual"],
                     avg_doh=Decimal(str(c["avg_doh"])).quantize(Decimal('0.1')),
                     justificacion=fund,
+                    diagnostico_tag=c.get("diagnostico_tag", "Operación Balanceada"),
                     fundamento_estrategico=fund,
                     skus_prioritarios=c["skus_prioritarios"]
                 ))
@@ -2527,15 +2533,28 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
             f"{dictamen_general}"
         )
 
+        # Serialización defensiva para Pydantic v2
+        serialized_metas = []
+        for s in suggestions:
+            if hasattr(s, "model_dump"):
+                serialized_metas.append(s.model_dump())
+            elif hasattr(s, "dict"):
+                serialized_metas.append(s.dict())
+            elif isinstance(s, dict):
+                serialized_metas.append(s)
+            else:
+                serialized_metas.append(dict(s))
+
         return BudgetAISuggestResponse(
             periodo=periodo,
             total_sugerido=total_sug,
-            total_unidades=total_unids,
+            total_presupuestado_usd=total_sug,
+            total_unidades=int(total_unids),
             suggestions=suggestions,
             analisis_resumen=resumen,
             crecimiento_global_pct=crecimiento_global_pct,
             dictamen_general=dictamen_general,
             distribucion_unidades_negocio=unidades_negocio,
-            metas_categorias=suggestions
+            metas_categorias=serialized_metas
         )
 
