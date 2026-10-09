@@ -31,14 +31,27 @@ export const PricingAnalyticsView = ({
   currentRole,
 }: PricingAnalyticsViewProps) => {
   // Estado del Agente de Pricing y Packs IA
+  const [activeModel, setActiveModel] = useState<string>('gemma4:26b');
   const [bundlesData, setBundlesData] = useState<PricingAIBundlesResponse | null>(null);
   const [loadingBundles, setLoadingBundles] = useState<boolean>(false);
   const [copiedBundleId, setCopiedBundleId] = useState<string | null>(null);
 
+  // Cargar modelo activo de Ollama
+  useEffect(() => {
+    apiService.getOllamaModels().then((res) => {
+      if (res?.active_model) {
+        setActiveModel(res.active_model);
+      }
+    }).catch(() => {});
+  }, []);
+
   const fetchAIBundles = async () => {
     setLoadingBundles(true);
     try {
-      const data = await apiService.getAIBundles();
+      const data = await apiService.getAIBundles({
+        model: activeModel || 'gemma4:26b',
+        engine_mode: 'local_ai'
+      });
       setBundlesData(data);
     } catch (err) {
       console.error('Error fetching AI bundles', err);
@@ -49,7 +62,7 @@ export const PricingAnalyticsView = ({
 
   useEffect(() => {
     fetchAIBundles();
-  }, []);
+  }, [activeModel]);
 
   const handleCopyProposal = (bundle: AIBundleItem) => {
     const text = `📦 PROPUESTA COMERCIAL: ${bundle.nombre_pack}\n\n` +
@@ -69,23 +82,26 @@ export const PricingAnalyticsView = ({
   };
 
   // Estado del Simulador Interactivo
-  const [selectedSku, setSelectedSku] = useState<string>('');
+  const [selectedSku, setSelectedSku] = useState<string>('LUM-6060');
   const [selectedChannel, setSelectedChannel] = useState<string>('Mercado Libre');
-  const [basePrice, setBasePrice] = useState<number>(1000);
-  const [cost, setCost] = useState<number>(600);
-  const [discountPct, setDiscountPct] = useState<number>(10);
+  const [basePrice, setBasePrice] = useState<number>(29.90);
+  const [cost, setCost] = useState<number>(14.50);
+  const [discountPct, setDiscountPct] = useState<number>(0);
   const [commissionPct, setCommissionPct] = useState<number>(12);
-  const [freight, setFreight] = useState<number>(20);
+  const [freight, setFreight] = useState<number>(0);
   const [simulation, setSimulation] = useState<DiscountSimulationResponse | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
 
-  // Inicializar o sincronizar con SKU seleccionado
+  // Inicializar o sincronizar con SKU seleccionado (Priorizar LUM-6060)
   useEffect(() => {
-    if (margins.length > 0 && !selectedSku) {
-      const first = margins[0];
-      setSelectedSku(first.sku);
-      setBasePrice(Number(first.precio_venta));
-      setCost(Number(first.costo_unitario));
+    if (margins.length > 0) {
+      const target = margins.find((m) => m.sku === 'LUM-6060') || margins[0];
+      if (target && (!selectedSku || selectedSku === 'LUM-6060')) {
+        setSelectedSku(target.sku);
+        setBasePrice(Number(target.precio_venta));
+        setCost(Number(target.costo_unitario));
+        setDiscountPct(0);
+      }
     }
   }, [margins]);
 
@@ -95,6 +111,7 @@ export const PricingAnalyticsView = ({
     if (prod) {
       setBasePrice(Number(prod.precio_venta));
       setCost(Number(prod.costo_unitario));
+      setDiscountPct(0);
     }
   };
 
@@ -106,18 +123,25 @@ export const PricingAnalyticsView = ({
     else if (channel === 'Retail Físico') setCommissionPct(8);
   };
 
-  // Simular descuento comercial
+  // Simular descuento comercial con debounce de 200ms
   useEffect(() => {
     const runSimulation = async () => {
       setIsSimulating(true);
       try {
         const res = await apiService.simulatePricing({
+          sku: selectedSku || undefined,
           base_price: basePrice,
+          precio_base: basePrice,
           cost: cost,
+          costo_unitario: cost,
           discount_pct: discountPct,
+          descuento_pct: discountPct,
           channel: selectedChannel,
+          canal: selectedChannel,
           commission_pct: commissionPct,
+          comision_pct: commissionPct,
           freight: freight,
+          flete_usd: freight,
         });
         setSimulation(res);
       } catch (err) {
@@ -127,9 +151,9 @@ export const PricingAnalyticsView = ({
       }
     };
 
-    const timeout = setTimeout(runSimulation, 250);
+    const timeout = setTimeout(runSimulation, 200);
     return () => clearTimeout(timeout);
-  }, [basePrice, cost, discountPct, selectedChannel, commissionPct, freight]);
+  }, [selectedSku, basePrice, cost, discountPct, selectedChannel, commissionPct, freight]);
 
   // Filtrado de tabla
   const filteredMargins = margins.filter((item) => {
@@ -226,22 +250,22 @@ export const PricingAnalyticsView = ({
       {/* Top Simulator Card and Waterfall Graphic */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Controls Slider Panel */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center space-x-2">
-              <div className="p-2 bg-sky-50 text-[#00a2e8] rounded-lg">
+              <div className="p-2 bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] rounded-lg">
                 <Sliders size={18} />
               </div>
-              <h3 className="font-bold text-sm text-[#333333]">Simulador de Sensibilidad de Pricing</h3>
+              <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">Simulador de Sensibilidad de Pricing</h3>
             </div>
             {simulation && (
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                   isSimulating
-                    ? 'bg-sky-50 text-[#00a2e8] border-sky-200'
+                    ? 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] border-sky-200 dark:border-sky-800'
                     : simulation.is_viable
-                    ? 'bg-emerald-50 text-[#2ecc71] border-emerald-200'
-                    : 'bg-rose-50 text-[#e74c3c] border-rose-200'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] border-emerald-200 dark:border-emerald-800'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-[#e74c3c] border-rose-200 dark:border-rose-800'
                 }`}
               >
                 {isSimulating
@@ -256,13 +280,13 @@ export const PricingAnalyticsView = ({
           {/* Selector de SKU y Canal */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#535c69] mb-1">
+              <label className="block text-xs font-semibold text-[#535c69] dark:text-slate-400 mb-1">
                 Producto / SKU
               </label>
               <select
                 value={selectedSku}
                 onChange={(e) => handleSkuChange(e.target.value)}
-                className="w-full bg-[#f5f7f8] border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-[#333333] focus:outline-none focus:border-[#00a2e8]"
+                className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
               >
                 <option value="">Entrada Manual</option>
                 {margins.map((m) => (
@@ -274,13 +298,13 @@ export const PricingAnalyticsView = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#535c69] mb-1">
+              <label className="block text-xs font-semibold text-[#535c69] dark:text-slate-400 mb-1">
                 Canal de Venta
               </label>
               <select
                 value={selectedChannel}
                 onChange={(e) => handleChannelChange(e.target.value)}
-                className="w-full bg-[#f5f7f8] border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-[#333333] focus:outline-none focus:border-[#00a2e8]"
+                className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
               >
                 <option value="Mercado Libre">Mercado Libre (12% com.)</option>
                 <option value="Tienda Propia">Tienda Propia (4% pasarela)</option>
@@ -292,77 +316,122 @@ export const PricingAnalyticsView = ({
 
           {/* Banner de Advertencia si Ratio Marginal < 15% */}
           {simulation && simulation.below_threshold_15pct && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-2 animate-in fade-in">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start space-x-2 animate-in fade-in">
               <span className="text-amber-500 text-sm">🚨</span>
               <div className="text-xs">
-                <span className="font-bold text-amber-800 block">
+                <span className="font-bold text-amber-800 dark:text-amber-300 block">
                   Advertencia de Margen Crítico (&lt; 15%)
                 </span>
-                <span className="text-amber-700 leading-tight block mt-0.5">
+                <span className="text-amber-700 dark:text-amber-400 leading-tight block mt-0.5">
                   El descuento de {discountPct}% en el canal {selectedChannel} sitúa el ratio marginal en{' '}
-                  <strong>{(simulation.marginal_ratio * 100).toFixed(1)}%</strong>, comprometiendo la absorción de costos fijos.
+                  <strong>
+                    {(simulation.ratio_marginal !== undefined ? Number(simulation.ratio_marginal) : (Number(simulation.marginal_ratio) * 100)).toFixed(1)}%
+                  </strong>
+                  , comprometiendo la absorción de costos fijos.
                 </span>
               </div>
             </div>
           )}
 
-          {/* Slider Precio Base */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="font-medium text-[#535c69]">Precio de Venta Base ($)</span>
-              <span className="font-bold font-mono text-[#333333]">${basePrice}</span>
+          {/* Control Precio Base: Input Numérico + Slider Sincronizado */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-[#535c69] dark:text-slate-300">Precio de Venta Base ($)</span>
+              <div className="flex items-center space-x-1">
+                <span className="text-slate-400 font-mono text-xs">$</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={basePrice}
+                  onChange={(e) => setBasePrice(Math.max(0, Number(e.target.value)))}
+                  className="w-24 px-2 py-0.5 text-xs font-bold font-mono text-[#333333] dark:text-slate-100 bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-right focus:outline-none focus:border-[#00a2e8]"
+                />
+              </div>
             </div>
             <input
               type="range"
-              min={10}
-              max={50000}
-              step={10}
+              min={1}
+              max={Math.max(100, Math.ceil(basePrice * 2.5))}
+              step={0.5}
               value={basePrice}
               onChange={(e) => setBasePrice(Number(e.target.value))}
-              className="w-full accent-[#00a2e8]"
+              className="w-full accent-[#00a2e8] cursor-pointer"
             />
           </div>
 
-          {/* Slider Costo Unitario */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="font-medium text-[#535c69]">Costo Unitario ($)</span>
-              <span className="font-bold font-mono text-[#333333]">${cost}</span>
+          {/* Control Costo Unitario: Input Numérico + Slider Sincronizado */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-[#535c69] dark:text-slate-300">Costo Unitario CMV ($)</span>
+              <div className="flex items-center space-x-1">
+                <span className="text-slate-400 font-mono text-xs">$</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={cost}
+                  onChange={(e) => setCost(Math.max(0, Number(e.target.value)))}
+                  className="w-24 px-2 py-0.5 text-xs font-bold font-mono text-[#333333] dark:text-slate-100 bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-right focus:outline-none focus:border-slate-500"
+                />
+              </div>
             </div>
             <input
               type="range"
-              min={5}
-              max={40000}
-              step={5}
+              min={0.5}
+              max={Math.max(100, Math.ceil(cost * 2.5))}
+              step={0.5}
               value={cost}
               onChange={(e) => setCost(Number(e.target.value))}
-              className="w-full accent-slate-600"
+              className="w-full accent-slate-600 dark:accent-slate-400 cursor-pointer"
             />
           </div>
 
-          {/* Slider Descuento Comercial */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="font-medium text-[#535c69]">Descuento Comercial (%)</span>
-              <span className="font-bold font-mono text-[#e74c3c]">{discountPct}%</span>
+          {/* Control Descuento Comercial: Input Numérico + Slider Sincronizado */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-[#535c69] dark:text-slate-300">Descuento Comercial (%)</span>
+              <div className="flex items-center space-x-1">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="100"
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+                  className="w-20 px-2 py-0.5 text-xs font-bold font-mono text-[#e74c3c] bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-right focus:outline-none focus:border-[#e74c3c]"
+                />
+                <span className="text-[#e74c3c] font-bold text-xs">%</span>
+              </div>
             </div>
             <input
               type="range"
               min={0}
-              max={50}
-              step={1}
+              max={60}
+              step={0.5}
               value={discountPct}
               onChange={(e) => setDiscountPct(Number(e.target.value))}
-              className="w-full accent-[#e74c3c]"
+              className="w-full accent-[#e74c3c] cursor-pointer"
             />
           </div>
 
-          {/* Slider Comisión & Flete */}
+          {/* Sliders e Inputs de Comisión & Flete */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <div className="flex justify-between text-[11px]">
-                <span className="font-medium text-[#535c69]">Comisión (%)</span>
-                <span className="font-bold font-mono text-[#f39c12]">{commissionPct}%</span>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium text-[#535c69] dark:text-slate-400">Comisión (%)</span>
+                <div className="flex items-center space-x-0.5">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="50"
+                    value={commissionPct}
+                    onChange={(e) => setCommissionPct(Math.max(0, Number(e.target.value)))}
+                    className="w-14 px-1 py-0.5 text-[11px] font-bold font-mono text-[#f39c12] bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-right focus:outline-none"
+                  />
+                  <span className="text-[#f39c12] font-bold text-[11px]">%</span>
+                </div>
               </div>
               <input
                 type="range"
@@ -371,49 +440,59 @@ export const PricingAnalyticsView = ({
                 step={0.5}
                 value={commissionPct}
                 onChange={(e) => setCommissionPct(Number(e.target.value))}
-                className="w-full accent-[#f39c12]"
+                className="w-full accent-[#f39c12] cursor-pointer"
               />
             </div>
 
             <div className="space-y-1">
-              <div className="flex justify-between text-[11px]">
-                <span className="font-medium text-[#535c69]">Flete ($)</span>
-                <span className="font-bold font-mono text-slate-700">${freight}</span>
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-medium text-[#535c69] dark:text-slate-400">Flete ($)</span>
+                <div className="flex items-center space-x-0.5">
+                  <span className="text-slate-400 font-mono text-[11px]">$</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={freight}
+                    onChange={(e) => setFreight(Math.max(0, Number(e.target.value)))}
+                    className="w-16 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-700 dark:text-slate-200 bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-right focus:outline-none"
+                  />
+                </div>
               </div>
               <input
                 type="range"
                 min={0}
-                max={500}
-                step={5}
+                max={100}
+                step={0.5}
                 value={freight}
                 onChange={(e) => setFreight(Number(e.target.value))}
-                className="w-full accent-slate-400"
+                className="w-full accent-slate-400 cursor-pointer"
               />
             </div>
           </div>
 
           {/* Quick Metrics from Simulation */}
           {simulation && (
-            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
-              <div className="bg-[#f5f7f8] p-2 rounded-lg">
-                <span className="text-[10px] text-[#535c69] block">Precio Efectivo</span>
-                <span className="text-xs font-bold text-[#333333]">
-                  ${Number(simulation.effective_price).toFixed(2)}
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+              <div className="bg-[#f5f7f8] dark:bg-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-[#535c69] dark:text-slate-400 block">Precio Neto</span>
+                <span className="text-xs font-bold font-mono text-[#333333] dark:text-slate-100">
+                  ${Number(simulation.precio_neto ?? simulation.effective_price).toFixed(2)}
                 </span>
               </div>
-              <div className="bg-[#f5f7f8] p-2 rounded-lg">
-                <span className="text-[10px] text-[#535c69] block">Margen Bruto %</span>
+              <div className="bg-[#f5f7f8] dark:bg-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-[#535c69] dark:text-slate-400 block">Margen Bruto %</span>
                 <span
-                  className={`text-xs font-bold ${
-                    simulation.gross_margin_pct >= 25 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'
+                  className={`text-xs font-bold font-mono ${
+                    Number(simulation.gross_margin_pct) >= 25 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'
                   }`}
                 >
                   {Number(simulation.gross_margin_pct).toFixed(1)}%
                 </span>
               </div>
-              <div className="bg-[#f5f7f8] p-2 rounded-lg">
-                <span className="text-[10px] text-[#535c69] block">Markup %</span>
-                <span className="text-xs font-bold text-[#00a2e8]">
+              <div className="bg-[#f5f7f8] dark:bg-slate-800/80 p-2 rounded-lg">
+                <span className="text-[10px] text-[#535c69] dark:text-slate-400 block">Markup %</span>
+                <span className="text-xs font-bold font-mono text-[#00a2e8]">
                   {Number(simulation.markup_pct).toFixed(1)}%
                 </span>
               </div>
@@ -438,30 +517,37 @@ export const PricingAnalyticsView = ({
               </span>
               <span
                 className={`text-lg font-bold font-mono ${
-                  (simulation?.unit_contribution_margin ?? 0) >= 0
+                  Number(simulation?.margen_contribucion ?? simulation?.unit_contribution_margin ?? 0) >= 0
                     ? 'text-[#2ecc71]'
                     : 'text-[#e74c3c]'
                 }`}
               >
-                ${Number(simulation?.unit_contribution_margin ?? 0).toFixed(2)}
+                ${Number(simulation?.margen_contribucion ?? simulation?.unit_contribution_margin ?? 0).toFixed(2)}
               </span>
             </div>
           </div>
 
           {/* Renderizado de Cascada Flotante */}
           <WaterfallChart
-            basePrice={basePrice}
-            discountAmount={(basePrice * discountPct) / 100}
-            effectivePrice={simulation?.effective_price ?? (basePrice - (basePrice * discountPct) / 100)}
-            directCost={cost}
+            basePrice={simulation?.precio_base !== undefined ? Number(simulation.precio_base) : basePrice}
+            discountAmount={simulation?.descuento_monto !== undefined ? Number(simulation.descuento_monto) : ((basePrice * discountPct) / 100)}
+            effectivePrice={
+              simulation?.precio_neto !== undefined
+                ? Number(simulation.precio_neto)
+                : simulation?.effective_price !== undefined
+                ? Number(simulation.effective_price)
+                : (basePrice * (1 - discountPct / 100))
+            }
+            directCost={simulation?.cmv !== undefined ? Number(simulation.cmv) : cost}
             channelAndFreight={
-              simulation
-                ? ((simulation.effective_price * commissionPct) / 100 + freight)
+              simulation?.canal_flete !== undefined
+                ? Number(simulation.canal_flete)
                 : ((basePrice * (1 - discountPct / 100) * commissionPct) / 100 + freight)
             }
             netContribution={
-              simulation?.unit_contribution_margin ??
-              (basePrice - (basePrice * discountPct) / 100 - cost - ((basePrice * (1 - discountPct / 100) * commissionPct) / 100 + freight))
+              simulation?.margen_contribucion !== undefined
+                ? Number(simulation.margen_contribucion)
+                : Number(simulation?.unit_contribution_margin ?? 0)
             }
           />
 
@@ -470,8 +556,12 @@ export const PricingAnalyticsView = ({
               <CheckCircle2 size={14} className="text-[#00a2e8]" />
               <span>
                 Ratio Marginal:{' '}
-                <strong className="text-[#333333]">
-                  {((simulation?.marginal_ratio ?? 0) * 100).toFixed(1)}%
+                <strong className="text-[#333333] dark:text-slate-100 font-mono">
+                  {simulation?.ratio_marginal !== undefined
+                    ? Number(simulation.ratio_marginal).toFixed(1)
+                    : simulation?.marginal_ratio !== undefined
+                    ? (Number(simulation.marginal_ratio) * 100).toFixed(1)
+                    : '0.0'}%
                 </strong>
               </span>
             </div>
@@ -513,7 +603,11 @@ export const PricingAnalyticsView = ({
             className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:scale-95 shrink-0"
           >
             <Sparkles size={14} className={loadingBundles ? 'animate-spin' : ''} />
-            <span>{loadingBundles ? 'Analizando Catálogo e Inventario...' : 'Regenerar Sugerencias IA'}</span>
+            <span>
+              {loadingBundles
+                ? `🧠 Generando packs estratégicos con ${activeModel} en local...`
+                : 'Regenerar Sugerencias IA'}
+            </span>
           </button>
         </div>
 

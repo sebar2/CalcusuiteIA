@@ -48,29 +48,55 @@ export interface MarginSummaryItem {
   marginal_ratio: number;
 }
 
+export interface WaterfallStepItem {
+  step: string;
+  valor: number;
+  tipo: 'base' | 'deduccion' | 'subtotal' | 'final' | string;
+}
+
 export interface DiscountSimulationRequest {
   base_price?: number;
+  precio_base?: number;
   cost?: number;
+  costo_unitario?: number;
   sku?: string;
-  discount_pct: number;
+  discount_pct?: number;
+  descuento_pct?: number;
   channel?: string;
+  canal?: string;
   commission_pct?: number;
+  comision_pct?: number;
   freight?: number;
+  flete_usd?: number;
 }
 
 export interface DiscountSimulationResponse {
-  discount_pct: number;
+  // Claves en español del Waterfall
+  precio_base?: number;
+  descuento_monto?: number;
+  precio_neto?: number;
+  cmv?: number;
+  canal_flete?: number;
+  margen_contribucion?: number;
+  ratio_marginal?: number;
+  waterfall_steps?: WaterfallStepItem[];
+  alerta?: string | null;
+
+  // Claves existentes
+  base_price?: number | string;
+  discount_pct?: number | string;
+  discounted_price?: number | string;
   effective_price: number;
   channel?: string;
   commission_pct?: number;
   freight?: number;
-  gross_margin: number;
-  gross_margin_pct: number;
-  unit_contribution_margin: number;
-  marginal_ratio: number;
-  markup_pct: number;
+  gross_margin?: number | string;
+  gross_margin_pct?: number;
+  unit_contribution_margin?: number | string;
+  marginal_ratio?: number | string;
+  markup_pct?: number;
   below_threshold_15pct?: boolean;
-  is_viable: boolean;
+  is_viable?: boolean;
 }
 
 export interface BudgetVarianceItem {

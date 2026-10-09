@@ -1,5 +1,6 @@
 import io
 import re
+import json
 import calendar
 from decimal import Decimal
 from datetime import datetime, timezone, date
@@ -127,8 +128,10 @@ from app.domain.schemas import (
     BudgetScenarioRequest,
     BudgetScenarioResponse,
     PricingAIBundlesResponse,
+    PricingAIBundlesRequest,
     AIBundleItem,
     BundleProductItem,
+    WaterfallStep,
 )
 from app.services.budget_planner_service import BudgetPlannerService
 from app.services.tenders_service import tenders_service
@@ -616,46 +619,132 @@ def simulate_commercial_discount(
     db: Session = Depends(get_db)
 ):
     """
-    Simulador interactivo del impacto de descuentos sobre precio base, margen bruto y contribución.
-    Permite suministrar base_price y cost directamente, o indicar un sku existente para auto-completarlos.
+    Simulador interactivo del impacto de descuentos comerciales y cálculo del Waterfall de canales y márgenes.
+    Normaliza y acepta parámetros flexibles en español e inglés:
+    precio_base / base_price, costo_unitario / cost, descuento_pct / discount_pct, comision_pct / commission_pct, flete_usd / freight.
     """
-    base_price = req.base_price
-    cost = req.cost
+    p_base_dec = req.precio_base if req.precio_base is not None else req.base_price
+    c_unit_dec = req.costo_unitario if req.costo_unitario is not None else req.cost
 
-    if (base_price is None or cost is None) and req.sku:
+    if (p_base_dec is None or c_unit_dec is None) and req.sku:
         prod = db.query(Product).filter(Product.sku == req.sku).first()
         if prod:
-            if base_price is None:
-                base_price = prod.precio_venta
-            if cost is None:
-                cost = prod.costo_unitario
+            if p_base_dec is None:
+                p_base_dec = prod.precio_venta
+            if c_unit_dec is None:
+                c_unit_dec = prod.costo_unitario
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Producto con SKU '{req.sku}' no encontrado en el sistema."
             )
 
-    if base_price is None or cost is None:
+    if p_base_dec is None or c_unit_dec is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Se requiere base_price y cost, o un sku existente en la base de datos."
         )
 
-    if base_price <= Decimal('0'):
+    if p_base_dec <= Decimal('0'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El precio base debe ser mayor a cero."
         )
 
-    simulation = simulate_discount(
-        base_price=base_price,
-        cost=cost,
-        discount_pct=req.discount_pct,
-        commission_pct=req.commission_pct,
-        freight=req.freight
-    )
+    p_base = float(p_base_dec)
+    c_unit = float(c_unit_dec)
 
-    return DiscountSimulationResponse(**simulation)
+    # Normalizar descuento porcentual (maneja tanto '0.10' = 10% como '10' = 10%)
+    raw_desc = req.descuento_pct if req.descuento_pct is not None else req.discount_pct
+    if raw_desc is None:
+        desc_pct = 0.0
+    else:
+        f_desc = float(raw_desc)
+        if 0.0 < f_desc <= 1.0:
+            desc_pct = f_desc * 100.0
+        else:
+            desc_pct = max(0.0, f_desc)
+
+    # Normalizar canal y comisión porcentual
+    canal = req.canal or req.channel or "Canal Mayorista"
+    raw_com = req.comision_pct if req.comision_pct is not None else req.commission_pct
+    if raw_com is None or float(raw_com) == 0.0:
+        channel_commissions = {
+            "Mercado Libre": 12.0,
+            "Retail Físico": 8.0,
+            "Tienda Propia": 4.0,
+            "Canal Mayorista": 2.0,
+            "Mayorista": 2.0
+        }
+        com_pct = channel_commissions.get(canal, 0.0)
+    else:
+        f_com = float(raw_com)
+        if 0.0 < f_com <= 1.0:
+            com_pct = f_com * 100.0
+        else:
+            com_pct = max(0.0, f_com)
+
+    # Normalizar flete
+    raw_flete = req.flete_usd if req.flete_usd is not None else req.freight
+    flete = float(raw_flete) if raw_flete is not None else 0.0
+
+    # Lógica de cálculo determinista del Waterfall
+    desc_monto = p_base * (desc_pct / 100.0)
+    precio_neto = p_base - desc_monto
+    comision_monto = precio_neto * (com_pct / 100.0)
+    costo_canal_flete = comision_monto + flete
+    cmv_total = c_unit
+    margen_contribucion = precio_neto - cmv_total - costo_canal_flete
+    ratio_marginal = (margen_contribucion / precio_neto * 100.0) if precio_neto > 0 else 0.0
+
+    waterfall_steps = [
+        WaterfallStep(step="1. Precio Base", valor=round(p_base, 2), tipo="base"),
+        WaterfallStep(step="2. Descuento", valor=-round(desc_monto, 2), tipo="deduccion"),
+        WaterfallStep(step="3. Precio Neto", valor=round(precio_neto, 2), tipo="subtotal"),
+        WaterfallStep(step="4. Costo CMV", valor=-round(cmv_total, 2), tipo="deduccion"),
+        WaterfallStep(step="5. Canal & Flete", valor=-round(costo_canal_flete, 2), tipo="deduccion"),
+        WaterfallStep(step="6. Contrib. Neta", valor=round(margen_contribucion, 2), tipo="final")
+    ]
+    alerta = "El descuento destruye el margen de la unidad" if margen_contribucion <= 0 else None
+
+    # Métricas de compatibilidad previa
+    gross_margin_amount = precio_neto - c_unit
+    gross_margin = (gross_margin_amount / precio_neto) if precio_neto > 0 else 0.0
+    markup = (gross_margin_amount / c_unit) if c_unit > 0 else 0.0
+    is_neg = gross_margin < 0 or margen_contribucion < 0
+    below_15 = (ratio_marginal / 100.0) < 0.15
+    is_viable = not below_15 and margen_contribucion > 0
+
+    disc_price_dec = (p_base_dec * (Decimal('1') - Decimal(str(desc_pct / 100.0)))).quantize(Decimal('0.01'))
+    gross_margin_dec = Decimal(str(round(gross_margin, 4))).quantize(Decimal('0.0001')) if precio_neto > 0 else Decimal('0')
+    cm_dec = Decimal(str(round(margen_contribucion, 2))).quantize(Decimal('0.01'))
+
+    return DiscountSimulationResponse(
+        precio_base=round(p_base, 2),
+        descuento_monto=round(desc_monto, 2),
+        precio_neto=round(precio_neto, 2),
+        cmv=round(cmv_total, 2),
+        canal_flete=round(costo_canal_flete, 2),
+        margen_contribucion=round(margen_contribucion, 2),
+        ratio_marginal=round(ratio_marginal, 1),
+        waterfall_steps=waterfall_steps,
+        alerta=alerta,
+        base_price=p_base_dec,
+        discount_pct=Decimal(str(round(desc_pct / 100.0, 4))),
+        discounted_price=disc_price_dec,
+        effective_price=disc_price_dec,
+        cost=c_unit_dec,
+        channel=canal,
+        gross_margin=gross_margin_dec,
+        gross_margin_pct=Decimal(str(round(gross_margin * 100.0, 2))),
+        markup=Decimal(str(round(markup, 4))),
+        markup_pct=Decimal(str(round(markup * 100.0, 2))),
+        unit_contribution_margin=cm_dec,
+        marginal_ratio=Decimal(str(round(ratio_marginal / 100.0, 4))),
+        is_negative_margin=is_neg,
+        below_threshold_15pct=below_15,
+        is_viable=is_viable
+    )
 
 
 @router.post(
@@ -664,20 +753,24 @@ def simulate_commercial_discount(
     summary="Generador de Packs y Bundles Estratégicos con Asesor Multifuncional IA"
 )
 async def suggest_ai_bundles(
-    engine_mode: str = Query("auto", description="Modo: auto, force_llm, heuristic"),
+    payload: Optional[PricingAIBundlesRequest] = None,
+    engine_mode: Optional[str] = Query(None, description="Modo: auto, force_llm, heuristic, local_ai"),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
     """
     Agente de Pricing multifuncional (Performance + Marketing + Ventas + Logística + Finanzas).
-    Detecta productos en sobrestock (DOH > 90d o stock inmovilizado) y productos de alta rotación
-    para generar combinaciones estratégicas de Bundles con cálculo de margen neto y capital liberado.
+    Detecta productos en sobrestock (DOH > 90d o stock inmovilizado) y productos de alta rotación.
+    Ejecuta inferencia en el modelo local de Ollama (ej. gemma4:26b) con timeout infinito.
     """
+    target_model = (payload.model if payload and payload.model else None) or "gemma4:26b"
+    eff_mode = (payload.engine_mode if payload and payload.engine_mode else None) or engine_mode or "local_ai"
+
     products = db.query(Product).filter(Product.activo == True).all()
     if not products:
         products = db.query(Product).all()
 
-    # Análisis de DOH y candidatos
+    # Análisis de DOH y candidatos reales
     overstock_candidates = []
     fast_mover_candidates = []
 
@@ -717,7 +810,6 @@ async def suggest_ai_bundles(
     overstock_candidates.sort(key=lambda x: (x["doh"], x["volumen_total"]), reverse=True)
     fast_mover_candidates.sort(key=lambda x: x["stock_actual"], reverse=True)
 
-    # Si no hay candidatos extremos, usar partición de catálogo
     if not overstock_candidates:
         overstock_candidates = [
             {
@@ -745,7 +837,183 @@ async def suggest_ai_bundles(
             for p in products[len(products)//2 or 1:]
         ]
 
-    # Crear 3 propuestas estratégicas
+    # Intentar inferencia real con Ollama si no está en modo heurístico forzado
+    if eff_mode != "heuristic":
+        try:
+            skus_context = {
+                "sobrestock_critico": [
+                    {
+                        "sku": p["sku"],
+                        "nombre": p["nombre"],
+                        "stock_unidades": p["stock_actual"],
+                        "doh_dias": p["doh"],
+                        "precio_regular_usd": p["precio_regular_usd"],
+                        "costo_unitario_usd": p["costo_unitario_usd"]
+                    }
+                    for p in overstock_candidates[:5]
+                ],
+                "productos_ancla_alta_demanda": [
+                    {
+                        "sku": p["sku"],
+                        "nombre": p["nombre"],
+                        "stock_unidades": p["stock_actual"],
+                        "doh_dias": p["doh"],
+                        "precio_regular_usd": p["precio_regular_usd"],
+                        "costo_unitario_usd": p["costo_unitario_usd"]
+                    }
+                    for p in fast_mover_candidates[:5]
+                ]
+            }
+
+            prompt = (
+                "Eres el Comité Ejecutivo de Calcu (CFO, Marketing, Ventas y Logística).\n"
+                "Analiza los siguientes SKUs de sobrestock y productos ancla del catálogo real:\n"
+                f"{json.dumps(skus_context, ensure_ascii=False, indent=2)}\n\n"
+                "Genera 3 propuestas estratégicas de Bundles / Packs en formato JSON estricto con la siguiente estructura:\n"
+                "{\n"
+                '  "dictamen_cfo": "Resumen ejecutivo del comité explicando la estrategia financiera y de rotación",\n'
+                '  "bundles": [\n'
+                "    {\n"
+                '      "id": "BUNDLE-01",\n'
+                '      "titulo": "Nombre comercial del pack",\n'
+                '      "descuento_pct": 15.0,\n'
+                '      "margen_pct": 28.5,\n'
+                '      "racional": "Estrategia comercial de apalancamiento",\n'
+                '      "skus": [\n'
+                '        {"sku": "SKU-XXX", "nombre": "Nombre", "tipo": "sobrestock", "stock_dias": 120, "precio_reg": 50.0},\n'
+                '        {"sku": "SKU-YYY", "nombre": "Nombre", "tipo": "ancla", "stock_dias": 20, "precio_reg": 30.0}\n'
+                "      ],\n"
+                '      "precio_pack": 68.0,\n'
+                '      "precio_regular": 80.0,\n'
+                '      "capital_liberado": 350.0,\n'
+                '      "espacio_liberado_m2": 2.4,\n'
+                '      "evaluaciones": {\n'
+                '        "mkt": "Evaluación de marketing",\n'
+                '        "finanzas": "Evaluación financiera",\n'
+                '        "logistica": "Evaluación logística"\n'
+                "      },\n"
+                '      "pitch_comercial": "Argumento de venta para clientes y comerciales"\n'
+                "    }\n"
+                "  ]\n"
+                "}\n\n"
+                "IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON válido, sin markdown ni explicaciones adicionales."
+            )
+
+            ollama_url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
+            async with httpx.AsyncClient(timeout=httpx.Timeout(None, connect=5.0)) as client:
+                resp = await client.post(
+                    ollama_url,
+                    json={
+                        "model": target_model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": 0.2}
+                    }
+                )
+                if resp.status_code == 200:
+                    raw_text = resp.json().get("response", "")
+                    cleaned_json_text = re.sub(r'<think>[\s\S]*?</think>', '', raw_text, flags=re.IGNORECASE).strip()
+                    match = re.search(r'\{[\s\S]*\}', cleaned_json_text)
+                    if match:
+                        parsed = json.loads(match.group(0))
+                        llm_bundles = parsed.get("bundles", [])
+                        if isinstance(llm_bundles, list) and len(llm_bundles) >= 2:
+                            ai_items: List[AIBundleItem] = []
+                            for idx, b in enumerate(llm_bundles[:3]):
+                                b_id = str(b.get("id") or f"BUNDLE-OLLAMA-0{idx+1}")
+                                b_titulo = str(b.get("titulo") or b.get("nombre_pack") or f"Pack IA {idx+1}")
+                                b_racional = str(b.get("racional") or b.get("descripcion") or "Combinación estratégica generada por IA")
+                                b_desc_pct = float(b.get("descuento_pct") or 15.0)
+                                b_margen_pct = float(b.get("margen_pct") or 25.0)
+                                b_p_pack = float(b.get("precio_pack") or b.get("precio_bundle_sugerido_usd") or 50.0)
+                                b_p_reg = float(b.get("precio_regular") or b.get("precio_individual_total_usd") or (b_p_pack * 1.15))
+                                b_cap_lib = float(b.get("capital_liberado") or b.get("capital_inmovilizado_liberado_usd") or 200.0)
+                                b_m2_lib = float(b.get("espacio_liberado_m2") or b.get("m2_liberados_estimados") or 1.5)
+                                b_pitch = str(b.get("pitch_comercial") or b.get("argumento_comercial") or "Propuesta de valor integral.")
+
+                                evs = b.get("evaluaciones") or {}
+                                mkt_ev = str(evs.get("mkt") or b.get("evaluacion_marketing") or "Impulsa la adopción comercial acelerada.")
+                                fin_ev = str(evs.get("finanzas") or b.get("evaluacion_finanzas") or f"Preserva margen del {b_margen_pct}%.")
+                                log_ev = str(evs.get("logistica") or b.get("evaluacion_logistica") or f"Descomprime {b_m2_lib} m² en depósito.")
+
+                                skus_raw = b.get("skus") or b.get("productos") or []
+                                prod_items: List[BundleProductItem] = []
+                                for s in skus_raw:
+                                    s_sku = str(s.get("sku") or "SKU-GEN")
+                                    prod_db = next((p for p in products if p.sku == s_sku), None)
+                                    s_nom = str(s.get("nombre") or (prod_db.nombre if prod_db else s_sku))
+                                    s_doh = float(s.get("stock_dias") or s.get("doh") or (120.0 if "sobre" in str(s.get("tipo", "")).lower() else 25.0))
+                                    s_precio = float(s.get("precio_reg") or s.get("precio_regular_usd") or (float(prod_db.precio_venta) if prod_db else 20.0))
+                                    s_costo = float(prod_db.costo_unitario) if prod_db else (s_precio * 0.6)
+                                    s_stock = int(prod_db.inventario.stock_actual) if (prod_db and prod_db.inventario) else 50
+                                    s_over = "sobre" in str(s.get("tipo", "")).lower() or s_doh > 90
+
+                                    prod_items.append(BundleProductItem(
+                                        sku=s_sku,
+                                        nombre=s_nom,
+                                        stock_actual=s_stock,
+                                        doh=round(s_doh, 1),
+                                        precio_regular_usd=round(s_precio, 2),
+                                        costo_unitario_usd=round(s_costo, 2),
+                                        es_sobrestock=s_over
+                                    ))
+
+                                if not prod_items and overstock_candidates and fast_mover_candidates:
+                                    p_o = overstock_candidates[idx % len(overstock_candidates)]
+                                    p_f = fast_mover_candidates[idx % len(fast_mover_candidates)]
+                                    prod_items = [
+                                        BundleProductItem(
+                                            sku=p_o["sku"],
+                                            nombre=p_o["nombre"],
+                                            stock_actual=p_o["stock_actual"],
+                                            doh=p_o["doh"],
+                                            precio_regular_usd=p_o["precio_regular_usd"],
+                                            costo_unitario_usd=p_o["costo_unitario_usd"],
+                                            es_sobrestock=True
+                                        ),
+                                        BundleProductItem(
+                                            sku=p_f["sku"],
+                                            nombre=p_f["nombre"],
+                                            stock_actual=p_f["stock_actual"],
+                                            doh=p_f["doh"],
+                                            precio_regular_usd=p_f["precio_regular_usd"],
+                                            costo_unitario_usd=p_f["costo_unitario_usd"],
+                                            es_sobrestock=False
+                                        )
+                                    ]
+
+                                ai_items.append(AIBundleItem(
+                                    id=b_id,
+                                    nombre_pack=b_titulo,
+                                    descripcion=b_racional,
+                                    productos=prod_items,
+                                    precio_individual_total_usd=b_p_reg,
+                                    precio_bundle_sugerido_usd=b_p_pack,
+                                    descuento_bundle_pct=b_desc_pct,
+                                    margen_neto_pct=b_margen_pct,
+                                    capital_inmovilizado_liberado_usd=b_cap_lib,
+                                    m2_liberados_estimados=b_m2_lib,
+                                    argumento_comercial=b_pitch,
+                                    evaluacion_marketing=mkt_ev,
+                                    evaluacion_finanzas=fin_ev,
+                                    evaluacion_logistica=log_ev
+                                ))
+
+                            cfo_dictamen = parsed.get("dictamen_cfo") or (
+                                f"Dictamen del Comité Ejecutivo (Inferencia LLM {target_model}): Se estructuraron {len(ai_items)} "
+                                "packs estratégicos anti-sobrestock optimizando el margen de contribución y liberando espacio físico de almacenamiento."
+                            )
+                            return PricingAIBundlesResponse(
+                                status="success",
+                                total_bundles_sugeridos=len(ai_items),
+                                dictamen_cfo=cfo_dictamen,
+                                bundles=ai_items
+                            )
+        except Exception as exc:
+            logger.info("Ollama bundling inference fallback (%s): %s", target_model, exc)
+
+    # Fallback matemático determinista sobre catálogo real
     bundles: List[AIBundleItem] = []
     
     # 1. Combo Industrial / Infraestructura

@@ -432,9 +432,9 @@ export const apiService = {
   },
 
   // MÓDULO PRICING: Packs y Bundles Estratégicos con IA
-  async getAIBundles(engineMode: string = 'auto'): Promise<PricingAIBundlesResponse> {
-    const res = await apiClient.post<PricingAIBundlesResponse>('/api/v1/pricing/ai-bundles-suggest', null, {
-      params: { engine_mode: engineMode },
+  async getAIBundles(payload?: { model?: string; engine_mode?: string } | string): Promise<PricingAIBundlesResponse> {
+    const body = typeof payload === 'object' ? payload : { engine_mode: payload || 'local_ai' };
+    const res = await apiClient.post<PricingAIBundlesResponse>('/api/v1/pricing/ai-bundles-suggest', body, {
       timeout: 0,
     });
     return res.data;

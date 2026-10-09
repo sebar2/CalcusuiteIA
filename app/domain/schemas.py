@@ -249,16 +249,41 @@ class MarginSummary(BaseModel):
     unit_contribution_margin: Decimal
     marginal_ratio: Decimal
 
+class WaterfallStep(BaseModel):
+    step: str
+    valor: float
+    tipo: str  # "base" | "deduccion" | "subtotal" | "final"
+
 class DiscountSimulationRequest(BaseModel):
     sku: Optional[str] = None
     base_price: Optional[Decimal] = Field(default=None, gt=0)
+    precio_base: Optional[Decimal] = Field(default=None, gt=0)
     cost: Optional[Decimal] = Field(default=None, ge=0)
-    discount_pct: Decimal = Field(ge=0, le=1)
-    commission_pct: Decimal = Field(default=Decimal('0'), ge=0, le=1)
-    freight: Decimal = Field(default=Decimal('0'), ge=0)
+    costo_unitario: Optional[Decimal] = Field(default=None, ge=0)
+    discount_pct: Optional[Decimal] = Field(default=None, ge=0)
+    descuento_pct: Optional[Decimal] = Field(default=None, ge=0)
+    commission_pct: Optional[Decimal] = Field(default=None, ge=0)
+    comision_pct: Optional[Decimal] = Field(default=None, ge=0)
+    freight: Optional[Decimal] = Field(default=None, ge=0)
+    flete_usd: Optional[Decimal] = Field(default=None, ge=0)
     channel: Optional[str] = "General"
+    canal: Optional[str] = None
+
+    model_config = ConfigDict(extra="ignore")
 
 class DiscountSimulationResponse(BaseModel):
+    # Formato Waterfall determinista en español
+    precio_base: Optional[float] = None
+    descuento_monto: Optional[float] = None
+    precio_neto: Optional[float] = None
+    cmv: Optional[float] = None
+    canal_flete: Optional[float] = None
+    margen_contribucion: Optional[float] = None
+    ratio_marginal: Optional[float] = None
+    waterfall_steps: List[WaterfallStep] = Field(default_factory=list)
+    alerta: Optional[str] = None
+
+    # Campos existentes para retrocompatibilidad
     base_price: Decimal
     discount_pct: Decimal
     discounted_price: Decimal
@@ -274,6 +299,8 @@ class DiscountSimulationResponse(BaseModel):
     is_negative_margin: bool
     below_threshold_15pct: bool = False
     is_viable: bool = True
+
+    model_config = ConfigDict(extra="allow", from_attributes=True)
 
 
 # --- ETL Schemas ---
@@ -1918,4 +1945,11 @@ class PricingAIBundlesResponse(BaseModel):
     total_bundles_sugeridos: int
     dictamen_cfo: str
     bundles: List[AIBundleItem] = Field(default_factory=list)
+
+
+class PricingAIBundlesRequest(BaseModel):
+    model: Optional[str] = "gemma4:26b"
+    engine_mode: Optional[str] = "local_ai"
+
+    model_config = ConfigDict(extra="ignore")
 
