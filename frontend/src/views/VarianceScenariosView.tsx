@@ -15,6 +15,8 @@ import {
   Building2,
   Users,
   ShieldAlert,
+  Check,
+  X,
 } from 'lucide-react';
 import {
   BarChart,
@@ -78,10 +80,83 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
     }).catch(() => {});
   }, []);
 
+  // Interfaces para soporte normalizado de escenarios
+  interface CostCenterBreakdownItem {
+    centro_costo_id: number;
+    nombre: string;
+    monto_sugerido: number;
+    justificacion: string;
+  }
+
+  interface NormalizedScenario {
+    name: string;
+    focus: string;
+    ingresos: number;
+    cogs: number;
+    margen_bruto: number;
+    ebitda: number;
+    opex: number;
+    doh: number;
+    plan_accion: {
+      compras_abastecimiento?: string;
+      politica_pricing?: string;
+      logistica_inventario?: string;
+    };
+    desglose_centros_costo: CostCenterBreakdownItem[];
+    riesgos_mitigacion: {
+      riesgo: string;
+      mitigacion: string;
+    }[];
+  }
+
+  const normalizeScenario = (raw: any, defaultDoh = 45): NormalizedScenario | null => {
+    if (!raw) return null;
+    const num = (v: any) => typeof v === 'number' ? v : (parseFloat(String(v).replace(/[^0-9.-]/g, '')) || 0);
+    const sales = num(raw.projected_sales ?? raw.ingresos ?? raw.ingresos_totales ?? 0);
+    const cogs = num(raw.projected_cogs ?? raw.cogs ?? raw.cogs_total ?? 0);
+    let margin = num(raw.gross_margin_pct ?? raw.margen_bruto ?? raw.margen_bruto_pct ?? 0);
+    if (margin > 0 && margin <= 1) margin = margin * 100;
+    else if (margin === 0 && sales > 0) margin = ((sales - cogs) / sales) * 100;
+
+    return {
+      name: raw.name || '',
+      focus: raw.focus || raw.racional || '',
+      ingresos: sales,
+      cogs: cogs,
+      margen_bruto: Number(margin.toFixed(1)),
+      ebitda: num(raw.contribution_margin ?? raw.ebitda ?? (sales - cogs)),
+      opex: num(raw.projected_opex ?? 0),
+      doh: Math.round(num(raw.doh_objetivo ?? raw.doh ?? raw.doh_objetivo_dias ?? defaultDoh)),
+      plan_accion: raw.plan_accion || {},
+      desglose_centros_costo: raw.desglose_centros_costo || [],
+      riesgos_mitigacion: raw.riesgos_mitigacion || []
+    };
+  };
+
   // Estado del Generador de 3 Escenarios
   const [scenariosData, setScenariosData] = useState<BudgetScenarioResponse | null>(null);
+  const [scenarios, setScenarios] = useState<{
+    conservador: NormalizedScenario | null;
+    base: NormalizedScenario | null;
+    agresivo: NormalizedScenario | null;
+  } | null>(null);
   const [isGeneratingScenarios, setIsGeneratingScenarios] = useState(false);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
+
+  // Estados de Progressive Disclosure (Acordeones por Escenario)
+  const [activeAccordion, setActiveAccordion] = useState<Record<string, 'plan' | 'centros' | 'riesgos' | null>>({
+    conservador: null,
+    base: 'centros',
+    agresivo: null,
+  });
+
+  // Estado para Adopción y Cierre Contable de Escenario
+  const [selectedScenarioForAdoption, setSelectedScenarioForAdoption] = useState<{
+    key: 'conservador' | 'base' | 'agresivo';
+    data: NormalizedScenario;
+  } | null>(null);
+  const [isApplyingScenario, setIsApplyingScenario] = useState(false);
+  const [adoptionMessage, setAdoptionMessage] = useState<string | null>(null);
 
   // Estado para Reinicio / Eliminación de Período (Admin)
   const [isDeletingPeriod, setIsDeletingPeriod] = useState(false);
@@ -133,15 +208,50 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
   const handleGenerateScenarios = async () => {
     setIsGeneratingScenarios(true);
     setScenarioError(null);
+    setAdoptionMessage(null);
     try {
       const res = await apiService.getBudgetScenarios({
-        target_period: selectedPeriod,
+        target_period: currentPeriod || selectedPeriod,
       });
       setScenariosData(res);
+      const sc = (res as any)?.scenarios || (res as any)?.escenarios || res;
+      setScenarios({
+        conservador: normalizeScenario(sc.conservative || sc.conservador, 60),
+        base: normalizeScenario(sc.base || sc.moderado, 45),
+        agresivo: normalizeScenario(sc.aggressive || sc.agresivo, 35)
+      });
     } catch (err: any) {
       setScenarioError(err.response?.data?.detail || 'Error al generar escenarios presupuestarios');
     } finally {
       setIsGeneratingScenarios(false);
+    }
+  };
+
+  // Adopción Presupuestaria Oficial
+  const handleConfirmAdoptScenario = async () => {
+    if (!selectedScenarioForAdoption) return;
+    setIsApplyingScenario(true);
+    try {
+      const partidas = (selectedScenarioForAdoption.data.desglose_centros_costo || []).map((cc) => ({
+        centro_costo_id: cc.centro_costo_id,
+        monto_presupuestado: cc.monto_sugerido,
+        concepto_opex: `Presupuesto Oficial ${selectedScenarioForAdoption.data.name || selectedScenarioForAdoption.key.toUpperCase()} - ${cc.justificacion || 'OPEX'}`
+      }));
+
+      const res = await apiService.applyBudgetScenario({
+        periodo: currentPeriod,
+        scenario_name: selectedScenarioForAdoption.key,
+        partidas
+      });
+
+      setAdoptionMessage(res.message || `Presupuesto oficial para ${currentPeriod} grabado exitosamente.`);
+      setSelectedScenarioForAdoption(null);
+      await fetchVariances();
+    } catch (err: any) {
+      console.error('Error applying budget scenario', err);
+      alert(err.response?.data?.detail || 'Error al grabar el presupuesto oficial.');
+    } finally {
+      setIsApplyingScenario(false);
     }
   };
 
@@ -640,142 +750,319 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
               </div>
             )}
 
+            {/* Notificación de Adopción Oficial Exitosa */}
+            {adoptionMessage && (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 animate-in fade-in">
+                <div className="flex items-center space-x-2.5">
+                  <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="font-semibold">{adoptionMessage}</span>
+                </div>
+                <button
+                  onClick={() => setAdoptionMessage(null)}
+                  className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-lg text-emerald-600 cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+
             {/* Escenarios Table and Qualitative Analysis */}
-            {scenariosData && (
+            {scenarios && (
               <div className="space-y-6 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Conservador */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <span className="font-bold text-xs uppercase text-slate-700 dark:text-slate-300 tracking-wider">
-                        🛡️ Conservador
-                      </span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full">
-                        Caja &amp; Defensivo
-                      </span>
-                    </div>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Ingresos:</span>
-                        <span className="font-bold font-mono">
-                          ${(scenariosData.escenarios?.conservador?.ingresos_totales || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">COGS:</span>
-                        <span className="font-mono text-slate-600 dark:text-slate-400">
-                          ${(scenariosData.escenarios?.conservador?.cogs_total || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Margen Bruto:</span>
-                        <span className="font-semibold text-[#2ecc71]">
-                          {safeToFixed(scenariosData.escenarios?.conservador?.margen_bruto_pct, 1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">EBITDA Proyectado:</span>
-                        <span className="font-bold font-mono text-[#00a2e8]">
-                          ${(scenariosData.escenarios?.conservador?.ebitda || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-[#535c69] dark:text-slate-400">DOH Objetivo:</span>
-                        <span className="font-bold">{scenariosData.escenarios?.conservador?.doh_objetivo_dias || 0} días</span>
-                      </div>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  {(['conservador', 'base', 'agresivo'] as const).map((key) => {
+                    const s = scenarios[key];
+                    if (!s) return null;
+                    const isBase = key === 'base';
+                    const activeTabKey = activeAccordion[key];
 
-                  {/* Base */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-[#00a2e8] p-5 shadow-sm space-y-3 relative">
-                    <span className="absolute -top-2.5 right-4 px-2 py-0.5 bg-[#00a2e8] text-white text-[9px] font-bold rounded-full uppercase tracking-wider">
-                      Recomendado
-                    </span>
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <span className="font-bold text-xs uppercase text-[#00a2e8] tracking-wider">
-                        🎯 Base / Moderado
-                      </span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] rounded-full">
-                        Tendencial
-                      </span>
-                    </div>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Ingresos:</span>
-                        <span className="font-bold font-mono">
-                          ${(scenariosData.escenarios?.base?.ingresos_totales || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">COGS:</span>
-                        <span className="font-mono text-slate-600 dark:text-slate-400">
-                          ${(scenariosData.escenarios?.base?.cogs_total || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Margen Bruto:</span>
-                        <span className="font-semibold text-[#2ecc71]">
-                          {safeToFixed(scenariosData.escenarios?.base?.margen_bruto_pct, 1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">EBITDA Proyectado:</span>
-                        <span className="font-bold font-mono text-[#00a2e8]">
-                          ${(scenariosData.escenarios?.base?.ebitda || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-[#535c69] dark:text-slate-400">DOH Objetivo:</span>
-                        <span className="font-bold">{scenariosData.escenarios?.base?.doh_objetivo_dias || 0} días</span>
-                      </div>
-                    </div>
-                  </div>
+                    return (
+                      <div
+                        key={key}
+                        className={`bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between transition-all ${
+                          isBase
+                            ? 'border-2 border-[#00a2e8] ring-4 ring-sky-500/10'
+                            : 'border border-slate-200/80 dark:border-slate-800'
+                        }`}
+                      >
+                        {/* Cabecera */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                                {key === 'conservador' && '🛡️ Conservador'}
+                                {key === 'base' && '🎯 Base / Moderado'}
+                                {key === 'agresivo' && '🚀 Agresivo'}
+                              </span>
+                              {isBase && (
+                                <span className="px-2 py-0.5 bg-[#00a2e8] text-white text-[9px] font-bold rounded-full uppercase tracking-wider">
+                                  Recomendado
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full">
+                              {key === 'conservador' && 'Caja & Defensivo'}
+                              {key === 'base' && 'Tendencial'}
+                              {key === 'agresivo' && 'Expansión'}
+                            </span>
+                          </div>
 
-                  {/* Agresivo */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                      <span className="font-bold text-xs uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">
-                        🚀 Agresivo
-                      </span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] rounded-full">
-                        Expansión
-                      </span>
-                    </div>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Ingresos:</span>
-                        <span className="font-bold font-mono">
-                          ${(scenariosData.escenarios?.agresivo?.ingresos_totales || 0).toLocaleString()}
-                        </span>
+                          <p className="text-[11px] text-[#535c69] dark:text-slate-400 italic leading-snug">
+                            {s.focus || 'Estrategia presupuestaria equilibrada.'}
+                          </p>
+                        </div>
+
+                        {/* KPIs Principales en USD */}
+                        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 dark:text-slate-400">Ingresos Proyectados:</span>
+                            <span className="font-bold font-mono text-slate-900 dark:text-slate-100">
+                              {formatCurrency(s.ingresos)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 dark:text-slate-400">CMV / COGS:</span>
+                            <span className="font-mono text-slate-600 dark:text-slate-400">
+                              {formatCurrency(s.cogs)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 dark:text-slate-400">Margen Bruto:</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              {s.margen_bruto}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 dark:text-slate-400">OPEX Proyectado:</span>
+                            <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
+                              {formatCurrency(s.opex)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                            <span className="text-slate-500 dark:text-slate-400">EBITDA Proyectado:</span>
+                            <span className="font-bold font-mono text-[#00a2e8]">
+                              {formatCurrency(s.ebitda)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 dark:text-slate-400">DOH Objetivo:</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              {s.doh} días
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Acordeón Plegable "Estrategia & Desglose OPEX" */}
+                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                            <span>Estrategia &amp; Desglose OPEX</span>
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveAccordion((prev) => ({
+                                    ...prev,
+                                    [key]: prev[key] === 'plan' ? null : 'plan',
+                                  }))
+                                }
+                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
+                                  activeTabKey === 'plan'
+                                    ? 'bg-[#00a2e8] text-white font-bold'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                Plan
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveAccordion((prev) => ({
+                                    ...prev,
+                                    [key]: prev[key] === 'centros' ? null : 'centros',
+                                  }))
+                                }
+                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
+                                  activeTabKey === 'centros'
+                                    ? 'bg-[#00a2e8] text-white font-bold'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                11 CCs
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveAccordion((prev) => ({
+                                    ...prev,
+                                    [key]: prev[key] === 'riesgos' ? null : 'riesgos',
+                                  }))
+                                }
+                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
+                                  activeTabKey === 'riesgos'
+                                    ? 'bg-[#00a2e8] text-white font-bold'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                }`}
+                              >
+                                Riesgos
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Pestaña 1: Plan Operativo */}
+                          {activeTabKey === 'plan' && (
+                            <div className="p-3 bg-sky-50/50 dark:bg-sky-950/20 rounded-xl space-y-2 border border-sky-100 dark:border-sky-900/40 text-[11px] animate-in fade-in">
+                              <div>
+                                <span className="font-bold text-[#00a2e8] block">📦 Compras &amp; Abastecimiento:</span>
+                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
+                                  {s.plan_accion.compras_abastecimiento || 'Reposición balanceada según ROP.'}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-bold text-[#00a2e8] block">🏷️ Política de Pricing:</span>
+                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
+                                  {s.plan_accion.politica_pricing || 'Margen objetivo del 38%.'}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-bold text-[#00a2e8] block">🚚 Logística &amp; Inventario:</span>
+                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
+                                  {s.plan_accion.logistica_inventario || 'DOH objetivo de rotación continua.'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pestaña 2: Desglose por Centro de Costo (11 CCs) */}
+                          {activeTabKey === 'centros' && (
+                            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl space-y-1.5 border border-slate-200 dark:border-slate-700 max-h-56 overflow-y-auto text-[11px] animate-in fade-in">
+                              <div className="flex justify-between font-bold text-slate-500 pb-1 border-b border-slate-200 dark:border-slate-700">
+                                <span>Centro de Costo</span>
+                                <span>Monto USD</span>
+                              </div>
+                              {(s.desglose_centros_costo || []).map((cc) => (
+                                <div key={cc.centro_costo_id} className="py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-medium text-slate-700 dark:text-slate-200">
+                                      {cc.nombre}
+                                    </span>
+                                    <span className="font-mono font-bold text-[#00a2e8]">
+                                      {formatCurrency(cc.monto_sugerido)}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-400 line-clamp-1">
+                                    {cc.justificacion}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Pestaña 3: Matriz de Riesgos y Mitigación */}
+                          {activeTabKey === 'riesgos' && (
+                            <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl space-y-2 border border-amber-200 dark:border-amber-900/40 text-[11px] animate-in fade-in">
+                              {(s.riesgos_mitigacion || []).map((rm, idx) => (
+                                <div key={idx} className="space-y-0.5">
+                                  <span className="font-bold text-amber-700 dark:text-amber-400 block">
+                                    ⚠️ {rm.riesgo}
+                                  </span>
+                                  <p className="text-slate-600 dark:text-slate-300 leading-snug">
+                                    🛡️ {rm.mitigacion}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botón de Acción Principal: Adoptar y Grabar Presupuesto */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedScenarioForAdoption({ key, data: s })}
+                          className={`w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                            isBase
+                              ? 'bg-gradient-to-r from-[#00a2e8] to-[#008ecb] hover:from-[#008ecb] text-white hover:shadow-bitrix-glow'
+                              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <Sparkles size={14} className={isBase ? 'text-amber-300' : 'text-[#00a2e8]'} />
+                          <span>✨ Adoptar y Grabar Presupuesto Oficial</span>
+                        </button>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">COGS:</span>
-                        <span className="font-mono text-slate-600 dark:text-slate-400">
-                          ${(scenariosData.escenarios?.agresivo?.cogs_total || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">Margen Bruto:</span>
-                        <span className="font-semibold text-[#2ecc71]">
-                          {safeToFixed(scenariosData.escenarios?.agresivo?.margen_bruto_pct, 1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#535c69] dark:text-slate-400">EBITDA Proyectado:</span>
-                        <span className="font-bold font-mono text-[#00a2e8]">
-                          ${(scenariosData.escenarios?.agresivo?.ebitda || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-[#535c69] dark:text-slate-400">DOH Objetivo:</span>
-                        <span className="font-bold">{scenariosData.escenarios?.agresivo?.doh_objetivo_dias || 0} días</span>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
 
+                {/* Modal de Confirmación de Adopción Oficial */}
+                {selectedScenarioForAdoption && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-xl w-full p-6 space-y-5 animate-in zoom-in-95">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center space-x-2.5">
+                          <span className="p-2 bg-sky-100 dark:bg-sky-950/60 text-[#00a2e8] rounded-xl">
+                            <Sparkles size={20} />
+                          </span>
+                          <div>
+                            <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
+                              Adoptar y Grabar Presupuesto Oficial
+                            </h3>
+                            <p className="text-xs text-slate-500">
+                              Período: <span className="font-bold text-[#00a2e8]">{currentPeriod}</span> • Escenario: <span className="font-bold uppercase">{selectedScenarioForAdoption.key}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedScenarioForAdoption(null)}
+                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                        <p>
+                          Esta acción grabará formalmente en la base de datos (<code className="font-mono text-[#00a2e8]">presupuestos_centros_costo</code>) las siguientes <span className="font-bold text-slate-800 dark:text-slate-100">{selectedScenarioForAdoption.data.desglose_centros_costo.length} partidas de gasto operativo</span> con un monto consolidado de <span className="font-bold font-mono text-[#00a2e8]">{formatCurrency(selectedScenarioForAdoption.data.opex)}</span>:
+                        </p>
+
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto space-y-1.5">
+                          {selectedScenarioForAdoption.data.desglose_centros_costo.map((cc) => (
+                            <div key={cc.centro_costo_id} className="flex justify-between items-center text-[11px] py-0.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                              <span className="text-slate-700 dark:text-slate-200">{cc.nombre}</span>
+                              <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{formatCurrency(cc.monto_sugerido)}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-center space-x-2">
+                          <AlertTriangle size={16} className="shrink-0" />
+                          <span>Si ya existen partidas para este período, los montos presupuestados serán actualizados de forma segura (Upsert).</span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedScenarioForAdoption(null)}
+                          disabled={isApplyingScenario}
+                          className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmAdoptScenario}
+                          disabled={isApplyingScenario}
+                          className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#00a2e8] to-[#008ecb] hover:from-[#008ecb] rounded-xl shadow-sm hover:shadow-bitrix-glow flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Check size={14} />
+                          <span>{isApplyingScenario ? 'Grabando en Base de Datos...' : 'Confirmar y Grabar Presupuesto'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Dictamen Cualitativo de IA */}
-                {scenariosData.analisis_ia && (
+                {scenariosData?.analisis_ia && (
                   <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-4">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                       <h4 className="font-bold text-sm text-[#333333] dark:text-slate-100 flex items-center space-x-2">

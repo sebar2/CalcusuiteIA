@@ -281,6 +281,18 @@ export const apiService = {
     return res.data;
   },
 
+  async applyBudgetScenario(payload: {
+    periodo: string;
+    scenario_name: string;
+    partidas: { centro_costo_id: number; monto_presupuestado: number; concepto_opex: string }[];
+  }): Promise<{ status: string; periodo: string; partidas_actualizadas: number; message?: string }> {
+    const res = await apiClient.post<{ status: string; periodo: string; partidas_actualizadas: number; message?: string }>(
+      '/api/v1/budget/apply-scenario',
+      payload
+    );
+    return res.data;
+  },
+
   async getSupplyActionPlan(payload: {
     items?: any[];
     target_doh?: number;

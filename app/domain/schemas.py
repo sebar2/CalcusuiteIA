@@ -347,26 +347,55 @@ class AdvisorInsightResponse(BaseModel):
 
 
 # --- 3-Scenario Budget Planning Schemas ---
+class BudgetScenarioCostCenterItem(BaseModel):
+    centro_costo_id: int
+    nombre: str
+    monto_sugerido: Decimal
+    justificacion: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BudgetScenarioPlanAccion(BaseModel):
+    compras_abastecimiento: str = ""
+    politica_pricing: str = ""
+    logistica_inventario: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BudgetScenarioRiskItem(BaseModel):
+    riesgo: str
+    mitigacion: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BudgetScenarioItem(BaseModel):
     name: str
     focus: str
-    sales_growth_pct: Decimal
-    cogs_growth_pct: Decimal
-    opex_growth_pct: Decimal
+    sales_growth_pct: Decimal = Decimal('0.00')
+    cogs_growth_pct: Decimal = Decimal('0.00')
+    opex_growth_pct: Decimal = Decimal('0.00')
     projected_sales: Decimal
     projected_cogs: Decimal
-    gross_margin: Decimal
+    gross_margin: Decimal = Decimal('0.00')
     gross_margin_pct: Decimal
     projected_opex: Decimal
     contribution_margin: Decimal
-    contribution_margin_pct: Decimal
-    delta_cm_vs_historical: Decimal
+    contribution_margin_pct: Decimal = Decimal('0.00')
+    delta_cm_vs_historical: Decimal = Decimal('0.00')
+    doh_objetivo: int = 45
+    plan_accion: Dict[str, str] = Field(default_factory=dict)
+    desglose_centros_costo: List[Dict[str, Any]] = Field(default_factory=list)
+    riesgos_mitigacion: List[Dict[str, str]] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetScenarioRequest(BaseModel):
     periodo: Optional[str] = None
+    target_period: Optional[str] = None
     historical_sales: Optional[Decimal] = None
     historical_cogs: Optional[Decimal] = None
     historical_opex: Optional[Decimal] = None
@@ -378,12 +407,38 @@ class BudgetScenarioResponse(BaseModel):
     model: Optional[str] = None
     status: str = "success"
     latency_ms: float = 0.0
+    periodo_objetivo: Optional[str] = None
     historical: dict
     conservative: BudgetScenarioItem
     base: BudgetScenarioItem
     aggressive: BudgetScenarioItem
+    scenarios: Optional[Dict[str, Any]] = None
+    escenarios: Optional[Dict[str, Any]] = None
     ai_analysis: dict = Field(default_factory=dict)
+    analisis_ia: Optional[dict] = Field(default_factory=dict)
     raw_markdown: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Apply Budget Scenario (Adopción de Presupuesto Oficial) ---
+class ApplyScenarioPartida(BaseModel):
+    centro_costo_id: int
+    monto_presupuestado: Decimal
+    concepto_opex: str = "Gasto Operativo Sugerido IA"
+
+
+class ApplyScenarioRequest(BaseModel):
+    periodo: str
+    scenario_name: str = "base"
+    partidas: List[ApplyScenarioPartida] = Field(default_factory=list)
+
+
+class ApplyScenarioResponse(BaseModel):
+    status: str = "success"
+    periodo: str
+    partidas_actualizadas: int
+    message: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

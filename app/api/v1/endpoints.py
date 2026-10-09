@@ -120,10 +120,14 @@ from app.domain.schemas import (
     WarehouseTransferPayload,
     WarehouseAssignStockPayload,
     WarehouseStockItem,
-    WarehouseBatchDetail,
     TenderLiveFeedResponse,
     TenderImportFeedRequest,
+    ApplyScenarioRequest,
+    ApplyScenarioResponse,
+    BudgetScenarioRequest,
+    BudgetScenarioResponse,
 )
+from app.services.budget_planner_service import BudgetPlannerService
 from app.services.tenders_service import tenders_service
 from app.services.commercial_service import commercial_service
 from app.services.stock_trace_service import stock_trace_service
@@ -3451,7 +3455,96 @@ def update_cost_center_budget(
     )
 
 
+
 # =====================================================================
-# ASESOR DE IA & SELECTOR DINÁMICO DE LOS 11 MODELOS DE OLLAMA
+# ADOPCIÓN PRESUPUESTARIA OFICIAL & ESCENARIOS FP&A (SPRINT 2)
 # =====================================================================
 
+@router.post(
+    "/budget/apply-scenario",
+    response_model=ApplyScenarioResponse,
+    summary="Adopción Presupuestaria Oficial (Cierre Contable FP&A)",
+    response_description="Persiste el escenario seleccionado en presupuestos_centros_costo vía Upsert"
+)
+def apply_budget_scenario(
+    payload: ApplyScenarioRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_OPERACIONES]))
+):
+    """
+    Graba el presupuesto sugerido por la IA o el usuario en la tabla 'presupuestos_centros_costo'
+    para el período seleccionado utilizando un Upsert seguro por (centro_costo_id, periodo).
+    """
+    periodo = payload.periodo.strip()
+    if not periodo:
+        raise HTTPException(status_code=400, detail="El período es obligatorio.")
+
+    actualizados = 0
+    from app.models.entities import PresupuestoCentroCosto, CentroCosto
+
+    for partida in payload.partidas:
+        cc = db.query(CentroCosto).filter(CentroCosto.id == partida.centro_costo_id).first()
+        if not cc:
+            logger.warning("Centro de costo ID %s no encontrado, omitiendo.", partida.centro_costo_id)
+            continue
+
+        concepto = (partida.concepto_opex or f"Partida {cc.nombre}").strip()
+        monto_decimal = Decimal(str(partida.monto_presupuestado))
+        if monto_decimal < Decimal('0'):
+            monto_decimal = Decimal('0.00')
+
+        existente = db.query(PresupuestoCentroCosto).filter(
+            PresupuestoCentroCosto.centro_costo_id == partida.centro_costo_id,
+            PresupuestoCentroCosto.periodo == periodo
+        ).first()
+
+        if existente:
+            existente.monto_presupuestado = monto_decimal
+            existente.concepto_opex = concepto
+        else:
+            nueva_fila = PresupuestoCentroCosto(
+                periodo=periodo,
+                centro_costo_id=partida.centro_costo_id,
+                concepto_opex=concepto,
+                monto_presupuestado=monto_decimal,
+                monto_real=Decimal('0.00')
+            )
+            db.add(nueva_fila)
+        actualizados += 1
+
+    db.commit()
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="APPLY_BUDGET_SCENARIO",
+        resource=f"budget/scenarios/{periodo}",
+        details={
+            "periodo": periodo,
+            "scenario_name": payload.scenario_name,
+            "partidas_actualizadas": actualizados
+        }
+    )
+
+    return ApplyScenarioResponse(
+        status="success",
+        periodo=periodo,
+        partidas_actualizadas=actualizados,
+        message=f"Presupuesto oficial para {periodo} ({payload.scenario_name.upper()}) grabado exitosamente: {actualizados} centros de costo actualizados."
+    )
+
+
+@router.post(
+    "/budget/scenarios",
+    response_model=BudgetScenarioResponse,
+    summary="Generador de 3 Escenarios Presupuestarios FP&A (Ruta directa de Presupuestos)"
+)
+async def get_budget_scenarios_direct(
+    req: BudgetScenarioRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ruta directa en /budget/scenarios que delega al motor FP&A BudgetPlannerService.
+    """
+    return await BudgetPlannerService.generate_scenarios(req, db)
