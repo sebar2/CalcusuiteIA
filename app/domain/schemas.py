@@ -55,12 +55,17 @@ class ClientUpdate(BaseModel):
     address: Optional[str] = None
 
 class ClientDealItemSummary(BaseModel):
-    id: str
-    proyecto_nombre: str
-    monto_total: Decimal
-    etapa: str
+    id: Optional[str] = None
+    deal_id: Optional[int] = None
+    deal_code: Optional[str] = None
+    deal_title: Optional[str] = None
+    proyecto_nombre: Optional[str] = None
+    monto_total: Decimal = Decimal('0.00')
+    probabilidad_pct: Optional[int] = 50
+    etapa: str = "prospeccion"
     moneda: str = "USD"
     created_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True, extra="allow")
 
 class ClientResponse(ClientBase):
     id: int

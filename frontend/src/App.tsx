@@ -4,8 +4,9 @@ import type { ActiveTab } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
 import { SettingsModal } from './components/common/SettingsModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { apiService, setCurrentAuthContext } from './services/api';
+import { apiService, setCurrentAuthContext, getStoredUser, type StoredUser } from './services/api';
 import { ThemeProvider } from './context/ThemeContext';
+import { LoginView } from './views/auth/LoginView';
 
 const ControlRoomView = lazy(() => import('./views/ControlRoomView').then(m => ({ default: m.ControlRoomView })));
 const SupplyKanbanView = lazy(() => import('./views/SupplyKanbanView').then(m => ({ default: m.SupplyKanbanView })));
@@ -37,12 +38,31 @@ import type {
 export function AppContent() {
   // Estado de Layout & Navegación
   const [activeTab, setActiveTab] = useState<ActiveTab>('control_room');
+  // Estado de Autenticación & Auth Gate
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => (getStoredUser()?.role as UserRole) || 'controller_admin');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [currentRole, setCurrentRole] = useState<UserRole>('controller_admin');
-
-  // Modo de Inferencia (Módulo 1: Zero Fallback Silencioso)
   const [engineMode, setEngineMode] = useState<EngineMode>('auto');
+
+  useEffect(() => {
+    const handleLoginEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<StoredUser>;
+      setCurrentUser(customEvent.detail);
+      if (customEvent.detail?.role) {
+        handleRoleChange(customEvent.detail.role);
+      }
+    };
+    const handleLogoutEvent = () => {
+      setCurrentUser(null);
+    };
+    window.addEventListener('calcu:auth:login', handleLoginEvent);
+    window.addEventListener('calcu:auth:logout', handleLogoutEvent);
+    return () => {
+      window.removeEventListener('calcu:auth:login', handleLoginEvent);
+      window.removeEventListener('calcu:auth:logout', handleLogoutEvent);
+    };
+  }, []);
 
   const handleRoleChange = (role: string) => {
     setCurrentRole(role as UserRole);
@@ -227,6 +247,25 @@ export function AppContent() {
   // Conteo de quiebres para el badge del Sidebar
   const alertCount = inventory.filter((i) => i.is_alert).length;
 
+  // Auth Gate: Si no hay sesión válida activa, renderizar exclusivamente LoginView
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          handleRoleChange(user.role);
+          if (user.role === 'operaciones' || user.role === 'analista_operaciones') {
+            setActiveTab('kanban');
+          } else if (user.role === 'comercial' || user.role === 'analista_comercial') {
+            setActiveTab('crm');
+          } else {
+            setActiveTab('control_room');
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#eef2f4] dark:bg-slate-950 text-[#333333] dark:text-slate-100 flex transition-colors duration-200">
       {/* 1. Sidebar Fijo */}
@@ -236,6 +275,7 @@ export function AppContent() {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         alertCount={alertCount}
+        currentRole={currentRole}
       />
 
       {/* 2. Main Wrapper */}

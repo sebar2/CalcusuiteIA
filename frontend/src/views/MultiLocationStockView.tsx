@@ -402,7 +402,7 @@ export const MultiLocationStockView = () => {
     }
   };
 
-  // KPIs dinámicos calculados desde los lotes unificados
+  // KPIs dinámicos calculados desde los lotes filtrados (reactividad en tiempo real)
   const stageStats = useMemo(() => {
     const stats: Record<string, { units: number; lots: number }> = {
       fabricacion: { units: 0, lots: 0 },
@@ -412,7 +412,7 @@ export const MultiLocationStockView = () => {
       showroom_pocitos: { units: 0, lots: 0 },
     };
 
-    unifiedBatches.forEach((b) => {
+    filteredBatches.forEach((b) => {
       const stage = b.etapa_logistica;
       if (stats[stage]) {
         stats[stage].units += b.cantidad;
@@ -421,7 +421,7 @@ export const MultiLocationStockView = () => {
     });
 
     return stats;
-  }, [unifiedBatches]);
+  }, [filteredBatches, selectedOrigenTipo]);
 
   return (
     <div className="space-y-6">

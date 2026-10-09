@@ -2976,24 +2976,37 @@ def update_client(
         )
     ).all()
 
+    def _get_deal_amount(deal):
+        for field in ['monto_usd', 'valor_usd', 'monto', 'total_usd', 'valor_total']:
+            val = getattr(deal, field, None)
+            if val is not None:
+                return float(val)
+        if hasattr(deal, 'items') and deal.items:
+            return sum(float(getattr(i, 'precio_unitario', 0.0) or 0.0) * float(getattr(i, 'cantidad', 1) or 1) for i in deal.items)
+        return 0.0
+
     total_pipe = sum(
-        float(d.valor_total or 0.0) 
+        _get_deal_amount(d)
         for d in c_deals 
-        if (d.etapa or '').lower() not in ['perdida', 'perdido']
+        if (getattr(d, 'etapa', '') or '').lower() not in ['perdida', 'perdido']
     )
     deal_items = [
         ClientDealItemSummary(
+            id=str(d.id),
             deal_id=d.id,
-            deal_code=d.codigo,
-            deal_title=d.titulo,
-            etapa=d.etapa,
-            monto_total=float(d.valor_total or 0.0),
-            probabilidad_pct=d.probabilidad_cierre or 50,
-            created_at=d.created_at.isoformat() if d.created_at else None
+            deal_code=getattr(d, 'codigo', '') or f"DEAL-{d.id}",
+            deal_title=getattr(d, 'titulo', '') or getattr(d, 'proyecto_nombre', '') or f"Trato #{d.id}",
+            proyecto_nombre=getattr(d, 'proyecto_nombre', '') or getattr(d, 'titulo', '') or f"Trato #{d.id}",
+            etapa=getattr(d, 'etapa', 'prospeccion') or 'prospeccion',
+            monto_total=Decimal(str(round(_get_deal_amount(d), 2))),
+            probabilidad_pct=getattr(d, 'probabilidad_cierre', None) or getattr(d, 'probabilidad_pct', 50) or 50,
+            moneda=getattr(d, 'moneda', 'USD') or 'USD',
+            created_at=d.created_at if hasattr(d, 'created_at') else None
         )
         for d in c_deals
     ]
 
+    pipe_float = round(float(total_pipe), 2)
     return ClientResponse(
         id=client.id,
         nombre=client.nombre,
@@ -3003,7 +3016,9 @@ def update_client(
         phone=client.phone,
         address=client.address,
         deals_count=len(c_deals),
-        total_pipeline=round(total_pipe, 2),
+        total_pipeline=Decimal(str(pipe_float)),
+        pipeline_activo=pipe_float,
+        pipeline_total=pipe_float,
         deals=deal_items,
         created_at=client.created_at
     )

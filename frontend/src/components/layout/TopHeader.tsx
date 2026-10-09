@@ -493,7 +493,7 @@ export const TopHeader = ({
                     className="w-full flex items-center justify-center space-x-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                   >
                     <LogOut size={13} />
-                    <span>Cerrar Sesión</span>
+                    <span>Cerrar Sesión / Cambiar Rol</span>
                   </button>
                 </div>
               )}

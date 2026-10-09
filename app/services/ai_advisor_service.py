@@ -113,6 +113,17 @@ class AIAdvisorService:
         timeout = float(timeout_str)
         return endpoint_url, model, timeout
 
+    @staticmethod
+    def _extract_json_payload(raw_text: str) -> dict:
+        """
+        Extractor seguro con regex para procesar la respuesta de cualquier modelo de Ollama
+        sin romperse por bloques markdown (```json ... ```).
+        """
+        import json
+        cleaned = re.sub(r'```(?:json)?', '', raw_text).strip().rstrip('`').strip()
+        match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        return json.loads(match.group(0)) if match else json.loads(cleaned)
+
     # ------------------------------------------------------------------
     # Llamada al LLM Local (Ollama qwen2.5:7b) con control de engine_mode
     # ------------------------------------------------------------------

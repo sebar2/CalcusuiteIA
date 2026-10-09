@@ -28,6 +28,9 @@ app = FastAPI(
     title="Calcu - SupplyFinance Core API",
     description="Motor de analítica financiera, pricing, abastecimiento y control de inventario",
     version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 

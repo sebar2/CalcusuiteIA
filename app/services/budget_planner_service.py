@@ -24,9 +24,20 @@ class BudgetPlannerService:
     y genera análisis cualitativo con Ollama qwen2.5:7b y fallback determinístico contable.
     """
 
+    @staticmethod
+    def _extract_json_payload(raw_text: str) -> dict:
+        """
+        Extractor seguro con regex para procesar la respuesta de cualquier modelo de Ollama
+        sin romperse por bloques markdown (```json ... ```).
+        """
+        import re, json
+        cleaned = re.sub(r'```(?:json)?', '', raw_text).strip().rstrip('`').strip()
+        match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        return json.loads(match.group(0)) if match else json.loads(cleaned)
+
     @classmethod
     def _extract_historical_from_db(cls, db: Session, periodo: Optional[str] = None) -> tuple[Decimal, Decimal, Decimal]:
-        # 1. Extraer desde transacciones reales (Sale) en runtime
+        # 1. Consultar ventas en transacciones_ventas para el periodo
         sales_q = db.query(
             func.sum(Sale.cantidad * Sale.precio_unitario_real).label("sales"),
             func.sum(Sale.cantidad * Sale.costo_unitario_real).label("costs")
@@ -35,28 +46,29 @@ class BudgetPlannerService:
             sales_q = sales_q.filter(Sale.periodo == periodo)
         res = sales_q.first()
 
-        if res and res.sales and res.sales > Decimal('0'):
+        # Si la suma es mayor o igual a $10,000 USD
+        if res and res.sales and res.sales >= Decimal('10000.00'):
             total_sales = Decimal(str(res.sales)).quantize(Decimal('0.01'))
-            total_costs = Decimal(str(res.costs)).quantize(Decimal('0.01')) if res.costs else (total_sales * Decimal('0.5')).quantize(Decimal('0.01'))
-            total_opex = (total_sales * Decimal('0.15')).quantize(Decimal('0.01'))
+            total_costs = Decimal(str(res.costs)).quantize(Decimal('0.01')) if res.costs else (total_sales * Decimal('0.62')).quantize(Decimal('0.01'))
+            total_opex = Decimal('32000.00')
             return total_sales, total_costs, total_opex
 
-        # 2. Si no hay para el período exacto, buscar histórico global de ventas
+        # 2. Si no hay para el período exacto o es < $10,000 USD, buscar histórico global de ventas
         global_res = db.query(
             func.sum(Sale.cantidad * Sale.precio_unitario_real).label("sales"),
             func.sum(Sale.cantidad * Sale.costo_unitario_real).label("costs")
         ).first()
-        if global_res and global_res.sales and global_res.sales > Decimal('0'):
+        if global_res and global_res.sales and global_res.sales >= Decimal('10000.00'):
             total_sales = Decimal(str(global_res.sales)).quantize(Decimal('0.01'))
-            total_costs = Decimal(str(global_res.costs)).quantize(Decimal('0.01')) if global_res.costs else (total_sales * Decimal('0.5')).quantize(Decimal('0.01'))
-            total_opex = (total_sales * Decimal('0.15')).quantize(Decimal('0.01'))
+            total_costs = Decimal(str(global_res.costs)).quantize(Decimal('0.01')) if global_res.costs else (total_sales * Decimal('0.62')).quantize(Decimal('0.01'))
+            total_opex = Decimal('32000.00')
             return total_sales, total_costs, total_opex
 
-        # 3. Fallback a metas o valores representativos determinísticos
-        total_sales = Decimal('281000.00')
-        total_costs = Decimal('139000.00')
-        total_opex = Decimal('42000.00')
-        return total_sales, total_costs, total_opex
+        # 3. Si la suma es 0 o menor a $10,000 USD, adoptar el baseline financiero del catálogo:
+        baseline_revenue = Decimal('185000.00')  # USD mensuales
+        baseline_cogs = Decimal('114700.00')     # 62% COGS
+        baseline_opex = Decimal('32000.00')      # OPEX fijo
+        return baseline_revenue, baseline_cogs, baseline_opex
 
     @classmethod
     def _generate_fallback_qualitative_analysis(cls, proj: Dict[str, Any]) -> str:
@@ -92,16 +104,16 @@ class BudgetPlannerService:
         start_time = time.perf_counter()
 
         # Determinar base histórica
-        if req.historical_sales and req.historical_cogs:
+        if req.historical_sales and req.historical_cogs and req.historical_sales >= Decimal('10000.00'):
             hist_sales = req.historical_sales
             hist_cogs = req.historical_cogs
-            hist_opex = req.historical_opex or (hist_sales * Decimal('0.15')).quantize(Decimal('0.01'))
+            hist_opex = req.historical_opex or Decimal('32000.00')
         elif db is not None:
             hist_sales, hist_cogs, hist_opex = cls._extract_historical_from_db(db, req.periodo)
         else:
-            hist_sales = Decimal('281000.00')
-            hist_cogs = Decimal('139000.00')
-            hist_opex = Decimal('42000.00')
+            hist_sales = Decimal('185000.00')
+            hist_cogs = Decimal('114700.00')
+            hist_opex = Decimal('32000.00')
 
         # Ejecutar proyecciones matemáticas puras
         raw_proj = project_budget_scenarios(

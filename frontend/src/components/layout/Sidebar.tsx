@@ -36,6 +36,7 @@ interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   alertCount: number;
+  currentRole?: string;
 }
 
 export const Sidebar = ({
@@ -44,8 +45,9 @@ export const Sidebar = ({
   collapsed,
   onToggleCollapse,
   alertCount,
+  currentRole = 'controller_admin',
 }: SidebarProps) => {
-  const navItems = [
+  const allNavItems = [
     {
       id: 'control_room' as ActiveTab,
       label: 'Control Room Abastecimiento',
@@ -53,74 +55,91 @@ export const Sidebar = ({
       icon: Boxes,
       badge: alertCount > 0 ? alertCount : undefined,
       badgeColor: 'bg-[#e74c3c]',
+      roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
     },
     {
       id: 'kanban' as ActiveTab,
       label: 'Pipeline Kanban Reposición',
       shortLabel: 'Kanban ROP',
       icon: GitPullRequest,
+      roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
     },
     {
       id: 'stock_trace' as ActiveTab,
       label: 'Trazabilidad Multi-Depósito',
       shortLabel: 'Multi-Depósito',
       icon: Ship,
+      roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
     },
     {
       id: 'pricing' as ActiveTab,
       label: 'Analítica Comercial & Canales',
       shortLabel: 'Pricing',
       icon: BadgePercent,
+      roles: ['controller_admin', 'comercial', 'analista_comercial'],
     },
     {
       id: 'crm' as ActiveTab,
       label: 'Pipeline Comercial (CRM)',
       shortLabel: 'Pipeline CRM',
       icon: Handshake,
+      roles: ['controller_admin', 'comercial', 'analista_comercial'],
     },
     {
       id: 'clients' as ActiveTab,
       label: 'Directorio Clientes B2B',
       shortLabel: 'Clientes',
       icon: Users,
+      roles: ['controller_admin', 'comercial', 'analista_comercial'],
     },
     {
       id: 'suppliers' as ActiveTab,
       label: 'Directorio Proveedores',
       shortLabel: 'Proveedores',
       icon: Truck,
+      roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
     },
     {
       id: 'tenders' as ActiveTab,
       label: 'Licitaciones & Proyectos B2B',
       shortLabel: 'Licitaciones B2B',
       icon: Building2,
+      roles: ['controller_admin', 'comercial', 'analista_comercial'],
     },
     {
       id: 'initiatives' as ActiveTab,
       label: 'Evaluador de Iniciativas & CAPEX',
       shortLabel: 'Nuevos Proyectos',
       icon: Briefcase,
+      roles: ['controller_admin'],
     },
     {
       id: 'variance' as ActiveTab,
       label: 'Control Presupuestario & Escenarios',
       shortLabel: 'Presupuestos',
       icon: BarChart3,
+      roles: ['controller_admin'],
     },
     {
       id: 'reports' as ActiveTab,
       label: 'Copiloto Ejecutivo & Acciones',
       shortLabel: 'Minutas IA',
       icon: FileText,
+      roles: ['controller_admin'],
     },
     {
       id: 'etl' as ActiveTab,
       label: 'Ingesta de Datos (ETL)',
       shortLabel: 'ETL Ingest',
       icon: UploadCloud,
+      roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
     },
   ];
+
+  const navItems = allNavItems.filter((item) => {
+    if (currentRole === 'controller_admin') return true;
+    return item.roles.includes(currentRole);
+  });
 
   return (
     <aside

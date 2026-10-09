@@ -118,7 +118,7 @@ export const ClientsView: React.FC = () => {
   const totalPipeline = useMemo(() => {
     return clients.reduce((acc, c) => {
       const raw = c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline ?? 0;
-      const num = typeof raw === 'number' ? raw : parseFloat(String(raw)) || 0;
+      const num = Number(raw) || 0;
       return acc + num;
     }, 0);
   }, [clients]);
