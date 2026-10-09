@@ -10,7 +10,7 @@ from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL).strip()
 
 
 def create_app_engine(database_url: str) -> Engine:
@@ -19,6 +19,7 @@ def create_app_engine(database_url: str) -> Engine:
     - PostgreSQL: QueuePool (pool_size=20, max_overflow=30, recycle=1800s, pre_ping=True).
     - SQLite: Conexión monohilo desactivada y StaticPool en bases en memoria.
     """
+    database_url = database_url.strip()
     if database_url.startswith("postgresql"):
         return create_engine(
             database_url,

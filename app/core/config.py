@@ -40,7 +40,12 @@ class Settings(BaseModel):
     local_llm_timeout: float = Field(default_factory=lambda: float(os.getenv("LOCAL_LLM_TIMEOUT", str(os.getenv("OLLAMA_TIMEOUT", "45.0")))))
 
     # 4. Base de Datos Relacional
-    database_url: str = Field(default_factory=lambda: os.getenv("DATABASE_URL", "sqlite:///calcu.db"))
+    database_url: str = Field(default_factory=lambda: (os.getenv("DATABASE_URL") or "sqlite:///calcu.db").strip())
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else v
 
     @field_validator("jwt_secret_key")
     @classmethod
@@ -54,7 +59,7 @@ class Settings(BaseModel):
 settings = Settings()
 
 # Variables a nivel de módulo para retrocompatibilidad total con la suite
-DATABASE_URL: str = settings.database_url
+DATABASE_URL: str = settings.database_url.strip()
 JWT_SECRET_KEY: str = settings.jwt_secret_key
 JWT_ALGORITHM: str = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES: int = settings.access_token_expire_minutes

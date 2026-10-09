@@ -26,7 +26,7 @@ echo   [4] MIGRAR DATOS ETL (SQLite hacia PostgreSQL 16)
 echo       - Sincroniza tablas, registros y secuencias
 echo.
 echo   [5] EJECUTAR SUITE DE PRUEBAS AUTOMATIZADAS (Pytest)
-echo       - Ejecuta los 175 tests unitarios y de integracion
+echo       - Ejecuta los 176 tests unitarios y de integracion
 echo.
 echo   [0] SALIR
 echo.
@@ -52,7 +52,7 @@ echo ===========================================================================
 echo   INICIANDO EN MODO LIGERO (SQLite)
 echo ===============================================================================
 echo.
-set DATABASE_URL=sqlite:///calcu.db
+set "DATABASE_URL=sqlite:///calcu.db"
 echo [*] DATABASE_URL = %DATABASE_URL%
 echo [*] Servidor Backend en: http://localhost:8000
 echo [*] Swagger Docs: http://localhost:8000/docs
@@ -79,7 +79,7 @@ if %ERRORLEVEL% neq 0 (
 echo [*] Levantando contenedores PostgreSQL y Redis...
 docker-compose up -d
 timeout /t 3 /nobreak >nul
-set DATABASE_URL=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db
+set "DATABASE_URL=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
 echo [*] DATABASE_URL = %DATABASE_URL%
 echo [*] Servidor Backend en: http://localhost:8000
 echo [*] Presione Ctrl+C para detener el servidor.
@@ -109,14 +109,14 @@ if "%DB_CHOICE%"=="2" (
     )
     docker-compose up -d
     timeout /t 3 /nobreak >nul
-    set TARGET_DB=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db
+    set "TARGET_DB=postgresql+pg8000://calcu_user:calcu_secure_pass_2026@localhost:5432/calcu_db"
 ) else (
-    set TARGET_DB=sqlite:///calcu.db
+    set "TARGET_DB=sqlite:///calcu.db"
 )
 
 echo.
 echo [*] Abriendo Backend FastAPI (:8000)...
-start "Calcu Backend (:8000)" cmd /k "color 0A && cd /d "%~dp0" && set DATABASE_URL=%TARGET_DB% && python -m uvicorn app.main:app --reload --port 8000"
+start "Calcu Backend (:8000)" cmd /k "color 0A && cd /d "%~dp0" && set "DATABASE_URL=%TARGET_DB%" && python -m uvicorn app.main:app --reload --port 8000"
 
 echo [*] Abriendo Frontend React Vite (:5173)...
 start "Calcu Frontend (:5173)" cmd /k "color 0E && cd /d "%~dp0frontend" && npm run dev"
