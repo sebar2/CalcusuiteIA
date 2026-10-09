@@ -16,9 +16,9 @@ import {
   Key,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { apiService, getStoredUser, login as apiLogin, logout as apiLogout } from '../../services/api';
+import api, { apiService, getStoredUser, login as apiLogin, logout as apiLogout } from '../../services/api';
 import type { StoredUser } from '../../services/api';
-import type { EngineMode, OllamaStatus } from '../../types';
+import type { EngineMode, OllamaStatus, OllamaModelItem } from '../../types';
 
 interface TopHeaderProps {
   sidebarCollapsed: boolean;
@@ -60,6 +60,9 @@ export const TopHeader = ({
   const { isDark, toggleTheme } = useTheme();
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState<boolean>(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelItem[]>([]);
+  const [activeModel, setActiveModel] = useState<string>('qwen2.5:7b');
+  const [isChangingModel, setIsChangingModel] = useState<boolean>(false);
 
   // Estado de Autenticación JWT y Switcher de Usuarios Demo
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
@@ -140,11 +143,35 @@ export const TopHeader = ({
     }
   };
 
+  const fetchOllamaModels = async () => {
+    try {
+      const res = await api.getOllamaModels();
+      setOllamaModels(res.models);
+      setActiveModel(res.active_model);
+    } catch {
+      // Ignorar si falla
+    }
+  };
+
   useEffect(() => {
     checkOllama();
+    fetchOllamaModels();
     const interval = setInterval(checkOllama, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleModelSelect = async (mName: string) => {
+    if (mName === activeModel) return;
+    try {
+      setIsChangingModel(true);
+      await api.setActiveOllamaModel({ model: mName });
+      setActiveModel(mName);
+    } catch {
+      alert('No se pudo conmutar el modelo Ollama.');
+    } finally {
+      setIsChangingModel(false);
+    }
+  };
 
   return (
     <header
@@ -229,6 +256,31 @@ export const TopHeader = ({
               ? '🤖 Ollama: Conectado' 
               : 'Ollama: Offline'}
           </span>
+        </div>
+
+        {/* Selector Dinámico de los 11 Modelos de Ollama */}
+        <div className="hidden md:inline-flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 shadow-2xs">
+          <Cpu className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+          <select
+            value={activeModel}
+            disabled={isChangingModel}
+            onChange={(e) => handleModelSelect(e.target.value)}
+            className="bg-transparent text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer max-w-[170px] truncate"
+            title="Seleccionar modelo LLM activo en Ollama"
+          >
+            {ollamaModels.length === 0 ? (
+              <option value="qwen2.5:7b">qwen2.5:7b (Predeterminado)</option>
+            ) : (
+              ollamaModels.map((m) => (
+                <option key={m.name} value={m.name} className="dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                  {m.name} {m.size_formatted ? `(${m.size_formatted})` : ''}
+                </option>
+              ))
+            )}
+          </select>
+          {isChangingModel && (
+            <RefreshCw className="w-3 h-3 text-blue-500 animate-spin flex-shrink-0" />
+          )}
         </div>
 
         {/* Toggle Dark Mode */}

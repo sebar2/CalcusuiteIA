@@ -4,12 +4,15 @@ import calendar
 from decimal import Decimal
 from datetime import datetime, timezone, date
 from typing import List, Optional
+import httpx
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, and_, or_
+
+from app.core.config import settings
 
 PERIOD_REGEX = re.compile(r'^\d{4}-(0[1-9]|1[0-2])$')
 
@@ -34,12 +37,30 @@ from app.models.entities import (
     StockLocationBatch,
     Warehouse,
     AccionCompromiso,
+    Client,
+    Company,
+    Supplier,
 )
 from app.domain.schemas import (
     ETLUploadResponse,
     InventoryAlert,
     InventoryQuickUpdateRequest,
     InventoryQuickUpdateResponse,
+    ClientCreate,
+    ClientUpdate,
+    ClientResponse,
+    ClientDealItemSummary,
+    SupplierCreate,
+    SupplierUpdate,
+    SupplierResponse,
+    SupplierProductItem,
+    CostCenterBudgetCreate,
+    CostCenterBudgetUpdate,
+    CostCenterBudgetResponse,
+    OllamaModelItem,
+    OllamaModelsResponse,
+    ActiveModelRequest,
+    ActiveModelResponse,
     MarginSummary,
     DiscountSimulationRequest,
     DiscountSimulationResponse,
@@ -152,6 +173,13 @@ async def upload_spreadsheet(
         )
     
     content = await file.read()
+    MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="El archivo excede el tamaño máximo permitido de 15 MB."
+        )
+
     result = ETLService.ingest_spreadsheet(content, filename, db)
     
     if result["status"] == "error":
@@ -285,6 +313,18 @@ def get_inventory_alerts(
         query = query.join(Category).filter(Category.nombre.ilike(f"%{categoria}%"))
     
     products = query.all()
+
+    # Demanda Comprometida en Pipeline CRM (Tratos en etapas 'negociacion', 'ganada'/'ganado')
+    committed_deals = db.query(CommercialDeal).filter(
+        CommercialDeal.etapa.in_(["negociacion", "ganada", "ganado"])
+    ).all()
+    committed_by_sku = {}
+    for d in committed_deals:
+        if d.items:
+            for it in d.items:
+                s = it.sku
+                committed_by_sku[s] = committed_by_sku.get(s, 0) + int(it.cantidad or 0)
+
     report: List[InventoryAlert] = []
 
     for prod in products:
@@ -299,6 +339,10 @@ def get_inventory_alerts(
             safety_stock=Decimal(str(inv.stock_seguridad))
         )
         
+        # Demanda comprometida en pipeline y stock disponible neto
+        stock_comprometido = committed_by_sku.get(prod.sku, 0)
+        stock_disponible_neto = max(0, stock_actual - stock_comprometido)
+
         # DOH (Days On Hand): Días de inventario disponibles según rotación y demanda anual
         inv_val = Decimal(str(stock_actual)) * prod.costo_unitario
         cogs_anual = inv.demanda_diaria_promedio * prod.costo_unitario * Decimal('365')
@@ -309,7 +353,8 @@ def get_inventory_alerts(
         else:
             doh = Decimal('0.00')
 
-        is_alert = Decimal(str(stock_actual)) <= rop
+        # Alerta se dispara si stock total <= ROP o si el stock neto tras compromisos <= ROP
+        is_alert = (Decimal(str(stock_actual)) <= rop) or (Decimal(str(stock_disponible_neto)) <= rop)
 
         if only_alerts and not is_alert:
             continue
@@ -329,7 +374,9 @@ def get_inventory_alerts(
             aduana=inv.aduana,
             costo_unitario=prod.costo_unitario,
             demanda_diaria_promedio=inv.demanda_diaria_promedio,
-            image_url=prod.image_url
+            image_url=prod.image_url,
+            stock_comprometido_pipeline=stock_comprometido,
+            stock_disponible_neto=stock_disponible_neto
         ))
 
     return report
@@ -2571,25 +2618,60 @@ def download_etl_template(
         filename = "plantilla_opex_centros_costo.xlsx"
     elif tipo_clean == "crm":
         ws.title = "Pipeline_CRM_Deals"
-        headers = ["titulo", "cliente_empresa", "contacto_nombre", "etapa", "probabilidad_pct", "sku", "cantidad", "precio_unitario", "moneda"]
+        headers = [
+            "titulo", "cliente_empresa", "rut", "contacto_nombre", "email", 
+            "telefono", "direccion", "logo_url", "etapa", "probabilidad_pct", 
+            "sku", "cantidad", "precio_unitario", "moneda"
+        ]
         sample_rows = [
-            ["Licitación Edificio Aeropuerto", "Constructora del Plata SA", "Ing. Mario Rossi", "propuesta_enviada", 65, "SKU-LED-PANEL-60X60", 400, 28.5, "USD"],
-            ["Modernización Planta Industrial", "Laboratorios Pharma Uy", "Lic. Lucía Menéndez", "negociacion", 80, "SKU-CAMPANA-LED-150W", 120, 89.0, "USD"],
-            ["Iluminación Cadena Retail", "Supermercados Sol SRL", "Cr. Diego Silva", "cotizacion", 40, "SKU-SPOT-EMBUTIR-7W", 850, 6.2, "USD"],
+            [
+                "Licitación Edificio Aeropuerto", "Constructora del Plata SA", "76.452.120-K", 
+                "Ing. Mario Rossi", "mrossi@delplata.cl", "+56 9 8765 4321", 
+                "Av. Las Condes 10200, Santiago", "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100", 
+                "propuesta_enviada", 65, "SKU-LED-PANEL-60X60", 400, 28.5, "USD"
+            ],
+            [
+                "Modernización Planta Industrial", "Laboratorios Pharma Uy", "77.102.304-5", 
+                "Lic. Lucía Menéndez", "lmenendez@pharmauy.com", "+56 2 2345 6789", 
+                "Parque Industrial ENEA, Pudahuel", "https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=100", 
+                "negociacion", 80, "SKU-CAMPANA-LED-150W", 120, 89.0, "USD"
+            ],
+            [
+                "Iluminación Cadena Retail", "Supermercados Sol SRL", "78.203.405-1", 
+                "Cr. Diego Silva", "compras@supermercadosol.cl", "+56 9 1234 5678", 
+                "Av. Providencia 1234, Santiago", "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=100", 
+                "cotizacion", 40, "SKU-SPOT-EMBUTIR-7W", 850, 6.2, "USD"
+            ],
         ]
         filename = "plantilla_crm_deals.xlsx"
     else:
         ws.title = "Inventario_Maestro"
         headers = [
-            "sku", "nombre", "categoria", "costo_unitario", "precio_venta",
+            "sku", "nombre", "categoria", "proveedor", "imagen_url", "costo_unitario", "precio_venta",
             "deposito_central", "transito_maritimo", "aduana", "stock_seguridad",
             "lead_time_dias", "demanda_diaria_promedio"
         ]
         sample_rows = [
-            ["SKU-LED-PANEL-60X60", "Panel LED 60x60 Backlight 40W", "Paneles LED", 14.50, 29.90, 850, 400, 150, 200, 45, 18.5],
-            ["SKU-CAMPANA-LED-150W", "Campana Industrial High Bay 150W IP65", "Industrial", 48.00, 95.00, 220, 150, 50, 80, 60, 4.2],
-            ["SKU-REFLECTOR-SLIM-50W", "Reflector Exterior Slim 50W Negro IP65", "Exterior", 8.20, 18.50, 1400, 600, 200, 300, 40, 32.0],
-            ["SKU-CINTA-LED-COB-24V", "Cinta LED COB 24V 5m 4000K", "Tiras y Perfiles", 11.00, 24.00, 500, 200, 0, 150, 35, 12.0],
+            [
+                "SKU-LED-PANEL-60X60", "Panel LED 60x60 Backlight 40W", "Paneles LED", 
+                "Distribuidora Mayorista SA", "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100", 
+                14.50, 29.90, 850, 400, 150, 200, 45, 18.5
+            ],
+            [
+                "SKU-CAMPANA-LED-150W", "Campana Industrial High Bay 150W IP65", "Industrial", 
+                "Importadora Conosur Ltda", "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100", 
+                48.00, 95.00, 220, 150, 50, 80, 60, 4.2
+            ],
+            [
+                "SKU-REFLECTOR-SLIM-50W", "Reflector Exterior Slim 50W Negro IP65", "Exterior", 
+                "Tech & Logistics SpA", "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=100", 
+                8.20, 18.50, 1400, 600, 200, 300, 40, 32.0
+            ],
+            [
+                "SKU-CINTA-LED-COB-24V", "Cinta LED COB 24V 5m 4000K", "Tiras y Perfiles", 
+                "Distribuidora Mayorista SA", "https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=100", 
+                11.00, 24.00, 500, 200, 0, 150, 35, 12.0
+            ],
         ]
         filename = "plantilla_inventario_maestro.xlsx"
         
@@ -2683,5 +2765,697 @@ def export_executive_report_pdf(
     )
 
 
+# =====================================================================
+# DIRECTORIO B2B: CLIENTES Y PROVEEDORES
+# =====================================================================
+
+@router.get(
+    "/crm/clients",
+    response_model=List[ClientResponse],
+    summary="Listado de Clientes B2B con métricas de Pipeline y tratos vinculados"
+)
+def list_clients(
+    q: Optional[str] = Query(None, description="Búsqueda por nombre o RUT"),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna el directorio maestro de clientes B2B con enriquecimiento en vivo
+    de deals activos, volumen en pipeline y tratos asociados.
+    """
+    total_clients = db.query(Client).count()
+    if total_clients == 0:
+        # Auto-seeding suave desde CommercialDeal para garantizar visibilidad inmediata
+        unique_deals = db.query(CommercialDeal).all()
+        seen_names = set()
+        for deal in unique_deals:
+            client_name = (deal.cliente or "").strip()
+            if client_name and client_name not in seen_names:
+                seen_names.add(client_name)
+                clean_email_prefix = re.sub(r'[^a-zA-Z0-9]', '', client_name.lower())[:15]
+                new_c = Client(
+                    nombre=client_name,
+                    rut=deal.rut or None,
+                    logo_url=f"https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100&auto=format&fit=crop&q=80",
+                    email=f"contacto@{clean_email_prefix or 'empresa'}.com",
+                    phone="+56 9 8765 4321",
+                    address="Av. Las Condes 10200, Santiago"
+                )
+                db.add(new_c)
+        if seen_names:
+            db.commit()
+
+    query = db.query(Client)
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(or_(Client.nombre.ilike(term), Client.rut.ilike(term)))
+
+    clients = query.order_by(Client.nombre.asc()).all()
+    results: List[ClientResponse] = []
+
+    # Cargar tratos para relacionar en memoria
+    all_deals = db.query(CommercialDeal).all()
+
+    for c in clients:
+        # Match por nombre o RUT
+        c_deals = [
+            d for d in all_deals 
+            if (d.cliente and d.cliente.strip().lower() == c.nombre.strip().lower()) or 
+               (c.rut and d.rut and d.rut.strip().lower() == c.rut.strip().lower())
+        ]
+        
+        deals_count = len(c_deals)
+        total_pipe = sum(
+            float(d.valor_total or 0.0) 
+            for d in c_deals 
+            if (d.etapa or '').lower() not in ['perdida', 'perdido']
+        )
+        
+        deal_items = [
+            ClientDealItemSummary(
+                deal_id=d.id,
+                deal_code=d.codigo,
+                deal_title=d.titulo,
+                etapa=d.etapa,
+                monto_total=float(d.valor_total or 0.0),
+                probabilidad_pct=d.probabilidad_cierre or 50,
+                created_at=d.created_at.isoformat() if d.created_at else None
+            )
+            for d in c_deals
+        ]
+
+        results.append(ClientResponse(
+            id=c.id,
+            nombre=c.nombre,
+            rut=c.rut,
+            logo_url=c.logo_url,
+            email=c.email,
+            phone=c.phone,
+            address=c.address,
+            deals_count=deals_count,
+            total_pipeline=round(total_pipe, 2),
+            deals=deal_items,
+            created_at=c.created_at
+        ))
+
+    return results
 
 
+@router.post(
+    "/crm/clients",
+    response_model=ClientResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea un nuevo Cliente B2B en el directorio"
+)
+def create_client(
+    payload: ClientCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    existing = db.query(Client).filter(Client.nombre.ilike(payload.nombre.strip())).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ya existe un cliente con el nombre '{payload.nombre.strip()}'."
+        )
+
+    new_client = Client(
+        nombre=payload.nombre.strip(),
+        rut=payload.rut.strip() if payload.rut else None,
+        logo_url=payload.logo_url,
+        email=payload.email.strip() if payload.email else None,
+        phone=payload.phone.strip() if payload.phone else None,
+        address=payload.address.strip() if payload.address else None
+    )
+    db.add(new_client)
+    db.commit()
+    db.refresh(new_client)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CLIENT_CREATE",
+        resource=f"clients/{new_client.id}",
+        details=payload.model_dump()
+    )
+
+    return ClientResponse(
+        id=new_client.id,
+        nombre=new_client.nombre,
+        rut=new_client.rut,
+        logo_url=new_client.logo_url,
+        email=new_client.email,
+        phone=new_client.phone,
+        address=new_client.address,
+        deals_count=0,
+        total_pipeline=0.0,
+        deals=[],
+        created_at=new_client.created_at
+    )
+
+
+@router.put(
+    "/crm/clients/{client_id}",
+    response_model=ClientResponse,
+    summary="Actualiza datos de contacto y multimedia de un Cliente B2B"
+)
+def update_client(
+    client_id: int,
+    payload: ClientUpdate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado.")
+
+    old_vals = {"nombre": client.nombre, "rut": client.rut, "email": client.email}
+
+    if payload.nombre is not None:
+        client.nombre = payload.nombre.strip()
+    if payload.rut is not None:
+        client.rut = payload.rut.strip() if payload.rut else None
+    if payload.logo_url is not None:
+        client.logo_url = payload.logo_url
+    if payload.email is not None:
+        client.email = payload.email.strip() if payload.email else None
+    if payload.phone is not None:
+        client.phone = payload.phone.strip() if payload.phone else None
+    if payload.address is not None:
+        client.address = payload.address.strip() if payload.address else None
+
+    db.commit()
+    db.refresh(client)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CLIENT_UPDATE",
+        resource=f"clients/{client.id}",
+        details=payload.model_dump(exclude_unset=True)
+    )
+
+    # Vincular tratos
+    c_deals = db.query(CommercialDeal).filter(
+        or_(
+            CommercialDeal.cliente == client.nombre,
+            and_(CommercialDeal.rut == client.rut, client.rut != None)
+        )
+    ).all()
+
+    total_pipe = sum(
+        float(d.valor_total or 0.0) 
+        for d in c_deals 
+        if (d.etapa or '').lower() not in ['perdida', 'perdido']
+    )
+    deal_items = [
+        ClientDealItemSummary(
+            deal_id=d.id,
+            deal_code=d.codigo,
+            deal_title=d.titulo,
+            etapa=d.etapa,
+            monto_total=float(d.valor_total or 0.0),
+            probabilidad_pct=d.probabilidad_cierre or 50,
+            created_at=d.created_at.isoformat() if d.created_at else None
+        )
+        for d in c_deals
+    ]
+
+    return ClientResponse(
+        id=client.id,
+        nombre=client.nombre,
+        rut=client.rut,
+        logo_url=client.logo_url,
+        email=client.email,
+        phone=client.phone,
+        address=client.address,
+        deals_count=len(c_deals),
+        total_pipeline=round(total_pipe, 2),
+        deals=deal_items,
+        created_at=client.created_at
+    )
+
+
+@router.get(
+    "/suppliers",
+    response_model=List[SupplierResponse],
+    summary="Listado de Proveedores con catálogo de SKUs y lead times asociados"
+)
+def list_suppliers(
+    q: Optional[str] = Query(None, description="Búsqueda por nombre o RUT"),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna el directorio de proveedores con catálogo de SKUs suministrados,
+    costos de compra y lead times de entrega.
+    """
+    total_suppliers = db.query(Supplier).count()
+    if total_suppliers == 0:
+        # Extraer proveedores desde productos o inicializar con distribuidores clave
+        existing_provs = [p[0] for p in db.query(Product.proveedor).distinct().all() if p[0]]
+        base_names = set(existing_provs)
+        if not base_names:
+            base_names = {"Distribuidora Mayorista SA", "Importadora Conosur Ltda", "Tech & Logistics SpA"}
+
+        for idx, name in enumerate(sorted(base_names)):
+            s_clean = re.sub(r'[^a-zA-Z0-9]', '', name.lower())[:15]
+            new_s = Supplier(
+                nombre=name.strip(),
+                rut=f"76.{100 + idx * 25}.{200 + idx}-K",
+                logo_url=f"https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=100&auto=format&fit=crop&q=80",
+                email=f"ventas@{s_clean or 'proveedor'}.cl",
+                phone="+56 2 2345 6789",
+                address="Parque Industrial ENEA, Pudahuel"
+            )
+            db.add(new_s)
+        db.commit()
+
+    query = db.query(Supplier)
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(or_(Supplier.nombre.ilike(term), Supplier.rut.ilike(term)))
+
+    suppliers = query.order_by(Supplier.nombre.asc()).all()
+    all_products = db.query(Product).all()
+    all_orders = db.query(OrdenReposicion).all()
+    products_by_sku = {p.sku: p for p in all_products}
+
+    supplier_skus_map: dict[str, set[str]] = {}
+    for ord_rep in all_orders:
+        if ord_rep.proveedor:
+            s_name = ord_rep.proveedor.strip().lower()
+            if s_name not in supplier_skus_map:
+                supplier_skus_map[s_name] = set()
+            supplier_skus_map[s_name].add(ord_rep.sku_id)
+
+    results: List[SupplierResponse] = []
+
+    for s in suppliers:
+        s_norm = s.nombre.strip().lower()
+        skus_associated = supplier_skus_map.get(s_norm, set())
+        prods = [
+            products_by_sku[sku] for sku in skus_associated if sku in products_by_sku
+        ]
+        prod_items = [
+            SupplierProductItem(
+                product_id=p.id,
+                sku=p.sku,
+                nombre=p.nombre,
+                costo_unitario=float(p.costo_unitario or 0.0),
+                lead_time_dias=int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 7,
+                imagen_url=p.image_url
+            )
+            for p in prods
+        ]
+
+        results.append(SupplierResponse(
+            id=s.id,
+            nombre=s.nombre,
+            rut=s.rut,
+            logo_url=s.logo_url,
+            email=s.email,
+            phone=s.phone,
+            address=s.address,
+            total_skus=len(prod_items),
+            productos=prod_items,
+            created_at=s.created_at
+        ))
+
+    return results
+
+
+@router.post(
+    "/suppliers",
+    response_model=SupplierResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea un nuevo Proveedor en el directorio"
+)
+def create_supplier(
+    payload: SupplierCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    existing = db.query(Supplier).filter(Supplier.nombre.ilike(payload.nombre.strip())).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ya existe un proveedor con el nombre '{payload.nombre.strip()}'."
+        )
+
+    new_supp = Supplier(
+        nombre=payload.nombre.strip(),
+        rut=payload.rut.strip() if payload.rut else None,
+        logo_url=payload.logo_url,
+        email=payload.email.strip() if payload.email else None,
+        phone=payload.phone.strip() if payload.phone else None,
+        address=payload.address.strip() if payload.address else None
+    )
+    db.add(new_supp)
+    db.commit()
+    db.refresh(new_supp)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="SUPPLIER_CREATE",
+        resource=f"suppliers/{new_supp.id}",
+        details=payload.model_dump()
+    )
+
+    return SupplierResponse(
+        id=new_supp.id,
+        nombre=new_supp.nombre,
+        rut=new_supp.rut,
+        logo_url=new_supp.logo_url,
+        email=new_supp.email,
+        phone=new_supp.phone,
+        address=new_supp.address,
+        total_skus=0,
+        productos=[],
+        created_at=new_supp.created_at
+    )
+
+
+@router.put(
+    "/suppliers/{supplier_id}",
+    response_model=SupplierResponse,
+    summary="Actualiza datos de un Proveedor"
+)
+def update_supplier(
+    supplier_id: int,
+    payload: SupplierUpdate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado.")
+
+    old_vals = {"nombre": supplier.nombre, "rut": supplier.rut, "email": supplier.email}
+
+    if payload.nombre is not None:
+        supplier.nombre = payload.nombre.strip()
+    if payload.rut is not None:
+        supplier.rut = payload.rut.strip() if payload.rut else None
+    if payload.logo_url is not None:
+        supplier.logo_url = payload.logo_url
+    if payload.email is not None:
+        supplier.email = payload.email.strip() if payload.email else None
+    if payload.phone is not None:
+        supplier.phone = payload.phone.strip() if payload.phone else None
+    if payload.address is not None:
+        supplier.address = payload.address.strip() if payload.address else None
+
+    db.commit()
+    db.refresh(supplier)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="SUPPLIER_UPDATE",
+        resource=f"suppliers/{supplier.id}",
+        details=payload.model_dump(exclude_unset=True)
+    )
+
+    # SKUs vinculados vía OrdenReposicion
+    rep_orders = db.query(OrdenReposicion).filter(
+        OrdenReposicion.proveedor.ilike(supplier.nombre.strip())
+    ).all()
+    rep_skus = {ro.sku_id for ro in rep_orders}
+    prods = db.query(Product).filter(Product.sku.in_(rep_skus)).all() if rep_skus else []
+    prod_items = [
+        SupplierProductItem(
+            product_id=p.id,
+            sku=p.sku,
+            nombre=p.nombre,
+            costo_unitario=float(p.costo_unitario or 0.0),
+            lead_time_dias=int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 7,
+            imagen_url=p.image_url
+        )
+        for p in prods
+    ]
+
+    return SupplierResponse(
+        id=supplier.id,
+        nombre=supplier.nombre,
+        rut=supplier.rut,
+        logo_url=supplier.logo_url,
+        email=supplier.email,
+        phone=supplier.phone,
+        address=supplier.address,
+        total_skus=len(prod_items),
+        productos=prod_items,
+        created_at=supplier.created_at
+    )
+
+
+# =====================================================================
+# PRESUPUESTO: CRUD DE PARTIDAS DE CENTROS DE COSTO
+# =====================================================================
+
+@router.post(
+    "/budget/cost-centers",
+    response_model=CostCenterBudgetResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea una partida individual de presupuesto para un Centro de Costo"
+)
+def create_cost_center_budget(
+    payload: CostCenterBudgetCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    if not PERIOD_REGEX.match(payload.periodo):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El período '{payload.periodo}' es inválido. Formato requerido: YYYY-MM."
+        )
+
+    cc = db.query(CentroCosto).filter(CentroCosto.id == payload.centro_costo_id).first()
+    if not cc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Centro de costo ID {payload.centro_costo_id} no encontrado."
+        )
+
+    existing = db.query(PresupuestoCentroCosto).filter(
+        PresupuestoCentroCosto.periodo == payload.periodo,
+        PresupuestoCentroCosto.centro_costo_id == payload.centro_costo_id,
+        PresupuestoCentroCosto.concepto_opex == payload.concepto_opex.strip()
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ya existe una partida con concepto '{payload.concepto_opex.strip()}' para este centro de costo en el período {payload.periodo}."
+        )
+
+    p_pres = Decimal(str(payload.monto_presupuestado))
+    p_real = Decimal(str(payload.monto_real or 0.0))
+
+    new_line = PresupuestoCentroCosto(
+        periodo=payload.periodo,
+        centro_costo_id=payload.centro_costo_id,
+        concepto_opex=payload.concepto_opex.strip(),
+        monto_presupuestado=p_pres,
+        monto_real=p_real
+    )
+    db.add(new_line)
+    db.commit()
+    db.refresh(new_line)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="BUDGET_LINE_CREATE",
+        resource=f"budget/cost-centers/{new_line.id}",
+        details=payload.model_dump()
+    )
+
+    m_pres_f = float(new_line.monto_presupuestado)
+    m_real_f = float(new_line.monto_real)
+    var_monto = round(m_pres_f - m_real_f, 2)
+    var_pct = round((var_monto / m_pres_f * 100.0), 1) if m_pres_f > 0 else 0.0
+    estado = "OK" if var_monto >= 0 else "EXCEDIDO"
+
+    return CostCenterBudgetResponse(
+        id=new_line.id,
+        periodo=new_line.periodo,
+        centro_costo_id=new_line.centro_costo_id,
+        centro_costo_codigo=cc.codigo,
+        centro_costo_nombre=cc.nombre,
+        concepto_opex=new_line.concepto_opex,
+        monto_presupuestado=m_pres_f,
+        monto_real=m_real_f,
+        variacion_monto=var_monto,
+        variacion_pct=var_pct,
+        estado=estado
+    )
+
+
+@router.put(
+    "/budget/cost-centers/{partida_id}",
+    response_model=CostCenterBudgetResponse,
+    summary="Actualiza montos o concepto de una partida de presupuesto de Centro de Costo"
+)
+def update_cost_center_budget(
+    partida_id: int,
+    payload: CostCenterBudgetUpdate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    partida = db.query(PresupuestoCentroCosto).filter(PresupuestoCentroCosto.id == partida_id).first()
+    if not partida:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Partida de presupuesto ID {partida_id} no encontrada."
+        )
+
+    old_vals = {
+        "concepto_opex": partida.concepto_opex,
+        "monto_presupuestado": float(partida.monto_presupuestado),
+        "monto_real": float(partida.monto_real)
+    }
+
+    if payload.concepto_opex is not None:
+        partida.concepto_opex = payload.concepto_opex.strip()
+    if payload.monto_presupuestado is not None:
+        partida.monto_presupuestado = Decimal(str(payload.monto_presupuestado))
+    if payload.monto_real is not None:
+        partida.monto_real = Decimal(str(payload.monto_real))
+
+    db.commit()
+    db.refresh(partida)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="BUDGET_LINE_UPDATE",
+        resource=f"budget/cost-centers/{partida.id}",
+        details=payload.model_dump(exclude_unset=True)
+    )
+
+    cc = partida.centro_costo
+    m_pres_f = float(partida.monto_presupuestado)
+    m_real_f = float(partida.monto_real)
+    var_monto = round(m_pres_f - m_real_f, 2)
+    var_pct = round((var_monto / m_pres_f * 100.0), 1) if m_pres_f > 0 else 0.0
+    estado = "OK" if var_monto >= 0 else "EXCEDIDO"
+
+    return CostCenterBudgetResponse(
+        id=partida.id,
+        periodo=partida.periodo,
+        centro_costo_id=partida.centro_costo_id,
+        centro_costo_codigo=cc.codigo if cc else "",
+        centro_costo_nombre=cc.nombre if cc else "",
+        concepto_opex=partida.concepto_opex,
+        monto_presupuestado=m_pres_f,
+        monto_real=m_real_f,
+        variacion_monto=var_monto,
+        variacion_pct=var_pct,
+        estado=estado
+    )
+
+
+# =====================================================================
+# ASESOR DE IA & SELECTOR DINÁMICO DE LOS 11 MODELOS DE OLLAMA
+# =====================================================================
+
+OFFICIAL_OLLAMA_FALLBACK_MODELS = [
+    {"name": "deepseek-r1:8b", "size": 4900000000, "size_formatted": "4.9 GB", "digest": "sha256:d1a8e945"},
+    {"name": "qwen2.5:7b", "size": 4700000000, "size_formatted": "4.7 GB", "digest": "sha256:843513b8"},
+    {"name": "llama3.1:8b", "size": 4920000000, "size_formatted": "4.9 GB", "digest": "sha256:4b494d48"},
+    {"name": "mistral:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:61e88e88"},
+    {"name": "gemma2:9b", "size": 5400000000, "size_formatted": "5.4 GB", "digest": "sha256:ff025218"},
+    {"name": "phi3:medium", "size": 7900000000, "size_formatted": "7.9 GB", "digest": "sha256:22c07b3b"},
+    {"name": "codellama:7b", "size": 3800000000, "size_formatted": "3.8 GB", "digest": "sha256:8f43be5d"},
+    {"name": "qwen2.5-coder:7b", "size": 4700000000, "size_formatted": "4.7 GB", "digest": "sha256:b1d8351a"},
+    {"name": "command-r:latest", "size": 18000000000, "size_formatted": "18.0 GB", "digest": "sha256:77353f3e"},
+    {"name": "starling-lm:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:ca18641a"},
+    {"name": "neural-chat:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:911855e4"}
+]
+
+@router.get(
+    "/advisor/models",
+    response_model=OllamaModelsResponse,
+    summary="Listado dinámico de los modelos Ollama disponibles con fallback a los 11 modelos locales"
+)
+def list_ollama_models():
+    """
+    Consulta los modelos registrados en la instancia de Ollama activa.
+    Si Ollama está apagado o no responde en 2.0s, retorna de manera determinista
+    el catálogo de los 11 modelos locales optimizados para la suite.
+    """
+    current_active = getattr(settings, "ollama_model", "qwen2.5:7b")
+    models_list: List[OllamaModelItem] = []
+    ollama_running = False
+
+    try:
+        url = f"{settings.ollama_base_url}/api/tags"
+        resp = httpx.get(url, timeout=2.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_models = data.get("models", [])
+            if raw_models:
+                ollama_running = True
+                for rm in raw_models:
+                    m_name = rm.get("name", "")
+                    m_size = rm.get("size", 0)
+                    m_sz_gb = f"{round(m_size / (1024**3), 1)} GB" if m_size else "N/A"
+                    models_list.append(OllamaModelItem(
+                        name=m_name,
+                        size=m_size,
+                        size_formatted=m_sz_gb,
+                        modified_at=rm.get("modified_at"),
+                        digest=rm.get("digest"),
+                        is_active=(m_name == current_active)
+                    ))
+    except Exception:
+        ollama_running = False
+
+    if not models_list:
+        # Fallback a los 11 modelos locales oficiales
+        for fm in OFFICIAL_OLLAMA_FALLBACK_MODELS:
+            models_list.append(OllamaModelItem(
+                name=fm["name"],
+                size=fm["size"],
+                size_formatted=fm["size_formatted"],
+                modified_at=datetime.now().strftime("%Y-%m-%d"),
+                digest=fm["digest"],
+                is_active=(fm["name"] == current_active)
+            ))
+
+    return OllamaModelsResponse(
+        models=models_list,
+        active_model=current_active,
+        total=len(models_list),
+        ollama_running=ollama_running
+    )
+
+
+@router.post(
+    "/advisor/active-model",
+    response_model=ActiveModelResponse,
+    summary="Conmutador en caliente del modelo Ollama activo para análisis predictivo"
+)
+def set_active_ollama_model(
+    payload: ActiveModelRequest,
+    user: UserContext = Depends(get_current_user)
+):
+    selected = payload.model.strip()
+    settings.ollama_model = selected
+    settings.local_llm_model = selected
+    
+    # También actualizar variable de clase o singleton si existe
+    if hasattr(AIAdvisorService, "_active_model"):
+        setattr(AIAdvisorService, "_active_model", selected)
+
+    return ActiveModelResponse(
+        status="success",
+        active_model=selected,
+        message=f"Modelo activo de IA conmutado exitosamente a '{selected}'."
+    )

@@ -12,6 +12,8 @@ import {
   Building2,
   Handshake,
   Ship,
+  Users,
+  Truck,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -20,11 +22,13 @@ export type ActiveTab =
   | 'stock_trace'
   | 'pricing' 
   | 'crm'
+  | 'clients'
+  | 'suppliers'
+  | 'tenders'
   | 'initiatives' 
   | 'variance' 
   | 'reports' 
-  | 'etl' 
-  | 'tenders';
+  | 'etl';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -73,6 +77,18 @@ export const Sidebar = ({
       label: 'Pipeline Comercial (CRM)',
       shortLabel: 'Pipeline CRM',
       icon: Handshake,
+    },
+    {
+      id: 'clients' as ActiveTab,
+      label: 'Directorio Clientes B2B',
+      shortLabel: 'Clientes',
+      icon: Users,
+    },
+    {
+      id: 'suppliers' as ActiveTab,
+      label: 'Directorio Proveedores',
+      shortLabel: 'Proveedores',
+      icon: Truck,
     },
     {
       id: 'tenders' as ActiveTab,

@@ -148,10 +148,19 @@ export const ControlRoomView = ({
     },
     {
       key: 'stock_actual',
-      header: 'Stock Actual',
-      width: '110px',
+      header: 'Stock & Pipeline',
+      width: '140px',
       render: (row) => (
-        <span className="font-semibold">{row.stock_actual.toLocaleString()} u.</span>
+        <div className="flex flex-col">
+          <span className="font-semibold text-slate-900 dark:text-slate-100">
+            {row.stock_actual.toLocaleString()} u.
+          </span>
+          {row.stock_comprometido_pipeline && row.stock_comprometido_pipeline > 0 ? (
+            <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+              🔥 {row.stock_comprometido_pipeline} u. en tratos ({row.stock_disponible_neto ?? row.stock_actual} disp. neto)
+            </span>
+          ) : null}
+        </div>
       ),
     },
     {

@@ -17,6 +17,8 @@ const MultiLocationStockView = lazy(() => import('./views/MultiLocationStockView
 const VarianceScenariosView = lazy(() => import('./views/VarianceScenariosView').then(m => ({ default: m.VarianceScenariosView })));
 const ExecutiveReportsView = lazy(() => import('./views/ExecutiveReportsView').then(m => ({ default: m.ExecutiveReportsView })));
 const EtlIngestView = lazy(() => import('./views/EtlIngestView').then(m => ({ default: m.EtlIngestView })));
+const ClientsView = lazy(() => import('./views/directory/ClientsView').then(m => ({ default: m.ClientsView })));
+const SuppliersView = lazy(() => import('./views/directory/SuppliersView').then(m => ({ default: m.SuppliersView })));
 
 const ViewLoading = () => (
   <div className="h-96 flex flex-col items-center justify-center space-y-3 text-slate-400">
@@ -318,6 +320,18 @@ export function AppContent() {
                 <CommercialKanbanView 
                   onNavigateToTenders={() => setActiveTab('tenders')}
                 />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'clients' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Directorio de Clientes B2B">
+                <ClientsView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'suppliers' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Directorio de Proveedores">
+                <SuppliersView />
               </ErrorBoundary>
             )}
 

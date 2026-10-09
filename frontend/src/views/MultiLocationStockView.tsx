@@ -189,9 +189,14 @@ export const MultiLocationStockView = () => {
         tracking.includes(term) ||
         warehouseId.includes(term);
 
-      const origenTipo = String(b.origen_tipo ?? 'ROP');
+      const origenTipo = String(b.origen_tipo ?? 'ROP').toUpperCase();
       const matchOrigen =
-        selectedOrigenTipo === 'todos' || origenTipo === selectedOrigenTipo;
+        selectedOrigenTipo === 'todos' ||
+        origenTipo === selectedOrigenTipo.toUpperCase() ||
+        (selectedOrigenTipo.toUpperCase() === 'PIPELINE' &&
+          (((b as any).stock_comprometido_pipeline && (b as any).stock_comprometido_pipeline > 0) ||
+            (b as any).comprometido_pipeline ||
+            origenTipo === 'PIPELINE'));
 
       return matchSearch && matchOrigen;
     });
@@ -729,6 +734,8 @@ export const MultiLocationStockView = () => {
             <option value="todos">Todos los orígenes</option>
             <option value="ROP">ROP (Kanban Abastecimiento)</option>
             <option value="STOCK_DIRECTO">Stock Directo</option>
+            <option value="LICITACION">Licitación B2B</option>
+            <option value="PIPELINE">Demanda en Pipeline (CRM)</option>
           </select>
         </div>
       </div>
@@ -819,6 +826,14 @@ export const MultiLocationStockView = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* Chip Demanda en Pipeline */}
+                        {(((batch as any).stock_comprometido_pipeline && (batch as any).stock_comprometido_pipeline > 0) || (batch as any).comprometido_deals) && (
+                          <div className="mt-2 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800 flex items-center justify-between">
+                            <span>🔥 Demanda en Pipeline:</span>
+                            <span>{(batch as any).stock_comprometido_pipeline || 'Comprometido'} u.</span>
+                          </div>
+                        )}
 
                         {/* Almacén Físico */}
                         <div className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 flex items-center space-x-1">

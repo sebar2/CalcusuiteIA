@@ -14,6 +14,8 @@ export interface InventoryAlertItem {
   costo_unitario?: number;
   demanda_diaria_promedio?: number;
   image_url?: string | null;
+  stock_comprometido_pipeline?: number;
+  stock_disponible_neto?: number;
 }
 
 export interface InventoryQuickUpdatePayload {
@@ -1231,6 +1233,151 @@ export interface TenderImportFeedResponse {
   tender_id: string;
   feed_item: TenderFeedItem;
   evaluation: any;
+}
+
+// =====================================================================
+// DIRECTORIO B2B: CLIENTES & PROVEEDORES (MODERN SAAS)
+// =====================================================================
+export interface ClientDealItemSummary {
+  deal_id: number;
+  deal_code: string;
+  deal_title: string;
+  etapa: string;
+  monto_total: number;
+  probabilidad_pct: number;
+  created_at?: string | null;
+}
+
+export interface ClientItem {
+  id: number;
+  nombre: string;
+  rut?: string | null;
+  logo_url?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  deals_count: number;
+  total_pipeline: number;
+  deals: ClientDealItemSummary[];
+  created_at?: string;
+}
+
+export interface ClientCreatePayload {
+  nombre: string;
+  rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface ClientUpdatePayload {
+  nombre?: string;
+  rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface SupplierProductItem {
+  product_id: number;
+  sku: string;
+  nombre: string;
+  costo_unitario: number;
+  lead_time_dias: number;
+  imagen_url?: string | null;
+}
+
+export interface SupplierItem {
+  id: number;
+  nombre: string;
+  rut?: string | null;
+  logo_url?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  total_skus: number;
+  productos: SupplierProductItem[];
+  created_at?: string;
+}
+
+export interface SupplierCreatePayload {
+  nombre: string;
+  rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface SupplierUpdatePayload {
+  nombre?: string;
+  rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+// =====================================================================
+// PRESUPUESTO: LÍNEAS DE CENTRO DE COSTO
+// =====================================================================
+export interface CostCenterBudgetCreatePayload {
+  periodo: string;
+  centro_costo_id: number;
+  concepto_opex: string;
+  monto_presupuestado: number;
+  monto_real?: number;
+}
+
+export interface CostCenterBudgetUpdatePayload {
+  concepto_opex?: string;
+  monto_presupuestado?: number;
+  monto_real?: number;
+}
+
+export interface CostCenterBudgetSingleResponse {
+  id: number;
+  periodo: string;
+  centro_costo_id: number;
+  centro_costo_codigo: string;
+  centro_costo_nombre: string;
+  concepto_opex: string;
+  monto_presupuestado: number;
+  monto_real: number;
+  variacion_monto: number;
+  variacion_pct: number;
+  estado: string;
+}
+
+// =====================================================================
+// MODELOS OLLAMA DINÁMICOS
+// =====================================================================
+export interface OllamaModelItem {
+  name: string;
+  size: number;
+  size_formatted: string;
+  modified_at?: string | null;
+  digest?: string | null;
+  is_active: boolean;
+}
+
+export interface OllamaModelsResponse {
+  models: OllamaModelItem[];
+  active_model: string;
+  total: number;
+  ollama_running: boolean;
+}
+
+export interface ActiveModelRequest {
+  model: string;
+}
+
+export interface ActiveModelResponse {
+  status: string;
+  active_model: string;
+  message: string;
 }
 
 

@@ -54,6 +54,12 @@ export const EtlIngestView = ({ onUploadSuccess }: EtlIngestViewProps) => {
       setSelectedFile(null);
       return;
     }
+    const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
+    if (file.size > MAX_SIZE) {
+      setErrorMessage(`El archivo supera el límite estricto de 15 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB). Por favor comprime o divide la planilla.`);
+      setSelectedFile(null);
+      return;
+    }
     setSelectedFile(file);
     setErrorMessage(null);
     setResult(null);

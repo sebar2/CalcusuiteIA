@@ -54,8 +54,56 @@ class ClientUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
 
+class ClientDealItemSummary(BaseModel):
+    id: str
+    proyecto_nombre: str
+    monto_total: Decimal
+    etapa: str
+    moneda: str = "USD"
+    created_at: Optional[datetime] = None
+
 class ClientResponse(ClientBase):
     id: int
+    deals_count: int = 0
+    total_pipeline: Decimal = Decimal('0.00')
+    deals: List[ClientDealItemSummary] = []
+    created_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Supplier Schemas ---
+class SupplierBase(BaseModel):
+    nombre: str
+    rut: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+class SupplierCreate(SupplierBase):
+    pass
+
+class SupplierUpdate(BaseModel):
+    nombre: Optional[str] = None
+    rut: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+class SupplierProductItem(BaseModel):
+    sku: str
+    nombre: str
+    categoria: str
+    costo_unitario: Decimal
+    lead_time_dias: Decimal
+    image_url: Optional[str] = None
+
+class SupplierResponse(SupplierBase):
+    id: int
+    lead_time_promedio: Decimal = Decimal('30.0')
+    skus_count: int = 0
+    productos: List[SupplierProductItem] = []
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,6 +142,8 @@ class InventoryAlert(BaseModel):
     costo_unitario: Optional[Decimal] = None
     demanda_diaria_promedio: Optional[Decimal] = None
     image_url: Optional[str] = None
+    stock_comprometido_pipeline: int = 0
+    stock_disponible_neto: int = 0
     model_config = ConfigDict(from_attributes=True, extra="allow")
 
 
@@ -1090,6 +1140,34 @@ class CostCenterBatchResponse(BaseModel):
     message: str
 
 
+class CostCenterBudgetCreate(BaseModel):
+    centro_costo_id: int
+    periodo: str = Field(..., description="Periodo contable (ej. 2025-09)")
+    concepto_opex: str = Field(..., min_length=2, max_length=150)
+    monto_presupuestado: Decimal = Field(default=Decimal('0.00'), ge=0)
+    monto_real: Decimal = Field(default=Decimal('0.00'), ge=0)
+
+
+class CostCenterBudgetUpdate(BaseModel):
+    concepto_opex: Optional[str] = Field(None, min_length=2, max_length=150)
+    monto_presupuestado: Optional[Decimal] = Field(None, ge=0)
+    monto_real: Optional[Decimal] = Field(None, ge=0)
+    periodo: Optional[str] = None
+    centro_costo_id: Optional[int] = None
+
+
+class CostCenterBudgetResponse(BaseModel):
+    id: int
+    periodo: str
+    centro_costo_id: int
+    centro_costo_codigo: Optional[str] = None
+    centro_costo_nombre: Optional[str] = None
+    concepto_opex: str
+    monto_presupuestado: Decimal
+    monto_real: Decimal
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CostCenterTotalOpexResponse(BaseModel):
     periodo: str
     total_opex_presupuestado: float
@@ -1679,4 +1757,31 @@ class WarehouseStockItem(BaseModel):
     stock_disponible: int
     stock_reservado: int = 0
     lotes: List[WarehouseBatchDetail] = Field(default_factory=list)
+
+
+# --- Ollama Dynamic Models Schemas ---
+class OllamaModelItem(BaseModel):
+    name: str
+    size: int = 0
+    size_formatted: str = ""
+    modified_at: Optional[str] = None
+    digest: Optional[str] = None
+    is_active: bool = False
+
+
+class OllamaModelsResponse(BaseModel):
+    models: List[OllamaModelItem] = Field(default_factory=list)
+    active_model: str = "qwen2.5:7b"
+    total: int = 0
+    ollama_running: bool = True
+
+
+class ActiveModelRequest(BaseModel):
+    model: str = Field(..., min_length=1, description="Nombre del modelo Ollama (ej. qwen2.5:7b, llama3:8b)")
+
+
+class ActiveModelResponse(BaseModel):
+    status: str = "success"
+    active_model: str
+    message: str
 

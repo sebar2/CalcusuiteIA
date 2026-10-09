@@ -58,9 +58,25 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
   engineMode = 'auto',
 }) => {
   const [activeTab, setActiveTab] = useState<'cost_centers' | 'organization' | 'commitments' | 'variance' | 'multilevel' | 'scenarios'>('cost_centers');
+  const [currentPeriod, setCurrentPeriod] = useState<string>(selectedPeriod || '2025-09');
+  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
   const [variances, setVariances] = useState<BudgetVarianceItem[]>([]);
   const [multilevelData, setMultilevelData] = useState<MultilevelVarianceResponse | null>(null);
   const [isLoadingVariance, setIsLoadingVariance] = useState(false);
+
+  // Sincronizar si cambia desde props
+  useEffect(() => {
+    if (selectedPeriod) setCurrentPeriod(selectedPeriod);
+  }, [selectedPeriod]);
+
+  // Cargar períodos disponibles desde la base de datos
+  useEffect(() => {
+    apiService.getAvailablePeriods().then((res) => {
+      if (res.periods && res.periods.length > 0) {
+        setAvailablePeriods(res.periods);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Estado del Generador de 3 Escenarios
   const [scenariosData, setScenariosData] = useState<BudgetScenarioResponse | null>(null);
@@ -79,10 +95,10 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
     try {
       const [varData, multiData] = await Promise.all([
         apiService.getBudgetVariance({
-          periodo: selectedPeriod,
+          periodo: currentPeriod,
           categoria: selectedCategory !== 'Todas' ? selectedCategory : undefined,
         }).catch(() => []),
-        apiService.getMultilevelVariance(selectedPeriod).catch(() => null),
+        apiService.getMultilevelVariance(currentPeriod).catch(() => null),
       ]);
       setVariances(varData || []);
       setMultilevelData(multiData);
@@ -91,7 +107,7 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
     } finally {
       setIsLoadingVariance(false);
     }
-  }, [selectedPeriod, selectedCategory]);
+  }, [currentPeriod, selectedCategory]);
 
   useEffect(() => {
     fetchVariances();
@@ -306,17 +322,40 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
             </button>
           </div>
 
-          {/* Acciones de Controller Admin (Reiniciar Período) */}
-          {currentRole === 'controller_admin' && variances.length > 0 && (
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
-              title="Borrar metas y dejar período en blanco"
-            >
-              <Trash2 size={13} />
-              <span>Reiniciar Período</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            {/* Selector de Períodos Disponibles */}
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs shadow-2xs">
+              <span className="text-slate-400 font-medium">Período:</span>
+              <select
+                value={currentPeriod}
+                onChange={(e) => setCurrentPeriod(e.target.value)}
+                className="bg-transparent font-bold text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer"
+                title="Seleccionar período presupuestario"
+              >
+                {availablePeriods.length === 0 ? (
+                  <option value={currentPeriod}>{currentPeriod}</option>
+                ) : (
+                  availablePeriods.map((p) => (
+                    <option key={p} value={p} className="dark:bg-slate-900">
+                      {p}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Acciones de Controller Admin (Reiniciar Período) */}
+            {currentRole === 'controller_admin' && variances.length > 0 && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                title="Borrar metas y dejar período en blanco"
+              >
+                <Trash2 size={13} />
+                <span>Reiniciar Período</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {deleteMessage && (
@@ -792,7 +831,7 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
         {/* Pestaña: Centros de Costo & OPEX */}
         {activeTab === 'cost_centers' && (
           <CostCentersBudgetGrid
-            selectedPeriod={selectedPeriod}
+            selectedPeriod={currentPeriod}
             currentRole={currentRole}
           />
         )}
@@ -804,7 +843,7 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
 
         {/* Pestaña: Compromisos Presupuestarios & Tareas IA */}
         {activeTab === 'commitments' && (
-          <BudgetCommitmentsManager selectedPeriod={selectedPeriod} />
+          <BudgetCommitmentsManager selectedPeriod={currentPeriod} />
         )}
       </div>
     </ErrorBoundary>

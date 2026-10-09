@@ -78,6 +78,18 @@ import type {
   TenderLiveFeedResponse,
   TenderImportFeedRequest,
   TenderImportFeedResponse,
+  ClientItem,
+  ClientCreatePayload,
+  ClientUpdatePayload,
+  SupplierItem,
+  SupplierCreatePayload,
+  SupplierUpdatePayload,
+  CostCenterBudgetCreatePayload,
+  CostCenterBudgetUpdatePayload,
+  CostCenterBudgetSingleResponse,
+  OllamaModelsResponse,
+  ActiveModelRequest,
+  ActiveModelResponse,
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -735,7 +747,63 @@ export const apiService = {
   // Exportación Nativa de Reportes Ejecutivos (P1.3)
   downloadExecutiveExcel,
   downloadExecutivePdf,
+
+  // DIRECTORIO B2B: CLIENTES & PROVEEDORES
+  async getClients(q?: string): Promise<ClientItem[]> {
+    const res = await apiClient.get<ClientItem[]>('/api/v1/crm/clients', { params: q ? { q } : undefined });
+    return res.data;
+  },
+
+  async createClient(payload: ClientCreatePayload): Promise<ClientItem> {
+    const res = await apiClient.post<ClientItem>('/api/v1/crm/clients', payload);
+    return res.data;
+  },
+
+  async updateClient(id: number, payload: ClientUpdatePayload): Promise<ClientItem> {
+    const res = await apiClient.put<ClientItem>(`/api/v1/crm/clients/${id}`, payload);
+    return res.data;
+  },
+
+  async getSuppliers(q?: string): Promise<SupplierItem[]> {
+    const res = await apiClient.get<SupplierItem[]>('/api/v1/suppliers', { params: q ? { q } : undefined });
+    return res.data;
+  },
+
+  async createSupplier(payload: SupplierCreatePayload): Promise<SupplierItem> {
+    const res = await apiClient.post<SupplierItem>('/api/v1/suppliers', payload);
+    return res.data;
+  },
+
+  async updateSupplier(id: number, payload: SupplierUpdatePayload): Promise<SupplierItem> {
+    const res = await apiClient.put<SupplierItem>(`/api/v1/suppliers/${id}`, payload);
+    return res.data;
+  },
+
+  // PRESUPUESTO: CRUD DE PARTIDAS DE CENTRO DE COSTO
+  async createCostCenterBudget(payload: CostCenterBudgetCreatePayload): Promise<CostCenterBudgetSingleResponse> {
+    const res = await apiClient.post<CostCenterBudgetSingleResponse>('/api/v1/budget/cost-centers', payload);
+    return res.data;
+  },
+
+  async updateCostCenterBudget(id: number, payload: CostCenterBudgetUpdatePayload): Promise<CostCenterBudgetSingleResponse> {
+    const res = await apiClient.put<CostCenterBudgetSingleResponse>(`/api/v1/budget/cost-centers/${id}`, payload);
+    return res.data;
+  },
+
+  // ASESOR IA & MODELOS OLLAMA
+  async getOllamaModels(): Promise<OllamaModelsResponse> {
+    const res = await apiClient.get<OllamaModelsResponse>('/api/v1/advisor/models');
+    return res.data;
+  },
+
+  async setActiveOllamaModel(payload: ActiveModelRequest): Promise<ActiveModelResponse> {
+    const res = await apiClient.post<ActiveModelResponse>('/api/v1/advisor/active-model', payload);
+    return res.data;
+  },
 };
+
+export const api = apiService;
+export default apiService;
 
 export const downloadBlobFile = (blobData: Blob, defaultFilename: string) => {
   if (typeof window === 'undefined') return;
