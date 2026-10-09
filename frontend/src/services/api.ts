@@ -78,6 +78,7 @@ import type {
   TenderLiveFeedResponse,
   TenderImportFeedRequest,
   TenderImportFeedResponse,
+  PricingAIBundlesResponse,
   ClientItem,
   ClientCreatePayload,
   ClientUpdatePayload,
@@ -417,6 +418,25 @@ export const apiService = {
     origen?: string;
   }[]): Promise<AccionCompromiso[]> {
     const res = await apiClient.post<AccionCompromiso[]>('/api/v1/actions/batch', { acciones });
+    return res.data;
+  },
+
+  async updateAction(id: number, data: Partial<AccionCompromiso>): Promise<AccionCompromiso> {
+    const res = await apiClient.put<AccionCompromiso>(`/api/v1/actions/${id}`, data);
+    return res.data;
+  },
+
+  async deleteAction(id: number): Promise<{ status: string; message: string }> {
+    const res = await apiClient.delete<{ status: string; message: string }>(`/api/v1/actions/${id}`);
+    return res.data;
+  },
+
+  // MÓDULO PRICING: Packs y Bundles Estratégicos con IA
+  async getAIBundles(engineMode: string = 'auto'): Promise<PricingAIBundlesResponse> {
+    const res = await apiClient.post<PricingAIBundlesResponse>('/api/v1/pricing/ai-bundles-suggest', null, {
+      params: { engine_mode: engineMode },
+      timeout: 0,
+    });
     return res.data;
   },
 

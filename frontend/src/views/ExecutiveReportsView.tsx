@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   Sparkles, 
@@ -14,6 +14,16 @@ import {
   Cpu,
   FileSpreadsheet,
   Loader2,
+  Edit2,
+  Trash2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Search,
+  Filter,
+  AlertTriangle,
+  X,
+  Save,
 } from 'lucide-react';
 import type { CrossReportResponse, AccionCompromiso, EngineMode } from '../types';
 import { apiService, downloadExecutiveExcel, downloadExecutivePdf } from '../services/api';
@@ -38,6 +48,24 @@ export const ExecutiveReportsView = ({
   const [isCreatingAction, setIsCreatingAction] = useState(false);
   const [isConvertingActions, setIsConvertingActions] = useState(false);
   const [conversionSuccess, setConversionSuccess] = useState<string | null>(null);
+
+  // Estados para búsqueda, filtro y ordenamiento de compromisos
+  const [searchActionText, setSearchActionText] = useState('');
+  const [filterActionArea, setFilterActionArea] = useState('Todas');
+  const [filterActionStatus, setFilterActionStatus] = useState('Todos');
+  const [sortField, setSortField] = useState<'titulo' | 'responsable' | 'fecha_limite' | 'estado'>('fecha_limite');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Estado para edición modal
+  const [editingAction, setEditingAction] = useState<AccionCompromiso | null>(null);
+  const [editForm, setEditForm] = useState({
+    titulo: '',
+    area: 'Comercial',
+    responsable: '',
+    fecha_limite: '',
+    estado: 'Pendiente'
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Estados para exportación nativa de reportes (P1.3)
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
@@ -116,7 +144,7 @@ export const ExecutiveReportsView = ({
     }
   };
 
-  // Convertir recomendaciones de la minuta en acciones persistidas
+  // Convertir recomendaciones de la minuta en acciones persistidas con deduplicación preventiva
   const handleConvertRecommendations = async () => {
     if (!report) return;
     setIsConvertingActions(true);
@@ -156,8 +184,25 @@ export const ExecutiveReportsView = ({
         };
       });
 
-      await apiService.createActionsBatch(toSave);
-      setConversionSuccess(`Se han registrado ${toSave.length} compromisos operativos extraídos de la minuta.`);
+      // Deduplicación preventiva contra la matriz viva existente
+      const existingSignatures = new Set(
+        actionsList.map(a => `${a.titulo.trim().toLowerCase()}|${(a.area || '').trim().toLowerCase()}`)
+      );
+      const filteredToSave = toSave.filter(item => {
+        const sig = `${item.titulo.trim().toLowerCase()}|${item.area.trim().toLowerCase()}`;
+        return !existingSignatures.has(sig);
+      });
+
+      if (filteredToSave.length === 0) {
+        setConversionSuccess('Todos los compromisos derivados ya existen en la matriz con estado activo.');
+        return;
+      }
+
+      await apiService.createActionsBatch(filteredToSave);
+      setConversionSuccess(
+        `Se han registrado ${filteredToSave.length} compromisos operativos extraídos de la minuta` +
+        (toSave.length > filteredToSave.length ? ` (se omitieron ${toSave.length - filteredToSave.length} duplicados).` : '.')
+      );
       await loadActions();
     } catch (err: any) {
       console.error('Error converting recommendations to actions', err);
@@ -165,6 +210,94 @@ export const ExecutiveReportsView = ({
       setIsConvertingActions(false);
     }
   };
+
+  const handleSort = (field: 'titulo' | 'responsable' | 'fecha_limite' | 'estado') => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const handleToggleStatus = async (act: AccionCompromiso) => {
+    const nextStatus = act.estado === 'Pendiente' ? 'En Curso' : (act.estado === 'En Curso' ? 'Completada' : 'Pendiente');
+    try {
+      await apiService.updateAction(act.id, { estado: nextStatus });
+      await loadActions();
+    } catch (err) {
+      console.error('Error toggling status', err);
+    }
+  };
+
+  const handleOpenEdit = (act: AccionCompromiso) => {
+    setEditingAction(act);
+    setEditForm({
+      titulo: act.titulo,
+      area: act.area,
+      responsable: act.responsable,
+      fecha_limite: act.fecha_limite,
+      estado: act.estado
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingAction) return;
+    setIsSavingEdit(true);
+    try {
+      await apiService.updateAction(editingAction.id, editForm);
+      setEditingAction(null);
+      await loadActions();
+    } catch (err) {
+      console.error('Error saving action edit', err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteAction = async (id: number) => {
+    if (!window.confirm('¿Confirmas eliminar este compromiso operativo?')) return;
+    try {
+      await apiService.deleteAction(id);
+      await loadActions();
+    } catch (err) {
+      console.error('Error deleting action', err);
+    }
+  };
+
+  // Filtrado y ordenamiento interactivo
+  const filteredAndSortedActions = useMemo(() => {
+    return actionsList
+      .filter(act => {
+        if (filterActionArea !== 'Todas' && act.area.toLowerCase() !== filterActionArea.toLowerCase()) {
+          return false;
+        }
+        if (filterActionStatus !== 'Todos' && act.estado.toLowerCase() !== filterActionStatus.toLowerCase()) {
+          return false;
+        }
+        if (searchActionText.trim()) {
+          const q = searchActionText.toLowerCase();
+          return (
+            act.titulo.toLowerCase().includes(q) ||
+            act.responsable.toLowerCase().includes(q) ||
+            act.area.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortField === 'estado') {
+          const priority: Record<string, number> = { 'pendiente': 1, 'en curso': 2, 'completada': 3 };
+          const pA = priority[(a.estado || '').toLowerCase()] || 0;
+          const pB = priority[(b.estado || '').toLowerCase()] || 0;
+          return sortOrder === 'asc' ? pA - pB : pB - pA;
+        }
+        const valA = a[sortField] || '';
+        const valB = b[sortField] || '';
+        const cmp = String(valA).localeCompare(String(valB));
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
+  }, [actionsList, searchActionText, filterActionArea, filterActionStatus, sortField, sortOrder]);
 
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -435,6 +568,24 @@ export const ExecutiveReportsView = ({
             </div>
           )}
 
+          {/* Advertencia contable CMV = $0 si ventas > 0 */}
+          {(() => {
+            const km = report.key_metrics || {};
+            const cmvVal = km.costo_total ?? km.cmv ?? km['Costo Total'] ?? km['CMV'];
+            const ventasVal = km.ventas_totales ?? km.ingresos ?? km['Ventas Totales'] ?? km['Ingresos'];
+            const isCmvZero = cmvVal === 0 || cmvVal === '$0' || cmvVal === '$0.00' || String(cmvVal).trim() === '0';
+            const hasVentas = ventasVal && ventasVal !== 0 && ventasVal !== '$0' && String(ventasVal).trim() !== '0';
+            if (isCmvZero && hasVentas) {
+              return (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-xl flex items-center space-x-2 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="font-semibold">⚠️ CMV no imputado en el período (Margen contable provisional)</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Key Metrics Pill Grid */}
           {report.key_metrics && Object.keys(report.key_metrics).length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -449,8 +600,8 @@ export const ExecutiveReportsView = ({
             </div>
           )}
 
-          {/* Formatted Markdown / Text */}
-          <div className="p-4 bg-[#fbfcfd] dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-800 text-xs leading-relaxed text-[#333333] dark:text-slate-200 whitespace-pre-wrap font-sans">
+          {/* Formatted Markdown / Text con clase semántica Dark Mode */}
+          <div className="prose prose-slate dark:prose-invert max-w-none bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-slate-800 dark:text-slate-100 shadow-sm leading-relaxed text-xs whitespace-pre-wrap font-sans">
             {report.raw_markdown || report.executive_summary}
           </div>
         </div>
@@ -458,7 +609,7 @@ export const ExecutiveReportsView = ({
 
       {/* Dimensión 5: Panel de Acciones y Compromisos Cross-Área */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center space-x-2">
             <span className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
               <CheckSquare size={18} />
@@ -472,9 +623,11 @@ export const ExecutiveReportsView = ({
               </p>
             </div>
           </div>
-          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full">
-            {actionsList.length} compromisos registrados
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full">
+              {filteredAndSortedActions.length} de {actionsList.length} compromisos
+            </span>
+          </div>
         </div>
 
         {/* Quick Add Form */}
@@ -521,42 +674,273 @@ export const ExecutiveReportsView = ({
           </div>
         </div>
 
-        {/* Table of Actions */}
-        <div className="overflow-x-auto">
+        {/* Barra de Filtros, Búsqueda y Herramientas */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por título, responsable o área..."
+              value={searchActionText}
+              onChange={(e) => setSearchActionText(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-[#333333] dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-[#00a2e8]"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
+              <Filter size={13} className="text-slate-400" />
+              <select
+                value={filterActionArea}
+                onChange={(e) => setFilterActionArea(e.target.value)}
+                className="bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#00a2e8]"
+              >
+                <option value="Todas">Todas las áreas</option>
+                <option value="Comercial">Comercial</option>
+                <option value="Logística">Logística</option>
+                <option value="Finanzas">Finanzas</option>
+                <option value="Operaciones">Operaciones</option>
+              </select>
+            </div>
+            <div>
+              <select
+                value={filterActionStatus}
+                onChange={(e) => setFilterActionStatus(e.target.value)}
+                className="bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-[#00a2e8]"
+              >
+                <option value="Todos">Todos los estados</option>
+                <option value="Pendiente">Pendiente</option>
+                <option value="En Curso">En Curso</option>
+                <option value="Completada">Completada</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Table of Actions con Ordenamiento y Acciones */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-700/80">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#f8fafc] dark:bg-slate-800 text-[#535c69] dark:text-slate-400 uppercase text-[10px] tracking-wider border-y border-slate-200/80 dark:border-slate-700">
+            <thead className="bg-[#f8fafc] dark:bg-slate-800 text-[#535c69] dark:text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200/80 dark:border-slate-700">
               <tr>
-                <th className="py-2.5 px-3 font-semibold">Compromiso</th>
+                <th 
+                  onClick={() => handleSort('titulo')}
+                  className="py-2.5 px-3 font-semibold cursor-pointer select-none hover:text-[#00a2e8] transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Compromiso</span>
+                    {sortField === 'titulo' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} className="text-[#00a2e8]" /> : <ArrowDown size={12} className="text-[#00a2e8]" />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
                 <th className="py-2.5 px-3 font-semibold">Área</th>
-                <th className="py-2.5 px-3 font-semibold">Responsable</th>
-                <th className="py-2.5 px-3 font-semibold">Fecha Límite</th>
-                <th className="py-2.5 px-3 font-semibold">Estado</th>
+                <th 
+                  onClick={() => handleSort('responsable')}
+                  className="py-2.5 px-3 font-semibold cursor-pointer select-none hover:text-[#00a2e8] transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Responsable</span>
+                    {sortField === 'responsable' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} className="text-[#00a2e8]" /> : <ArrowDown size={12} className="text-[#00a2e8]" />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('fecha_limite')}
+                  className="py-2.5 px-3 font-semibold cursor-pointer select-none hover:text-[#00a2e8] transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Fecha Límite</span>
+                    {sortField === 'fecha_limite' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} className="text-[#00a2e8]" /> : <ArrowDown size={12} className="text-[#00a2e8]" />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  onClick={() => handleSort('estado')}
+                  className="py-2.5 px-3 font-semibold cursor-pointer select-none hover:text-[#00a2e8] transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Estado</span>
+                    {sortField === 'estado' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} className="text-[#00a2e8]" /> : <ArrowDown size={12} className="text-[#00a2e8]" />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {actionsList.map((act) => (
-                <tr key={act.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="py-2.5 px-3 font-medium text-[#333333] dark:text-slate-200">{act.titulo}</td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 font-semibold">{act.area}</td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">{act.responsable}</td>
-                  <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">{act.fecha_limite}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      act.estado === 'Completada'
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                        : act.estado === 'En Curso'
-                        ? 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-300 border border-sky-200 dark:border-sky-800'
-                        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                    }`}>
-                      {act.estado}
-                    </span>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+              {filteredAndSortedActions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                    No se encontraron compromisos que coincidan con los filtros aplicados.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredAndSortedActions.map((act) => (
+                  <tr key={act.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-2.5 px-3 font-medium text-[#333333] dark:text-slate-200">{act.titulo}</td>
+                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 font-semibold">{act.area}</td>
+                    <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">{act.responsable}</td>
+                    <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">{act.fecha_limite}</td>
+                    <td className="py-2.5 px-3">
+                      <button
+                        onClick={() => handleToggleStatus(act)}
+                        title="Clic para alternar estado (Pendiente ➔ En Curso ➔ Completada)"
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-transform hover:scale-105 active:scale-95 ${
+                          act.estado === 'Completada'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                            : act.estado === 'En Curso'
+                            ? 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-300 border border-sky-200 dark:border-sky-800'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                        }`}
+                      >
+                        {act.estado}
+                      </button>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <div className="inline-flex items-center space-x-1.5">
+                        <button
+                          onClick={() => handleOpenEdit(act)}
+                          title="Editar compromiso"
+                          className="p-1 rounded-md text-slate-400 hover:text-[#00a2e8] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAction(act.id)}
+                          title="Eliminar compromiso"
+                          className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal de Edición de Compromiso */}
+      {editingAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-2">
+                <Edit2 size={16} className="text-[#00a2e8]" />
+                <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">
+                  Editar Compromiso Operativo
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingAction(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Título / Compromiso:
+                </label>
+                <textarea
+                  rows={2}
+                  value={editForm.titulo}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, titulo: e.target.value }))}
+                  className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-xs text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Área:
+                  </label>
+                  <select
+                    value={editForm.area}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, area: e.target.value }))}
+                    className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                  >
+                    <option value="Comercial">Comercial</option>
+                    <option value="Logística">Logística</option>
+                    <option value="Finanzas">Finanzas</option>
+                    <option value="Operaciones">Operaciones</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Estado:
+                  </label>
+                  <select
+                    value={editForm.estado}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, estado: e.target.value }))}
+                    className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                  >
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="En Curso">En Curso</option>
+                    <option value="Completada">Completada</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Responsable:
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.responsable}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, responsable: e.target.value }))}
+                    className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Fecha Límite:
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.fecha_limite}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, fecha_limite: e.target.value }))}
+                    className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 text-xs text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setEditingAction(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit || !editForm.titulo.trim()}
+                className="inline-flex items-center space-x-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#00a2e8] hover:bg-[#008ecb] disabled:opacity-50 rounded-xl transition-colors shadow-sm"
+              >
+                {isSavingEdit ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                <span>Guardar Cambios</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

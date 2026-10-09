@@ -597,22 +597,47 @@ def create_actions_batch(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
-    created_items = []
-    for item in payload.acciones:
-        new_act = AccionCompromiso(
-            titulo=item.titulo,
-            area=item.area,
-            responsable=item.responsable,
-            fecha_limite=item.fecha_limite,
-            estado=item.estado or "Pendiente",
-            origen=item.origen or "Minuta Ejecutiva"
-        )
-        db.add(new_act)
-        created_items.append(new_act)
+    # Mapeo de acciones existentes para evitar duplicaciones físicas en BD
+    existing_all = db.query(AccionCompromiso).all()
+    existing_map = {
+        (a.titulo.strip().lower(), (a.area or '').strip().lower()): a
+        for a in existing_all
+        if (a.estado or '').lower() in ['pendiente', 'en curso']
+    }
 
-    db.commit()
-    for act in created_items:
-        db.refresh(act)
+    result_items = []
+    new_to_commit = []
+    seen_in_batch = set()
+
+    for item in payload.acciones:
+        tit_norm = item.titulo.strip().lower()
+        area_norm = (item.area or '').strip().lower()
+        sig = (tit_norm, area_norm)
+
+        if sig in seen_in_batch:
+            continue
+        seen_in_batch.add(sig)
+
+        if sig in existing_map:
+            # Reutilizar el compromiso ya activo para asegurar idempotencia sin duplicar
+            result_items.append(existing_map[sig])
+        else:
+            new_act = AccionCompromiso(
+                titulo=item.titulo.strip(),
+                area=item.area,
+                responsable=item.responsable,
+                fecha_limite=item.fecha_limite,
+                estado=item.estado or "Pendiente",
+                origen=item.origen or "Minuta Ejecutiva"
+            )
+            db.add(new_act)
+            new_to_commit.append(new_act)
+            result_items.append(new_act)
+
+    if new_to_commit:
+        db.commit()
+        for act in new_to_commit:
+            db.refresh(act)
 
     record_audit_log(
         db=db,
@@ -620,7 +645,64 @@ def create_actions_batch(
         role=user.role,
         action="CREATE_BATCH_ACTIONS",
         resource="acciones_compromisos/batch",
-        details={"count": len(created_items)}
+        details={"count": len(result_items), "created": len(new_to_commit)}
     )
 
-    return created_items
+    return result_items
+
+
+@router.put(
+    "/actions/{action_id}",
+    response_model=AccionCompromisoResponse,
+    summary="Actualiza una acción o compromiso derivado de minutas"
+)
+def update_action(
+    action_id: int,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    item = db.query(AccionCompromiso).filter(AccionCompromiso.id == action_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Acción o compromiso no encontrado")
+
+    texto = payload.get("titulo") or payload.get("compromiso") or payload.get("tarea")
+    if texto is not None:
+        item.titulo = str(texto).strip()
+    if "area" in payload and payload["area"] is not None:
+        item.area = str(payload["area"]).strip()
+    if "responsable" in payload and payload["responsable"] is not None:
+        item.responsable = str(payload["responsable"]).strip()
+    if "fecha_limite" in payload and payload["fecha_limite"] is not None:
+        from datetime import date
+        fl = payload["fecha_limite"]
+        if isinstance(fl, str):
+            try:
+                item.fecha_limite = date.fromisoformat(fl.split("T")[0])
+            except Exception:
+                pass
+        else:
+            item.fecha_limite = fl
+    if "estado" in payload and payload["estado"] is not None:
+        item.estado = str(payload["estado"])
+
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete(
+    "/actions/{action_id}",
+    summary="Elimina una acción o compromiso derivado de minutas"
+)
+def delete_action(
+    action_id: int,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    item = db.query(AccionCompromiso).filter(AccionCompromiso.id == action_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Acción o compromiso no encontrado")
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": f"Acción {action_id} eliminada exitosamente"}

@@ -1402,5 +1402,42 @@ export interface ActiveModelResponse {
   message: string;
 }
 
+// =====================================================================
+// PRICING AI BUNDLES & STRATEGIC PACKS
+// =====================================================================
+export interface BundleProductItem {
+  sku: string;
+  nombre: string;
+  stock_actual: number;
+  doh: number;
+  precio_regular_usd: number;
+  costo_unitario_usd: number;
+  es_sobrestock: boolean;
+}
+
+export interface AIBundleItem {
+  id: string;
+  nombre_pack: string;
+  descripcion: string;
+  productos: BundleProductItem[];
+  precio_individual_total_usd: number;
+  precio_bundle_sugerido_usd: number;
+  descuento_bundle_pct: number;
+  margen_neto_pct: number;
+  capital_inmovilizado_liberado_usd: number;
+  m2_liberados_estimados: number;
+  argumento_comercial: string;
+  evaluacion_marketing: string;
+  evaluacion_finanzas: string;
+  evaluacion_logistica: string;
+}
+
+export interface PricingAIBundlesResponse {
+  status: string;
+  total_bundles_sugeridos: number;
+  dictamen_cfo: string;
+  bundles: AIBundleItem[];
+}
+
 
 

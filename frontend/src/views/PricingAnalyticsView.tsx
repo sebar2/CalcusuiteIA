@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
 import { 
   Sliders, 
-  CheckCircle2 
+  CheckCircle2,
+  Package,
+  Sparkles,
+  Copy,
+  Check,
+  Warehouse,
+  Loader2,
+  ShieldAlert,
+  Lightbulb
 } from 'lucide-react';
 import { WaterfallChart } from '../components/pricing/WaterfallChart';
-import type { MarginSummaryItem, DiscountSimulationResponse } from '../types';
+import type { MarginSummaryItem, DiscountSimulationResponse, PricingAIBundlesResponse, AIBundleItem } from '../types';
 import { DataTable } from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
 import { apiService, getCurrentRole } from '../services/api';
@@ -22,6 +30,44 @@ export const PricingAnalyticsView = ({
   searchQuery,
   currentRole,
 }: PricingAnalyticsViewProps) => {
+  // Estado del Agente de Pricing y Packs IA
+  const [bundlesData, setBundlesData] = useState<PricingAIBundlesResponse | null>(null);
+  const [loadingBundles, setLoadingBundles] = useState<boolean>(false);
+  const [copiedBundleId, setCopiedBundleId] = useState<string | null>(null);
+
+  const fetchAIBundles = async () => {
+    setLoadingBundles(true);
+    try {
+      const data = await apiService.getAIBundles();
+      setBundlesData(data);
+    } catch (err) {
+      console.error('Error fetching AI bundles', err);
+    } finally {
+      setLoadingBundles(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAIBundles();
+  }, []);
+
+  const handleCopyProposal = (bundle: AIBundleItem) => {
+    const text = `📦 PROPUESTA COMERCIAL: ${bundle.nombre_pack}\n\n` +
+      `Descripción: ${bundle.descripcion}\n\n` +
+      `Productos incluidos:\n` +
+      bundle.productos.map(p => ` - ${p.nombre} (${p.sku}) [Stock: ${p.stock_actual}u | DOH: ${p.doh}d]`).join('\n') +
+      `\n\nPrecio Regular: $${bundle.precio_individual_total_usd.toFixed(2)} USD` +
+      `\nPrecio Pack con ${bundle.descuento_bundle_pct}% OFF: $${bundle.precio_bundle_sugerido_usd.toFixed(2)} USD` +
+      `\nMargen Neto Garantizado: ${bundle.margen_neto_pct}%` +
+      `\nCapital Inmovilizado Liberado: $${bundle.capital_inmovilizado_liberado_usd.toFixed(2)} USD` +
+      `\nEspacio en Bodega Liberado: ${bundle.m2_liberados_estimados.toFixed(1)} m²\n\n` +
+      `Argumento de Venta:\n"${bundle.argumento_comercial}"`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedBundleId(bundle.id);
+    setTimeout(() => setCopiedBundleId(null), 3000);
+  };
+
   // Estado del Simulador Interactivo
   const [selectedSku, setSelectedSku] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('Mercado Libre');
@@ -436,6 +482,214 @@ export const PricingAnalyticsView = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Sección: Agente de Bundling Inteligente & Packs Anti-Sobrestock (IA Cross-Área) */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-xs">
+              <Package size={20} />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-bold text-base text-[#333333] dark:text-slate-100">
+                  Agente de Bundling &amp; Packs Anti-Sobrestock (IA Cross-Área)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center space-x-1">
+                  <Sparkles size={11} />
+                  <span>Comité 360°</span>
+                </span>
+              </div>
+              <p className="text-xs text-[#535c69] dark:text-slate-400 mt-0.5">
+                Combina productos de baja rotación (DOH &gt; 90d) con productos ancla, liberando capital de trabajo y m² de bodega sin erosionar el margen neto.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={fetchAIBundles}
+            disabled={loadingBundles}
+            className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:scale-95 shrink-0"
+          >
+            <Sparkles size={14} className={loadingBundles ? 'animate-spin' : ''} />
+            <span>{loadingBundles ? 'Analizando Catálogo e Inventario...' : 'Regenerar Sugerencias IA'}</span>
+          </button>
+        </div>
+
+        {/* Dictamen del CFO / Resumen Ejecutivo */}
+        {bundlesData && (
+          <div className="p-4 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-800/80 dark:to-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-xl space-y-2">
+            <div className="flex items-center space-x-2 text-indigo-700 dark:text-indigo-300 font-bold text-xs">
+              <ShieldAlert size={15} />
+              <span>DICTAMEN DEL COMITÉ FINANCIERO (CFO &amp; SUPPLY CHAIN)</span>
+            </div>
+            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
+              {bundlesData.dictamen_cfo}
+            </p>
+          </div>
+        )}
+
+        {/* Grilla de Packs IA */}
+        {loadingBundles ? (
+          <div className="py-12 text-center space-y-2">
+            <Loader2 size={24} className="animate-spin text-indigo-600 mx-auto" />
+            <p className="text-xs font-semibold text-slate-500">Evaluando curvas ABC de inventario, DOH y márgenes de contribución...</p>
+          </div>
+        ) : !bundlesData || bundlesData.bundles.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+            No hay sugerencias de packs disponibles actualmente. Haz clic en "Regenerar Sugerencias IA" para iniciar el escaneo.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {bundlesData.bundles.map((bundle) => {
+              const isCopied = copiedBundleId === bundle.id;
+              return (
+                <div
+                  key={bundle.id}
+                  className="bg-[#fcfdfe] dark:bg-slate-800/70 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-5 flex flex-col justify-between shadow-xs hover:shadow-md transition-all group"
+                >
+                  <div className="space-y-3.5">
+                    {/* Header del Pack */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                          {bundle.id}
+                        </span>
+                        <h4 className="font-bold text-sm text-[#333333] dark:text-slate-100 leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {bundle.nombre_pack}
+                        </h4>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+                          -{bundle.descuento_bundle_pct}% OFF
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono">
+                          {bundle.margen_neto_pct}% Margen
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {bundle.descripcion}
+                    </p>
+
+                    {/* Lista de Productos del Bundle */}
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 block">
+                        Composición del Pack ({bundle.productos.length} SKUs):
+                      </span>
+                      <div className="space-y-1">
+                        {bundle.productos.map((prod) => (
+                          <div
+                            key={prod.sku}
+                            className="p-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl flex items-center justify-between text-xs"
+                          >
+                            <div className="min-w-0 pr-2">
+                              <span className="font-mono font-bold text-[11px] text-[#00a2e8] block truncate">
+                                {prod.sku}
+                              </span>
+                              <span className="text-[11px] text-[#333333] dark:text-slate-200 font-medium truncate block">
+                                {prod.nombre}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0">
+                              {prod.es_sobrestock ? (
+                                <span className="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  ⚠️ Sobrestock ({prod.doh}d)
+                                </span>
+                              ) : (
+                                <span className="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                  ⚡ Ancla ({prod.stock_actual}u)
+                                </span>
+                              )}
+                              <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
+                                Reg: ${prod.precio_regular_usd.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Precios y Liberación de Recursos */}
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                      <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Precio Pack Sugerido</span>
+                        <div className="flex items-baseline space-x-1.5 mt-0.5">
+                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
+                            ${bundle.precio_bundle_sugerido_usd.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 line-through font-mono">
+                            ${bundle.precio_individual_total_usd.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl">
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold block">Capital Liberado</span>
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono block mt-0.5">
+                          +${bundle.capital_inmovilizado_liberado_usd.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl flex items-center justify-between text-[11px] text-indigo-700 dark:text-indigo-300">
+                      <div className="flex items-center space-x-1.5">
+                        <Warehouse size={13} className="text-indigo-600 dark:text-indigo-400" />
+                        <span>Espacio liberado:</span>
+                      </div>
+                      <span className="font-bold font-mono">~{bundle.m2_liberados_estimados.toFixed(1)} m² de bodega</span>
+                    </div>
+
+                    {/* Evaluaciones de Comités */}
+                    <div className="space-y-1.5 pt-1 text-[11px]">
+                      <div className="p-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl space-y-1">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1">
+                          <Lightbulb size={11} className="text-amber-500" />
+                          <span>Evaluaciones Cross-Área:</span>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-400"><strong className="text-slate-700 dark:text-slate-300">Mkt:</strong> {bundle.evaluacion_marketing}</p>
+                        <p className="text-slate-600 dark:text-slate-400"><strong className="text-slate-700 dark:text-slate-300">Finanzas:</strong> {bundle.evaluacion_finanzas}</p>
+                        <p className="text-slate-600 dark:text-slate-400"><strong className="text-slate-700 dark:text-slate-300">Logística:</strong> {bundle.evaluacion_logistica}</p>
+                      </div>
+
+                      {/* Argumento Comercial */}
+                      <div className="p-2.5 bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider block mb-1">
+                          Pitch Comercial para Ejecutivos:
+                        </span>
+                        <p className="text-amber-900 dark:text-amber-200 italic leading-relaxed text-[11px]">
+                          "{bundle.argumento_comercial}"
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botón Copiar Propuesta */}
+                  <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => handleCopyProposal(bundle)}
+                      className="w-full py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-400 border border-slate-200/80 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center space-x-1.5"
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check size={14} className="text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400">¡Propuesta Copiada al Portapapeles!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          <span>Copiar Propuesta Comercial</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Pricing Matrix Table */}

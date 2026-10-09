@@ -1815,10 +1815,12 @@ class BudgetCommitmentCreate(BaseModel):
 
 class BudgetCommitmentUpdate(BaseModel):
     tarea: Optional[str] = None
+    compromiso: Optional[str] = None
+    titulo: Optional[str] = None
     area: Optional[str] = None
     responsable: Optional[str] = None
     monto: Optional[float] = None
-    fecha_limite: Optional[date] = None
+    fecha_limite: Optional[Union[date, str]] = None
     urgencia: Optional[str] = None
     estado: Optional[str] = None
     area_id: Optional[str] = None
@@ -1878,4 +1880,42 @@ class ActiveModelResponse(BaseModel):
     status: str = "success"
     active_model: str
     message: str
+
+
+# --- Pricing AI Bundles Schemas ---
+class BundleProductItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    sku: str
+    nombre: str
+    stock_actual: int
+    doh: float
+    precio_regular_usd: float
+    costo_unitario_usd: float
+    es_sobrestock: bool = False
+
+
+class AIBundleItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    nombre_pack: str
+    descripcion: str
+    productos: List[BundleProductItem] = Field(default_factory=list)
+    precio_individual_total_usd: float
+    precio_bundle_sugerido_usd: float
+    descuento_bundle_pct: float
+    margen_neto_pct: float
+    capital_inmovilizado_liberado_usd: float
+    m2_liberados_estimados: float
+    argumento_comercial: str
+    evaluacion_marketing: str
+    evaluacion_finanzas: str
+    evaluacion_logistica: str
+
+
+class PricingAIBundlesResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    status: str = "success"
+    total_bundles_sugeridos: int
+    dictamen_cfo: str
+    bundles: List[AIBundleItem] = Field(default_factory=list)
 

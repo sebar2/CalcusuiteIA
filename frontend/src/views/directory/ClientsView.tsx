@@ -10,7 +10,12 @@ import {
   Briefcase,
   Edit2,
   X,
-  ExternalLink
+  ExternalLink,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import api from '../../services/api';
 import type { ClientItem, ClientDealItemSummary } from '../../types';
@@ -29,6 +34,29 @@ export const ClientsView: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  // Selector de vista Dual con persistencia en localStorage
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    return (localStorage.getItem('calcu_clients_view_mode') as 'grid' | 'list') || 'grid';
+  });
+
+  const handleViewModeChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('calcu_clients_view_mode', mode);
+  };
+
+  // Ordenamiento interactivo
+  const [sortField, setSortField] = useState<'nombre' | 'pipeline'>('pipeline');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: 'nombre' | 'pipeline') => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'pipeline' ? 'desc' : 'asc');
+    }
+  };
 
   // Drawer de Tratos / Ficha
   const [selectedClient, setSelectedClient] = useState<ClientItem | null>(null);
@@ -127,6 +155,19 @@ export const ClientsView: React.FC = () => {
     return clients.reduce((acc, c) => acc + (Number(c.deals_count) || 0), 0);
   }, [clients]);
 
+  // Clientes ordenados
+  const sortedClients = useMemo(() => {
+    return [...clients].sort((a, b) => {
+      if (sortField === 'nombre') {
+        const cmp = a.nombre.localeCompare(b.nombre);
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      const valA = Number(a.pipeline_activo ?? a.pipeline_total ?? a.total_pipeline ?? 0);
+      const valB = Number(b.pipeline_activo ?? b.pipeline_total ?? b.total_pipeline ?? 0);
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
+    });
+  }, [clients, sortField, sortOrder]);
+
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* Encabezado y Toolbar Modern SaaS */}
@@ -147,7 +188,35 @@ export const ClientsView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Toggle de Vista Dual [Cuadrícula / Lista] */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700">
+            <button
+              onClick={() => handleViewModeChange('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+              title="Vista Cuadrícula"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cuadrícula</span>
+            </button>
+            <button
+              onClick={() => handleViewModeChange('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+              title="Vista Lista Compacta"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lista</span>
+            </button>
+          </div>
+
           <form onSubmit={handleSearch} className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -155,7 +224,7 @@ export const ClientsView: React.FC = () => {
               placeholder="Buscar por nombre o RUT..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-56 md:w-64"
+              className="pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 sm:w-56 md:w-64"
             />
           </form>
 
@@ -204,7 +273,7 @@ export const ClientsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid de Fichas de Contacto B2B */}
+      {/* Grid o Tabla Compacta de Fichas de Contacto B2B */}
       {loading ? (
         <div className="py-20 text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mb-3" />
@@ -220,9 +289,113 @@ export const ClientsView: React.FC = () => {
           <p className="text-base font-semibold text-slate-800 dark:text-slate-200">No se encontraron clientes</p>
           <p className="text-xs mt-1">Registra una nueva cuenta comercial o sincroniza los tratos del pipeline.</p>
         </div>
+      ) : viewMode === 'list' ? (
+        /* Vista de Tabla Compacta de Alta Densidad */
+        <div className="overflow-x-auto rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-200/80 dark:border-slate-800">
+              <tr>
+                <th 
+                  onClick={() => handleSort('nombre')}
+                  className="py-3 px-4 font-semibold cursor-pointer select-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Empresa / Cliente</span>
+                    {sortField === 'nombre' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-600" /> : <ArrowDown className="w-3 h-3 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="py-3 px-4 font-semibold">RUT</th>
+                <th className="py-3 px-4 font-semibold">Contacto Directo</th>
+                <th 
+                  onClick={() => handleSort('pipeline')}
+                  className="py-3 px-4 font-semibold cursor-pointer select-none hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Pipeline Activo ($)</span>
+                    {sortField === 'pipeline' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-blue-600" /> : <ArrowDown className="w-3 h-3 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="py-3 px-4 font-semibold text-center">Tratos Abiertos</th>
+                <th className="py-3 px-4 font-semibold text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {sortedClients.map((c) => (
+                <tr key={c.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={c.logo_url || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&auto=format&fit=crop&q=80'}
+                        alt={c.nombre}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&auto=format&fit=crop&q=80';
+                        }}
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 bg-slate-50 shrink-0"
+                      />
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{c.nombre}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                    {c.rut || '—'}
+                  </td>
+                  <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                    <div className="flex flex-col gap-0.5">
+                      {c.email && (
+                        <a href={`mailto:${c.email}`} className="truncate hover:text-blue-600 dark:hover:text-blue-400">
+                          {c.email}
+                        </a>
+                      )}
+                      {c.phone && (
+                        <a href={`tel:${c.phone}`} className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 text-[11px]">
+                          {c.phone}
+                        </a>
+                      )}
+                      {!c.email && !c.phone && <span className="text-slate-400 italic">Sin contacto</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                    {formatCurrency(c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline)}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                      {c.deals_count || 0} tratos
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={() => setSelectedClient(c)}
+                        title="Ver tratos"
+                        className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openEditModal(c)}
+                        title="Editar cliente"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
+        /* Vista Cuadrícula */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {clients.map((c) => (
+          {sortedClients.map((c) => (
             <div
               key={c.id}
               className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
