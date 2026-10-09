@@ -4,10 +4,19 @@ import {
   BrainCircuit, 
   Sparkles, 
   AlertCircle,
-  Save
+  Save,
+  ChevronDown,
+  ChevronUp,
+  TrendingDown,
+  ArrowUpRight
 } from 'lucide-react';
 import { apiService } from '../../services/api';
-import type { BudgetCategorySuggestion, BudgetManualItem } from '../../types';
+import type { 
+  BudgetCategorySuggestion, 
+  BudgetManualItem, 
+  BusinessUnitDistribution,
+  SkuPrioritarioItem 
+} from '../../types';
 
 interface AIBudgetReviewModalProps {
   isOpen: boolean;
@@ -15,6 +24,8 @@ interface AIBudgetReviewModalProps {
   periodo: string;
   suggestions: BudgetCategorySuggestion[];
   analisisResumen: string;
+  distribucionUnidades?: BusinessUnitDistribution[];
+  crecimientoGlobalPct?: number;
   onSuccess: () => void;
 }
 
@@ -28,6 +39,8 @@ interface EditableCategoryRow {
   stock_actual: number;
   avg_doh: number;
   justificacion: string;
+  fundamento_estrategico?: string;
+  skus_prioritarios?: SkuPrioritarioItem[];
 }
 
 export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
@@ -36,9 +49,12 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
   periodo,
   suggestions,
   analisisResumen,
+  distribucionUnidades,
+  crecimientoGlobalPct: _crecimientoProp,
   onSuccess,
 }) => {
   const [rows, setRows] = useState<EditableCategoryRow[]>([]);
+  const [expandedSkus, setExpandedSkus] = useState<Record<number, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -55,12 +71,21 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
           stock_actual: Number(s.stock_actual),
           avg_doh: Number(s.avg_doh),
           justificacion: s.justificacion,
+          fundamento_estrategico: s.fundamento_estrategico,
+          skus_prioritarios: s.skus_prioritarios || [],
         }))
       );
     }
   }, [suggestions]);
 
   if (!isOpen) return null;
+
+  const toggleExpandSkus = (catId: number) => {
+    setExpandedSkus((prev) => ({
+      ...prev,
+      [catId]: !prev[catId],
+    }));
+  };
 
   const handleRowChange = (index: number, field: 'monto' | 'unidades', value: number) => {
     setRows((prev) => {
@@ -76,7 +101,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
   const totalMonto = rows.reduce((acc, r) => acc + (Number(r.monto) || 0), 0);
   const totalUnidades = rows.reduce((acc, r) => acc + (Number(r.unidades) || 0), 0);
   const totalHistorico = rows.reduce((acc, r) => acc + (Number(r.ventas_historicas) || 0), 0);
-  const crecimientoGlobalPct = totalHistorico > 0 ? ((totalMonto - totalHistorico) / totalHistorico) * 100 : 0;
+  const calcCrecimientoGlobalPct = totalHistorico > 0 ? ((totalMonto - totalHistorico) / totalHistorico) * 100 : 0;
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -108,7 +133,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
       <div 
-        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabecera Estilo Modern SaaS */}
@@ -127,7 +152,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#535c69] dark:text-slate-400 mt-0.5">
-                Cruce algorítmico de ventas históricas, DOH y alertas ROP. Puedes ajustar los montos y unidades antes de confirmar.
+                Cruce de ventas históricas, DOH y alertas ROP con asignación por Unidades de Negocio y SKUs prioritarios.
               </p>
             </div>
           </div>
@@ -145,7 +170,36 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
           <div className="px-5 py-3 bg-[#f8fafc] dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 flex items-start space-x-2">
             <Sparkles size={16} className="text-[#00a2e8] shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <strong className="text-slate-900 dark:text-slate-100">Dictamen del Asesor:</strong> {analisisResumen}
+              <strong className="text-slate-900 dark:text-slate-100">Dictamen Estratégico:</strong> {analisisResumen}
+            </div>
+          </div>
+        )}
+
+        {/* Unidades de Negocio Estratégicas */}
+        {distribucionUnidades && distribucionUnidades.length > 0 && (
+          <div className="px-5 py-3 bg-slate-50/60 dark:bg-slate-850/60 border-b border-slate-100 dark:border-slate-800">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Desglose Estratégico por Unidades de Negocio
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {distribucionUnidades.map((u, i) => (
+                <div 
+                  key={i} 
+                  className="p-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-2xs space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                      {u.unidad}
+                    </span>
+                    <span className="px-2 py-0.5 bg-sky-50 dark:bg-sky-950/50 text-[#00a2e8] font-bold text-[10px] rounded-full font-mono">
+                      {Number(u.participacion_pct).toFixed(0)}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    {u.enfoque}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -168,8 +222,8 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
 
           <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700 flex items-center justify-between">
             <span className="text-xs text-[#535c69] dark:text-slate-400">Crecimiento vs Histórico:</span>
-            <span className={`text-sm font-bold font-mono ${crecimientoGlobalPct >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}`}>
-              {crecimientoGlobalPct >= 0 ? '+' : ''}{crecimientoGlobalPct.toFixed(1)}%
+            <span className={`text-sm font-bold font-mono ${calcCrecimientoGlobalPct >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}`}>
+              {calcCrecimientoGlobalPct >= 0 ? '+' : ''}{calcCrecimientoGlobalPct.toFixed(1)}%
             </span>
           </div>
         </div>
@@ -190,59 +244,148 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
                   <th className="py-2.5 px-3">Categoría</th>
                   <th className="py-2.5 px-3 text-right">Histórico Real</th>
                   <th className="py-2.5 px-3 text-center">Stock / DOH</th>
-                  <th className="py-2.5 px-3 w-40 text-right">Meta Ventas ($)</th>
-                  <th className="py-2.5 px-3 w-32 text-right">Meta Unidades</th>
-                  <th className="py-2.5 px-3">Fundamento de IA</th>
+                  <th className="py-2.5 px-3 w-36 text-right">Meta Ventas ($)</th>
+                  <th className="py-2.5 px-3 w-28 text-right">Meta Unidades</th>
+                  <th className="py-2.5 px-3">Fundamento Estratégico</th>
+                  <th className="py-2.5 px-3 text-center w-28">SKUs Críticos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-200">
-                {rows.map((row, idx) => (
-                  <tr key={row.categoria_id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
-                      {row.categoria_nombre}
-                    </td>
+                {rows.map((row, idx) => {
+                  const isExpanded = !!expandedSkus[row.categoria_id];
+                  const skus = row.skus_prioritarios || [];
 
-                    <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">
-                      ${Number(row.ventas_historicas).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
+                  return (
+                    <React.Fragment key={row.categoria_id}>
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                        <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
+                          {row.categoria_nombre}
+                        </td>
 
-                    <td className="py-2.5 px-3 text-center text-slate-500 dark:text-slate-400">
-                      <span className="font-mono">{row.stock_actual} un.</span>
-                      <span className="text-[10px] text-slate-400 ml-1">({Number(row.avg_doh).toFixed(0)}d)</span>
-                    </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-500 dark:text-slate-400">
+                          ${Number(row.ventas_historicas).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
 
-                    <td className="py-2 px-3 text-right">
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1.5 text-slate-400 font-mono text-[11px]">$</span>
-                        <input
-                          type="number"
-                          step="100"
-                          min="0"
-                          value={row.monto}
-                          onChange={(e) => handleRowChange(idx, 'monto', Number(e.target.value))}
-                          className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-6 pr-2 py-1 font-mono font-bold text-xs text-[#00a2e8] text-right focus:outline-none focus:border-[#00a2e8]"
-                        />
-                      </div>
-                    </td>
+                        <td className="py-2.5 px-3 text-center text-slate-500 dark:text-slate-400">
+                          <span className="font-mono">{row.stock_actual} un.</span>
+                          <span className="text-[10px] text-slate-400 ml-1">({Number(row.avg_doh).toFixed(0)}d)</span>
+                        </td>
 
-                    <td className="py-2 px-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="10"
-                        value={row.unidades}
-                        onChange={(e) => handleRowChange(idx, 'unidades', Number(e.target.value))}
-                        className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 font-mono text-xs text-slate-800 dark:text-slate-200 text-right focus:outline-none focus:border-[#00a2e8]"
-                      />
-                    </td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1.5 text-slate-400 font-mono text-[11px]">$</span>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              value={row.monto}
+                              onChange={(e) => handleRowChange(idx, 'monto', Number(e.target.value))}
+                              className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-5 pr-2 py-1 font-mono font-bold text-xs text-[#00a2e8] text-right focus:outline-none focus:border-[#00a2e8]"
+                            />
+                          </div>
+                        </td>
 
-                    <td className="py-2.5 px-3 text-[11px] text-slate-500 dark:text-slate-400">
-                      <span className="line-clamp-2" title={row.justificacion}>
-                        {row.justificacion}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                        <td className="py-2 px-3 text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="10"
+                            value={row.unidades}
+                            onChange={(e) => handleRowChange(idx, 'unidades', Number(e.target.value))}
+                            className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 font-mono text-xs text-slate-800 dark:text-slate-200 text-right focus:outline-none focus:border-[#00a2e8]"
+                          />
+                        </td>
+
+                        <td className="py-2.5 px-3 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="line-clamp-2" title={row.fundamento_estrategico || row.justificacion}>
+                            {row.fundamento_estrategico || row.justificacion}
+                          </span>
+                        </td>
+
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => toggleExpandSkus(row.categoria_id)}
+                            className="inline-flex items-center space-x-1 px-2 py-1 text-[10px] font-semibold text-[#00a2e8] hover:bg-sky-50 dark:hover:bg-sky-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Desplegar SKUs de acción prioritaria"
+                          >
+                            <span>{isExpanded ? 'Ocultar' : 'Ver SKUs'}</span>
+                            {skus.length > 0 && (
+                              <span className="px-1.5 py-0.2 bg-sky-100 dark:bg-sky-900/60 rounded-full text-[9px] font-mono">
+                                {skus.length}
+                              </span>
+                            )}
+                            {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Acordeón de SKUs Prioritarios PUSH / PULL */}
+                      {isExpanded && (
+                        <tr className="bg-slate-50/70 dark:bg-slate-800/40">
+                          <td colSpan={7} className="p-3">
+                            {skus.length === 0 ? (
+                              <div className="text-[11px] text-slate-400 italic text-center py-1">
+                                Sin desvíos críticos de inventario o quiebres detectados para esta categoría.
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  SKUs Prioritarios Asignados (Acciones PUSH & PULL):
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                  {skus.map((skuItem, sIdx) => {
+                                    const isPush = skuItem.tipo_accion === 'PUSH_SOBRESTOCK';
+                                    return (
+                                      <div
+                                        key={sIdx}
+                                        className={`p-2.5 rounded-xl border text-xs space-y-1 ${
+                                          isPush
+                                            ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+                                            : 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800/60 text-sky-900 dark:text-sky-200'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="font-mono font-bold text-[11px]">
+                                            {skuItem.sku}
+                                          </span>
+                                          <span
+                                            className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                              isPush
+                                                ? 'bg-amber-200/80 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200'
+                                                : 'bg-sky-200/80 dark:bg-sky-900/60 text-sky-800 dark:text-sky-200'
+                                            }`}
+                                          >
+                                            {isPush ? (
+                                              <>
+                                                <TrendingDown size={10} />
+                                                <span>PUSH</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <ArrowUpRight size={10} />
+                                                <span>PULL</span>
+                                              </>
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="font-semibold text-[11px] truncate" title={skuItem.nombre}>
+                                          {skuItem.nombre}
+                                        </div>
+                                        <p className="text-[10px] opacity-85 leading-tight">
+                                          {skuItem.motivo}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -251,7 +394,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
         {/* Footer con Acciones */}
         <div className="p-4 bg-[#f8fafc] dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <span className="text-xs text-slate-500">
-            {rows.length} categorías configuradas
+            {rows.length} categorías comerciales activas
           </span>
 
           <div className="flex items-center space-x-2">

@@ -16,6 +16,7 @@ import { CreatableCategorySelect } from '../common/CreatableCategorySelect';
 import type { 
   BudgetManualItem, 
   BudgetCategorySuggestion, 
+  BusinessUnitDistribution,
   EngineMode 
 } from '../../types';
 
@@ -49,6 +50,8 @@ export const BudgetEmptyState: React.FC<BudgetEmptyStateProps> = ({
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<BudgetCategorySuggestion[]>([]);
   const [aiRationale, setAiRationale] = useState<string>('');
+  const [aiBusinessUnits, setAiBusinessUnits] = useState<BusinessUnitDistribution[]>([]);
+  const [aiGlobalGrowth, setAiGlobalGrowth] = useState<number | undefined>(undefined);
   const [allCategories, setAllCategories] = useState<string[]>([]);
 
   // Cargar categorías disponibles para la grilla manual
@@ -138,8 +141,10 @@ export const BudgetEmptyState: React.FC<BudgetEmptyStateProps> = ({
     setErrorMessage(null);
     try {
       const res = await apiService.getAIBudgetSuggestions(periodo);
-      setAiSuggestions(res.suggestions || []);
-      setAiRationale(res.analisis_resumen || '');
+      setAiSuggestions(res.suggestions || res.metas_categorias || []);
+      setAiRationale(res.analisis_resumen || res.dictamen_general || '');
+      setAiBusinessUnits(res.distribucion_unidades_negocio || []);
+      setAiGlobalGrowth(res.crecimiento_global_pct);
       setIsAIModalOpen(true);
     } catch (err: any) {
       console.error('Error fetching AI budget suggestions', err);
@@ -414,6 +419,48 @@ export const BudgetEmptyState: React.FC<BudgetEmptyStateProps> = ({
         </div>
       )}
 
+      {/* Overlay de Espera Prolongada para Inferencia Local (gemma4:31b · 18.5 GB) */}
+      {isSuggestingAI && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 max-w-lg w-full text-center space-y-6 shadow-2xl">
+            <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/60 text-violet-700 dark:text-violet-300 text-xs font-semibold">
+              <Sparkles size={14} className="text-violet-500 animate-spin" />
+              <span>🧠 Inferencia Profunda en Local (gemma4:31b · 18.5 GB)</span>
+            </div>
+
+            <div className="relative w-20 h-20 mx-auto">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-100 dark:border-slate-800"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-[#00a2e8] border-t-transparent animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center text-2xl">
+                ⚡
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                Analizando Catálogo y Estrategia FP&A
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                El modelo denso está procesando las categorías reales, calculando DOH y quiebres de ROP para definir la distribución en Unidades de Negocio y SKUs prioritarios.
+              </p>
+              <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 font-medium text-left space-y-1">
+                <div className="flex items-center space-x-1.5">
+                  <span className="font-bold">⏳ Tiempo estimado de espera:</span>
+                </div>
+                <div>
+                  En modelos densos como <strong>gemma4:31b</strong>, la inferencia local sin timeout puede demorar <strong>8 a 10 minutos</strong>. Por favor, mantén esta ventana abierta.
+                </div>
+              </div>
+            </div>
+
+            {/* Barra de progreso shimmer infinita con micro-pulso */}
+            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+              <div className="bg-gradient-to-r from-sky-400 via-indigo-500 to-sky-400 h-2.5 rounded-full animate-pulse w-full"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Revisión de IA */}
       <AIBudgetReviewModal
         isOpen={isAIModalOpen}
@@ -421,6 +468,8 @@ export const BudgetEmptyState: React.FC<BudgetEmptyStateProps> = ({
         periodo={periodo}
         suggestions={aiSuggestions}
         analisisResumen={aiRationale}
+        distribucionUnidades={aiBusinessUnits}
+        crecimientoGlobalPct={aiGlobalGrowth}
         onSuccess={onRefresh}
       />
     </div>

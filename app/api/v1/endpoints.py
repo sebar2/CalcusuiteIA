@@ -961,16 +961,18 @@ def save_budget_manual_batch(
 
 
 @router.post("/budget/ai-suggest", response_model=BudgetAISuggestResponse, summary="Opción B: Sugerir Presupuesto con IA (Ventas + Stock + Costos)")
-def suggest_budget_ai_endpoint(
+@router.post("/budget/ai-goals", response_model=BudgetAISuggestResponse, summary="Alias: Generación Asistida de Metas Presupuestarias con IA")
+async def suggest_budget_ai_endpoint(
     periodo: str = Query(..., description="Periodo objetivo YYYY-MM para sugerir presupuesto"),
+    engine_mode: str = Query("auto", description="Modo de ejecución: auto, force_llm, heuristic"),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
     """
     Analiza ventas históricas, DOH actual por categoría y alertas de ROP para generar
-    una recomendación balanceada de metas comerciales asistida por IA.
+    una recomendación balanceada de metas comerciales asistida por IA y sanitizada por unidades de negocio.
     """
-    return AIAdvisorService.suggest_budget_ai(periodo, db)
+    return await AIAdvisorService.suggest_budget_ai(periodo, db, engine_mode=engine_mode)
 
 
 @router.delete("/budget/period/{periodo}", response_model=BudgetPeriodDeleteResponse, summary="Reiniciar / Limpiar Período Presupuestario (Solo Admin)")

@@ -1021,6 +1021,23 @@ class BudgetManualBatchResponse(BaseModel):
     message: str
 
 
+class SkuPrioritarioItem(BaseModel):
+    sku: str
+    nombre: str
+    tipo_accion: str  # "PUSH_SOBRESTOCK" | "PULL_REPOSICION"
+    motivo: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BusinessUnitDistribution(BaseModel):
+    unidad: str
+    participacion_pct: float
+    enfoque: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BudgetCategorySuggestion(BaseModel):
     categoria_id: int
     categoria_nombre: str
@@ -1031,14 +1048,24 @@ class BudgetCategorySuggestion(BaseModel):
     stock_actual: int
     avg_doh: Decimal
     justificacion: str
+    fundamento_estrategico: Optional[str] = None
+    skus_prioritarios: List[SkuPrioritarioItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetAISuggestResponse(BaseModel):
     periodo: str
     total_sugerido: Decimal
     total_unidades: int
-    suggestions: List[BudgetCategorySuggestion]
+    crecimiento_global_pct: Optional[Decimal] = Decimal('5.0')
+    dictamen_general: Optional[str] = None
+    distribucion_unidades_negocio: List[BusinessUnitDistribution] = Field(default_factory=list)
+    suggestions: List[BudgetCategorySuggestion] = Field(default_factory=list)
+    metas_categorias: Optional[List[Dict[str, Any]]] = None
     analisis_resumen: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetPeriodDeleteResponse(BaseModel):

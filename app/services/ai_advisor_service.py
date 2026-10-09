@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import time
 import math
 import calendar
@@ -55,6 +56,8 @@ from app.domain.schemas import (
     CompetitorSelectionEvaluationResponse,
     BudgetAISuggestResponse,
     BudgetCategorySuggestion,
+    SkuPrioritarioItem,
+    BusinessUnitDistribution,
 )
 from app.models.entities import Product, Inventory, Budget, Category, Sale, PresupuestoMeta
 from app.engine.inventory import calculate_rop, calculate_doh, calculate_inventory_turnover
@@ -156,8 +159,9 @@ class AIAdvisorService:
             hardened_user_prompt = user_prompt
 
         t0 = time.perf_counter()
+        timeout_config = httpx.Timeout(None, connect=60.0)
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout_config) as client:
                 payload = {
                     "model": model,
                     "messages": [
@@ -174,16 +178,18 @@ class AIAdvisorService:
                 resp = await client.post(endpoint_url, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"]
+                raw_content = data["choices"][0]["message"]["content"]
+                # Limpieza de tags de pensamiento (<think>...</think>) y bloques markdown
+                cleaned_content = re.sub(r'<think>[\s\S]*?</think>', '', raw_content, flags=re.IGNORECASE).strip()
                 latency_ms = (time.perf_counter() - t0) * 1000
-                return content, latency_ms
+                return cleaned_content, latency_ms
         except Exception as e:
             logger.info("Local LLM call to %s failed (%s) [engine_mode=%s]", endpoint_url, e, engine_mode)
             if engine_mode == "force_llm":
                 from fastapi import HTTPException, status
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"Inferencia profunda requerida (force_llm) pero el modelo local '{model}' en Ollama está inaccesible o agotó el tiempo límite de {timeout}s: {str(e)}"
+                    detail=f"Inferencia profunda requerida (force_llm) pero el modelo local '{model}' en Ollama está inaccesible: {str(e)}"
                 )
             return None
 
@@ -2283,17 +2289,49 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
     # GESTIÓN PRESUPUESTARIA: SUGERENCIA ASISTIDA POR IA DATA-DRIVEN
     # ==================================================================
     @classmethod
-    def suggest_budget_ai(
+    async def suggest_budget_ai(
         cls,
         periodo: str,
-        db: Session
+        db: Session,
+        engine_mode: str = "auto"
     ) -> BudgetAISuggestResponse:
-        cats = db.query(Category).all()
+        # Filtrar categorías reales (excluir 'TestCat%' y sin productos asociados)
+        all_cats = db.query(Category).filter(~Category.nombre.ilike("TestCat%")).all()
+        valid_cats = []
+        for cat in all_cats:
+            prod_count = db.query(Product).filter(Product.categoria_id == cat.id).count()
+            if prod_count > 0:
+                valid_cats.append(cat)
+
+        if not valid_cats:
+            # Fallback en caso de que la BD solo contenga categorías sin productos
+            valid_cats = all_cats
+
+        # Unidades de negocio estratégicas predeterminadas
+        unidades_negocio: List[BusinessUnitDistribution] = [
+            BusinessUnitDistribution(
+                unidad="Grandes Obras & Licitaciones B2B",
+                participacion_pct=Decimal("50.0"),
+                enfoque="Proyectos de infraestructura y contratos mayoristas de alta escala con entregas programadas."
+            ),
+            BusinessUnitDistribution(
+                unidad="Canal Distribución & Clientes Frecuentes",
+                participacion_pct=Decimal("35.0"),
+                enfoque="Venta recurrente de alta rotación, clientes industriales y distribuidores regionales."
+            ),
+            BusinessUnitDistribution(
+                unidad="Servicios Técnicos & Proyectos Especiales",
+                participacion_pct=Decimal("15.0"),
+                enfoque="Integración técnica, automatización de sistemas, calibración y valor agregado de alto margen."
+            )
+        ]
+
+        category_analysis_data = []
         suggestions: List[BudgetCategorySuggestion] = []
         total_sug = Decimal('0.00')
         total_unids = 0
 
-        for cat in cats:
+        for cat in valid_cats:
             # Ventas reales históricas
             sales_sum = db.query(
                 func.sum(Sale.cantidad * Sale.precio_unitario_real)
@@ -2305,22 +2343,45 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
             # Stock y DOH de la categoría
             prods = db.query(Product).filter(Product.categoria_id == cat.id).all()
             total_stock = sum((p.inventario.stock_actual for p in prods if p.inventario), 0)
-            
+
             doh_vals = []
             alert_count = 0
+            skus_prioritarios: List[SkuPrioritarioItem] = []
+
             for p in prods:
                 if p.inventario:
                     inv = p.inventario
                     cogs_a = inv.demanda_diaria_promedio * p.costo_unitario * Decimal('365')
+                    p_doh = Decimal('0.0')
                     if cogs_a > Decimal('0'):
-                        doh_vals.append(calculate_doh(Decimal(str(inv.stock_actual)) * p.costo_unitario, cogs_a))
+                        p_doh = calculate_doh(Decimal(str(inv.stock_actual)) * p.costo_unitario, cogs_a)
+                        doh_vals.append(p_doh)
                     rop = calculate_rop(inv.demanda_diaria_promedio, inv.lead_time_dias, Decimal(str(inv.stock_seguridad)))
                     if inv.stock_actual <= rop:
                         alert_count += 1
-            
+
+                    # Identificación de SKUs prioritarios PUSH / PULL
+                    if p_doh > Decimal('90.0'):
+                        skus_prioritarios.append(SkuPrioritarioItem(
+                            sku=p.sku,
+                            nombre=p.nombre,
+                            tipo_accion="PUSH_SOBRESTOCK",
+                            motivo=f"DOH elevado ({p_doh:.0f}d). Requiere acelerar comercialización para evitar inmovilización de capital."
+                        ))
+                    elif p_doh < Decimal('15.0') or inv.stock_actual <= rop:
+                        skus_prioritarios.append(SkuPrioritarioItem(
+                            sku=p.sku,
+                            nombre=p.nombre,
+                            tipo_accion="PULL_REPOSICION",
+                            motivo=f"Stock crítico ({inv.stock_actual} unids vs ROP {rop:.0f}). Riesgo inminente de quiebre."
+                        ))
+
+            # Limitar a máximo 4 SKUs prioritarios por categoría para mantener legibilidad
+            skus_prioritarios = skus_prioritarios[:4]
+
             avg_doh = sum(doh_vals, Decimal('0')) / Decimal(str(len(doh_vals))) if doh_vals else Decimal('30.0')
 
-            # Reglas de negocio asistidas por IA:
+            # Reglas heurísticas de referencia CFO
             if avg_doh > Decimal('60.0'):
                 growth_factor = Decimal('1.025')
                 growth_pct = Decimal('2.5')
@@ -2337,28 +2398,144 @@ Período de recupero de la inversión inicial (CAPEX {sym} {fmt_curr(inv)}): **{
             sug_monto = (hist_sales * growth_factor).quantize(Decimal('0.01'))
             sug_unids = int(round(float(sug_monto) / 100.0))
 
-            suggestions.append(BudgetCategorySuggestion(
-                categoria_id=cat.id,
-                categoria_nombre=cat.nombre,
-                monto_sugerido=sug_monto,
-                unidades_sugeridas=sug_unids,
-                crecimiento_pct=growth_pct,
-                ventas_historicas=hist_sales,
-                stock_actual=total_stock,
-                avg_doh=avg_doh.quantize(Decimal('0.1')),
-                justificacion=just
-            ))
+            category_analysis_data.append({
+                "categoria_id": cat.id,
+                "categoria_nombre": cat.nombre,
+                "ventas_historicas": float(hist_sales),
+                "stock_actual": total_stock,
+                "avg_doh": float(avg_doh),
+                "alert_count": alert_count,
+                "heuristic_monto": float(sug_monto),
+                "heuristic_unids": sug_unids,
+                "heuristic_growth": float(growth_pct),
+                "heuristic_just": just,
+                "skus_prioritarios": skus_prioritarios
+            })
 
-            total_sug += sug_monto
-            total_unids += sug_unids
+        # Si engine_mode != "heuristic", intentamos inferencia con LLM
+        llm_success = False
+        crecimiento_global_pct = Decimal('5.2')
+        dictamen_general = (
+            f"Estrategia Presupuestaria V0 para {periodo}: Crecimiento balanceado enfocado en alta tracción en Grandes Obras "
+            f"(50%) y disciplina de inventario para depurar sobrestock en líneas de bajo giro."
+        )
 
-        resumen = f"Presupuesto sugerido para el período {periodo}: ${total_sug:,.2f} ({total_unids:,} unidades) combinando historia de ventas, rotación de inventarios y mitigación de sobrestock."
+        if engine_mode != "heuristic":
+            prompt = (
+                f"Eres el Chief Financial Officer (CFO) y Director de FP&A de una corporación industrial/comercial.\n"
+                f"Genera la propuesta de presupuesto comercial para el período {periodo}.\n\n"
+                f"DATOS DE ENTRADA POR CATEGORÍA:\n"
+                f"{json.dumps([{k: v for k, v in c.items() if k != 'skus_prioritarios'} for c in category_analysis_data], indent=2)}\n\n"
+                f"DIRECTRICES ESTRATÉGICAS:\n"
+                f"1. Grandes Obras & Licitaciones B2B absorben el 50% del esfuerzo comercial.\n"
+                f"2. Categorías con DOH > 60d deben buscar crecimiento moderado (+2% a +4%) promoviendo liquidación activa (PUSH).\n"
+                f"3. Categorías con quiebres de ROP deben expandirse (+6% a +10%) acelerando abastecimiento (PULL).\n\n"
+                f"RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO CON ESTA ESTRUCTURA:\n"
+                f"{{\n"
+                f'  "crecimiento_global_pct": 5.4,\n'
+                f'  "dictamen_general": "Resumen ejecutivo CFO del plan...",\n'
+                f'  "metas_categorias": [\n'
+                f'    {{\n'
+                f'      "categoria_id": 1,\n'
+                f'      "monto_sugerido": 52500.0,\n'
+                f'      "unidades_sugeridas": 525,\n'
+                f'      "crecimiento_pct": 5.0,\n'
+                f'      "fundamento_estrategico": "Justificación estratégica profunda..."\n'
+                f'    }}\n'
+                f'  ]\n'
+                f"}}\n"
+            )
+            try:
+                llm_res = await cls._call_local_llm(
+                    user_prompt=prompt,
+                    system_prompt=SYSTEM_PROMPT_CONTROLLER,
+                    engine_mode=engine_mode
+                )
+                if llm_res and llm_res[0]:
+                    parsed = cls._extract_json_payload(llm_res[0])
+                    if "metas_categorias" in parsed and isinstance(parsed["metas_categorias"], list):
+                        metas_map = {m["categoria_id"]: m for m in parsed["metas_categorias"] if "categoria_id" in m}
+                        if "crecimiento_global_pct" in parsed:
+                            crecimiento_global_pct = Decimal(str(parsed["crecimiento_global_pct"])).quantize(Decimal('0.1'))
+                        if "dictamen_general" in parsed:
+                            dictamen_general = str(parsed["dictamen_general"]).strip()
+
+                        for c in category_analysis_data:
+                            cid = c["categoria_id"]
+                            cat_meta = metas_map.get(cid)
+                            if cat_meta:
+                                m_sug = Decimal(str(cat_meta.get("monto_sugerido", c["heuristic_monto"]))).quantize(Decimal('0.01'))
+                                u_sug = int(cat_meta.get("unidades_sugeridas", c["heuristic_unids"]))
+                                g_pct = Decimal(str(cat_meta.get("crecimiento_pct", c["heuristic_growth"]))).quantize(Decimal('0.1'))
+                                fund = str(cat_meta.get("fundamento_estrategico", c["heuristic_just"])).strip()
+                            else:
+                                m_sug = Decimal(str(c["heuristic_monto"])).quantize(Decimal('0.01'))
+                                u_sug = c["heuristic_unids"]
+                                g_pct = Decimal(str(c["heuristic_growth"])).quantize(Decimal('0.1'))
+                                fund = c["heuristic_just"]
+
+                            suggestions.append(BudgetCategorySuggestion(
+                                categoria_id=cid,
+                                categoria_nombre=c["categoria_nombre"],
+                                monto_sugerido=m_sug,
+                                unidades_sugeridas=u_sug,
+                                crecimiento_pct=g_pct,
+                                ventas_historicas=Decimal(str(c["ventas_historicas"])),
+                                stock_actual=c["stock_actual"],
+                                avg_doh=Decimal(str(c["avg_doh"])).quantize(Decimal('0.1')),
+                                justificacion=fund,
+                                fundamento_estrategico=fund,
+                                skus_prioritarios=c["skus_prioritarios"]
+                            ))
+                            total_sug += m_sug
+                            total_unids += u_sug
+                        llm_success = True
+            except Exception as e:
+                logger.warning(f"Error procesando LLM en suggest_budget_ai: {e}. Usando fallback determinista enriquecido.")
+
+        if not llm_success:
+            # Fallback determinista
+            for c in category_analysis_data:
+                m_sug = Decimal(str(c["heuristic_monto"])).quantize(Decimal('0.01'))
+                u_sug = c["heuristic_unids"]
+                g_pct = Decimal(str(c["heuristic_growth"])).quantize(Decimal('0.1'))
+                fund = c["heuristic_just"]
+
+                suggestions.append(BudgetCategorySuggestion(
+                    categoria_id=c["categoria_id"],
+                    categoria_nombre=c["categoria_nombre"],
+                    monto_sugerido=m_sug,
+                    unidades_sugeridas=u_sug,
+                    crecimiento_pct=g_pct,
+                    ventas_historicas=Decimal(str(c["ventas_historicas"])),
+                    stock_actual=c["stock_actual"],
+                    avg_doh=Decimal(str(c["avg_doh"])).quantize(Decimal('0.1')),
+                    justificacion=fund,
+                    fundamento_estrategico=fund,
+                    skus_prioritarios=c["skus_prioritarios"]
+                ))
+                total_sug += m_sug
+                total_unids += u_sug
+
+            # Calcular crecimiento global ponderado
+            total_hist = sum((s.ventas_historicas for s in suggestions), Decimal('0'))
+            if total_hist > Decimal('0'):
+                crecimiento_global_pct = (((total_sug - total_hist) / total_hist) * Decimal('100')).quantize(Decimal('0.1'))
+
+        resumen = (
+            f"Presupuesto sugerido para el período {periodo}: ${total_sug:,.2f} ({total_unids:,} unidades). "
+            f"{dictamen_general}"
+        )
 
         return BudgetAISuggestResponse(
             periodo=periodo,
             total_sugerido=total_sug,
             total_unidades=total_unids,
             suggestions=suggestions,
-            analisis_resumen=resumen
+            analisis_resumen=resumen,
+            crecimiento_global_pct=crecimiento_global_pct,
+            dictamen_general=dictamen_general,
+            distribucion_unidades_negocio=unidades_negocio,
+            metas_categorias=suggestions
         )
 

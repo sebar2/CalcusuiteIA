@@ -530,6 +530,19 @@ export interface BudgetManualBatchResponse {
   message: string;
 }
 
+export interface SkuPrioritarioItem {
+  sku: string;
+  nombre: string;
+  tipo_accion: 'PUSH_SOBRESTOCK' | 'PULL_REPOSICION' | string;
+  motivo: string;
+}
+
+export interface BusinessUnitDistribution {
+  unidad: string;
+  participacion_pct: number;
+  enfoque: string;
+}
+
 export interface BudgetCategorySuggestion {
   categoria_id: number;
   categoria_nombre: string;
@@ -540,6 +553,8 @@ export interface BudgetCategorySuggestion {
   stock_actual: number;
   avg_doh: number;
   justificacion: string;
+  fundamento_estrategico?: string;
+  skus_prioritarios?: SkuPrioritarioItem[];
 }
 
 export interface BudgetAISuggestResponse {
@@ -548,6 +563,10 @@ export interface BudgetAISuggestResponse {
   total_unidades: number;
   suggestions: BudgetCategorySuggestion[];
   analisis_resumen: string;
+  crecimiento_global_pct?: number;
+  dictamen_general?: string;
+  distribucion_unidades_negocio?: BusinessUnitDistribution[];
+  metas_categorias?: BudgetCategorySuggestion[];
 }
 
 export interface BudgetPeriodDeleteResponse {

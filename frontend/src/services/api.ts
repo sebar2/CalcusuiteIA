@@ -469,9 +469,18 @@ export const apiService = {
   },
 
   // MÓDULO 3: Sugerencia de Presupuesto Asistida por IA
-  async getAIBudgetSuggestions(periodo: string): Promise<BudgetAISuggestResponse> {
+  async getAIBudgetSuggestions(periodo: string, engineMode: string = 'auto'): Promise<BudgetAISuggestResponse> {
     const res = await apiClient.post<BudgetAISuggestResponse>('/api/v1/budget/ai-suggest', null, {
-      params: { periodo },
+      params: { periodo, engine_mode: engineMode },
+      timeout: 0, // Inferencia completa sin interrupción para modelos densos (gemma4:31b)
+    });
+    return res.data;
+  },
+
+  async getAIBudgetGoals(periodo: string, engineMode: string = 'auto'): Promise<BudgetAISuggestResponse> {
+    const res = await apiClient.post<BudgetAISuggestResponse>('/api/v1/budget/ai-goals', null, {
+      params: { periodo, engine_mode: engineMode },
+      timeout: 0, // Inferencia profunda sin timeout
     });
     return res.data;
   },
