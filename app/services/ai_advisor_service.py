@@ -85,6 +85,18 @@ class AIAdvisorService:
     y dispone de fallback determinístico contable/operativo de alta velocidad (< 15ms).
     """
 
+    _active_model: Optional[str] = None
+
+    @classmethod
+    def set_active_model(cls, model_name: str):
+        cls._active_model = model_name
+        os.environ["LOCAL_LLM_MODEL"] = model_name
+        os.environ["OLLAMA_MODEL"] = model_name
+
+    @classmethod
+    def get_active_model(cls) -> str:
+        return cls._active_model or os.getenv("LOCAL_LLM_MODEL") or os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
+
     @classmethod
     def get_llm_config(cls) -> Tuple[str, str, float]:
         raw_url = os.getenv("LOCAL_LLM_URL") or os.getenv("OLLAMA_BASE_URL", OLLAMA_BASE_URL)
@@ -96,7 +108,7 @@ class AIAdvisorService:
         else:
             endpoint_url = f"{raw_url}/v1/chat/completions"
 
-        model = os.getenv("LOCAL_LLM_MODEL") or os.getenv("OLLAMA_MODEL", OLLAMA_MODEL)
+        model = cls.get_active_model()
         timeout_str = os.getenv("LOCAL_LLM_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT", str(OLLAMA_TIMEOUT))
         timeout = float(timeout_str)
         return endpoint_url, model, timeout

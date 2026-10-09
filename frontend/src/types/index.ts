@@ -1258,6 +1258,8 @@ export interface ClientItem {
   address?: string | null;
   deals_count: number;
   total_pipeline: number;
+  pipeline_activo?: number;
+  pipeline_total?: number;
   deals: ClientDealItemSummary[];
   created_at?: string;
 }

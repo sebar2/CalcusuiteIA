@@ -101,7 +101,7 @@ export const MultiLocationStockView = () => {
 
   // Filtros
   const [searchFilter, setSearchFilter] = useState<string>('');
-  const [selectedOrigenTipo, setSelectedOrigenTipo] = useState<string>('todos');
+  const [selectedOrigenTipo, setSelectedOrigenTipo] = useState<string>('ALL');
 
   // Modal de Transferencia entre Almacenes
   const [transferModalBatch, setTransferModalBatch] = useState<StockBatchItem | null>(null);
@@ -189,14 +189,18 @@ export const MultiLocationStockView = () => {
         tracking.includes(term) ||
         warehouseId.includes(term);
 
-      const origenTipo = String(b.origen_tipo ?? 'ROP').toUpperCase();
+      const rawOrigen = String(b.origen_tipo ?? 'ROP_REPOSICION').toUpperCase();
       const matchOrigen =
+        selectedOrigenTipo === 'ALL' ||
         selectedOrigenTipo === 'todos' ||
-        origenTipo === selectedOrigenTipo.toUpperCase() ||
-        (selectedOrigenTipo.toUpperCase() === 'PIPELINE' &&
+        rawOrigen === selectedOrigenTipo ||
+        (selectedOrigenTipo === 'LICITACION_B2B' && (rawOrigen.includes('LICIT') || rawOrigen.includes('B2B'))) ||
+        (selectedOrigenTipo === 'ROP_REPOSICION' && (rawOrigen.includes('ROP') || rawOrigen.includes('REPO'))) ||
+        (selectedOrigenTipo === 'STOCK_DIRECTO' && (rawOrigen.includes('DIRECT') || rawOrigen === 'STOCK_DIRECTO')) ||
+        (selectedOrigenTipo === 'PIPELINE' &&
           (((b as any).stock_comprometido_pipeline && (b as any).stock_comprometido_pipeline > 0) ||
             (b as any).comprometido_pipeline ||
-            origenTipo === 'PIPELINE'));
+            rawOrigen === 'PIPELINE'));
 
       return matchSearch && matchOrigen;
     });
@@ -729,13 +733,12 @@ export const MultiLocationStockView = () => {
           <select
             value={selectedOrigenTipo}
             onChange={(e) => setSelectedOrigenTipo(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
           >
-            <option value="todos">Todos los orígenes</option>
-            <option value="ROP">ROP (Kanban Abastecimiento)</option>
+            <option value="ALL">Todos los orígenes</option>
             <option value="STOCK_DIRECTO">Stock Directo</option>
-            <option value="LICITACION">Licitación B2B</option>
-            <option value="PIPELINE">Demanda en Pipeline (CRM)</option>
+            <option value="LICITACION_B2B">Licitación B2B</option>
+            <option value="ROP_REPOSICION">ROP (Reposición / Kanban)</option>
           </select>
         </div>
       </div>

@@ -40,6 +40,7 @@ from app.models.entities import (
     Client,
     Company,
     Supplier,
+    UserPreference,
 )
 from app.domain.schemas import (
     ETLUploadResponse,
@@ -2851,6 +2852,7 @@ def list_clients(
             for d in c_deals
         ]
 
+        pipe_float = round(float(total_pipe), 2)
         results.append(ClientResponse(
             id=c.id,
             nombre=c.nombre,
@@ -2860,7 +2862,9 @@ def list_clients(
             phone=c.phone,
             address=c.address,
             deals_count=deals_count,
-            total_pipeline=Decimal(str(round(total_pipe, 2))),
+            total_pipeline=Decimal(str(pipe_float)),
+            pipeline_activo=pipe_float,
+            pipeline_total=pipe_float,
             deals=deal_items,
             created_at=c.created_at
         ))
@@ -3436,97 +3440,3 @@ def update_cost_center_budget(
 # ASESOR DE IA & SELECTOR DINÁMICO DE LOS 11 MODELOS DE OLLAMA
 # =====================================================================
 
-OFFICIAL_OLLAMA_FALLBACK_MODELS = [
-    {"name": "deepseek-r1:8b", "size": 4900000000, "size_formatted": "4.9 GB", "digest": "sha256:d1a8e945"},
-    {"name": "qwen2.5:7b", "size": 4700000000, "size_formatted": "4.7 GB", "digest": "sha256:843513b8"},
-    {"name": "llama3.1:8b", "size": 4920000000, "size_formatted": "4.9 GB", "digest": "sha256:4b494d48"},
-    {"name": "mistral:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:61e88e88"},
-    {"name": "gemma2:9b", "size": 5400000000, "size_formatted": "5.4 GB", "digest": "sha256:ff025218"},
-    {"name": "phi3:medium", "size": 7900000000, "size_formatted": "7.9 GB", "digest": "sha256:22c07b3b"},
-    {"name": "codellama:7b", "size": 3800000000, "size_formatted": "3.8 GB", "digest": "sha256:8f43be5d"},
-    {"name": "qwen2.5-coder:7b", "size": 4700000000, "size_formatted": "4.7 GB", "digest": "sha256:b1d8351a"},
-    {"name": "command-r:latest", "size": 18000000000, "size_formatted": "18.0 GB", "digest": "sha256:77353f3e"},
-    {"name": "starling-lm:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:ca18641a"},
-    {"name": "neural-chat:7b", "size": 4100000000, "size_formatted": "4.1 GB", "digest": "sha256:911855e4"}
-]
-
-@router.get(
-    "/advisor/models",
-    response_model=OllamaModelsResponse,
-    summary="Listado dinámico de los modelos Ollama disponibles con fallback a los 11 modelos locales"
-)
-def list_ollama_models():
-    """
-    Consulta los modelos registrados en la instancia de Ollama activa.
-    Si Ollama está apagado o no responde en 2.0s, retorna de manera determinista
-    el catálogo de los 11 modelos locales optimizados para la suite.
-    """
-    current_active = getattr(settings, "ollama_model", "qwen2.5:7b")
-    models_list: List[OllamaModelItem] = []
-    ollama_running = False
-
-    try:
-        url = f"{settings.ollama_base_url}/api/tags"
-        resp = httpx.get(url, timeout=2.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            raw_models = data.get("models", [])
-            if raw_models:
-                ollama_running = True
-                for rm in raw_models:
-                    m_name = rm.get("name", "")
-                    m_size = rm.get("size", 0)
-                    m_sz_gb = f"{round(m_size / (1024**3), 1)} GB" if m_size else "N/A"
-                    models_list.append(OllamaModelItem(
-                        name=m_name,
-                        size=m_size,
-                        size_formatted=m_sz_gb,
-                        modified_at=rm.get("modified_at"),
-                        digest=rm.get("digest"),
-                        is_active=(m_name == current_active)
-                    ))
-    except Exception:
-        ollama_running = False
-
-    if not models_list:
-        # Fallback a los 11 modelos locales oficiales
-        for fm in OFFICIAL_OLLAMA_FALLBACK_MODELS:
-            models_list.append(OllamaModelItem(
-                name=fm["name"],
-                size=fm["size"],
-                size_formatted=fm["size_formatted"],
-                modified_at=datetime.now().strftime("%Y-%m-%d"),
-                digest=fm["digest"],
-                is_active=(fm["name"] == current_active)
-            ))
-
-    return OllamaModelsResponse(
-        models=models_list,
-        active_model=current_active,
-        total=len(models_list),
-        ollama_running=ollama_running
-    )
-
-
-@router.post(
-    "/advisor/active-model",
-    response_model=ActiveModelResponse,
-    summary="Conmutador en caliente del modelo Ollama activo para análisis predictivo"
-)
-def set_active_ollama_model(
-    payload: ActiveModelRequest,
-    user: UserContext = Depends(get_current_user)
-):
-    selected = payload.model.strip()
-    settings.ollama_model = selected
-    settings.local_llm_model = selected
-    
-    # También actualizar variable de clase o singleton si existe
-    if hasattr(AIAdvisorService, "_active_model"):
-        setattr(AIAdvisorService, "_active_model", selected)
-
-    return ActiveModelResponse(
-        status="success",
-        active_model=selected,
-        message=f"Modelo activo de IA conmutado exitosamente a '{selected}'."
-    )

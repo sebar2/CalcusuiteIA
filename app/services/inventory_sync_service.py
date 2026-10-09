@@ -208,6 +208,15 @@ class InventorySyncService:
 
             prod_nombre = b.producto_rel.nombre if b.producto_rel else b.sku
 
+            obs_upper = (b.observaciones or "").upper()
+            id_upper = (b.id or "").upper()
+            if "LICIT" in obs_upper or "LICIT" in id_upper or "TENDER" in obs_upper:
+                orig_tipo_val = "LICITACION_B2B"
+            elif "ROP" in obs_upper or "ROP" in id_upper or getattr(b, "orden_rop_id", None):
+                orig_tipo_val = "ROP_REPOSICION"
+            else:
+                orig_tipo_val = "STOCK_DIRECTO"
+
             result.append(
                 StockBatchItem(
                     id=b.id,
@@ -225,7 +234,7 @@ class InventorySyncService:
                     fecha_despacho=b.fecha_despacho,
                     producto_nombre=prod_nombre or b.sku,
                     buque_o_tracking=b.buque_o_tracking or "",
-                    origen_tipo="ROP" if getattr(b, "orden_rop_id", None) else "STOCK_DIRECTO",
+                    origen_tipo=orig_tipo_val,
                     estado=b.estado or "DISPONIBLE",
                     observaciones=b.observaciones or "",
                 )

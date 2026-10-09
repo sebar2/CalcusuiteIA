@@ -66,6 +66,8 @@ class ClientResponse(ClientBase):
     id: int
     deals_count: int = 0
     total_pipeline: Decimal = Decimal('0.00')
+    pipeline_activo: Optional[float] = 0.0
+    pipeline_total: Optional[float] = 0.0
     deals: List[ClientDealItemSummary] = []
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)

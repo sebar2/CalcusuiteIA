@@ -15,6 +15,15 @@ import {
 import api from '../../services/api';
 import type { ClientItem, ClientDealItemSummary } from '../../types';
 
+const formatCurrency = (val: number | string | undefined | null) => {
+  const num = typeof val === 'number' ? val : parseFloat(String(val || 0)) || 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(num);
+};
+
 export const ClientsView: React.FC = () => {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -107,11 +116,15 @@ export const ClientsView: React.FC = () => {
 
   // KPIs
   const totalPipeline = useMemo(() => {
-    return clients.reduce((acc, c) => acc + (c.total_pipeline || 0), 0);
+    return clients.reduce((acc, c) => {
+      const raw = c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline ?? 0;
+      const num = typeof raw === 'number' ? raw : parseFloat(String(raw)) || 0;
+      return acc + num;
+    }, 0);
   }, [clients]);
 
   const totalDeals = useMemo(() => {
-    return clients.reduce((acc, c) => acc + (c.deals_count || 0), 0);
+    return clients.reduce((acc, c) => acc + (Number(c.deals_count) || 0), 0);
   }, [clients]);
 
   return (
@@ -182,7 +195,7 @@ export const ClientsView: React.FC = () => {
           <div>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Volumen Total Pipeline</p>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-              ${totalPipeline.toLocaleString('es-CL')}
+              {formatCurrency(totalPipeline)}
             </p>
           </div>
           <div className="p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-emerald-600 dark:text-emerald-400">
@@ -279,7 +292,7 @@ export const ClientsView: React.FC = () => {
                 <div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Pipeline Activo</span>
                   <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                    ${(c.total_pipeline || 0).toLocaleString('es-CL')}
+                    {formatCurrency(c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline)}
                   </span>
                 </div>
 
@@ -310,7 +323,7 @@ export const ClientsView: React.FC = () => {
                   />
                   <div>
                     <h2 className="font-bold text-slate-900 dark:text-slate-100 text-base">{selectedClient.nombre}</h2>
-                    <p className="text-xs text-slate-500">Pipeline: ${(selectedClient.total_pipeline || 0).toLocaleString('es-CL')}</p>
+                    <p className="text-xs text-slate-500">Pipeline: {formatCurrency(selectedClient.pipeline_activo ?? selectedClient.pipeline_total ?? selectedClient.total_pipeline)}</p>
                   </div>
                 </div>
                 <button
@@ -347,7 +360,7 @@ export const ClientsView: React.FC = () => {
                         <div className="flex items-center justify-between text-xs mt-1">
                           <span className="text-slate-500">Monto:</span>
                           <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            ${(d.monto_total || 0).toLocaleString('es-CL')}
+                            {formatCurrency(d.monto_total)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-xs">

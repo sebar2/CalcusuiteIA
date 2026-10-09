@@ -1,7 +1,11 @@
+from datetime import datetime, timezone
+import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
+from app.core.config import settings
+from app.domain.models import UserPreference
 from app.domain.schemas import (
     VarianceInsightRequest,
     InventoryInsightRequest,
@@ -18,11 +22,127 @@ from app.domain.schemas import (
     InitiativeEvaluationResponse,
     CrossReportRequest,
     CrossReportResponse,
+    OllamaModelItem,
+    OllamaModelsResponse,
+    ActiveModelRequest,
+    ActiveModelResponse,
 )
 from app.services.ai_advisor_service import AIAdvisorService
 from app.services.budget_planner_service import BudgetPlannerService
 
 router = APIRouter(prefix="/api/v1/advisor", tags=["Copiloto Asesor IA & Performance"])
+
+OFFICIAL_11_OLLAMA_LOCAL_MODELS = [
+    {"name": "qwen2.5:3b", "size": 1900000000, "size_formatted": "1.9 GB", "digest": "sha256:7b243a41"},
+    {"name": "qwen2.5:7b", "size": 4700000000, "size_formatted": "4.7 GB", "digest": "sha256:843513b8"},
+    {"name": "gemma4:26b", "size": 16500000000, "size_formatted": "16.5 GB", "digest": "sha256:26c04f11"},
+    {"name": "gemma4:31b", "size": 19800000000, "size_formatted": "19.8 GB", "digest": "sha256:31b08a99"},
+    {"name": "gemma4:latest", "size": 5400000000, "size_formatted": "5.4 GB", "digest": "sha256:44a0bb22"},
+    {"name": "muse-glimmer:latest", "size": 4900000000, "size_formatted": "4.9 GB", "digest": "sha256:92f0dd33"},
+    {"name": "devstral:latest", "size": 14200000000, "size_formatted": "14.2 GB", "digest": "sha256:de7718aa"},
+    {"name": "olmo-3.1:32b-instruct", "size": 20400000000, "size_formatted": "20.4 GB", "digest": "sha256:32e18b77"},
+    {"name": "ornith:35b", "size": 22100000000, "size_formatted": "22.1 GB", "digest": "sha256:35bb9910"},
+    {"name": "nemotron-3.5-lightning:latest", "size": 11800000000, "size_formatted": "11.8 GB", "digest": "sha256:35aa77ff"},
+    {"name": "qwen3.8:27b", "size": 18000000000, "size_formatted": "18.0 GB", "digest": "sha256:27bb88ee"}
+]
+
+
+@router.get(
+    "/models",
+    response_model=OllamaModelsResponse,
+    summary="Listado dinámico de los 11 modelos Ollama locales disponibles con fallback"
+)
+def list_ollama_models(db: Session = Depends(get_db)):
+    """
+    Consulta los modelos registrados en Ollama local (localhost:11434).
+    Si Ollama está apagado o da timeout (3.0s), retorna la lista de fallback
+    con los 11 modelos locales registrados por el usuario.
+    """
+    pref = db.query(UserPreference).filter(UserPreference.user_id == "default_user").first()
+    saved_model = None
+    if pref and pref.saved_filters and isinstance(pref.saved_filters, dict):
+        saved_model = pref.saved_filters.get("ollama_active_model")
+
+    current_active = saved_model or AIAdvisorService.get_active_model()
+    models_list = []
+    ollama_running = False
+
+    try:
+        ollama_url = getattr(settings, "ollama_base_url", "http://localhost:11434").rstrip("/")
+        tags_url = f"{ollama_url}/api/tags"
+        resp = httpx.get(tags_url, timeout=3.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_models = data.get("models", [])
+            if raw_models:
+                ollama_running = True
+                for rm in raw_models:
+                    m_name = rm.get("name", "")
+                    m_size = rm.get("size", 0)
+                    m_sz_gb = f"{round(m_size / (1024**3), 1)} GB" if m_size else "N/A"
+                    models_list.append(OllamaModelItem(
+                        name=m_name,
+                        size=m_size,
+                        size_formatted=m_sz_gb,
+                        modified_at=rm.get("modified_at"),
+                        digest=rm.get("digest"),
+                        is_active=(m_name == current_active)
+                    ))
+    except Exception:
+        ollama_running = False
+
+    if not models_list:
+        for fm in OFFICIAL_11_OLLAMA_LOCAL_MODELS:
+            models_list.append(OllamaModelItem(
+                name=fm["name"],
+                size=fm["size"],
+                size_formatted=fm["size_formatted"],
+                modified_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                digest=fm["digest"],
+                is_active=(fm["name"] == current_active)
+            ))
+
+    return OllamaModelsResponse(
+        models=models_list,
+        active_model=current_active,
+        total=len(models_list),
+        ollama_running=ollama_running
+    )
+
+
+@router.post(
+    "/active-model",
+    response_model=ActiveModelResponse,
+    summary="Conmutador en caliente del modelo Ollama activo para análisis predictivo"
+)
+def set_active_ollama_model(
+    payload: ActiveModelRequest,
+    db: Session = Depends(get_db)
+):
+    selected = payload.model.strip()
+    AIAdvisorService.set_active_model(selected)
+    settings.ollama_model = selected
+    settings.local_llm_model = selected
+
+    pref = db.query(UserPreference).filter(UserPreference.user_id == "default_user").first()
+    if not pref:
+        pref = UserPreference(
+            user_id="default_user",
+            saved_filters={"ollama_active_model": selected}
+        )
+        db.add(pref)
+    else:
+        filters = dict(pref.saved_filters or {})
+        filters["ollama_active_model"] = selected
+        pref.saved_filters = filters
+        pref.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return ActiveModelResponse(
+        status="success",
+        active_model=selected,
+        message=f"Modelo activo de IA conmutado exitosamente a '{selected}'."
+    )
 
 
 # ------------------------------------------------------------------
