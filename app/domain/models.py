@@ -39,7 +39,7 @@ class PresupuestoVersion(Base):
 
 class OrdenReposicion(Base):
     """
-    Pipeline Kanban de Reposición estilo Bitrix24
+    Pipeline Kanban de Reposición
     Etapas:
     1. sugerido: 'Sugerido (Stock <= ROP)'
     2. aprobacion: 'Pendiente de Aprobación'

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, Calendar, DollarSign, Package, Truck, User } from 'lucide-react';
+import { X, Save, AlertCircle, Calendar, DollarSign, Truck, User } from 'lucide-react';
 import type { SupplyOrder, SupplyOrderUpdate } from '../../types';
+import { ProductThumbnail } from '../common/ProductThumbnail';
 
 interface OrderDetailModalProps {
   isOpen: boolean;
@@ -70,10 +71,15 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        {/* Header Bitrix24 */}
+        {/* Header Modal */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
-          <div className="flex items-center space-x-2">
-            <Package className="text-[#00a2e8]" size={20} />
+          <div className="flex items-center space-x-3">
+            <ProductThumbnail
+              sku={order.sku_id}
+              alt={`SKU ${order.sku_id}`}
+              size="md"
+              className="border border-slate-200 dark:border-slate-700 shadow-2xs"
+            />
             <div>
               <h3 className="text-base font-bold text-[#333333] dark:text-slate-100">
                 Orden #{order.id} — SKU {order.sku_id}

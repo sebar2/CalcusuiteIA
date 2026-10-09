@@ -306,7 +306,7 @@ La suite completa de pruebas consta de **151 pruebas automatizadas** distribuida
 ## 6. Diagnóstico UI/UX y Ergonomía
 
 ### 6.1 Consistencia Visual y Sistema de Diseño
-* **Look & Feel:** Inspirado en la interfaz corporativa de Bitrix24, adoptando una paleta funcional de grises fríos (`slate-50` a `slate-900`) con soporte íntegro para Dark Mode mediante CSS variables gestionadas en `ThemeContext.tsx`.
+* **Look & Feel:** Identidad corporativa de Calcu | SupplyFinance Suite, adoptando una paleta funcional de grises fríos (`slate-50` a `slate-900`) con soporte íntegro para Dark Mode mediante CSS variables gestionadas en `ThemeContext.tsx`.
 * **Densidad de Información:** Excelente adaptación para perfiles analíticos. Los componentes `MetricCard` y `DataTable` presentan cifras financieras con formato local (`es-UY`), separadores de miles y colores semánticos (verde = superávit/margen saludable, rojo = déficit/quiebre de ROP).
 
 ### 6.2 Ergonomía y Puntos de Fricción Identificados

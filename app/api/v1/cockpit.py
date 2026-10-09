@@ -167,7 +167,7 @@ async def post_budget_scenarios_matrix(
 
 
 # ----------------------------------------------------------------------
-# DIMENSIÓN 3: PIPELINE KANBAN DE REPOSICIÓN (ESTILO BITRIX24 CON TOTALES)
+# DIMENSIÓN 3: PIPELINE KANBAN DE REPOSICIÓN (CON TOTALES)
 # ----------------------------------------------------------------------
 KANBAN_STAGE_CONFIG = [
     {

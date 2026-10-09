@@ -410,7 +410,7 @@ export const InitiativesStepper: React.FC<InitiativesStepperProps> = ({ engineMo
 
   return (
     <div className="space-y-6">
-      {/* Barra Superior del Stepper - Estilo Bitrix24 */}
+      {/* Barra Superior del Stepper */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-3">
@@ -746,7 +746,7 @@ export const InitiativesStepper: React.FC<InitiativesStepperProps> = ({ engineMo
             </div>
           </div>
 
-          {/* Tabla Densa Bitrix24 con Scroll y Cabecera Sticky */}
+          {/* Tabla Densa con Scroll y Cabecera Sticky */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">

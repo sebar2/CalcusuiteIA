@@ -4,8 +4,6 @@ import {
   RefreshCw, 
   Download, 
   Settings, 
-  AlertTriangle, 
-  Clock, 
   ChevronDown,
   Sun,
   Moon,
@@ -26,15 +24,15 @@ interface TopHeaderProps {
   sidebarCollapsed: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  categories: string[];
-  selectedCategory: string;
-  onSelectCategory: (category: string) => void;
-  onlyAlerts: boolean;
-  onToggleOnlyAlerts: () => void;
-  leadTimeFilter: boolean;
-  onToggleLeadTime: () => void;
-  selectedPeriod: string;
-  onSelectPeriod: (period: string) => void;
+  categories?: string[];
+  selectedCategory?: string;
+  onSelectCategory?: (category: string) => void;
+  onlyAlerts?: boolean;
+  onToggleOnlyAlerts?: () => void;
+  leadTimeFilter?: boolean;
+  onToggleLeadTime?: () => void;
+  selectedPeriod?: string;
+  onSelectPeriod?: (period: string) => void;
   onRefresh: () => void;
   onExport: () => void;
   onOpenSettings: () => void;
@@ -49,15 +47,6 @@ export const TopHeader = ({
   sidebarCollapsed,
   searchQuery,
   onSearchChange,
-  categories,
-  selectedCategory,
-  onSelectCategory,
-  onlyAlerts,
-  onToggleOnlyAlerts,
-  leadTimeFilter,
-  onToggleLeadTime,
-  selectedPeriod,
-  onSelectPeriod,
   onRefresh,
   onExport,
   onOpenSettings,
@@ -71,30 +60,6 @@ export const TopHeader = ({
   const { isDark, toggleTheme } = useTheme();
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState<boolean>(false);
-  const [availablePeriods, setAvailablePeriods] = useState<string[]>([
-    '2025-09',
-    '2025-10',
-    '2025-11',
-    '2025-12'
-  ]);
-
-  // Consultar períodos presupuestarios disponibles dinámicamente
-  useEffect(() => {
-    const fetchPeriods = async () => {
-      try {
-        const data = await apiService.getAvailablePeriods();
-        if (data.periods && data.periods.length > 0) {
-          setAvailablePeriods(data.periods);
-          if (!selectedPeriod || !data.periods.includes(selectedPeriod)) {
-            onSelectPeriod(data.default_period);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching available periods:', err);
-      }
-    };
-    fetchPeriods();
-  }, []);
 
   // Estado de Autenticación JWT y Switcher de Usuarios Demo
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
@@ -242,67 +207,6 @@ export const TopHeader = ({
           </div>
         )}
 
-        {/* Chips / Píldoras de Filtro Rápido */}
-        <div className="hidden md:flex items-center space-x-2 overflow-x-auto py-1">
-          {/* Chip Categoría */}
-          <div className="relative group">
-            <select
-              value={selectedCategory}
-              onChange={(e) => onSelectCategory(e.target.value)}
-              className="appearance-none bg-[#f5f7f8] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/60 border border-slate-200 dark:border-slate-700 text-xs font-medium text-[#535c69] dark:text-slate-300 rounded-full pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:border-[#00a2e8] transition-all"
-            >
-              <option value="Todas">Categoría: Todas</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  Categoría: {c}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-          </div>
-
-          {/* Chip 🚨 Solo Quiebres */}
-          <button
-            onClick={onToggleOnlyAlerts}
-            className={`inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${
-              onlyAlerts
-                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-[#e74c3c] dark:text-rose-400 shadow-xs'
-                : 'bg-[#f5f7f8] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-[#535c69] dark:text-slate-300'
-            }`}
-          >
-            <AlertTriangle size={13} className={onlyAlerts ? 'text-[#e74c3c]' : 'text-slate-400 dark:text-slate-500'} />
-            <span>🚨 Solo Quiebres</span>
-          </button>
-
-          {/* Chip Lead Time > 30d */}
-          <button
-            onClick={onToggleLeadTime}
-            className={`inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${
-              leadTimeFilter
-                ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-[#f39c12] dark:text-amber-400 shadow-xs'
-                : 'bg-[#f5f7f8] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-[#535c69] dark:text-slate-300'
-            }`}
-          >
-            <Clock size={13} className={leadTimeFilter ? 'text-[#f39c12]' : 'text-slate-400 dark:text-slate-500'} />
-            <span>Lead Time &gt; 30d</span>
-          </button>
-
-          {/* Chip Periodo */}
-          <div className="relative group">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => onSelectPeriod(e.target.value)}
-              className="appearance-none bg-[#f5f7f8] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs font-medium text-[#535c69] dark:text-slate-300 rounded-full pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:border-[#00a2e8] transition-all"
-            >
-              {availablePeriods.map((p) => (
-                <option key={p} value={p}>
-                  Periodo: {p}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
-          </div>
-        </div>
       </div>
 
       {/* Botones de Acción Rápida & Estado Ollama */}

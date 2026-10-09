@@ -133,7 +133,7 @@ export const SettingsModal = ({
           {/* Theme Selector */}
           <div>
             <label className="block font-semibold text-[#535c69] dark:text-slate-300 mb-2">
-              Tema Visual Bitrix24
+              Tema Visual
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -147,7 +147,7 @@ export const SettingsModal = ({
               >
                 <Sun size={18} className={theme === 'light_bitrix' ? 'text-[#00a2e8]' : 'text-slate-400'} />
                 <div>
-                  <div className="font-semibold text-xs text-[#333333] dark:text-slate-100">Bitrix Light</div>
+                  <div className="font-semibold text-xs text-[#333333] dark:text-slate-100">Calcu Light</div>
                   <div className="text-[10px] text-slate-400">Cyan & Canvas Clean</div>
                 </div>
               </button>
@@ -163,7 +163,7 @@ export const SettingsModal = ({
               >
                 <Moon size={18} className={theme === 'dark' ? 'text-[#00a2e8]' : 'text-slate-400'} />
                 <div>
-                  <div className="font-semibold text-xs text-[#333333] dark:text-slate-100">Bitrix Dark</div>
+                  <div className="font-semibold text-xs text-[#333333] dark:text-slate-100">Calcu Dark</div>
                   <div className="text-[10px] text-slate-400">Carbono Empresarial</div>
                 </div>
               </button>

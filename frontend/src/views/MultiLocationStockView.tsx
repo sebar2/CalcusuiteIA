@@ -14,6 +14,8 @@ import {
   PackageCheck,
   Settings,
   MapPin,
+  Trash2,
+  Box,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -22,7 +24,9 @@ import type {
   WarehouseTransferPayload,
   WarehouseAssignStockPayload,
   WarehouseItem,
+  WarehouseStockItem,
 } from '../types';
+import { ProductThumbnail } from '../components/common/ProductThumbnail';
 
 interface StageColumnConfig {
   id: BatchStage;
@@ -126,6 +130,11 @@ export const MultiLocationStockView = () => {
   const [whFormUbicacion, setWhFormUbicacion] = useState<string>('');
   const [whFormCapacidad, setWhFormCapacidad] = useState<number>(10000);
   const [whFormActivo, setWhFormActivo] = useState<boolean>(true);
+
+  // Explorador granular de stock por almacén
+  const [selectedWarehouseForStock, setSelectedWarehouseForStock] = useState<string | null>(null);
+  const [warehouseStockDetail, setWarehouseStockDetail] = useState<WarehouseStockItem[]>([]);
+  const [isLoadingStockDetail, setIsLoadingStockDetail] = useState<boolean>(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -347,6 +356,43 @@ export const MultiLocationStockView = () => {
     }
   };
 
+  // Manejador del Explorador de Stock Granular por Almacén
+  const handleSelectWarehouseStock = async (whId: string) => {
+    if (selectedWarehouseForStock === whId) {
+      setSelectedWarehouseForStock(null);
+      setWarehouseStockDetail([]);
+      return;
+    }
+    setSelectedWarehouseForStock(whId);
+    setIsLoadingStockDetail(true);
+    try {
+      const data = await apiService.getWarehouseStock(whId);
+      setWarehouseStockDetail(data);
+    } catch (err) {
+      console.error('Error fetching warehouse stock:', err);
+      setWarehouseStockDetail([]);
+    } finally {
+      setIsLoadingStockDetail(false);
+    }
+  };
+
+  const handleDeleteWarehouse = async (whId: string, whNombre: string) => {
+    if (!window.confirm(`¿Está seguro de eliminar el depósito "${whNombre}" (${whId})?`)) return;
+    try {
+      const res = await apiService.deleteWarehouse(whId);
+      setSuccessBanner(res.message || `Depósito ${whNombre} eliminado.`);
+      if (selectedWarehouseForStock === whId) {
+        setSelectedWarehouseForStock(null);
+        setWarehouseStockDetail([]);
+      }
+      setTimeout(() => setSuccessBanner(null), 5000);
+      await loadData();
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || 'No se pudo eliminar el depósito.';
+      alert(`Error: ${detail}`);
+    }
+  };
+
   // KPIs dinámicos calculados desde los lotes unificados
   const stageStats = useMemo(() => {
     const stats: Record<string, { units: number; lots: number }> = {
@@ -442,27 +488,119 @@ export const MultiLocationStockView = () => {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {warehouses.map((wh) => (
-            <div
-              key={wh.id}
-              className="flex items-center space-x-2 px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs shadow-xs"
-            >
-              <MapPin size={12} className="text-slate-400" />
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{wh.nombre}</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                {wh.id}
-              </span>
-              <button
-                onClick={() => handleOpenEditWarehouse(wh)}
-                className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"
-                title="Configurar depósito"
+          {warehouses.map((wh) => {
+            const isSelected = selectedWarehouseForStock === wh.id;
+            return (
+              <div
+                key={wh.id}
+                onClick={() => handleSelectWarehouseStock(wh.id)}
+                className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all border ${
+                  isSelected
+                    ? 'bg-sky-50 dark:bg-sky-950/60 border-[#00a2e8] ring-2 ring-[#00a2e8]/30 shadow-xs'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-sky-300 dark:hover:border-sky-700 shadow-2xs'
+                }`}
               >
-                <Settings size={12} />
-              </button>
-            </div>
-          ))}
+                <MapPin size={12} className={isSelected ? 'text-[#00a2e8]' : 'text-slate-400'} />
+                <span className={`font-semibold ${isSelected ? 'text-[#00a2e8] dark:text-sky-300' : 'text-slate-800 dark:text-slate-200'}`}>
+                  {wh.nombre}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                  {wh.id}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenEditWarehouse(wh);
+                  }}
+                  className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"
+                  title="Configurar depósito"
+                >
+                  <Settings size={12} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteWarehouse(wh.id, wh.nombre);
+                  }}
+                  className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded transition-colors"
+                  title="Eliminar depósito"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Explorador Granular de Stock por Almacén Seleccionado */}
+      {selectedWarehouseForStock && (
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-900 shadow-xs space-y-3 animate-in fade-in-50 duration-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Box size={16} className="text-[#00a2e8]" />
+              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                Inventario Físico en: <span className="text-[#00a2e8]">{selectedWarehouseForStock}</span>
+              </h3>
+            </div>
+            <button
+              onClick={() => setSelectedWarehouseForStock(null)}
+              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              Cerrar explorador ×
+            </button>
+          </div>
+
+          {isLoadingStockDetail ? (
+            <div className="py-6 text-center text-xs text-slate-400">
+              Consultando lotes y SKUs en almacén...
+            </div>
+          ) : warehouseStockDetail.length === 0 ? (
+            <div className="py-6 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              No hay stock asignado actualmente en este depósito.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {warehouseStockDetail.map((item) => (
+                <div
+                  key={item.sku}
+                  className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 flex items-start gap-3"
+                >
+                  <ProductThumbnail src={item.image_url} alt={item.sku} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-xs text-slate-900 dark:text-slate-100 font-mono">
+                      {item.sku}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      {item.producto_nombre}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 text-xs">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        {item.stock_disponible} un. disp.
+                      </span>
+                      {item.stock_reservado > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400 text-[11px]">
+                          ({item.stock_reservado} res.)
+                        </span>
+                      )}
+                    </div>
+                    {item.lotes && item.lotes.length > 0 && (
+                      <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60 text-[10px] text-slate-400 space-y-0.5">
+                        {item.lotes.map((l, i) => (
+                          <div key={i} className="flex justify-between">
+                            <span className="font-mono">{l.lote}</span>
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">{l.cantidad} u.</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* KPI Cards de los 5 Nodos Logísticos */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
@@ -664,19 +802,22 @@ export const MultiLocationStockView = () => {
                           </span>
                         </div>
 
-                        {/* SKU y Cantidad */}
-                        <div className="mt-2">
-                          <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 flex items-center justify-between">
-                            <span className="font-mono">{batch.sku}</span>
-                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
-                              {batch.cantidad.toLocaleString('es-UY')} u.
-                            </span>
+                        {/* SKU y Cantidad con ProductThumbnail */}
+                        <div className="mt-2 flex items-start gap-2">
+                          <ProductThumbnail src={batch.image_url} alt={batch.sku} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-xs text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                              <span className="font-mono">{batch.sku}</span>
+                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
+                                {batch.cantidad.toLocaleString('es-UY')} u.
+                              </span>
+                            </div>
+                            {batch.producto_nombre && (
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                                {batch.producto_nombre}
+                              </p>
+                            )}
                           </div>
-                          {batch.producto_nombre && (
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                              {batch.producto_nombre}
-                            </p>
-                          )}
                         </div>
 
                         {/* Almacén Físico */}

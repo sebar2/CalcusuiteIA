@@ -84,7 +84,7 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
   return (
     <ErrorBoundary fallbackTitle="Error al cargar el Evaluador de Iniciativas">
       <div className="space-y-6">
-        {/* Selector de Sub-Pestaña Bitrix24 */}
+        {/* Selector de Sub-Pestaña */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
             <span className="p-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg">

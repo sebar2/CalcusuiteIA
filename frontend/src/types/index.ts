@@ -13,6 +13,7 @@ export interface InventoryAlertItem {
   aduana: number;
   costo_unitario?: number;
   demanda_diaria_promedio?: number;
+  image_url?: string | null;
 }
 
 export interface InventoryQuickUpdatePayload {
@@ -24,6 +25,7 @@ export interface InventoryQuickUpdatePayload {
   lead_time_dias?: number;
   stock_seguridad?: number;
   demanda_diaria_promedio?: number;
+  image_url?: string;
 }
 
 export interface InventoryQuickUpdateResponse {
@@ -857,6 +859,7 @@ export interface DealItem {
   precio_unitario: number;
   subtotal?: number;
   producto_nombre?: string;
+  image_url?: string | null;
 }
 
 export interface CommercialDeal {
@@ -864,6 +867,10 @@ export interface CommercialDeal {
   proyecto_nombre: string;
   cliente: string;
   rut?: string;
+  logo_url?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
   vendedor: string;
   monto_total: number;
   moneda: 'USD' | 'UYU' | string;
@@ -879,6 +886,10 @@ export interface CommercialDealCreatePayload {
   proyecto_nombre: string;
   cliente: string;
   rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   vendedor?: string;
   monto_total?: number;
   moneda?: string;
@@ -891,6 +902,10 @@ export interface CommercialDealUpdatePayload {
   proyecto_nombre?: string;
   cliente?: string;
   rut?: string;
+  logo_url?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   vendedor?: string;
   monto_total?: number;
   moneda?: string;
@@ -1111,6 +1126,7 @@ export interface StockBatchItem {
   lote: string;
   sku: string;
   producto_nombre?: string;
+  image_url?: string | null;
   cantidad: number;
   etapa_logistica: BatchStage;
   warehouse_id: string;
@@ -1124,6 +1140,24 @@ export interface StockBatchItem {
   estado: string;
   observaciones?: string | null;
   created_at?: string;
+}
+
+export interface WarehouseBatchDetail {
+  lote: string;
+  cantidad: number;
+  estado: string;
+  fecha_eta?: string | null;
+  buque_o_tracking?: string | null;
+  observaciones?: string | null;
+}
+
+export interface WarehouseStockItem {
+  sku: string;
+  producto_nombre: string;
+  image_url?: string | null;
+  stock_disponible: number;
+  stock_reservado: number;
+  lotes: WarehouseBatchDetail[];
 }
 
 export interface WarehouseTransferPayload {

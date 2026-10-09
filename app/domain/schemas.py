@@ -12,11 +12,51 @@ class ProductBase(BaseModel):
     categoria: str
     costo_unitario: Decimal
     precio_venta: Decimal
+    image_url: Optional[str] = None
 
 class ProductCreate(ProductBase):
-    pass
+    doh_seguridad: Optional[int] = 15
+    activo: Optional[bool] = True
+
+class ProductUpdate(BaseModel):
+    nombre: Optional[str] = None
+    categoria: Optional[str] = None
+    costo_unitario: Optional[Decimal] = None
+    precio_venta: Optional[Decimal] = None
+    image_url: Optional[str] = None
+    doh_seguridad: Optional[int] = None
+    activo: Optional[bool] = None
 
 class ProductResponse(ProductBase):
+    id: Optional[int] = None
+    doh_seguridad: Optional[int] = 15
+    activo: Optional[bool] = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Client & Company Schemas ---
+class ClientBase(BaseModel):
+    nombre: str
+    rut: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+class ClientCreate(ClientBase):
+    pass
+
+class ClientUpdate(BaseModel):
+    nombre: Optional[str] = None
+    rut: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+class ClientResponse(ClientBase):
+    id: int
+    created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -53,6 +93,7 @@ class InventoryAlert(BaseModel):
     aduana: int = 0
     costo_unitario: Optional[Decimal] = None
     demanda_diaria_promedio: Optional[Decimal] = None
+    image_url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True, extra="allow")
 
 
@@ -66,6 +107,7 @@ class InventoryQuickUpdateRequest(BaseModel):
     lead_time_dias: Optional[Decimal] = Field(None, ge=0)
     stock_seguridad: Optional[int] = Field(None, ge=0)
     demanda_diaria_promedio: Optional[Decimal] = Field(None, ge=0)
+    image_url: Optional[str] = None
 
 
 class InventoryQuickUpdateResponse(BaseModel):
@@ -1242,6 +1284,7 @@ class DealItemResponse(BaseModel):
     precio_unitario: Decimal
     subtotal: Optional[Decimal] = None
     producto_nombre: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class CommercialDealCreate(BaseModel):
@@ -1253,6 +1296,10 @@ class CommercialDealCreate(BaseModel):
     moneda: str = Field(default="USD", pattern=r"^(USD|UYU)$")
     etapa: str = Field(default="prospeccion") # prospeccion, cotizacion, propuesta_enviada, negociacion, ganada, perdida
     observaciones: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     items: List[DealItemCreate] = Field(default_factory=list)
 
     @field_validator("proyecto_nombre", "cliente", "vendedor")
@@ -1270,6 +1317,10 @@ class CommercialDealUpdate(BaseModel):
     moneda: Optional[str] = None
     etapa: Optional[str] = None
     observaciones: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     items: Optional[List[DealItemCreate]] = None
 
 
@@ -1289,6 +1340,10 @@ class CommercialDealResponse(BaseModel):
     moneda: str
     etapa: str
     observaciones: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     created_at: Optional[datetime] = None
     items: List[DealItemResponse] = Field(default_factory=list)
     total_items_count: int = 0
@@ -1312,6 +1367,7 @@ class SalesOrderItemResponse(BaseModel):
     precio_unitario: float
     subtotal: float
     producto_nombre: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class SalesOrderResponse(BaseModel):
@@ -1331,6 +1387,10 @@ class SalesOrderResponse(BaseModel):
     tipo_cambio: Optional[float] = None
     estado: str
     notas: Optional[str] = None
+    logo_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
     fecha_emision: date
     created_at: Optional[datetime] = None
     items: List[SalesOrderItemResponse] = Field(default_factory=list)
@@ -1601,7 +1661,22 @@ class BudgetCommitmentAIAuditResponse(BaseModel):
     diagnostico_ia: str
     compromisos_urgentes_sugeridos: List[BudgetCommitmentCreate] = Field(default_factory=list)
 
+class WarehouseBatchDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    lote: str
+    cantidad: int
+    estado: str = "DISPONIBLE"
+    fecha_eta: Optional[date] = None
+    buque_o_tracking: Optional[str] = None
+    observaciones: Optional[str] = None
 
 
-
+class WarehouseStockItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    sku: str
+    producto_nombre: str
+    image_url: Optional[str] = None
+    stock_disponible: int
+    stock_reservado: int = 0
+    lotes: List[WarehouseBatchDetail] = Field(default_factory=list)
 

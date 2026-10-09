@@ -46,7 +46,7 @@ export const AILoader: React.FC<AILoaderProps> = ({
 
   return (
     <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-sky-200/80 dark:border-sky-900 shadow-md flex flex-col items-center justify-center text-center space-y-4 animate-in fade-in duration-200">
-      {/* Spinner con Pulso Bitrix24 Cyan */}
+      {/* Spinner con Pulso Cyan */}
       <div className="relative flex items-center justify-center">
         <div className="w-16 h-16 rounded-full border-4 border-[#eef2f4] dark:border-slate-800 border-t-[#00a2e8] animate-spin" />
         <div className="absolute w-10 h-10 rounded-full bg-[#00a2e8]/10 dark:bg-[#00a2e8]/20 flex items-center justify-center animate-pulse">

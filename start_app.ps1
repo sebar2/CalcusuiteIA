@@ -1,5 +1,5 @@
-# Script PowerShell para iniciar Calcu Suite Bitrix24 SPA
-$Host.UI.RawUI.WindowTitle = "Calcu - SupplyFinance Suite (Bitrix24 Edition)"
+# Script PowerShell para iniciar Calcu Suite SPA
+$Host.UI.RawUI.WindowTitle = "Calcu | SupplyFinance Suite"
 Set-Location -Path $PSScriptRoot
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  Iniciando Calcu Suite: FastAPI (:8000) + Vite SPA (:5173)" -ForegroundColor Green

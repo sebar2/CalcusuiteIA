@@ -74,6 +74,7 @@ import type {
   StockBatchItem,
   WarehouseTransferPayload,
   WarehouseAssignStockPayload,
+  WarehouseStockItem,
   TenderLiveFeedResponse,
   TenderImportFeedRequest,
   TenderImportFeedResponse,
@@ -564,6 +565,11 @@ export const apiService = {
     return res.data;
   },
 
+  async patchDealStage(id: string, etapa: string): Promise<CommercialDeal> {
+    const res = await apiClient.patch<CommercialDeal>(`/api/v1/crm/deals/${id}/stage`, { etapa });
+    return res.data;
+  },
+
   async deleteDeal(id: string): Promise<{ status: string; message: string }> {
     const res = await apiClient.delete<{ status: string; message: string }>(`/api/v1/deals/${id}`);
     return res.data;
@@ -610,6 +616,16 @@ export const apiService = {
 
   async updateWarehouse(id: string, payload: WarehouseUpdatePayload): Promise<WarehouseItem> {
     const res = await apiClient.put<WarehouseItem>(`/api/v1/warehouses/${id}`, payload);
+    return res.data;
+  },
+
+  async deleteWarehouse(id: string): Promise<{ status: string; warehouse_id: string; message: string }> {
+    const res = await apiClient.delete<{ status: string; warehouse_id: string; message: string }>(`/api/v1/warehouses/${id}`);
+    return res.data;
+  },
+
+  async getWarehouseStock(warehouseId: string): Promise<WarehouseStockItem[]> {
+    const res = await apiClient.get<WarehouseStockItem[]>(`/api/v1/warehouses/${warehouseId}/stock`);
     return res.data;
   },
 

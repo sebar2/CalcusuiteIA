@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Save, 
-  Boxes, 
   AlertTriangle, 
   CheckCircle2, 
-  RotateCcw
+  RotateCcw,
+  Image as ImageIcon
 } from 'lucide-react';
 import type { InventoryAlertItem, InventoryQuickUpdatePayload } from '../../types';
 import { apiService } from '../../services/api';
+import { ProductThumbnail } from '../common/ProductThumbnail';
 
 interface InventoryQuickEditModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const InventoryQuickEditModal: React.FC<InventoryQuickEditModalProps> = (
   const [leadTimeDias, setLeadTimeDias] = useState<number>(Number(item.lead_time_dias || 30));
   const [stockSeguridad, setStockSeguridad] = useState<number>(item.stock_seguridad || 10);
   const [demandaDiaria, setDemandaDiaria] = useState<number>(Number(item.demanda_diaria_promedio || 5));
+  const [imageUrl, setImageUrl] = useState<string>(item.image_url || '');
 
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export const InventoryQuickEditModal: React.FC<InventoryQuickEditModalProps> = (
       setLeadTimeDias(Number(item.lead_time_dias || 30));
       setStockSeguridad(item.stock_seguridad || 10);
       setDemandaDiaria(Number(item.demanda_diaria_promedio || 5));
+      setImageUrl(item.image_url || '');
       setErrorMsg(null);
     }
   }, [item]);
@@ -63,6 +66,7 @@ export const InventoryQuickEditModal: React.FC<InventoryQuickEditModalProps> = (
       lead_time_dias: leadTimeDias,
       stock_seguridad: stockSeguridad,
       demanda_diaria_promedio: demandaDiaria,
+      image_url: imageUrl.trim() || undefined,
     };
 
     try {
@@ -81,12 +85,16 @@ export const InventoryQuickEditModal: React.FC<InventoryQuickEditModalProps> = (
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-lg w-full overflow-hidden flex flex-col">
-        {/* Cabecera Bitrix24 */}
+        {/* Cabecera Modal */}
         <div className="flex items-center justify-between p-4 px-6 border-b border-slate-100 dark:border-slate-800 bg-[#f8fafc] dark:bg-slate-800/50">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] rounded-xl">
-              <Boxes size={20} />
-            </div>
+          <div className="flex items-center space-x-3">
+            <ProductThumbnail
+              src={imageUrl || item.image_url}
+              alt={item.nombre}
+              sku={item.sku}
+              size="md"
+              className="border border-slate-200 dark:border-slate-700 shadow-2xs"
+            />
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-2">
                 <span>Ajuste Rápido de Abastecimiento</span>
@@ -252,6 +260,39 @@ export const InventoryQuickEditModal: React.FC<InventoryQuickEditModalProps> = (
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
               Al guardar, se recalcula el Punto de Reorden ($ROP$) y se sincroniza automáticamente el pipeline Kanban.
+            </p>
+          </div>
+
+          {/* Multimedia del Producto: URL de Imagen */}
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              URL de Imagen del Producto
+            </label>
+            <div className="flex items-center space-x-2">
+              <div className="relative flex-1">
+                <ImageIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="url"
+                  placeholder="https://ejemplo.com/producto.jpg"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="w-full bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
+                />
+              </div>
+              {imageUrl && (
+                <div className="shrink-0">
+                  <ProductThumbnail
+                    src={imageUrl}
+                    alt="Preview"
+                    sku={item.sku}
+                    size="sm"
+                    className="border border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Permite previsualizar el catálogo en inventario, kanban y expedición de depósitos.
             </p>
           </div>
 

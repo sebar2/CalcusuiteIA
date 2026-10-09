@@ -185,7 +185,7 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
         </div>
       )}
 
-      {/* Kanban Board Container: 5 Etapas Bitrix24 */}
+      {/* Kanban Board Container: 5 Etapas */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-x-auto pb-4">
         {kanban?.stages.map((stage: SupplyKanbanStage) => {
           // Filtrado de órdenes según chips de la barra superior
@@ -213,7 +213,7 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
               key={stage.id}
               className="bg-[#f8fafc] dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col min-w-[260px] shadow-2xs"
             >
-              {/* Header de Etapa con Color Bitrix24 y Total Acumulado */}
+              {/* Header de Etapa con Color y Total Acumulado */}
               <div 
                 className="p-3.5 rounded-t-2xl border-b border-slate-200/80 dark:border-slate-800"
                 style={{ borderTop: `4px solid ${stage.color_hex}` }}

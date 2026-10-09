@@ -111,7 +111,7 @@ export const AIBudgetReviewModal: React.FC<AIBudgetReviewModalProps> = ({
         className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Cabecera Estilo Bitrix24 */}
+        {/* Cabecera Estilo Modern SaaS */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-sky-50/50 via-white to-sky-50/20 dark:from-sky-950/20 dark:via-slate-900 dark:to-slate-900">
           <div className="flex items-center space-x-3">
             <span className="p-2 bg-[#00a2e8]/10 text-[#00a2e8] rounded-xl">

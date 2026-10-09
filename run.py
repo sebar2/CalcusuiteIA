@@ -14,7 +14,7 @@ if sys.platform == "win32":
 
 def main():
     print("=" * 65)
-    print("      🚀 INICIANDO CALCU - SUITE BITRIX24 SPA (FASTAPI + VITE)")
+    print("      🚀 INICIANDO CALCU | SUPPLYFINANCE SUITE (FASTAPI + VITE)")
     print("=" * 65)
     print("\n[1/3] Levantando Backend FastAPI (http://127.0.0.1:8000)...")
     
@@ -43,7 +43,7 @@ def main():
 
     print("\n" + "=" * 65)
     print("  ✅ SUITE CALCU OPERATIVA Y DISPONIBLE:")
-    print("     - Frontend Bitrix24 SPA:  http://localhost:5173")
+    print("     - Frontend Suite SPA:     http://localhost:5173")
     print("     - Swagger API & Docs:     http://127.0.0.1:8000/docs")
     print("     - Backend Health:         http://127.0.0.1:8000/health")
     print("=" * 65)

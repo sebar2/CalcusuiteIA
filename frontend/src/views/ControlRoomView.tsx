@@ -15,6 +15,7 @@ import { MetricCard } from '../components/common/MetricCard';
 import { DataTable } from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
 import { InventoryQuickEditModal } from '../components/inventory/InventoryQuickEditModal';
+import { ProductThumbnail } from '../components/common/ProductThumbnail';
 import { apiService } from '../services/api';
 
 interface ControlRoomViewProps {
@@ -130,9 +131,18 @@ export const ControlRoomView = ({
       key: 'nombre',
       header: 'Producto',
       render: (row) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-[#333333]">{row.nombre}</span>
-          <span className="text-[10px] text-slate-400">{row.categoria}</span>
+        <div className="flex items-center space-x-3">
+          <ProductThumbnail
+            src={row.image_url}
+            alt={row.nombre}
+            sku={row.sku}
+            size="sm"
+            className="border border-slate-200 dark:border-slate-700 shrink-0"
+          />
+          <div className="flex flex-col min-w-0">
+            <span className="font-medium text-[#333333] dark:text-slate-100 truncate">{row.nombre}</span>
+            <span className="text-[10px] text-slate-400">{row.categoria}</span>
+          </div>
         </div>
       ),
     },
@@ -422,7 +432,7 @@ export const ControlRoomView = ({
         onSuccess={handleItemSuccess}
       />
 
-      {/* Toast Flotante de Confirmación Bitrix24 */}
+      {/* Toast Flotante de Confirmación */}
       {successToast && (
         <div className="fixed bottom-6 right-6 z-50 p-4 bg-slate-900/90 text-white border border-slate-700/80 rounded-2xl shadow-xl flex items-center space-x-3 text-xs animate-in slide-in-from-bottom-3 duration-200">
           <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">

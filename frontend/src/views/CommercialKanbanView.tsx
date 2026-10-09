@@ -3,17 +3,10 @@ import {
   Handshake,
   Plus,
   Building2,
-  DollarSign,
-  User,
-  ArrowRight,
-  ArrowLeft,
   CheckCircle2,
-  XCircle,
   ExternalLink,
-  Trash2,
   RefreshCw,
   AlertTriangle,
-  Package,
   Edit3,
   Warehouse as WarehouseIcon,
   Receipt,
@@ -28,60 +21,73 @@ import type {
   WarehouseItem,
   SalesOrder,
 } from '../types';
+import { CommercialKPIs } from './commercial/CommercialKPIs';
+import { KanbanColumn } from './commercial/KanbanColumn';
+import { DealDetailDrawer } from './commercial/DealDetailDrawer';
 
 interface CommercialKanbanViewProps {
   onNavigateToTenders?: () => void;
 }
 
-interface ColumnConfig {
-  id: DealStage | 'cierre';
-  title: string;
-  stages: DealStage[];
+interface StageColumnConfig {
+  key: DealStage;
+  label: string;
   color: string;
-  borderColor: string;
-  badgeBg: string;
+  borderClass: string;
+  dotColor: string;
 }
 
-const COLUMNS: ColumnConfig[] = [
+const ALL_STAGES: DealStage[] = [
+  'prospeccion',
+  'cotizacion',
+  'propuesta_enviada',
+  'negociacion',
+  'ganada',
+  'perdida',
+];
+
+const STAGES_CONFIG: StageColumnConfig[] = [
   {
-    id: 'prospeccion',
-    title: '1. Prospección',
-    stages: ['prospeccion'],
-    color: 'text-blue-600 dark:text-blue-400',
-    borderColor: 'border-blue-400 dark:border-blue-600',
-    badgeBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300',
-  },
-  {
-    id: 'cotizacion',
-    title: '2. En Cotización',
-    stages: ['cotizacion'],
-    color: 'text-purple-600 dark:text-purple-400',
-    borderColor: 'border-purple-400 dark:border-purple-600',
-    badgeBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300',
-  },
-  {
-    id: 'propuesta_enviada',
-    title: '3. Propuesta Enviada',
-    stages: ['propuesta_enviada'],
-    color: 'text-amber-600 dark:text-amber-400',
-    borderColor: 'border-amber-400 dark:border-amber-600',
-    badgeBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
-  },
-  {
-    id: 'negociacion',
-    title: '4. Negociación',
-    stages: ['negociacion'],
+    key: 'prospeccion',
+    label: '1. Prospección',
     color: 'text-sky-600 dark:text-sky-400',
-    borderColor: 'border-sky-400 dark:border-sky-600',
-    badgeBg: 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300',
+    borderClass: 'border-sky-300 dark:border-sky-800',
+    dotColor: 'bg-sky-500',
   },
   {
-    id: 'cierre',
-    title: '5. Cierre (Ganada / Perdida)',
-    stages: ['ganada', 'perdida'],
+    key: 'cotizacion',
+    label: '2. En Cotización',
+    color: 'text-purple-600 dark:text-purple-400',
+    borderClass: 'border-purple-300 dark:border-purple-800',
+    dotColor: 'bg-purple-500',
+  },
+  {
+    key: 'propuesta_enviada',
+    label: '3. Propuesta Enviada',
+    color: 'text-amber-600 dark:text-amber-400',
+    borderClass: 'border-amber-300 dark:border-amber-800',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    key: 'negociacion',
+    label: '4. Negociación',
+    color: 'text-indigo-600 dark:text-indigo-400',
+    borderClass: 'border-indigo-300 dark:border-indigo-800',
+    dotColor: 'bg-indigo-500',
+  },
+  {
+    key: 'ganada',
+    label: '5. Ganada (Cierre)',
     color: 'text-emerald-600 dark:text-emerald-400',
-    borderColor: 'border-emerald-400 dark:border-emerald-600',
-    badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+    borderClass: 'border-emerald-300 dark:border-emerald-800',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    key: 'perdida',
+    label: '6. Perdida',
+    color: 'text-rose-600 dark:text-rose-400',
+    borderClass: 'border-rose-300 dark:border-rose-800',
+    dotColor: 'bg-rose-500',
   },
 ];
 
@@ -96,11 +102,20 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
 
+  // Drawer lateral de detalle y Drag & Drop nativo
+  const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
+  const [selectedDealForDrawer, setSelectedDealForDrawer] = useState<CommercialDeal | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+
   // Modal Nuevo Trato
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [newProyecto, setNewProyecto] = useState<string>('');
   const [newCliente, setNewCliente] = useState<string>('');
   const [newRut, setNewRut] = useState<string>('');
+  const [newLogoUrl, setNewLogoUrl] = useState<string>('');
+  const [newEmail, setNewEmail] = useState<string>('');
+  const [newPhone, setNewPhone] = useState<string>('');
+  const [newAddress, setNewAddress] = useState<string>('');
   const [newVendedor, setNewVendedor] = useState<string>('Martín Gómez');
   const [newMonto, setNewMonto] = useState<string>('15000');
   const [newMoneda, setNewMoneda] = useState<string>('USD');
@@ -116,6 +131,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   const [editProyecto, setEditProyecto] = useState<string>('');
   const [editCliente, setEditCliente] = useState<string>('');
   const [editRut, setEditRut] = useState<string>('');
+  const [editLogoUrl, setEditLogoUrl] = useState<string>('');
+  const [editEmail, setEditEmail] = useState<string>('');
+  const [editPhone, setEditPhone] = useState<string>('');
+  const [editAddress, setEditAddress] = useState<string>('');
   const [editVendedor, setEditVendedor] = useState<string>('');
   const [editMonto, setEditMonto] = useState<string>('0');
   const [editMoneda, setEditMoneda] = useState<string>('USD');
@@ -193,24 +212,29 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     });
   }, [deals, searchQuery, selectedVendedor]);
 
-  // KPIs
-  const kpis = useMemo(() => {
-    const totalPipeline = deals
-      .filter((d) => d.etapa !== 'perdida')
-      .reduce((sum, d) => sum + Number(d.monto_total || 0), 0);
-    const ganados = deals.filter((d) => d.etapa === 'ganada');
-    const ganadosMonto = ganados.reduce((sum, d) => sum + Number(d.monto_total || 0), 0);
-    const activos = deals.filter((d) => d.etapa !== 'ganada' && d.etapa !== 'perdida').length;
-    const tasaCierre = deals.length > 0 ? (ganados.length / deals.length) * 100 : 0;
+  // Drag & Drop nativo y cambio de etapa con Optimistic UI
+  const handleDragStart = (_e: React.DragEvent, dealId: string) => {
+    setDraggedDealId(dealId);
+  };
 
-    return { totalPipeline, ganadosMonto, activos, tasaCierre, totalDeals: deals.length };
-  }, [deals]);
+  const handleDropDeal = async (targetStage: DealStage) => {
+    if (!draggedDealId) return;
+    const dealId = draggedDealId;
+    setDraggedDealId(null);
+    await handleStageChange(dealId, targetStage);
+  };
 
-  // Manejo de cambio de etapa
   const handleStageChange = async (dealId: string, newStage: DealStage) => {
+    const prevDeals = [...deals];
+    // Optimistic UI inmediata
+    setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, etapa: newStage } : d)));
+
     try {
-      const updated = await apiService.updateDealStage(dealId, newStage);
+      const updated = await apiService.patchDealStage(dealId, newStage);
       setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+      if (selectedDealForDrawer && selectedDealForDrawer.id === dealId) {
+        setSelectedDealForDrawer(updated);
+      }
       if (newStage === 'ganada') {
         const warning = updated.stock_reservation_warning
           ? ` Alerta: ${updated.stock_reservation_warning}`
@@ -219,9 +243,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
       } else {
         setSuccessBanner(`Trato movido a la etapa "${newStage.toUpperCase()}".`);
       }
-      setTimeout(() => setSuccessBanner(null), 7000);
+      setTimeout(() => setSuccessBanner(null), 5000);
     } catch (err: any) {
       console.error('Error al cambiar etapa:', err);
+      setDeals(prevDeals);
       setErrorMsg('Error al actualizar la etapa del trato comercial.');
     }
   };
@@ -268,6 +293,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         proyecto_nombre: newProyecto.trim(),
         cliente: newCliente.trim(),
         rut: newRut.trim() || undefined,
+        logo_url: newLogoUrl.trim() || undefined,
+        email: newEmail.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        address: newAddress.trim() || undefined,
         vendedor: newVendedor.trim(),
         monto_total: parseFloat(newMonto) || 0,
         moneda: newMoneda,
@@ -290,6 +319,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
       setNewProyecto('');
       setNewCliente('');
       setNewRut('');
+      setNewLogoUrl('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewAddress('');
       setNewMonto('15000');
       setNewObservaciones('');
     } catch (err: any) {
@@ -304,6 +337,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     setEditProyecto(deal.proyecto_nombre);
     setEditCliente(deal.cliente);
     setEditRut(deal.rut || '');
+    setEditLogoUrl(deal.logo_url || '');
+    setEditEmail(deal.email || '');
+    setEditPhone(deal.phone || '');
+    setEditAddress(deal.address || '');
     setEditVendedor(deal.vendedor || '');
     setEditMonto(String(deal.monto_total || 0));
     setEditMoneda(deal.moneda || 'USD');
@@ -347,6 +384,10 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         proyecto_nombre: editProyecto.trim(),
         cliente: editCliente.trim(),
         rut: editRut.trim() || undefined,
+        logo_url: editLogoUrl.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        phone: editPhone.trim() || undefined,
+        address: editAddress.trim() || undefined,
         vendedor: editVendedor.trim(),
         monto_total: parseFloat(editMonto) || 0,
         moneda: editMoneda,
@@ -411,22 +452,22 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   return (
     <div className="space-y-6">
       {/* Cabecera Principal */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#00a2e8] to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
             <Handshake size={24} />
           </div>
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Pipeline Comercial (CRM)
+                Pipeline Comercial B2B
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-                Bitrix24 B2B
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 border border-sky-200/60 dark:border-sky-800/60">
+                SupplyFinance Suite
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Gestión visual de obras, cotizaciones técnicas, reservas de stock y cierres comerciales.
+              Gestión visual de obras y cotizaciones técnicas con reserva de stock en tiempo real y drag & drop.
             </p>
           </div>
         </div>
@@ -455,7 +496,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm shadow-blue-600/30 transition-all hover:scale-[1.02]"
+            className="flex items-center space-x-2 px-4 py-2 bg-[#00a2e8] hover:bg-[#008ecb] text-white text-xs font-semibold rounded-lg shadow-sm transition-all hover:scale-[1.02]"
           >
             <Plus size={16} />
             <span>+ Nuevo Trato</span>
@@ -463,60 +504,8 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-            <span>Pipeline Total Activo</span>
-            <DollarSign size={15} className="text-blue-500" />
-          </div>
-          <div className="mt-2 text-xl font-bold text-slate-900 dark:text-slate-100">
-            USD {kpis.totalPipeline.toLocaleString('es-UY', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            {kpis.activos} tratos en curso
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-            <span>Tratos Ganados</span>
-            <CheckCircle2 size={15} className="text-emerald-500" />
-          </div>
-          <div className="mt-2 text-xl font-bold text-emerald-600 dark:text-emerald-400">
-            USD {kpis.ganadosMonto.toLocaleString('es-UY', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Stock reservado automáticamente
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-            <span>Tasa de Conversión</span>
-            <Building2 size={15} className="text-purple-500" />
-          </div>
-          <div className="mt-2 text-xl font-bold text-slate-900 dark:text-slate-100">
-            {kpis.tasaCierre.toFixed(1)}%
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Sobre {kpis.totalDeals} oportunidades totales
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-            <span>Ejecutivo Asignado</span>
-            <User size={15} className="text-indigo-500" />
-          </div>
-          <div className="mt-2 text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
-            {selectedVendedor === 'todos' ? 'Martín Gómez & Equipo' : selectedVendedor}
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Responsable comercial Serlux
-          </div>
-        </div>
-      </div>
+      {/* KPI Cards Modulares */}
+      <CommercialKPIs deals={deals} />
 
       {/* Banner de Éxito / Warning */}
       {successBanner && (
@@ -579,235 +568,47 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         </div>
       </div>
 
-      {/* Tablero Kanban (5 Columnas) */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-start min-h-[600px]">
-        {COLUMNS.map((col) => {
-          const colDeals = filteredDeals.filter((d) => col.stages.includes(d.etapa));
-          const colTotalMonto = colDeals.reduce((sum, d) => sum + Number(d.monto_total || 0), 0);
-
+      {/* Tablero Kanban Moderno con Drag & Drop nativo */}
+      <div className="flex gap-4 items-start overflow-x-auto pb-4 min-h-[550px]">
+        {STAGES_CONFIG.map((col) => {
+          const colDeals = filteredDeals.filter((d) => d.etapa === col.key);
           return (
-            <div
-              key={col.id}
-              className="flex flex-col bg-slate-50/80 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm"
-            >
-              {/* Cabecera de Columna */}
-              <div className={`p-3 border-t-4 ${col.borderColor} bg-white dark:bg-slate-900 border-b border-slate-200/70 dark:border-slate-800`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 tracking-tight">
-                    {col.title}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${col.badgeBg}`}>
-                    {colDeals.length}
-                  </span>
-                </div>
-                <div className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  USD {colTotalMonto.toLocaleString('es-UY', { minimumFractionDigits: 0 })}
-                </div>
-              </div>
-
-              {/* Lista de Tarjetas de Trato */}
-              <div className="p-2.5 space-y-3 min-h-[350px] max-h-[750px] overflow-y-auto">
-                {colDeals.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-center p-3 text-slate-400 text-xs italic">
-                    Sin tratos en esta etapa
-                  </div>
-                ) : (
-                  colDeals.map((deal) => {
-                    const isGanada = deal.etapa === 'ganada';
-                    const isPerdida = deal.etapa === 'perdida';
-
-                    return (
-                      <div
-                        key={deal.id}
-                        className={`bg-white dark:bg-slate-800 p-3.5 rounded-lg border transition-all duration-150 shadow-sm hover:shadow-md ${
-                          isGanada
-                            ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50/30 dark:bg-emerald-950/20'
-                            : isPerdida
-                            ? 'border-rose-300 dark:border-rose-700 opacity-70'
-                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600'
-                        }`}
-                      >
-                        {/* Header de la Tarjeta */}
-                        <div className="flex items-start justify-between gap-1.5">
-                          <h4 className="font-semibold text-xs text-slate-900 dark:text-slate-100 leading-snug">
-                            {deal.proyecto_nombre}
-                          </h4>
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleOpenEditModal(deal)}
-                              className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5"
-                              title="Editar Trato Comercial"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteDeal(deal.id)}
-                              className="text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors p-0.5"
-                              title="Eliminar Trato"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Cliente & RUT */}
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                          <Building2 size={12} className="mr-0.5 flex-shrink-0 text-slate-400" />
-                          <span className="truncate font-medium">{deal.cliente}</span>
-                          {deal.rut && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                              RUT: {deal.rut}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Vendedor */}
-                        <div className="mt-1 flex items-center text-[11px] text-slate-500 dark:text-slate-400">
-                          <User size={12} className="mr-1 flex-shrink-0 text-indigo-400" />
-                          <span className="truncate">{deal.vendedor}</span>
-                        </div>
-
-                        {/* Monto y Moneda */}
-                        <div className="mt-2.5 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                            {deal.moneda}{' '}
-                            {Number(deal.monto_total).toLocaleString('es-UY', {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 0,
-                            })}
-                          </span>
-
-                          {isGanada && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 flex items-center space-x-1">
-                              <CheckCircle2 size={10} />
-                              <span>GANADA</span>
-                            </span>
-                          )}
-                          {isPerdida && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-900 text-rose-800 dark:text-rose-200 flex items-center space-x-1">
-                              <XCircle size={10} />
-                              <span>PERDIDA</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* SKUs asociados */}
-                        {deal.items && deal.items.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {deal.items.map((it) => (
-                              <div
-                                key={it.id}
-                                className="flex items-center justify-between text-[10px] bg-slate-50 dark:bg-slate-900/80 px-2 py-0.5 rounded border border-slate-200/60 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-                              >
-                                <div className="flex items-center space-x-1 truncate mr-2">
-                                  <Package size={10} className="text-blue-500" />
-                                  <span className="font-mono font-medium">{it.sku}</span>
-                                </div>
-                                <span className="font-bold whitespace-nowrap">{it.cantidad} u.</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Observaciones */}
-                        {deal.observaciones && (
-                          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 italic line-clamp-2">
-                            "{deal.observaciones}"
-                          </p>
-                        )}
-
-                        {/* Botón de Emisión de Orden de Venta (OV) */}
-                        <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-700">
-                          <button
-                            onClick={() => handleOpenSalesOrderModal(deal)}
-                            className="w-full py-1 px-2 rounded text-[11px] font-semibold flex items-center justify-center space-x-1 transition-all bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                            title="Generar Orden de Venta formal con descuento de inventario"
-                          >
-                            <Receipt size={12} className="text-emerald-600 dark:text-emerald-400" />
-                            <span>{isGanada ? '📄 Ver / Reemitir OV' : '📄 Generar Orden de Venta'}</span>
-                          </button>
-                        </div>
-
-                        {/* Botones de Cambio Rápido de Etapa */}
-                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-[10px]">
-                          {deal.etapa !== 'prospeccion' && !isGanada && !isPerdida && (
-                            <button
-                              onClick={() => {
-                                const stageOrder: DealStage[] = [
-                                  'prospeccion',
-                                  'cotizacion',
-                                  'propuesta_enviada',
-                                  'negociacion',
-                                ];
-                                const currIdx = stageOrder.indexOf(deal.etapa);
-                                if (currIdx > 0) {
-                                  handleStageChange(deal.id, stageOrder[currIdx - 1]);
-                                }
-                              }}
-                              className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center space-x-0.5"
-                              title="Retroceder etapa"
-                            >
-                              <ArrowLeft size={11} />
-                              <span>Atrás</span>
-                            </button>
-                          )}
-
-                          {deal.etapa === 'negociacion' ? (
-                            <div className="flex items-center space-x-1.5 ml-auto">
-                              <button
-                                onClick={() => handleStageChange(deal.id, 'ganada')}
-                                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center space-x-1 transition-all"
-                                title="Cerrar y Reservar Stock"
-                              >
-                                <CheckCircle2 size={11} />
-                                <span>Ganar</span>
-                              </button>
-                              <button
-                                onClick={() => handleStageChange(deal.id, 'perdida')}
-                                className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold flex items-center space-x-1 transition-all"
-                              >
-                                <XCircle size={11} />
-                                <span>Perdida</span>
-                              </button>
-                            </div>
-                          ) : deal.etapa !== 'ganada' && deal.etapa !== 'perdida' ? (
-                            <button
-                              onClick={() => {
-                                const stageOrder: DealStage[] = [
-                                  'prospeccion',
-                                  'cotizacion',
-                                  'propuesta_enviada',
-                                  'negociacion',
-                                ];
-                                const currIdx = stageOrder.indexOf(deal.etapa);
-                                if (currIdx >= 0 && currIdx < stageOrder.length - 1) {
-                                  handleStageChange(deal.id, stageOrder[currIdx + 1]);
-                                }
-                              }}
-                              className="ml-auto text-blue-600 dark:text-blue-400 hover:text-blue-800 font-medium flex items-center space-x-0.5"
-                              title="Avanzar etapa"
-                            >
-                              <span>Avanzar</span>
-                              <ArrowRight size={11} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleStageChange(deal.id, 'negociacion')}
-                              className="text-slate-400 hover:text-slate-600 text-[10px] ml-auto underline"
-                            >
-                              Reabrir trato
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+            <KanbanColumn
+              key={col.key}
+              config={col}
+              deals={colDeals}
+              allStages={ALL_STAGES}
+              onSelectDeal={(deal) => {
+                setSelectedDealForDrawer(deal);
+                setIsDrawerOpen(true);
+              }}
+              onMoveStage={(dealId, newStage) => handleStageChange(dealId, newStage)}
+              onDragStart={handleDragStart}
+              onDropDeal={handleDropDeal}
+            />
           );
         })}
       </div>
+
+      {/* Drawer Lateral de Detalle con Ficha de Cliente y SKUs */}
+      <DealDetailDrawer
+        deal={selectedDealForDrawer}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onStageChange={handleStageChange}
+        onGenerateSalesOrder={(deal) => {
+          setIsDrawerOpen(false);
+          handleOpenSalesOrderModal(deal);
+        }}
+        onEditDeal={(deal) => {
+          setIsDrawerOpen(false);
+          handleOpenEditModal(deal);
+        }}
+        onDeleteDeal={(dealId) => {
+          setIsDrawerOpen(false);
+          handleDeleteDeal(dealId);
+        }}
+      />
 
       {/* Modal [+ Nuevo Trato] */}
       {isModalOpen && (
@@ -868,6 +669,61 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                     value={newRut}
                     onChange={(e) => setNewRut(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Información de Contacto & Ficha de Empresa */}
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Logo / URL Imagen Empresa
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://ejemplo.com/logo.png"
+                    value={newLogoUrl}
+                    onChange={(e) => setNewLogoUrl(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Email de Contacto
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="compras@cliente.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Teléfono Comercial
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+598 99 123 456"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Dirección / Obra
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Av. Italia 2500, Montevideo"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
                   />
                 </div>
               </div>
@@ -1082,6 +938,61 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                     value={editRut}
                     onChange={(e) => setEditRut(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Información de Contacto & Ficha de Empresa */}
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Logo / URL Imagen Empresa
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://ejemplo.com/logo.png"
+                    value={editLogoUrl}
+                    onChange={(e) => setEditLogoUrl(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Email de Contacto
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="compras@cliente.com"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Teléfono Comercial
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+598 99 123 456"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Dirección / Obra
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Av. Italia 2500, Montevideo"
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
                   />
                 </div>
               </div>

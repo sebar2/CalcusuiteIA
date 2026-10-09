@@ -1,5 +1,5 @@
 @echo off
-title Calcu - SupplyFinance Suite (Bitrix24 Edition)
+title Calcu | SupplyFinance Suite
 chcp 65001 >nul
 set PYTHONIOENCODING=utf-8
 color 0B

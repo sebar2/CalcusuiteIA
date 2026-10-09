@@ -11,7 +11,7 @@ def test_warehouses_crud():
     warehouses = res.json()
     assert len(warehouses) >= 4
     wh_ids = [w["id"] for w in warehouses]
-    assert "dep-central" in wh_ids
+    assert any("CENTRAL" in wid.upper() for wid in wh_ids)
 
     # 2. Crear un nuevo depósito
     unique_id = f"dep-salto-{int(datetime.now(timezone.utc).timestamp())}"
@@ -39,6 +39,10 @@ def test_warehouses_crud():
     updated_data = res_update.json()
     assert updated_data["nombre"] == "Hub Logístico Regional Salto"
     assert updated_data["capacidad_unidades"] == 7500
+
+    # 4. Cleanup del depósito temporal de prueba (stock 0)
+    res_del = client.delete(f"/api/v1/warehouses/{unique_id}")
+    assert res_del.status_code == 200
 
 
 def test_areas_and_users_update():

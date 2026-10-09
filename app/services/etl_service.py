@@ -575,7 +575,7 @@ class ETLService:
             ))
 
         # -------------------------------------------------------------
-        # 1. Sembrar Pipeline Kanban de Reposición (Estilo Bitrix24)
+        # 1. Sembrar Pipeline Kanban de Reposición
         # Acumulador Etapa 1 (Sugerido Stock <= ROP): Exactamente $127,930.00
         # -------------------------------------------------------------
         if db.query(OrdenReposicion).first() is None:

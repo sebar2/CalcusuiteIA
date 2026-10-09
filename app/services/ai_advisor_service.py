@@ -1756,7 +1756,7 @@ Entrega un resumen ejecutivo contundente y directrices claras con formato Markdo
 
         # --- FASE 4: INFERENCIA DE IA / HEURÍSTICA ---
         prompt = f"""
-Actúa como Controller Financiero y Estratega Comercial Senior en Bitrix24 Suite.
+Actúa como Controller Financiero y Estratega Comercial Senior en Calcu | SupplyFinance Suite.
 Evalúa la siguiente NUEVA INICIATIVA comercial realizando un BENCHMARKING CRUZADO entre nuestra Base de Datos Interna y el Mercado Externo.
 
 <data_to_analyze>

@@ -35,6 +35,7 @@ class Product(Base):
     precio_lista: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     doh_seguridad: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     categoria_rel: Mapped["Category"] = relationship(back_populates="productos")
     inventario: Mapped[Optional["Inventory"]] = relationship(back_populates="producto", uselist=False, cascade="all, delete-orphan")
@@ -390,6 +391,10 @@ class CommercialDeal(Base):
     etapa: Mapped[str] = mapped_column(String(30), default="prospeccion", nullable=False, index=True)
     # Etapas válidas: 'prospeccion', 'cotizacion', 'propuesta_enviada', 'negociacion', 'ganada', 'perdida'
     observaciones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     items: Mapped[List["CommercialDealItem"]] = relationship(back_populates="deal", cascade="all, delete-orphan")
@@ -431,6 +436,10 @@ class SalesOrder(Base):
     tipo_cambio: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), nullable=True)
     estado: Mapped[str] = mapped_column(String(30), default="EMITIDA", nullable=False)  # EMITIDA, EN_DESPACHO, CUMPLIDA
     notas: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     fecha_emision: Mapped[date] = mapped_column(Date, default=lambda: datetime.now(timezone.utc).date(), nullable=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
@@ -494,6 +503,54 @@ class Warehouse(Base):
     ubicacion: Mapped[str] = mapped_column(String(150), nullable=False)
     capacidad_unidades: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+
+class Client(Base):
+    """
+    Directorio B2B de Clientes y Empresas Contratistas
+    """
+    __tablename__ = "clients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    rut: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+
+class Company(Base):
+    """
+    Empresas vinculadas y clientes corporativos
+    """
+    __tablename__ = "companies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    rut: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+
+class Supplier(Base):
+    """
+    Directorio de Proveedores y Fabricantes
+    """
+    __tablename__ = "suppliers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    rut: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
 

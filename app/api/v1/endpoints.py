@@ -93,6 +93,8 @@ from app.domain.schemas import (
     StockBatchItem,
     WarehouseTransferPayload,
     WarehouseAssignStockPayload,
+    WarehouseStockItem,
+    WarehouseBatchDetail,
     TenderLiveFeedResponse,
     TenderImportFeedRequest,
 )
@@ -322,7 +324,8 @@ def get_inventory_alerts(
             transito_maritimo=inv.transito_maritimo,
             aduana=inv.aduana,
             costo_unitario=prod.costo_unitario,
-            demanda_diaria_promedio=inv.demanda_diaria_promedio
+            demanda_diaria_promedio=inv.demanda_diaria_promedio,
+            image_url=prod.image_url
         ))
 
     return report
@@ -405,9 +408,11 @@ def quick_update_inventory(
     if payload.demanda_diaria_promedio is not None:
         inv.demanda_diaria_promedio = Decimal(str(payload.demanda_diaria_promedio))
 
-    # 3. Costo unitario base
+    # 3. Costo unitario base e imagen
     if payload.costo_unitario is not None:
         prod.costo_base = Decimal(str(payload.costo_unitario))
+    if payload.image_url is not None:
+        prod.image_url = payload.image_url
 
     db.flush()
 
@@ -493,7 +498,8 @@ def quick_update_inventory(
         transito_maritimo=inv.transito_maritimo,
         aduana=inv.aduana,
         costo_unitario=prod.costo_unitario,
-        demanda_diaria_promedio=inv.demanda_diaria_promedio
+        demanda_diaria_promedio=inv.demanda_diaria_promedio,
+        image_url=prod.image_url
     )
 
     return InventoryQuickUpdateResponse(
@@ -1766,6 +1772,16 @@ def update_commercial_deal(
     response_model=CommercialDealResponse,
     summary="Cambia la etapa de un trato comercial (reserva stock al ganar)"
 )
+@router.put(
+    "/crm/deals/{deal_id}/stage",
+    response_model=CommercialDealResponse,
+    summary="Cambia la etapa de un trato comercial (alias CRM)"
+)
+@router.patch(
+    "/crm/deals/{deal_id}/stage",
+    response_model=CommercialDealResponse,
+    summary="Cambia la etapa de un trato comercial (alias CRM)"
+)
 def update_commercial_deal_stage(
     deal_id: str,
     payload: CommercialDealStageUpdate,
@@ -2009,6 +2025,106 @@ def update_warehouse(
     db.commit()
     db.refresh(wh)
     return wh
+
+
+@router.get(
+    "/warehouses/{wh_id}/stock",
+    response_model=List[WarehouseStockItem],
+    summary="Obtiene el inventario consolidado y lotes por SKU de un depósito"
+)
+def get_warehouse_stock(
+    wh_id: str,
+    db: Session = Depends(get_db)
+):
+    wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Depósito no encontrado")
+
+    from app.services.inventory_sync_service import inventory_sync_service
+    batches = inventory_sync_service.list_unified_batches(db, warehouse_id=wh_id)
+
+    sku_groups: dict = {}
+    for b in batches:
+        sku = b.sku
+        if sku not in sku_groups:
+            prod = db.query(Product).filter(Product.sku == sku).first()
+            sku_groups[sku] = {
+                "sku": sku,
+                "producto_nombre": (prod.nombre if prod else b.producto_nombre) or sku,
+                "image_url": prod.image_url if prod else None,
+                "stock_disponible": 0,
+                "stock_reservado": 0,
+                "lotes": []
+            }
+
+        sku_groups[sku]["stock_disponible"] += b.cantidad
+        sku_groups[sku]["lotes"].append(
+            WarehouseBatchDetail(
+                lote=b.lote,
+                cantidad=b.cantidad,
+                estado=b.estado or "DISPONIBLE",
+                fecha_eta=b.fecha_eta,
+                buque_o_tracking=b.buque_o_tracking,
+                observaciones=b.observaciones
+            )
+        )
+
+    for sku, data in sku_groups.items():
+        reserved_qty = (
+            db.query(func.coalesce(func.sum(CommercialDealItem.cantidad), 0))
+            .join(CommercialDeal, CommercialDealItem.deal_id == CommercialDeal.id)
+            .filter(
+                CommercialDealItem.sku == sku,
+                CommercialDeal.etapa.in_(["GANADO", "CIERRE", "ORDEN_GENERADA"])
+            )
+            .scalar()
+        )
+        data["stock_reservado"] = int(reserved_qty or 0)
+
+    return [WarehouseStockItem(**data) for data in sku_groups.values()]
+
+
+@router.delete(
+    "/warehouses/{wh_id}",
+    summary="Elimina un depósito o almacén vacío o de prueba"
+)
+def delete_warehouse(
+    wh_id: str,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
+    if not wh:
+        raise HTTPException(status_code=404, detail="Depósito no encontrado")
+
+    from app.services.inventory_sync_service import inventory_sync_service
+    batches = inventory_sync_service.list_unified_batches(db, warehouse_id=wh_id)
+    total_qty = sum(b.cantidad for b in batches)
+    if total_qty > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el depósito '{wh.nombre}' porque contiene {total_qty} unidades de stock activo."
+        )
+
+    rev_loc = inventory_sync_service.LOCATION_REVERSE_MAP.get(wh_id, wh_id)
+    db.query(StockLocationBatch).filter(
+        (StockLocationBatch.ubicacion == wh_id) | (StockLocationBatch.ubicacion == rev_loc)
+    ).delete(synchronize_session=False)
+
+    db.delete(wh)
+    db.commit()
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="DELETE_WAREHOUSE",
+        resource=f"warehouses/{wh_id}",
+        details={"nombre": wh.nombre, "id": wh_id}
+    )
+
+    return {"status": "success", "warehouse_id": wh_id, "message": f"Depósito {wh.nombre} eliminado correctamente."}
+
 
 
 @router.post(
