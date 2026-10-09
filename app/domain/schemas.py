@@ -92,17 +92,20 @@ class SupplierUpdate(BaseModel):
     address: Optional[str] = None
 
 class SupplierProductItem(BaseModel):
+    product_id: Optional[int] = None
     sku: str
     nombre: str
-    categoria: str
-    costo_unitario: Decimal
-    lead_time_dias: Decimal
+    categoria: Optional[str] = "General"
+    costo_unitario: Decimal = Decimal('0.00')
+    lead_time_dias: Decimal = Decimal('30.0')
     image_url: Optional[str] = None
+    imagen_url: Optional[str] = None
 
 class SupplierResponse(SupplierBase):
     id: int
     lead_time_promedio: Decimal = Decimal('30.0')
     skus_count: int = 0
+    total_skus: int = 0
     productos: List[SupplierProductItem] = []
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)

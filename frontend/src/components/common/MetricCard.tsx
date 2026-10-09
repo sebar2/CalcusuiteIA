@@ -32,25 +32,25 @@ export const MetricCard = ({
   const getBadgeStyle = (variant: string) => {
     switch (variant) {
       case 'danger':
-        return 'bg-red-50 text-[#e74c3c] border-red-200';
+        return 'bg-red-50 dark:bg-red-950/40 text-[#e74c3c] dark:text-rose-400 border-red-200 dark:border-rose-900/50';
       case 'warning':
-        return 'bg-amber-50 text-[#f39c12] border-amber-200';
+        return 'bg-amber-50 dark:bg-amber-950/40 text-[#f39c12] dark:text-amber-400 border-amber-200 dark:border-amber-900/50';
       case 'success':
-        return 'bg-emerald-50 text-[#2ecc71] border-emerald-200';
+        return 'bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50';
       default:
-        return 'bg-sky-50 text-[#00a2e8] border-sky-200';
+        return 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-400 border-sky-200 dark:border-sky-900/50';
     }
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
       {/* Top Header Card */}
       <div className="flex items-start justify-between mb-2">
-        <span className="text-xs font-semibold text-[#535c69] tracking-wide uppercase">
+        <span className="text-xs font-semibold text-[#535c69] dark:text-slate-400 tracking-wide uppercase">
           {title}
         </span>
         {Icon && (
-          <div className={`p-2 rounded-lg ${iconBg} ${iconColor} shrink-0`}>
+          <div className={`p-2 rounded-lg ${iconBg} dark:bg-slate-800/80 ${iconColor} shrink-0`}>
             <Icon size={18} />
           </div>
         )}
@@ -58,7 +58,7 @@ export const MetricCard = ({
 
       {/* Main Metric Value */}
       <div className="my-1 flex items-baseline space-x-2">
-        <span className="text-2xl font-bold tracking-tight text-[#333333]">
+        <span className="text-2xl font-bold tracking-tight text-[#333333] dark:text-slate-100">
           {value}
         </span>
         {badge && (
@@ -73,16 +73,16 @@ export const MetricCard = ({
       </div>
 
       {/* Footer / Trend Subtitle */}
-      <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
         {trend && (
           <div className="flex items-center space-x-1">
             <span
               className={`inline-flex items-center space-x-0.5 font-semibold text-[11px] px-1.5 py-0.5 rounded ${
                 trend.positive === true
-                  ? 'bg-emerald-50 text-[#2ecc71]'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] dark:text-emerald-400'
                   : trend.positive === false
-                  ? 'bg-rose-50 text-[#e74c3c]'
-                  : 'bg-slate-100 text-slate-600'
+                  ? 'bg-rose-50 dark:bg-rose-950/40 text-[#e74c3c] dark:text-rose-400'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
               }`}
             >
               {trend.positive === true && <TrendingUp size={11} className="mr-0.5" />}
@@ -91,12 +91,12 @@ export const MetricCard = ({
               {trend.value}
             </span>
             {trend.label && (
-              <span className="text-slate-400 text-[11px]">{trend.label}</span>
+              <span className="text-slate-400 dark:text-slate-500 text-[11px]">{trend.label}</span>
             )}
           </div>
         )}
         {subtitle && !trend && (
-          <span className="text-slate-400 text-[11px]">{subtitle}</span>
+          <span className="text-slate-400 dark:text-slate-500 text-[11px]">{subtitle}</span>
         )}
       </div>
     </div>

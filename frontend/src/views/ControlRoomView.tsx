@@ -293,7 +293,7 @@ export const ControlRoomView = ({
       </div>
 
       {/* Panel Asesor Copiloto IA */}
-      <div className="bg-gradient-to-r from-sky-50/70 via-white to-sky-50/30 rounded-2xl border border-sky-200/80 p-5 shadow-sm">
+      <div className="bg-gradient-to-r from-sky-50/70 via-white to-sky-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950 rounded-2xl border border-sky-200/80 dark:border-slate-800 p-5 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start space-x-3">
             <div className="p-2.5 rounded-xl bg-[#00a2e8] text-white shadow-sm">
@@ -301,17 +301,17 @@ export const ControlRoomView = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="font-bold text-sm text-[#333333]">Copiloto Asesor IA de Cadena de Suministro</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-white text-[#00a2e8] border border-sky-200 rounded-full shadow-2xs">
+                <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">Copiloto Asesor IA de Cadena de Suministro</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-white dark:bg-slate-800 text-[#00a2e8] border border-sky-200 dark:border-sky-800 rounded-full shadow-2xs">
                   qwen2.5:7b Local
                 </span>
                 {copilotPlan && (
-                  <span className="px-2 py-0.5 text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
+                  <span className="px-2 py-0.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full">
                     ⚡ {copilotPlan.latency_ms.toFixed(0)} ms
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#535c69] mt-1 max-w-2xl leading-relaxed">
+              <p className="text-xs text-[#535c69] dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
                 Diagnostica desfasajes entre Demanda Diaria, Lead Time de proveedores y cobertura de DOH para emitir órdenes de compra óptimas minimizando capital inmovilizado.
               </p>
             </div>
@@ -328,42 +328,42 @@ export const ControlRoomView = ({
         </div>
 
         {copilotError && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-[#e74c3c]">
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-xs text-[#e74c3c] dark:text-rose-400">
             {copilotError}
           </div>
         )}
 
         {/* Resultados del Plan Sugerido */}
         {copilotPlan && (
-          <div className="mt-5 pt-5 border-t border-sky-100 space-y-4 animate-in fade-in duration-200">
+          <div className="mt-5 pt-5 border-t border-sky-100 dark:border-slate-800 space-y-4 animate-in fade-in duration-200">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-slate-200/80">
-                <span className="text-[11px] font-semibold text-[#535c69] block">SKUs en Riesgo Crítico</span>
-                <span className="text-lg font-bold text-[#e74c3c]">{copilotPlan.critical_skus_count} productos</span>
+              <div className="bg-white dark:bg-slate-800/90 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[11px] font-semibold text-[#535c69] dark:text-slate-400 block">SKUs en Riesgo Crítico</span>
+                <span className="text-lg font-bold text-[#e74c3c] dark:text-rose-400">{copilotPlan.critical_skus_count} productos</span>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200/80">
-                <span className="text-[11px] font-semibold text-[#535c69] block">Capital de Trabajo Requerido</span>
-                <span className="text-lg font-bold text-[#00a2e8]">
+              <div className="bg-white dark:bg-slate-800/90 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[11px] font-semibold text-[#535c69] dark:text-slate-400 block">Capital de Trabajo Requerido</span>
+                <span className="text-lg font-bold text-[#00a2e8] dark:text-sky-400">
                   ${Number(copilotPlan.total_working_capital_required).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200/80">
-                <span className="text-[11px] font-semibold text-[#535c69] block">Motor de Inferencia</span>
-                <span className="text-sm font-semibold text-slate-700">{copilotPlan.provider}</span>
+              <div className="bg-white dark:bg-slate-800/90 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[11px] font-semibold text-[#535c69] dark:text-slate-400 block">Motor de Inferencia</span>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{copilotPlan.provider}</span>
               </div>
             </div>
 
             {/* Plan de Acción en 3 Pasos */}
             {copilotPlan.action_plan_3_steps?.length > 0 && (
-              <div className="bg-white p-4 rounded-xl border border-slate-200/80">
-                <h4 className="font-bold text-xs text-[#333333] mb-2 flex items-center space-x-1.5">
-                  <CheckCircle2 size={14} className="text-[#2ecc71]" />
+              <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                <h4 className="font-bold text-xs text-[#333333] dark:text-slate-100 mb-2 flex items-center space-x-1.5">
+                  <CheckCircle2 size={14} className="text-[#2ecc71] dark:text-emerald-400" />
                   <span>Plan de Acción Inmediato (3 Pasos)</span>
                 </h4>
-                <ol className="list-decimal list-inside space-y-1.5 text-xs text-[#535c69]">
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-[#535c69] dark:text-slate-400">
                   {copilotPlan.action_plan_3_steps.map((step, idx) => (
                     <li key={idx} className="leading-relaxed">
-                      <span className="font-medium text-[#333333]">{step}</span>
+                      <span className="font-medium text-[#333333] dark:text-slate-200">{step}</span>
                     </li>
                   ))}
                 </ol>
@@ -372,32 +372,32 @@ export const ControlRoomView = ({
 
             {/* PO Sugeridas */}
             {copilotPlan.suggested_purchase_orders?.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200/80 p-3 overflow-x-auto">
-                <h4 className="font-bold text-xs text-[#333333] mb-2 flex items-center space-x-1.5">
-                  <ShoppingCart size={14} className="text-[#00a2e8]" />
+              <div className="bg-white dark:bg-slate-800/90 rounded-xl border border-slate-200/80 dark:border-slate-700 p-3 overflow-x-auto">
+                <h4 className="font-bold text-xs text-[#333333] dark:text-slate-100 mb-2 flex items-center space-x-1.5">
+                  <ShoppingCart size={14} className="text-[#00a2e8] dark:text-sky-400" />
                   <span>Órdenes de Compra Sugeridas (PO Priorizada)</span>
                 </h4>
                 <table className="w-full text-xs text-left">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[#535c69]">
+                    <tr className="border-b border-slate-200 dark:border-slate-700 text-[#535c69] dark:text-slate-400">
                       <th className="py-2 px-2">SKU</th>
                       <th className="py-2 px-2">Cantidad Sugerida</th>
                       <th className="py-2 px-2">Capital Estimado</th>
                       <th className="py-2 px-2">Prioridad</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                     {copilotPlan.suggested_purchase_orders.slice(0, 5).map((po, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50">
-                        <td className="py-1.5 px-2 font-mono font-bold text-[#00a2e8]">{po.sku}</td>
-                        <td className="py-1.5 px-2 font-semibold">{po.suggested_quantity} u.</td>
-                        <td className="py-1.5 px-2">${Number(po.working_capital_required).toFixed(2)}</td>
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                        <td className="py-1.5 px-2 font-mono font-bold text-[#00a2e8] dark:text-sky-400">{po.sku}</td>
+                        <td className="py-1.5 px-2 font-semibold text-slate-800 dark:text-slate-200">{po.suggested_quantity} u.</td>
+                        <td className="py-1.5 px-2 text-slate-700 dark:text-slate-300">${Number(po.working_capital_required).toFixed(2)}</td>
                         <td className="py-1.5 px-2">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               po.priority === 'CRÍTICA' || po.priority === 'ALTA'
-                                ? 'bg-red-50 text-[#e74c3c]'
-                                : 'bg-amber-50 text-[#f39c12]'
+                                ? 'bg-red-50 dark:bg-red-950/40 text-[#e74c3c] dark:text-rose-400'
+                                : 'bg-amber-50 dark:bg-amber-950/40 text-[#f39c12] dark:text-amber-400'
                             }`}
                           >
                             {po.priority}
@@ -416,10 +416,10 @@ export const ControlRoomView = ({
       {/* Tabla Dinámica de Inventario */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[#333333]">
+          <h3 className="text-sm font-bold text-[#333333] dark:text-slate-100">
             Monitoreo Físico de Existencias &amp; Alertas de Reposición
           </h3>
-          <span className="text-xs text-[#535c69]">
+          <span className="text-xs text-[#535c69] dark:text-slate-400">
             Mostrando {filteredInventory.length} de {inventory.length} SKUs
           </span>
         </div>

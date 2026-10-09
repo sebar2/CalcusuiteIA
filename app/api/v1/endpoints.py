@@ -2815,6 +2815,15 @@ def list_clients(
     # Cargar tratos para relacionar en memoria
     all_deals = db.query(CommercialDeal).all()
 
+    def _get_deal_val(deal):
+        for attr in ['monto_usd', 'valor_usd', 'valor_total', 'monto', 'total_usd', 'monto_total']:
+            val = getattr(deal, attr, None)
+            if val is not None:
+                return float(val)
+        if hasattr(deal, 'items') and deal.items:
+            return sum(float(getattr(it, 'precio_unitario', 0.0) or 0.0) * float(getattr(it, 'cantidad', 1) or 1) for it in deal.items)
+        return 0.0
+
     for c in clients:
         # Match por nombre o RUT
         c_deals = [
@@ -2825,20 +2834,19 @@ def list_clients(
         
         deals_count = len(c_deals)
         total_pipe = sum(
-            float(d.valor_total or 0.0) 
+            _get_deal_val(d)
             for d in c_deals 
-            if (d.etapa or '').lower() not in ['perdida', 'perdido']
+            if (getattr(d, 'etapa', '') or '').lower() not in ['perdida', 'perdido']
         )
         
         deal_items = [
             ClientDealItemSummary(
-                deal_id=d.id,
-                deal_code=d.codigo,
-                deal_title=d.titulo,
-                etapa=d.etapa,
-                monto_total=float(d.valor_total or 0.0),
-                probabilidad_pct=d.probabilidad_cierre or 50,
-                created_at=d.created_at.isoformat() if d.created_at else None
+                id=str(d.id),
+                proyecto_nombre=getattr(d, 'proyecto_nombre', '') or getattr(d, 'titulo', '') or f"Trato #{d.id}",
+                monto_total=Decimal(str(round(_get_deal_val(d), 2))),
+                etapa=getattr(d, 'etapa', 'prospeccion') or 'prospeccion',
+                moneda=getattr(d, 'moneda', 'USD') or 'USD',
+                created_at=getattr(d, 'created_at', None)
             )
             for d in c_deals
         ]
@@ -2852,7 +2860,7 @@ def list_clients(
             phone=c.phone,
             address=c.address,
             deals_count=deals_count,
-            total_pipeline=round(total_pipe, 2),
+            total_pipeline=Decimal(str(round(total_pipe, 2))),
             deals=deal_items,
             created_at=c.created_at
         ))
@@ -3012,21 +3020,71 @@ def list_suppliers(
     """
     total_suppliers = db.query(Supplier).count()
     if total_suppliers == 0:
-        # Extraer proveedores desde productos o inicializar con distribuidores clave
-        existing_provs = [p[0] for p in db.query(Product.proveedor).distinct().all() if p[0]]
-        base_names = set(existing_provs)
-        if not base_names:
-            base_names = {"Distribuidora Mayorista SA", "Importadora Conosur Ltda", "Tech & Logistics SpA"}
+        # Inicializar con distribuidores clave y proveedores registrados en reposición
+        existing_provs = [
+            r[0] for r in db.query(OrdenReposicion.proveedor).distinct().all() if r[0]
+        ]
+        
+        demo_suppliers_seed = [
+            {
+                "nombre": "Shenzhen TopLight Electronics",
+                "rut": "CN-88392019-X",
+                "logo_url": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&auto=format&fit=crop&q=80",
+                "email": "sales@toplight-sz.com",
+                "phone": "+86 755 8320 9988",
+                "address": "Baoan District, Shenzhen, Guangdong, China",
+                "default_lead_time": 45
+            },
+            {
+                "nombre": "DALI DriverTech Corp",
+                "rut": "DE-44910293-B",
+                "logo_url": "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=100&auto=format&fit=crop&q=80",
+                "email": "kontakt@dali-drivertech.de",
+                "phone": "+49 30 8923 1100",
+                "address": "Industriestrasse 14, 70565 Stuttgart, Germany",
+                "default_lead_time": 30
+            },
+            {
+                "nombre": "Aluminio Industrial Sur",
+                "rut": "76.449.120-4",
+                "logo_url": "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=100&auto=format&fit=crop&q=80",
+                "email": "ventas@aluminiosur.cl",
+                "phone": "+56 2 2789 4400",
+                "address": "Camino a Melipilla 9800, Maipú, Santiago",
+                "default_lead_time": 15
+            },
+            {
+                "nombre": "Wac Lighting Corp",
+                "rut": "US-11928475-W",
+                "logo_url": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=100&auto=format&fit=crop&q=80",
+                "email": "orders@waclighting.com",
+                "phone": "+1 800 526 2588",
+                "address": "44 Harbor Park Dr, Port Washington, NY, USA",
+                "default_lead_time": 25
+            }
+        ]
 
-        for idx, name in enumerate(sorted(base_names)):
-            s_clean = re.sub(r'[^a-zA-Z0-9]', '', name.lower())[:15]
+        seed_names = {s["nombre"] for s in demo_suppliers_seed}
+        for p_name in existing_provs:
+            if p_name.strip() and p_name.strip() not in seed_names:
+                demo_suppliers_seed.append({
+                    "nombre": p_name.strip(),
+                    "rut": None,
+                    "logo_url": None,
+                    "email": f"contacto@{re.sub(r'[^a-zA-Z0-9]', '', p_name.lower())[:15] or 'proveedor'}.com",
+                    "phone": "+56 2 2345 6789",
+                    "address": "Zona Industrial",
+                    "default_lead_time": 30
+                })
+
+        for s_data in demo_suppliers_seed:
             new_s = Supplier(
-                nombre=name.strip(),
-                rut=f"76.{100 + idx * 25}.{200 + idx}-K",
-                logo_url=f"https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=100&auto=format&fit=crop&q=80",
-                email=f"ventas@{s_clean or 'proveedor'}.cl",
-                phone="+56 2 2345 6789",
-                address="Parque Industrial ENEA, Pudahuel"
+                nombre=s_data["nombre"],
+                rut=s_data.get("rut"),
+                logo_url=s_data.get("logo_url"),
+                email=s_data.get("email"),
+                phone=s_data.get("phone"),
+                address=s_data.get("address")
             )
             db.add(new_s)
         db.commit()
@@ -3054,16 +3112,24 @@ def list_suppliers(
     for s in suppliers:
         s_norm = s.nombre.strip().lower()
         skus_associated = supplier_skus_map.get(s_norm, set())
-        prods = [
-            products_by_sku[sku] for sku in skus_associated if sku in products_by_sku
-        ]
+        if not skus_associated and all_products:
+            # Si no hay órdenes directas, asociar subconjunto representativo de productos
+            idx_s = (s.id or 1) % max(1, len(all_products))
+            prods = all_products[idx_s:idx_s + 3] if len(all_products) >= 3 else all_products
+        else:
+            prods = [
+                products_by_sku[sku] for sku in skus_associated if sku in products_by_sku
+            ]
+
         prod_items = [
             SupplierProductItem(
                 product_id=p.id,
                 sku=p.sku,
                 nombre=p.nombre,
-                costo_unitario=float(p.costo_unitario or 0.0),
-                lead_time_dias=int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 7,
+                categoria=getattr(p, 'categoria', '') or 'General',
+                costo_unitario=Decimal(str(round(float(p.costo_unitario or 0.0), 2))),
+                lead_time_dias=Decimal(str(int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 30)),
+                image_url=p.image_url,
                 imagen_url=p.image_url
             )
             for p in prods
@@ -3077,6 +3143,7 @@ def list_suppliers(
             email=s.email,
             phone=s.phone,
             address=s.address,
+            skus_count=len(prod_items),
             total_skus=len(prod_items),
             productos=prod_items,
             created_at=s.created_at
@@ -3132,6 +3199,7 @@ def create_supplier(
         email=new_supp.email,
         phone=new_supp.phone,
         address=new_supp.address,
+        skus_count=0,
         total_skus=0,
         productos=[],
         created_at=new_supp.created_at
@@ -3191,8 +3259,10 @@ def update_supplier(
             product_id=p.id,
             sku=p.sku,
             nombre=p.nombre,
-            costo_unitario=float(p.costo_unitario or 0.0),
-            lead_time_dias=int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 7,
+            categoria=getattr(p, 'categoria', '') or 'General',
+            costo_unitario=Decimal(str(round(float(p.costo_unitario or 0.0), 2))),
+            lead_time_dias=Decimal(str(int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 30)),
+            image_url=p.image_url,
             imagen_url=p.image_url
         )
         for p in prods
@@ -3206,6 +3276,7 @@ def update_supplier(
         email=supplier.email,
         phone=supplier.phone,
         address=supplier.address,
+        skus_count=len(prod_items),
         total_skus=len(prod_items),
         productos=prod_items,
         created_at=supplier.created_at
