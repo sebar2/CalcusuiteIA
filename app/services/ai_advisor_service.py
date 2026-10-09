@@ -2,13 +2,15 @@ import os
 import re
 import time
 import math
+import calendar
 import logging
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import date
 from typing import List, Optional, Tuple, Dict, Any, Union
 
 import httpx
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
 
 from app.services.exchange_rate_service import ExchangeRateService
 
@@ -600,9 +602,20 @@ class AIAdvisorService:
                         Product.categoria_id == m.categoria_id
                     )
                     if m.periodo:
-                        sales_q = sales_q.filter(
-                            (Sale.periodo == m.periodo) | (func.strftime('%Y-%m', Sale.fecha) == m.periodo)
-                        )
+                        # Rango de fechas determinista en memoria (ANSI-SQL compatible y optimizado para índices)
+                        if re.match(r'^\d{4}-(0[1-9]|1[0-2])$', m.periodo):
+                            year, month = int(m.periodo[:4]), int(m.periodo[5:7])
+                            start_date = date(year, month, 1)
+                            _, last_day = calendar.monthrange(year, month)
+                            end_date = date(year, month, last_day)
+                            sales_q = sales_q.filter(
+                                or_(
+                                    Sale.periodo == m.periodo,
+                                    and_(Sale.fecha >= start_date, Sale.fecha <= end_date)
+                                )
+                            )
+                        else:
+                            sales_q = sales_q.filter(Sale.periodo == m.periodo)
                     real_amount = sales_q.scalar()
                     if real_amount is None:
                         hist_sales = db.query(

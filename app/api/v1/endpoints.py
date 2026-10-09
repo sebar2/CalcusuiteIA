@@ -1,4 +1,6 @@
 import io
+import re
+import calendar
 from decimal import Decimal
 from datetime import datetime, timezone, date
 from typing import List, Optional
@@ -7,7 +9,9 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func
+from sqlalchemy import func, and_, or_
+
+PERIOD_REGEX = re.compile(r'^\d{4}-(0[1-9]|1[0-2])$')
 
 from app.database.session import get_db
 from app.models.entities import (
@@ -610,10 +614,31 @@ def get_budget_variance(
     Análisis de variaciones presupuestarias en tiempo de ejecución (BCNF Estricto).
     Cruza presupuestos_metas con transacciones_ventas para obtener montos reales
     sin almacenar datos derivados redundantes en la base de datos.
+    Operadores de comparación de rango ANSI-SQL 100% agnósticos para PostgreSQL y SQLite.
     """
     query = db.query(PresupuestoMeta)
+
     if periodo:
+        periodo = periodo.strip()
+        # Validación defensiva del formato de periodo
+        if not (PERIOD_REGEX.match(periodo) or re.match(r'^\d{4}-Q[1-4]$', periodo)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de período inválido '{periodo}'. Se espera formato YYYY-MM (ej. 2025-09)."
+            )
         query = query.filter(PresupuestoMeta.periodo == periodo)
+    else:
+        # Fallback inteligente: consultar por defecto el periodo más reciente con metas reales
+        latest_meta = (
+            db.query(PresupuestoMeta.periodo)
+            .filter(PresupuestoMeta.periodo.isnot(None))
+            .order_by(PresupuestoMeta.periodo.desc())
+            .first()
+        )
+        if latest_meta and latest_meta[0]:
+            periodo = latest_meta[0]
+            query = query.filter(PresupuestoMeta.periodo == periodo)
+
     if categoria:
         query = query.join(Category, PresupuestoMeta.categoria_id == Category.id).filter(Category.nombre.ilike(f"%{categoria}%"))
     
@@ -627,10 +652,23 @@ def get_budget_variance(
         ).join(Product, Sale.producto_id == Product.id).filter(
             Product.categoria_id == m.categoria_id
         )
-        if m.periodo:
-            sales_q = sales_q.filter(
-                (Sale.periodo == m.periodo) | (func.strftime('%Y-%m', Sale.fecha) == m.periodo)
-            )
+
+        target_period = m.periodo or periodo
+        if target_period:
+            if PERIOD_REGEX.match(target_period):
+                # Rango de fechas determinista en memoria (ANSI-SQL compatible y optimizado para índices)
+                year, month = int(target_period[:4]), int(target_period[5:7])
+                start_date = date(year, month, 1)
+                _, last_day = calendar.monthrange(year, month)
+                end_date = date(year, month, last_day)
+                sales_q = sales_q.filter(
+                    or_(
+                        Sale.periodo == target_period,
+                        and_(Sale.fecha >= start_date, Sale.fecha <= end_date)
+                    )
+                )
+            else:
+                sales_q = sales_q.filter(Sale.periodo == target_period)
 
         real_amount = sales_q.scalar()
         if real_amount is None:
@@ -665,8 +703,8 @@ def get_budget_variance(
 @router.get("/budget/available-periods", response_model=AvailablePeriodsResponse, summary="Obtener periodos presupuestarios disponibles")
 def get_available_periods(db: Session = Depends(get_db)):
     """
-    Retorna los meses únicos existentes (YYYY-MM) en ventas reales y metas presupuestarias,
-    ordenados cronológicamente descendente, junto al periodo por defecto recomendado.
+    Retorna los meses únicos existentes (YYYY-MM) en ventas reales, metas presupuestarias,
+    versiones y centros de costo, ordenados cronológicamente descendente, junto al periodo por defecto recomendado.
     """
     periods_set = set()
 
@@ -689,6 +727,12 @@ def get_available_periods(db: Session = Depends(get_db)):
     for pv in p_versions:
         if pv.periodo:
             periods_set.add(pv.periodo)
+
+    # 4. Presupuestos Centros de Costo (OPEX)
+    cc_periods = db.query(PresupuestoCentroCosto.periodo).distinct().all()
+    for ccp in cc_periods:
+        if ccp.periodo:
+            periods_set.add(ccp.periodo)
 
     if not periods_set:
         periods_set.add("2025-09")
@@ -1229,13 +1273,29 @@ def create_cost_center(
     summary="Reporte matricial de OPEX presupuestado vs real por Centro de Costo"
 )
 def get_cost_center_budget_report(
-    periodo: str = Query(default="2025-09", description="Período contable (ej. 2025-09)"),
+    periodo: Optional[str] = Query(default=None, description="Período contable (ej. 2025-09)"),
     db: Session = Depends(get_db)
 ):
     """
     Retorna la descomposición completa del gasto operativo (OPEX) por Centro de Costo,
     con cálculo de desvíos en monto y porcentaje, clasificación de ahorro/exceso y partidas.
     """
+    if not periodo:
+        latest_cc = (
+            db.query(PresupuestoCentroCosto.periodo)
+            .filter(PresupuestoCentroCosto.periodo.isnot(None))
+            .order_by(PresupuestoCentroCosto.periodo.desc())
+            .first()
+        )
+        periodo = latest_cc[0] if latest_cc and latest_cc[0] else "2025-09"
+    else:
+        periodo = periodo.strip()
+        if not (PERIOD_REGEX.match(periodo) or re.match(r'^\d{4}-Q[1-4]$', periodo)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Formato de período inválido '{periodo}'. Se espera YYYY-MM (ej. 2025-09)."
+            )
+
     centros = db.query(CentroCosto).filter(CentroCosto.activo == True).order_by(CentroCosto.codigo.asc()).all()
     partidas_query = db.query(PresupuestoCentroCosto).filter(PresupuestoCentroCosto.periodo == periodo).all()
 
