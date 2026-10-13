@@ -9,7 +9,8 @@ import {
   Warehouse,
   Loader2,
   ShieldAlert,
-  Lightbulb
+  Lightbulb,
+  Cpu
 } from 'lucide-react';
 import { WaterfallChart } from '../components/pricing/WaterfallChart';
 import type { MarginSummaryItem, DiscountSimulationResponse, PricingAIBundlesResponse, AIBundleItem } from '../types';
@@ -31,25 +32,38 @@ export const PricingAnalyticsView = ({
   currentRole,
 }: PricingAnalyticsViewProps) => {
   // Estado del Agente de Pricing y Packs IA
-  const [activeModel, setActiveModel] = useState<string>('gemma4:26b');
+  const [activeModel, setActiveModel] = useState<string>('qwen2.5:7b');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [bundlesData, setBundlesData] = useState<PricingAIBundlesResponse | null>(null);
   const [loadingBundles, setLoadingBundles] = useState<boolean>(false);
   const [copiedBundleId, setCopiedBundleId] = useState<string | null>(null);
 
-  // Cargar modelo activo de Ollama
+  // Cargar lista de modelos instalados en Ollama sin ejecutar inferencia automática
   useEffect(() => {
     apiService.getOllamaModels().then((res) => {
-      if (res?.active_model) {
-        setActiveModel(res.active_model);
+      const modelNames = res?.models?.map((m) => m.name) || [];
+      if (modelNames.length > 0) {
+        setAvailableModels(modelNames);
+        // Priorizar modelo ágil como qwen2.5:7b o qwen2.5:3b para evitar bloqueos pesados
+        const fastModel = modelNames.find((m) => m.includes('qwen2.5:7b') || m.includes('qwen2.5:3b'));
+        if (fastModel) {
+          setActiveModel(fastModel);
+        } else if (res?.active_model && modelNames.includes(res.active_model)) {
+          setActiveModel(res.active_model);
+        } else {
+          setActiveModel(modelNames[0]);
+        }
       }
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('No se pudieron obtener modelos de Ollama:', err);
+    });
   }, []);
 
   const fetchAIBundles = async () => {
     setLoadingBundles(true);
     try {
       const data = await apiService.getAIBundles({
-        model: activeModel || 'gemma4:26b',
+        model: activeModel || 'qwen2.5:7b',
         engine_mode: 'local_ai'
       });
       setBundlesData(data);
@@ -59,10 +73,6 @@ export const PricingAnalyticsView = ({
       setLoadingBundles(false);
     }
   };
-
-  useEffect(() => {
-    fetchAIBundles();
-  }, [activeModel]);
 
   const handleCopyProposal = (bundle: AIBundleItem) => {
     const text = `📦 PROPUESTA COMERCIAL: ${bundle.nombre_pack}\n\n` +
@@ -576,7 +586,7 @@ export const PricingAnalyticsView = ({
 
       {/* Sección: Agente de Bundling Inteligente & Packs Anti-Sobrestock (IA Cross-Área) */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-xs">
               <Package size={20} />
@@ -597,18 +607,50 @@ export const PricingAnalyticsView = ({
             </div>
           </div>
 
-          <button
-            onClick={fetchAIBundles}
-            disabled={loadingBundles}
-            className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:scale-95 shrink-0"
-          >
-            <Sparkles size={14} className={loadingBundles ? 'animate-spin' : ''} />
-            <span>
-              {loadingBundles
-                ? `🧠 Generando packs estratégicos con ${activeModel} en local...`
-                : 'Regenerar Sugerencias IA'}
-            </span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {/* Selector de Modelo Ollama */}
+            <div className="flex items-center space-x-2 bg-[#f5f7f8] dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <Cpu size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <label htmlFor="ollama-pricing-model" className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                Modelo IA:
+              </label>
+              <select
+                id="ollama-pricing-model"
+                value={activeModel}
+                onChange={(e) => setActiveModel(e.target.value)}
+                disabled={loadingBundles}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+              >
+                {availableModels.length > 0 ? (
+                  availableModels.map((m) => (
+                    <option key={m} value={m} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                      {m}
+                    </option>
+                  ))
+                ) : (
+                  <option value={activeModel} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+                    {activeModel}
+                  </option>
+                )}
+              </select>
+            </div>
+
+            {/* Botón de Ejecución Explícita */}
+            <button
+              onClick={fetchAIBundles}
+              disabled={loadingBundles}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:scale-95 cursor-pointer shrink-0"
+            >
+              <Sparkles size={14} className={loadingBundles ? 'animate-spin' : ''} />
+              <span>
+                {loadingBundles
+                  ? `🧠 Generando packs con ${activeModel}...`
+                  : bundlesData
+                  ? 'Regenerar Propuestas IA'
+                  : 'Generar Propuestas con IA'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Dictamen del CFO / Resumen Ejecutivo */}
@@ -626,13 +668,28 @@ export const PricingAnalyticsView = ({
 
         {/* Grilla de Packs IA */}
         {loadingBundles ? (
-          <div className="py-12 text-center space-y-2">
-            <Loader2 size={24} className="animate-spin text-indigo-600 mx-auto" />
-            <p className="text-xs font-semibold text-slate-500">Evaluando curvas ABC de inventario, DOH y márgenes de contribución...</p>
+          <div className="py-12 text-center space-y-3">
+            <Loader2 size={26} className="animate-spin text-indigo-600 mx-auto" />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                Evaluando curvas ABC de inventario y ejecutando inferencia con {activeModel}...
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                El comité multidisciplinario está calculando elasticidades, márgenes y m² liberados de bodega.
+              </p>
+            </div>
           </div>
         ) : !bundlesData || bundlesData.bundles.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-            No hay sugerencias de packs disponibles actualmente. Haz clic en "Regenerar Sugerencias IA" para iniciar el escaneo.
+          <div className="p-8 text-center bg-slate-50/60 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5">
+            <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+              <Package size={20} />
+            </div>
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">
+              Listo para generar propuestas comerciales
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+              Elige el modelo de IA que prefieras en el selector superior y haz clic en <strong>"Generar Propuestas con IA"</strong> para iniciar el análisis en demanda.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
