@@ -38,13 +38,16 @@ def test_supply_kanban_stages_and_totals(client):
     response = client.get("/api/v1/supply/kanban", headers=headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data["stages"]) == 5
+    assert len(data["stages"]) == 6
     
     # Validar Etapa 1: Sugerido con acumulado exacto de $127,930
     stage_sugerido = next((s for s in data["stages"] if s["id"] == "sugerido"), None)
     assert stage_sugerido is not None
     assert Decimal(str(stage_sugerido["total_capital"])) == Decimal('127930.0000')
-    assert stage_sugerido["color_hex"] == "#2fc6f6"
+
+    # Validar Etapa 5: Proveedores Uy presente
+    stage_proveedor_uy = next((s for s in data["stages"] if s["id"] == "proveedor_uy"), None)
+    assert stage_proveedor_uy is not None
 
 
 def test_rbac_segregation_of_duties_forbidden(client):

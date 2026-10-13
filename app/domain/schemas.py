@@ -81,7 +81,13 @@ class ClientResponse(ClientBase):
 # --- Supplier Schemas ---
 class SupplierBase(BaseModel):
     nombre: str
+    razon_social: Optional[str] = None
     rut: Optional[str] = None
+    tipo_proveedor: str = Field(default="FABRICA")  # FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL
+    pais: Optional[str] = Field(default="China")
+    contacto_nombre: Optional[str] = None
+    contacto_cargo: Optional[str] = None
+    descripcion: Optional[str] = None
     logo_url: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -92,7 +98,13 @@ class SupplierCreate(SupplierBase):
 
 class SupplierUpdate(BaseModel):
     nombre: Optional[str] = None
+    razon_social: Optional[str] = None
     rut: Optional[str] = None
+    tipo_proveedor: Optional[str] = None
+    pais: Optional[str] = None
+    contacto_nombre: Optional[str] = None
+    contacto_cargo: Optional[str] = None
+    descripcion: Optional[str] = None
     logo_url: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -114,6 +126,8 @@ class SupplierResponse(SupplierBase):
     skus_count: int = 0
     total_skus: int = 0
     productos: List[SupplierProductItem] = []
+    ordenes_compra_count: int = 0
+    ordenes_compra: Optional[List[Dict[str, Any]]] = None
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -1610,19 +1624,29 @@ class StockBatchItem(BaseModel):
     id: str = Field(default="")
     lote: str = Field(default="LOT-DEFAULT")  # Ej: "LOT-2026-SKU-1004"
     sku: str = Field(default="")
+    sku_fabrica: Optional[str] = Field(default=None)  # SKU / Código del Fabricante
+    lote_fabrica: Optional[str] = Field(default=None)  # Lote asignado por fábrica
     cantidad: int = Field(default=0, ge=0)
+    precio_venta: Optional[float] = Field(default=0.0)  # Precio de lista para venta (NO costos confidenciales)
+    costo_compra: Optional[float] = Field(default=None)  # Costo unitario confidencial (Visible solo para Admin/Comercial)
+    estado_aprobacion: Optional[str] = Field(default="APROBADO")  # "APROBADO" | "PENDIENTE_APROBACION" | "RECHAZADO"
     etapa: BatchStage = Field(default=BatchStage.CENTRAL)
     etapa_logistica: Optional[BatchStage] = None
-    warehouse_id: str = Field(default="DEP-CENTRAL-MVD")  # "FAB-CHINA", "TRANSITO-MAR", "DEP-CENTRAL-MVD", "DEP-SALTO", "SHOWROOM-POCITOS"
+    etapa_columna: Optional[str] = Field(default="deposito_uruguay")  # "fabrica" | "deposito_internacional" | "alta_mar" | "proveedor_uy" | "deposito_uruguay"
+    warehouse_id: str = Field(default="DEP-CENTRAL-MVD")
     warehouse_nombre: Optional[str] = Field(default="")
+    supplier_id: Optional[int] = Field(default=None)
+    supplier_nombre: Optional[str] = Field(default=None)
     origen_pais: str = Field(default="China")
     proveedor: str = Field(default="Luminar Global Logistics")
-    dias_restantes: int = Field(default=0)  # Días para embarcar o días hacia ETA
+    dias_restantes: int = Field(default=0)
     dias_restantes_eta: Optional[int] = Field(default=0)
     fecha_eta: Optional[date] = None
     fecha_despacho: Optional[date] = None
+    fecha_terminado: Optional[date] = None  # Fecha en que fábrica finaliza la producción
     producto_nombre: Optional[str] = Field(default="")
     buque_o_tracking: Optional[str] = Field(default="")
+    imagen_url: Optional[str] = Field(default=None)
     origen_tipo: str = Field(default="ROP")
     rop_order_id: Optional[str] = None
     estado: str = Field(default="DISPONIBLE")
@@ -1646,6 +1670,125 @@ class WarehouseAssignStockPayload(BaseModel):
     origen_pais: Optional[str] = "China"
     proveedor: Optional[str] = "Ingreso Manual / Stock Inicial"
     observaciones: Optional[str] = None
+
+
+class ReventaBatchCreatePayload(BaseModel):
+    sku: str  # SKU local Montevideo
+    sku_fabrica: Optional[str] = None  # SKU / Código del Proveedor Reventa
+    lote_fabrica: Optional[str] = None
+    supplier_id: int
+    cantidad: int = Field(..., gt=0)
+    precio_venta: Decimal = Field(..., ge=0)
+    costo_compra: Optional[Decimal] = Field(default=None, ge=0)
+    fecha_disponible: Optional[date] = None
+    observaciones: Optional[str] = None
+
+
+class BatchApprovePayload(BaseModel):
+    estado_aprobacion: str = "APROBADO"  # "APROBADO" | "RECHAZADO"
+    observaciones: Optional[str] = None
+
+
+# --- Schemas de Presupuestos Implícitos & Servicios Logísticos ---
+class ImplicitServiceItemSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    rubro: str
+    codigo: str
+    nombre_servicio: str
+    proveedor_id: Optional[int] = None
+    proveedor_nombre: Optional[str] = None
+    costo_unitario_base: float
+    moneda: str = "USD"
+    descripcion: Optional[str] = None
+    activo: bool = True
+
+
+class ImplicitServiceCreatePayload(BaseModel):
+    rubro: str  # "MARITIMO" | "SEGURO" | "ADUANA" | "TRANSPORTE_CAMION"
+    codigo: str
+    nombre_servicio: str
+    proveedor_id: Optional[int] = None
+    costo_unitario_base: Decimal = Field(..., ge=0)
+    moneda: str = "USD"
+    descripcion: Optional[str] = None
+
+
+class ImplicitBudgetItemCreate(BaseModel):
+    rubro: str
+    service_id: Optional[int] = None
+    supplier_id: Optional[int] = None
+    descripcion: str
+    cantidad: int = Field(default=1, gt=0)
+    costo_unitario: Decimal = Field(..., ge=0)
+
+
+class ImplicitBudgetItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    rubro: str
+    service_id: Optional[int] = None
+    service_nombre: Optional[str] = None
+    supplier_id: Optional[int] = None
+    supplier_nombre: Optional[str] = None
+    descripcion: str
+    cantidad: int
+    costo_unitario: float
+    costo_total: float
+
+
+class ImplicitBudgetOrderCreate(BaseModel):
+    titulo: str
+    observaciones: Optional[str] = None
+    items: List[ImplicitBudgetItemCreate]
+
+
+class ImplicitBudgetOrderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero_orden: str
+    titulo: str
+    monto_total: float
+    moneda: str
+    estado: str
+    aprobado_por: Optional[str] = None
+    fecha_aprobacion: Optional[datetime] = None
+    observaciones: Optional[str] = None
+    created_at: Optional[datetime] = None
+    items: List[ImplicitBudgetItemResponse] = []
+
+
+# --- Schemas de Órdenes de Compra Locales (Proveedores Uruguay) ---
+class LocalPurchaseOrderCreate(BaseModel):
+    proveedor_id: int
+    sku: str
+    cantidad: int = Field(..., gt=0)
+    costo_unitario: Decimal = Field(..., ge=0)
+    precio_venta_estimado: Optional[Decimal] = None
+    fecha_disponible: date
+    responsable: Optional[str] = "Comercial / Compras Plaza"
+    observaciones: Optional[str] = None
+
+
+class LocalPurchaseOrderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero_po: str
+    proveedor: str
+    proveedor_id: Optional[int] = None
+    sku: str
+    producto_nombre: Optional[str] = None
+    cantidad: int
+    costo_unitario: float
+    monto_total: float
+    fecha_emision: date
+    fecha_disponible: Optional[date] = None
+    estado: str
+    responsable: str
 
 
 # --- Feed Automatizado de Licitaciones B2B (Serlux: Iluminación & Mobiliario) ---
@@ -1758,8 +1901,9 @@ class WarehouseSchema(BaseModel):
 
     id: str
     nombre: str
-    tipo: str = "SUCURSAL"  # "CENTRAL", "SUCURSAL", "TRANSITO", "FABRICA"
+    tipo: str = "SUCURSAL"  # "CENTRAL", "SUCURSAL", "TRANSITO", "FABRICA", "INTERNACIONAL", "URUGUAY"
     ubicacion: str
+    pais: Optional[str] = "Uruguay"
     capacidad_unidades: int = Field(default=10000, ge=0)
     activo: bool = True
     created_at: Optional[datetime] = None
@@ -1768,8 +1912,9 @@ class WarehouseSchema(BaseModel):
 class WarehouseCreate(BaseModel):
     id: Optional[str] = None
     nombre: str = Field(..., min_length=2, max_length=100)
-    tipo: str = Field(default="SUCURSAL", pattern="^(CENTRAL|SUCURSAL|TRANSITO|FABRICA)$")
+    tipo: str = Field(default="SUCURSAL", pattern="^(CENTRAL|SUCURSAL|TRANSITO|FABRICA|INTERNACIONAL|URUGUAY)$")
     ubicacion: str = Field(..., min_length=2, max_length=150)
+    pais: Optional[str] = Field(default="Uruguay", max_length=100)
     capacidad_unidades: int = Field(default=10000, ge=0)
     activo: bool = True
 
@@ -1778,6 +1923,7 @@ class WarehouseUpdate(BaseModel):
     nombre: Optional[str] = None
     tipo: Optional[str] = None
     ubicacion: Optional[str] = None
+    pais: Optional[str] = None
     capacidad_unidades: Optional[int] = None
     activo: Optional[bool] = None
 
@@ -1952,4 +2098,79 @@ class PricingAIBundlesRequest(BaseModel):
     engine_mode: Optional[str] = "local_ai"
 
     model_config = ConfigDict(extra="ignore")
+
+
+class MluCategoryInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    path: str
+    icon: Optional[str] = None
+
+
+class ArbitrageScanRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    category_id: Optional[str] = "ALL"
+    article_name: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    currency: str = "UYU"
+    ollama_model: Optional[str] = None
+    limit: int = 100
+
+
+class ArbitrageItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    ranking: int
+    mlu_id: str
+    mlu_title: str
+    mlu_category_id: str
+    mlu_category_name: str
+    mlu_seller_name: str
+    mlu_price_uyu: float
+    mlu_price_usd: float
+    mlu_sold_quantity: Optional[int] = 0
+    mlu_permalink: str
+    mlu_thumbnail: Optional[str] = None
+    trend_signal: str
+    b2b_english_query: str
+    alibaba_supplier: str
+    alibaba_years: str
+    alibaba_verified: bool
+    alibaba_fob_price_usd: float
+    alibaba_moq: int
+    alibaba_search_url: str
+    shipping_logistics_usd: float
+    landed_cost_usd: float
+    mlu_fee_usd: float
+    net_margin_usd: float
+    net_margin_pct: float
+    markup: float
+    roi_pct: float
+    recommendation: str
+    status_color: str
+
+
+class ArbitrageSummaryMetrics(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    avg_net_margin_pct: float
+    avg_markup: float
+    high_profit_opportunities: int
+    total_catalog_scanned: int
+
+
+class ArbitrageScanResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    status: str = "success"
+    total_items: int
+    category_analyzed: str
+    article_filter: Optional[str] = None
+    currency_filter: str = "UYU"
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    exchange_rate_used: float
+    ollama_model_used: str
+    execution_time_seconds: float
+    summary_metrics: ArbitrageSummaryMetrics
+    items: List[ArbitrageItemResponse] = Field(default_factory=list)
 

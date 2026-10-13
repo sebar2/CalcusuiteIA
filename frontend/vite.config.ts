@@ -12,6 +12,10 @@ export default defineConfig({
         timeout: 600000,
         proxyTimeout: 600000,
       },
+      '/static': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

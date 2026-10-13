@@ -42,12 +42,27 @@ from app.models.entities import (
     Company,
     Supplier,
     UserPreference,
+    OrdenCompra,
+    OrdenCompraDetalle,
+    ImplicitServiceCatalog,
+    ImplicitBudgetOrder,
+    ImplicitBudgetItem,
 )
 from app.domain.schemas import (
     ETLUploadResponse,
     InventoryAlert,
     InventoryQuickUpdateRequest,
     InventoryQuickUpdateResponse,
+    ReventaBatchCreatePayload,
+    BatchApprovePayload,
+    ImplicitServiceItemSchema,
+    ImplicitServiceCreatePayload,
+    ImplicitBudgetItemCreate,
+    ImplicitBudgetItemResponse,
+    ImplicitBudgetOrderCreate,
+    ImplicitBudgetOrderResponse,
+    LocalPurchaseOrderCreate,
+    LocalPurchaseOrderResponse,
     ClientCreate,
     ClientUpdate,
     ClientResponse,
@@ -2604,7 +2619,11 @@ def create_warehouse(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user)
 ):
-    clean_id = payload.id.strip().lower().replace(" ", "-")
+    raw_id = payload.id.strip() if payload.id and payload.id.strip() else payload.nombre.strip()
+    clean_id = re.sub(r"[^a-zA-Z0-9_-]", "-", raw_id.lower()).strip("-")
+    if not clean_id:
+        clean_id = f"wh-{uuid.uuid4().hex[:6]}"
+
     existing = db.query(Warehouse).filter(Warehouse.id == clean_id).first()
     if existing:
         raise HTTPException(
@@ -2616,12 +2635,23 @@ def create_warehouse(
         nombre=payload.nombre.strip(),
         tipo=payload.tipo,
         ubicacion=payload.ubicacion.strip(),
+        pais=payload.pais.strip() if payload.pais else "Uruguay",
         capacidad_unidades=payload.capacidad_unidades,
         activo=payload.activo
     )
     db.add(wh)
     db.commit()
     db.refresh(wh)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="WAREHOUSE_CREATE",
+        resource=f"warehouses/{wh.id}",
+        details=payload.model_dump()
+    )
+
     return wh
 
 
@@ -2648,6 +2678,8 @@ def update_warehouse(
         wh.tipo = payload.tipo
     if payload.ubicacion is not None:
         wh.ubicacion = payload.ubicacion.strip()
+    if payload.pais is not None:
+        wh.pais = payload.pais.strip()
     if payload.capacidad_unidades is not None:
         wh.capacidad_unidades = payload.capacidad_unidades
     if payload.activo is not None:
@@ -2818,6 +2850,719 @@ def list_unified_warehouse_batches(
 ):
     from app.services.inventory_sync_service import inventory_sync_service
     return inventory_sync_service.list_unified_batches(db, warehouse_id=warehouse_id)
+
+
+# ==============================================================================
+# PROVEEDORES DE PLAZA / REVENTA LOCAL & FLUJO DE APROBACIÓN
+# ==============================================================================
+
+@router.post(
+    "/warehouses/reventa-batches",
+    response_model=StockBatchItem,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea un lote de compra a Proveedor Uruguay / Reventa (Pendiente de Aprobación)"
+)
+def create_reventa_batch(
+    payload: ReventaBatchCreatePayload,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    supplier = db.query(Supplier).filter(Supplier.id == payload.supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail=f"Proveedor con ID {payload.supplier_id} no encontrado.")
+
+    prod = db.query(Product).filter(Product.sku == payload.sku).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail=f"Producto con SKU '{payload.sku}' no registrado en el catálogo local.")
+
+    lote_id = f"LOT-REV-{datetime.now().strftime('%y%m')}-{uuid.uuid4().hex[:4].upper()}"
+    today = date.today()
+
+    new_batch = StockLocationBatch(
+        id=lote_id,
+        sku=payload.sku,
+        sku_fabrica=payload.sku_fabrica or f"MK-{payload.sku}-UY",
+        lote_fabrica=payload.lote_fabrica or f"LOT-PROV-{payload.supplier_id}",
+        cantidad=payload.cantidad,
+        ubicacion="proveedor_uy",
+        pais_origen="UY",
+        buque_o_tracking="PLAZA-LOCAL",
+        fecha_despacho=today,
+        fecha_eta=payload.fecha_disponible or today,
+        fecha_terminado=payload.fecha_disponible or today,
+        supplier_id=supplier.id,
+        warehouse_id="PROV-UY",
+        estado="EN_PROVEEDOR",
+        estado_aprobacion="PENDIENTE_APROBACION",
+        costo_compra=payload.costo_compra or prod.costo_base,
+        observaciones=payload.observaciones or f"Compra plaza reventa: {supplier.nombre}",
+    )
+    db.add(new_batch)
+    db.commit()
+    db.refresh(new_batch)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CREATE_REVENTA_BATCH",
+        resource=f"stock_location_batches/{new_batch.id}",
+        details=payload.model_dump(mode="json")
+    )
+
+    from app.services.inventory_sync_service import inventory_sync_service
+    batches = inventory_sync_service.list_unified_batches(db)
+    found = next((b for b in batches if b.id == new_batch.id), None)
+    if found:
+        return found
+
+    return StockBatchItem(
+        id=new_batch.id,
+        lote=new_batch.id,
+        sku=new_batch.sku,
+        sku_fabrica=new_batch.sku_fabrica,
+        lote_fabrica=new_batch.lote_fabrica,
+        cantidad=new_batch.cantidad,
+        precio_venta=float(payload.precio_venta),
+        costo_compra=float(payload.costo_compra) if payload.costo_compra and user.role in ("controller_admin", "comercial") else None,
+        estado_aprobacion="PENDIENTE_APROBACION",
+        etapa_columna="proveedor_uy",
+        warehouse_id="PROV-UY",
+        supplier_id=supplier.id,
+        supplier_nombre=supplier.nombre,
+        origen_pais="Uruguay",
+        proveedor=supplier.nombre,
+        fecha_eta=new_batch.fecha_eta,
+        fecha_terminado=new_batch.fecha_terminado,
+        producto_nombre=prod.nombre,
+        estado="EN_PROVEEDOR",
+        observaciones=new_batch.observaciones
+    )
+
+
+@router.patch(
+    "/warehouses/batches/{batch_id}/approve",
+    response_model=StockBatchItem,
+    summary="Aprueba o rechaza un lote de proveedor reventa (Solo Comercial o Admin)"
+)
+def approve_reventa_batch(
+    batch_id: str,
+    payload: BatchApprovePayload,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    if user.role not in ("controller_admin", "comercial"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Segregación de funciones: La aprobación de lotes de reventa requiere rol 'comercial' o 'controller_admin'."
+        )
+
+    batch = db.query(StockLocationBatch).filter(StockLocationBatch.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail=f"Lote '{batch_id}' no encontrado.")
+
+    batch.estado_aprobacion = payload.estado_aprobacion.upper()
+    if payload.estado_aprobacion.upper() == "APROBADO":
+        batch.estado = "APROBADO_PARA_INGRESO"
+    elif payload.estado_aprobacion.upper() == "RECHAZADO":
+        batch.estado = "RECHAZADO"
+
+    if payload.observaciones:
+        batch.observaciones = f"[{user.role.upper()}]: {payload.observaciones}. {batch.observaciones or ''}"
+
+    db.commit()
+    db.refresh(batch)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="APPROVE_REVENTA_BATCH",
+        resource=f"stock_location_batches/{batch.id}",
+        details={"estado_aprobacion": batch.estado_aprobacion}
+    )
+
+    from app.services.inventory_sync_service import inventory_sync_service
+    batches = inventory_sync_service.list_unified_batches(db)
+    found = next((b for b in batches if b.id == batch.id), None)
+    if found:
+        return found
+
+    return StockBatchItem(
+        id=batch.id,
+        lote=batch.id,
+        sku=batch.sku,
+        cantidad=batch.cantidad,
+        estado_aprobacion=batch.estado_aprobacion,
+        estado=batch.estado,
+        warehouse_id=batch.warehouse_id or "PROV-UY",
+        etapa_columna="proveedor_uy"
+    )
+
+
+# ==============================================================================
+# ÓRDENES DE COMPRA LOCALES (PROVEEDORES URUGUAY / PLAZA)
+# ==============================================================================
+
+@router.get(
+    "/supply/local-orders",
+    response_model=List[LocalPurchaseOrderResponse],
+    summary="Listado de órdenes de compra para proveedores de plaza (Uruguay)"
+)
+def list_local_purchase_orders(
+    db: Session = Depends(get_db)
+):
+    orders = db.query(OrdenCompra).filter(OrdenCompra.tipo_orden == "LOCAL_REVENTA").order_by(OrdenCompra.id.desc()).all()
+    res: List[LocalPurchaseOrderResponse] = []
+    for o in orders:
+        detalle = db.query(OrdenCompraDetalle).filter(OrdenCompraDetalle.orden_id == o.id).first()
+        sku_val = detalle.producto.sku if detalle and detalle.producto else ""
+        prod_nom = detalle.producto.nombre if detalle and detalle.producto else ""
+        cant = detalle.cantidad if detalle else 0
+        costo_u = float(detalle.costo_unitario_pactado) if detalle else 0.0
+
+        res.append(
+            LocalPurchaseOrderResponse(
+                id=o.id,
+                numero_po=o.numero_po,
+                proveedor=o.proveedor,
+                sku=sku_val,
+                producto_nombre=prod_nom,
+                cantidad=cant,
+                costo_unitario=costo_u,
+                monto_total=float(o.monto_total or (cant * costo_u)),
+                fecha_emision=o.fecha_emision,
+                fecha_disponible=o.fecha_disponible or o.fecha_arribo_estimada,
+                estado=o.etapa,
+                responsable=o.responsable
+            )
+        )
+    return res
+
+
+@router.post(
+    "/supply/local-orders",
+    response_model=LocalPurchaseOrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea una orden de compra para un proveedor de plaza local"
+)
+def create_local_purchase_order(
+    payload: LocalPurchaseOrderCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    supplier = db.query(Supplier).filter(Supplier.id == payload.proveedor_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Proveedor de plaza no encontrado.")
+
+    prod = db.query(Product).filter(Product.sku == payload.sku).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail=f"Producto con SKU '{payload.sku}' no encontrado.")
+
+    po_num = f"OC-UY-{datetime.now().strftime('%y%m')}-{uuid.uuid4().hex[:4].upper()}"
+    monto_tot = Decimal(str(payload.cantidad)) * payload.costo_unitario
+
+    po = OrdenCompra(
+        numero_po=po_num,
+        proveedor=supplier.nombre,
+        etapa="aprobada",
+        responsable=payload.responsable or user.user_id,
+        fecha_emision=date.today(),
+        fecha_arribo_estimada=payload.fecha_disponible,
+        tipo_orden="LOCAL_REVENTA",
+        fecha_disponible=payload.fecha_disponible,
+        monto_total=monto_tot
+    )
+    db.add(po)
+    db.commit()
+    db.refresh(po)
+
+    detalle = OrdenCompraDetalle(
+        orden_id=po.id,
+        producto_id=prod.id,
+        cantidad=payload.cantidad,
+        costo_unitario_pactado=payload.costo_unitario
+    )
+    db.add(detalle)
+
+    # Crear automáticamente lote correspondiente en Proveedores Uy (Pendiente de Aprobación)
+    lot_rev_id = f"LOT-REV-{po.numero_po[-4:]}"
+    batch = StockLocationBatch(
+        id=lot_rev_id,
+        sku=prod.sku,
+        sku_fabrica=f"MK-{prod.sku}-UY",
+        lote_fabrica=f"OC-{po.numero_po[-6:]}",
+        cantidad=payload.cantidad,
+        ubicacion="proveedor_uy",
+        pais_origen="UY",
+        buque_o_tracking="PLAZA-LOCAL",
+        fecha_despacho=date.today(),
+        fecha_eta=payload.fecha_disponible,
+        fecha_terminado=payload.fecha_disponible,
+        supplier_id=supplier.id,
+        warehouse_id="PROV-UY",
+        estado="EN_PROVEEDOR",
+        estado_aprobacion="PENDIENTE_APROBACION",
+        costo_compra=payload.costo_unitario,
+        observaciones=f"OC Local #{po.numero_po} ({supplier.nombre})",
+    )
+    db.add(batch)
+    db.commit()
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CREATE_LOCAL_PURCHASE_ORDER",
+        resource=f"ordenes_compra/{po.id}",
+        details=payload.model_dump(mode="json")
+    )
+
+    return LocalPurchaseOrderResponse(
+        id=po.id,
+        numero_po=po.numero_po,
+        proveedor=supplier.nombre,
+        proveedor_id=supplier.id,
+        sku=prod.sku,
+        producto_nombre=prod.nombre,
+        cantidad=payload.cantidad,
+        costo_unitario=float(payload.costo_unitario),
+        monto_total=float(monto_tot),
+        fecha_emision=po.fecha_emision,
+        fecha_disponible=po.fecha_disponible,
+        estado=po.etapa,
+        responsable=po.responsable
+    )
+
+
+# ==============================================================================
+# PRESUPUESTOS IMPLÍCITOS & SERVICIOS LOGÍSTICOS (MARÍTIMO, SEGURO, ADUANA, CAMIÓN)
+# ==============================================================================
+
+@router.get(
+    "/supply/implicit-catalog",
+    response_model=List[ImplicitServiceItemSchema],
+    summary="Catálogo de servicios de fletes marítimos, seguros, aduanas y camiones"
+)
+def list_implicit_services_catalog(
+    db: Session = Depends(get_db)
+):
+    items = db.query(ImplicitServiceCatalog).filter(ImplicitServiceCatalog.activo == True).order_by(ImplicitServiceCatalog.rubro.asc()).all()
+    return [
+        ImplicitServiceItemSchema(
+            id=i.id,
+            rubro=i.rubro,
+            codigo=i.codigo,
+            nombre_servicio=i.nombre_servicio,
+            proveedor_id=i.proveedor_id,
+            proveedor_nombre=i.proveedor_rel.nombre if i.proveedor_rel else None,
+            costo_unitario_base=float(i.costo_unitario_base),
+            moneda=i.moneda,
+            descripcion=i.descripcion,
+            activo=i.activo
+        )
+        for i in items
+    ]
+
+
+@router.post(
+    "/supply/implicit-catalog",
+    response_model=ImplicitServiceItemSchema,
+    status_code=status.HTTP_201_CREATED,
+    summary="Agrega un nuevo servicio al catálogo logístico"
+)
+def create_implicit_service(
+    payload: ImplicitServiceCreatePayload,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    existing = db.query(ImplicitServiceCatalog).filter(ImplicitServiceCatalog.codigo == payload.codigo).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Código de servicio '{payload.codigo}' ya registrado.")
+
+    item = ImplicitServiceCatalog(
+        rubro=payload.rubro.upper(),
+        codigo=payload.codigo.strip(),
+        nombre_servicio=payload.nombre_servicio.strip(),
+        proveedor_id=payload.proveedor_id,
+        costo_unitario_base=payload.costo_unitario_base,
+        moneda=payload.moneda or "USD",
+        descripcion=payload.descripcion,
+        activo=True
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return ImplicitServiceItemSchema(
+        id=item.id,
+        rubro=item.rubro,
+        codigo=item.codigo,
+        nombre_servicio=item.nombre_servicio,
+        proveedor_id=item.proveedor_id,
+        proveedor_nombre=item.proveedor_rel.nombre if item.proveedor_rel else None,
+        costo_unitario_base=float(item.costo_unitario_base),
+        moneda=item.moneda,
+        descripcion=item.descripcion,
+        activo=item.activo
+    )
+
+
+@router.get(
+    "/supply/implicit-budgets",
+    response_model=List[ImplicitBudgetOrderResponse],
+    summary="Listado de órdenes de presupuesto implícito multirrubro"
+)
+def list_implicit_budget_orders(
+    db: Session = Depends(get_db)
+):
+    orders = db.query(ImplicitBudgetOrder).order_by(ImplicitBudgetOrder.id.desc()).all()
+    res: List[ImplicitBudgetOrderResponse] = []
+    for o in orders:
+        items_dto = [
+            ImplicitBudgetItemResponse(
+                id=it.id,
+                rubro=it.rubro,
+                service_id=it.service_id,
+                service_nombre=it.service_rel.nombre_servicio if it.service_rel else None,
+                supplier_id=it.supplier_id,
+                supplier_nombre=it.supplier_rel.nombre if it.supplier_rel else None,
+                descripcion=it.descripcion,
+                cantidad=it.cantidad,
+                costo_unitario=float(it.costo_unitario),
+                costo_total=float(it.costo_total)
+            )
+            for it in o.items
+        ]
+        res.append(
+            ImplicitBudgetOrderResponse(
+                id=o.id,
+                numero_orden=o.numero_orden,
+                titulo=o.titulo,
+                monto_total=float(o.monto_total),
+                moneda=o.moneda,
+                estado=o.estado,
+                aprobado_por=o.aprobado_por,
+                fecha_aprobacion=o.fecha_aprobacion,
+                observaciones=o.observaciones,
+                created_at=o.created_at,
+                items=items_dto
+            )
+        )
+    return res
+
+
+@router.post(
+    "/supply/implicit-budgets",
+    response_model=ImplicitBudgetOrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crea una orden de presupuesto implícito combinando marítimo, seguro, aduana y camiones"
+)
+def create_implicit_budget_order(
+    payload: ImplicitBudgetOrderCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Debe incluir al menos un ítem de servicio.")
+
+    num = f"PRE-IMP-{datetime.now().strftime('%y%m')}-{uuid.uuid4().hex[:4].upper()}"
+    monto_total = Decimal('0.00')
+
+    order = ImplicitBudgetOrder(
+        numero_orden=num,
+        titulo=payload.titulo.strip(),
+        moneda="USD",
+        estado="PENDIENTE_APROBACION",
+        observaciones=payload.observaciones
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    items_res: List[ImplicitBudgetItemResponse] = []
+    for it in payload.items:
+        c_tot = Decimal(str(it.cantidad)) * it.costo_unitario
+        monto_total += c_tot
+        db_it = ImplicitBudgetItem(
+            budget_id=order.id,
+            rubro=it.rubro.upper(),
+            service_id=it.service_id,
+            supplier_id=it.supplier_id,
+            descripcion=it.descripcion.strip(),
+            cantidad=it.cantidad,
+            costo_unitario=it.costo_unitario,
+            costo_total=c_tot
+        )
+        db.add(db_it)
+        db.commit()
+        db.refresh(db_it)
+
+        items_res.append(
+            ImplicitBudgetItemResponse(
+                id=db_it.id,
+                rubro=db_it.rubro,
+                service_id=db_it.service_id,
+                service_nombre=db_it.service_rel.nombre_servicio if db_it.service_rel else None,
+                supplier_id=db_it.supplier_id,
+                supplier_nombre=db_it.supplier_rel.nombre if db_it.supplier_rel else None,
+                descripcion=db_it.descripcion,
+                cantidad=db_it.cantidad,
+                costo_unitario=float(db_it.costo_unitario),
+                costo_total=float(c_tot)
+            )
+        )
+
+    order.monto_total = monto_total
+    db.commit()
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CREATE_IMPLICIT_BUDGET",
+        resource=f"implicit_budget_orders/{order.id}",
+        details={"numero_orden": order.numero_orden, "monto_total": float(monto_total)}
+    )
+
+    return ImplicitBudgetOrderResponse(
+        id=order.id,
+        numero_orden=order.numero_orden,
+        titulo=order.titulo,
+        monto_total=float(monto_total),
+        moneda=order.moneda,
+        estado=order.estado,
+        observaciones=order.observaciones,
+        created_at=order.created_at,
+        items=items_res
+    )
+
+
+@router.patch(
+    "/supply/implicit-budgets/{budget_id}/approve",
+    response_model=ImplicitBudgetOrderResponse,
+    summary="Aprobación directiva de una orden de presupuesto implícito"
+)
+def approve_implicit_budget_order(
+    budget_id: int,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    if user.role != "controller_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gobernanza financiera: La aprobación de presupuestos implícitos requiere rol 'controller_admin'."
+        )
+
+    order = db.query(ImplicitBudgetOrder).filter(ImplicitBudgetOrder.id == budget_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden de presupuesto no encontrada.")
+
+    order.estado = "APROBADO"
+    order.aprobado_por = user.user_id
+    order.fecha_aprobacion = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(order)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="APPROVE_IMPLICIT_BUDGET",
+        resource=f"implicit_budget_orders/{order.id}",
+        details={"aprobado_por": user.user_id, "monto": float(order.monto_total)}
+    )
+
+    items_dto = [
+        ImplicitBudgetItemResponse(
+            id=it.id,
+            rubro=it.rubro,
+            service_id=it.service_id,
+            service_nombre=it.service_rel.nombre_servicio if it.service_rel else None,
+            supplier_id=it.supplier_id,
+            supplier_nombre=it.supplier_rel.nombre if it.supplier_rel else None,
+            descripcion=it.descripcion,
+            cantidad=it.cantidad,
+            costo_unitario=float(it.costo_unitario),
+            costo_total=float(it.costo_total)
+        )
+        for it in order.items
+    ]
+
+    return ImplicitBudgetOrderResponse(
+        id=order.id,
+        numero_orden=order.numero_orden,
+        titulo=order.titulo,
+        monto_total=float(order.monto_total),
+        moneda=order.moneda,
+        estado=order.estado,
+        aprobado_por=order.aprobado_por,
+        fecha_aprobacion=order.fecha_aprobacion,
+        observaciones=order.observaciones,
+        created_at=order.created_at,
+        items=items_dto
+    )
+
+
+# ==============================================================================
+# PLANTILLA EXCEL Y CARGA MASIVA DE CATÁLOGO / REVENTA
+# ==============================================================================
+
+@router.get(
+    "/suppliers/reventa/template",
+    summary="Descarga planilla Excel estructurada de ejemplo para catálogo de proveedores de reventa"
+)
+def download_reventa_catalog_template():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Catalogo_Reventa"
+
+    headers = [
+        "sku_local",
+        "sku_proveedor",
+        "nombre_producto",
+        "cantidad",
+        "precio_venta_usd",
+        "costo_compra_usd",
+        "fecha_disponible",
+        "observaciones"
+    ]
+    ws.append(headers)
+
+    sample_rows = [
+        ("ELEC-001", "DIST-UY-1001", "Panel LED 60x60 Backlight 40W 4000K", 150, 48.00, 28.50, "2026-10-15", "Stock entrega inmediata depósito Montevideo"),
+        ("ELEC-002", "DIST-UY-2004", "Campana Industrial UFO LED 150W IP65", 80, 115.00, 72.00, "2026-10-18", "Para proyecto licitación pública ARCE"),
+        ("ACC-001", "REF-SUR-330", "Sensor de Movimiento Microondas Techo", 200, 22.00, 11.50, "2026-10-12", "Distribuidor plaza central"),
+    ]
+    for row in sample_rows:
+        ws.append(row)
+
+    # Estilos cabecera
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = 24
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=template_proveedores_reventa.xlsx"}
+    )
+
+
+@router.post(
+    "/suppliers/reventa/import",
+    summary="Carga masiva de catálogo e inventario de reventa desde archivo Excel o CSV"
+)
+async def import_reventa_catalog(
+    file: UploadFile = File(...),
+    supplier_id: int = Query(..., description="ID del proveedor de reventa"),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Proveedor de reventa no encontrado.")
+
+    contents = await file.read()
+    filename = file.filename or ""
+
+    try:
+        import pandas as pd
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al procesar el archivo: {str(e)}")
+
+    # Normalizar columnas
+    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+    required = ["sku_local", "cantidad"]
+    for r in required:
+        if r not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Columna requerida '{r}' no encontrada en el archivo.")
+
+    imported_count = 0
+    today = date.today()
+
+    for _, row in df.iterrows():
+        sku_local = str(row["sku_local"]).strip()
+        if not sku_local or pd.isna(sku_local):
+            continue
+
+        cant = int(row.get("cantidad", 0))
+        if cant <= 0:
+            continue
+
+        sku_prov = str(row.get("sku_proveedor", f"MK-{sku_local}-UY")).strip()
+        costo_c = Decimal(str(row.get("costo_compra_usd", 0.0) or 0.0))
+        p_venta = Decimal(str(row.get("precio_venta_usd", 0.0) or 0.0))
+
+        # Verificar o crear producto si no existe
+        prod = db.query(Product).filter(Product.sku == sku_local).first()
+        if not prod:
+            cat = db.query(Category).first()
+            prod = Product(
+                sku=sku_local,
+                nombre=str(row.get("nombre_producto", f"Producto {sku_local}")).strip(),
+                categoria_id=cat.id if cat else 1,
+                costo_base=costo_c,
+                precio_lista=p_venta if p_venta > 0 else (costo_c * Decimal('1.30')),
+                doh_seguridad=15,
+                activo=True
+            )
+            db.add(prod)
+            db.commit()
+            db.refresh(prod)
+
+        lot_id = f"LOT-REV-{uuid.uuid4().hex[:6].upper()}"
+        batch = StockLocationBatch(
+            id=lot_id,
+            sku=sku_local,
+            sku_fabrica=sku_prov,
+            lote_fabrica=f"EXCEL-{supplier_id}",
+            cantidad=cant,
+            ubicacion="proveedor_uy",
+            pais_origen="UY",
+            buque_o_tracking="PLAZA-LOCAL",
+            fecha_despacho=today,
+            fecha_eta=today,
+            fecha_terminado=today,
+            supplier_id=supplier.id,
+            warehouse_id="PROV-UY",
+            estado="EN_PROVEEDOR",
+            estado_aprobacion="PENDIENTE_APROBACION",
+            costo_compra=costo_c,
+            observaciones=f"Importación Masiva Excel: {supplier.nombre}",
+        )
+        db.add(batch)
+        imported_count += 1
+
+    db.commit()
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="IMPORT_REVENTA_EXCEL",
+        resource=f"suppliers/{supplier_id}",
+        details={"imported_count": imported_count, "filename": filename}
+    )
+
+    return {
+        "message": f"{imported_count} productos de reventa importados correctamente. Quedaron registrados como lotes en la columna 'Proveedores Uy' pendientes de aprobación.",
+        "imported_count": imported_count,
+        "proveedor": supplier.nombre
+    }
 
 
 # ==============================================================================
@@ -3142,9 +3887,10 @@ def get_purchase_order_suggestions(
     summary="Descarga planilla Excel (.xlsx) estructurada de ejemplo para ingesta ETL"
 )
 def download_etl_template(
-    tipo: str = Query("inventario", description="Tipo de plantilla: 'inventario', 'opex' o 'crm'")
+    tipo: str = Query("inventario", description="Tipo de plantilla: 'inventario', 'ordenes_compra', 'ordenes_venta', 'opex' o 'crm'"),
+    tipo_archivo: Optional[str] = Query(None, description="Alias compatible para tipo de plantilla")
 ):
-    tipo_clean = tipo.strip().lower()
+    tipo_clean = (tipo_archivo or tipo or "inventario").strip().lower()
     wb = openpyxl.Workbook()
     ws = wb.active
     
@@ -3154,7 +3900,61 @@ def download_etl_template(
     border_side = Side(border_style="thin", color="CBD5E1")
     cell_border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
     
-    if tipo_clean == "opex":
+    if tipo_clean in ("ordenes_compra", "po", "compras"):
+        ws.title = "Ordenes_Compra_FOB_CIF"
+        headers = [
+            "numero_po", "proveedor", "etapa", "responsable", "incoterm", "moneda",
+            "almacen_destino", "fecha_emision", "fecha_arribo_estimada",
+            "sku", "nombre_producto", "imagen_url", "cantidad", "costo_unitario_pactado"
+        ]
+        sample_rows = [
+            [
+                "OC-2026-001", "Foshan Lighting Co. Ltd", "transito", "Carlos Méndez", "FOB", "USD",
+                "DEP-CENTRAL-MVD", "2026-09-01", "2026-10-25",
+                "SKU-LED-PANEL-60X60", "Panel LED 60x60 Backlight 40W",
+                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100", 500, 12.80
+            ],
+            [
+                "OC-2026-001", "Foshan Lighting Co. Ltd", "transito", "Carlos Méndez", "FOB", "USD",
+                "DEP-CENTRAL-MVD", "2026-09-01", "2026-10-25",
+                "SKU-CAMPANA-LED-150W", "Campana Industrial High Bay 150W IP65",
+                "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100", 200, 42.50
+            ],
+            [
+                "OC-2026-002", "Osram Opto Semiconductors", "sugerido", "Lucía Torres", "CIF", "USD",
+                "DEP-CENTRAL-MVD", "2026-09-15", "2026-11-10",
+                "SKU-REFLECTOR-SLIM-50W", "Reflector Exterior Slim 50W Negro IP65",
+                "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=100", 800, 7.50
+            ],
+        ]
+        filename = "plantilla_ordenes_compra.xlsx"
+    elif tipo_clean in ("ordenes_venta", "ov"):
+        ws.title = "Ordenes_Venta_OV"
+        headers = [
+            "numero_ov", "cliente", "rut", "contacto_nombre", "email", 
+            "telefono", "direccion", "logo_url", "vendedor", "almacen_despacho", "moneda",
+            "sku", "nombre_producto", "imagen_url", "cantidad", "precio_unitario", "estado"
+        ]
+        sample_rows = [
+            [
+                "OV-2026-1001", "Constructora del Plata SA", "76.452.120-K", 
+                "Ing. Mario Rossi", "mrossi@delplata.cl", "+56 9 8765 4321", 
+                "Av. Las Condes 10200, Santiago", "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100",
+                "Martín Gómez", "DEP-CENTRAL-MVD", "USD",
+                "SKU-LED-PANEL-60X60", "Panel LED 60x60 Backlight 40W",
+                "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=100", 400, 28.5, "EMITIDA"
+            ],
+            [
+                "OV-2026-1002", "Laboratorios Pharma Uy", "77.102.304-5", 
+                "Lic. Lucía Menéndez", "lmenendez@pharmauy.com", "+56 2 2345 6789", 
+                "Parque Industrial ENEA, Pudahuel", "https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=100",
+                "Valeria Rossi", "DEP-CENTRAL-MVD", "USD",
+                "SKU-CAMPANA-LED-150W", "Campana Industrial High Bay 150W IP65",
+                "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100", 120, 89.0, "EN_DESPACHO"
+            ],
+        ]
+        filename = "plantilla_ordenes_venta.xlsx"
+    elif tipo_clean == "opex":
         ws.title = "Presupuestos_OPEX"
         headers = ["periodo", "codigo_centro_costo", "concepto_opex", "monto_presupuestado", "monto_real"]
         sample_rows = [
@@ -3578,11 +4378,12 @@ def update_client(
 )
 def list_suppliers(
     q: Optional[str] = Query(None, description="Búsqueda por nombre o RUT"),
+    tipo_proveedor: Optional[str] = Query(None, description="Filtrar por tipo: FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL"),
     db: Session = Depends(get_db)
 ):
     """
-    Retorna el directorio de proveedores con catálogo de SKUs suministrados,
-    costos de compra y lead times de entrega.
+    Retorna el directorio de proveedores, fábricas y buques con catálogo de SKUs,
+    órdenes de compra asociadas y trazabilidad logística.
     """
     total_suppliers = db.query(Supplier).count()
     if total_suppliers == 0:
@@ -3593,40 +4394,60 @@ def list_suppliers(
         
         demo_suppliers_seed = [
             {
-                "nombre": "Shenzhen TopLight Electronics",
-                "rut": "CN-88392019-X",
-                "logo_url": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&auto=format&fit=crop&q=80",
-                "email": "sales@toplight-sz.com",
-                "phone": "+86 755 8320 9988",
-                "address": "Baoan District, Shenzhen, Guangdong, China",
-                "default_lead_time": 45
-            },
-            {
-                "nombre": "DALI DriverTech Corp",
-                "rut": "DE-44910293-B",
+                "nombre": "Foshan Lighting Co. Ltd",
+                "razon_social": "Foshan Electrical and Lamp Co. Ltd",
+                "rut": "CN-91440600190",
+                "tipo_proveedor": "FABRICA",
+                "pais": "China",
+                "contacto_nombre": "Chen Wei",
+                "contacto_cargo": "Director de Exportaciones",
                 "logo_url": "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=100&auto=format&fit=crop&q=80",
-                "email": "kontakt@dali-drivertech.de",
-                "phone": "+49 30 8923 1100",
-                "address": "Industriestrasse 14, 70565 Stuttgart, Germany",
-                "default_lead_time": 30
+                "email": "cwei@foshanlighting.cn",
+                "phone": "+86 757 8228 1234",
+                "address": "Foshan High-Tech Industrial Zone, Guangdong",
+                "descripcion": "Fábrica principal de paneles LED y campanas industriales."
             },
             {
-                "nombre": "Aluminio Industrial Sur",
-                "rut": "76.449.120-4",
-                "logo_url": "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=100&auto=format&fit=crop&q=80",
-                "email": "ventas@aluminiosur.cl",
-                "phone": "+56 2 2789 4400",
-                "address": "Camino a Melipilla 9800, Maipú, Santiago",
-                "default_lead_time": 15
+                "nombre": "Ningbo Led Component Group",
+                "razon_social": "Ningbo Electronics Import & Export Co.",
+                "rut": "CN-91330201720",
+                "tipo_proveedor": "FABRICA",
+                "pais": "China",
+                "contacto_nombre": "Lin Zhao",
+                "contacto_cargo": "Jefe de Planta",
+                "logo_url": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&auto=format&fit=crop&q=80",
+                "email": "lzhao@ningboled.com",
+                "phone": "+86 574 8770 9988",
+                "address": "Beilun District, Ningbo, Zhejiang",
+                "descripcion": "Fabricante especializado en drivers DALI y 1-10V."
             },
             {
-                "nombre": "Wac Lighting Corp",
-                "rut": "US-11928475-W",
+                "nombre": "MSC LAURA - Mediterranean Shipping",
+                "razon_social": "MSC Mediterranean Shipping Company SA",
+                "rut": "CH-CHE-106.533.456",
+                "tipo_proveedor": "NAVIERA_BUQUE",
+                "pais": "Suiza",
+                "contacto_nombre": "Capt. Marco Valente",
+                "contacto_cargo": "Agente Portuario MVD",
                 "logo_url": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=100&auto=format&fit=crop&q=80",
-                "email": "orders@waclighting.com",
-                "phone": "+1 800 526 2588",
-                "address": "44 Harbor Park Dr, Port Washington, NY, USA",
-                "default_lead_time": 25
+                "email": "mvalente@msc.com",
+                "phone": "+598 2916 4400",
+                "address": "Rambla 25 de Agosto 508, Montevideo",
+                "descripcion": "Buque portacontenedor y naviera regular para ruta Lejano Oriente - Río de la Plata."
+            },
+            {
+                "nombre": "Maersk Line Atlantic",
+                "razon_social": "Maersk A/S",
+                "rut": "DK-33165012",
+                "tipo_proveedor": "NAVIERA_BUQUE",
+                "pais": "Dinamarca",
+                "contacto_nombre": "Søren Hansen",
+                "contacto_cargo": "Representante Comercial",
+                "logo_url": "https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=100&auto=format&fit=crop&q=80",
+                "email": "shansen@maersk.com",
+                "phone": "+598 2915 2211",
+                "address": "Plaza Independencia 811, Montevideo",
+                "descripcion": "Servicio marítimo directo con despacho aduanero y tracking satelital."
             }
         ]
 
@@ -3635,27 +4456,40 @@ def list_suppliers(
             if p_name.strip() and p_name.strip() not in seed_names:
                 demo_suppliers_seed.append({
                     "nombre": p_name.strip(),
+                    "razon_social": p_name.strip(),
                     "rut": None,
+                    "tipo_proveedor": "FABRICA",
+                    "pais": "China",
+                    "contacto_nombre": "Contacto Comercial",
+                    "contacto_cargo": "Ejecutivo de Cuentas",
                     "logo_url": None,
                     "email": f"contacto@{re.sub(r'[^a-zA-Z0-9]', '', p_name.lower())[:15] or 'proveedor'}.com",
-                    "phone": "+56 2 2345 6789",
+                    "phone": "+86 574 2345 6789",
                     "address": "Zona Industrial",
-                    "default_lead_time": 30
+                    "descripcion": "Proveedor registrado en abastecimiento."
                 })
 
         for s_data in demo_suppliers_seed:
             new_s = Supplier(
                 nombre=s_data["nombre"],
+                razon_social=s_data.get("razon_social"),
                 rut=s_data.get("rut"),
+                tipo_proveedor=s_data.get("tipo_proveedor", "FABRICA"),
+                pais=s_data.get("pais", "China"),
+                contacto_nombre=s_data.get("contacto_nombre"),
+                contacto_cargo=s_data.get("contacto_cargo"),
                 logo_url=s_data.get("logo_url"),
                 email=s_data.get("email"),
                 phone=s_data.get("phone"),
-                address=s_data.get("address")
+                address=s_data.get("address"),
+                descripcion=s_data.get("descripcion")
             )
             db.add(new_s)
         db.commit()
 
     query = db.query(Supplier)
+    if tipo_proveedor and tipo_proveedor.strip():
+        query = query.filter(Supplier.tipo_proveedor == tipo_proveedor.strip().upper())
     if q and q.strip():
         term = f"%{q.strip()}%"
         query = query.filter(or_(Supplier.nombre.ilike(term), Supplier.rut.ilike(term)))
@@ -3665,21 +4499,32 @@ def list_suppliers(
     all_orders = db.query(OrdenReposicion).all()
     products_by_sku = {p.sku: p for p in all_products}
 
+    supplier_orders_map: dict[str, list] = {}
     supplier_skus_map: dict[str, set[str]] = {}
     for ord_rep in all_orders:
         if ord_rep.proveedor:
             s_name = ord_rep.proveedor.strip().lower()
             if s_name not in supplier_skus_map:
                 supplier_skus_map[s_name] = set()
+                supplier_orders_map[s_name] = []
             supplier_skus_map[s_name].add(ord_rep.sku_id)
+            supplier_orders_map[s_name].append({
+                "id": ord_rep.id,
+                "sku_id": ord_rep.sku_id,
+                "cantidad": ord_rep.cantidad,
+                "monto_total": float(ord_rep.monto_total or 0.0),
+                "etapa": ord_rep.etapa,
+                "fecha_arribo_estimada": str(ord_rep.fecha_arribo_estimada) if ord_rep.fecha_arribo_estimada else None,
+                "responsable": ord_rep.responsable
+            })
 
     results: List[SupplierResponse] = []
 
     for s in suppliers:
         s_norm = s.nombre.strip().lower()
         skus_associated = supplier_skus_map.get(s_norm, set())
+        matched_orders = supplier_orders_map.get(s_norm, [])
         if not skus_associated and all_products:
-            # Si no hay órdenes directas, asociar subconjunto representativo de productos
             idx_s = (s.id or 1) % max(1, len(all_products))
             prods = all_products[idx_s:idx_s + 3] if len(all_products) >= 3 else all_products
         else:
@@ -3704,7 +4549,13 @@ def list_suppliers(
         results.append(SupplierResponse(
             id=s.id,
             nombre=s.nombre,
+            razon_social=s.razon_social,
             rut=s.rut,
+            tipo_proveedor=s.tipo_proveedor or "FABRICA",
+            pais=s.pais or "China",
+            contacto_nombre=s.contacto_nombre,
+            contacto_cargo=s.contacto_cargo,
+            descripcion=s.descripcion,
             logo_url=s.logo_url,
             email=s.email,
             phone=s.phone,
@@ -3712,10 +4563,85 @@ def list_suppliers(
             skus_count=len(prod_items),
             total_skus=len(prod_items),
             productos=prod_items,
+            ordenes_compra_count=len(matched_orders),
+            ordenes_compra=matched_orders,
             created_at=s.created_at
         ))
 
     return results
+
+
+@router.get(
+    "/suppliers/{supplier_id}",
+    response_model=SupplierResponse,
+    summary="Detalle completo de un proveedor/fábrica/naviera con historial de compras"
+)
+def get_supplier_by_id(
+    supplier_id: int,
+    db: Session = Depends(get_db)
+):
+    s = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado.")
+
+    rep_orders = db.query(OrdenReposicion).filter(
+        OrdenReposicion.proveedor.ilike(s.nombre.strip())
+    ).all()
+    rep_skus = {ro.sku_id for ro in rep_orders}
+    all_products = db.query(Product).all()
+    products_by_sku = {p.sku: p for p in all_products}
+    prods = [products_by_sku[sku] for sku in rep_skus if sku in products_by_sku]
+    if not prods and all_products:
+        idx_s = (s.id or 1) % max(1, len(all_products))
+        prods = all_products[idx_s:idx_s + 3] if len(all_products) >= 3 else all_products
+
+    orders_data = [
+        {
+            "id": o.id,
+            "sku_id": o.sku_id,
+            "cantidad": o.cantidad,
+            "monto_total": float(o.monto_total or 0.0),
+            "etapa": o.etapa,
+            "fecha_arribo_estimada": str(o.fecha_arribo_estimada) if o.fecha_arribo_estimada else None,
+            "responsable": o.responsable
+        }
+        for o in rep_orders
+    ]
+    prod_items = [
+        SupplierProductItem(
+            product_id=p.id,
+            sku=p.sku,
+            nombre=p.nombre,
+            categoria=getattr(p, 'categoria', '') or 'General',
+            costo_unitario=Decimal(str(round(float(p.costo_unitario or 0.0), 2))),
+            lead_time_dias=Decimal(str(int(p.inventario.lead_time_dias) if (p.inventario and p.inventario.lead_time_dias) else 30)),
+            image_url=p.image_url,
+            imagen_url=p.image_url
+        )
+        for p in prods
+    ]
+
+    return SupplierResponse(
+        id=s.id,
+        nombre=s.nombre,
+        razon_social=s.razon_social,
+        rut=s.rut,
+        tipo_proveedor=s.tipo_proveedor or "FABRICA",
+        pais=s.pais or "China",
+        contacto_nombre=s.contacto_nombre,
+        contacto_cargo=s.contacto_cargo,
+        descripcion=s.descripcion,
+        logo_url=s.logo_url,
+        email=s.email,
+        phone=s.phone,
+        address=s.address,
+        skus_count=len(prod_items),
+        total_skus=len(prod_items),
+        productos=prod_items,
+        ordenes_compra_count=len(orders_data),
+        ordenes_compra=orders_data,
+        created_at=s.created_at
+    )
 
 
 @router.post(
@@ -3738,7 +4664,13 @@ def create_supplier(
 
     new_supp = Supplier(
         nombre=payload.nombre.strip(),
+        razon_social=payload.razon_social.strip() if payload.razon_social else None,
         rut=payload.rut.strip() if payload.rut else None,
+        tipo_proveedor=payload.tipo_proveedor.strip().upper() if payload.tipo_proveedor else "FABRICA",
+        pais=payload.pais.strip() if payload.pais else "China",
+        contacto_nombre=payload.contacto_nombre.strip() if payload.contacto_nombre else None,
+        contacto_cargo=payload.contacto_cargo.strip() if payload.contacto_cargo else None,
+        descripcion=payload.descripcion.strip() if payload.descripcion else None,
         logo_url=payload.logo_url,
         email=payload.email.strip() if payload.email else None,
         phone=payload.phone.strip() if payload.phone else None,
@@ -3760,7 +4692,13 @@ def create_supplier(
     return SupplierResponse(
         id=new_supp.id,
         nombre=new_supp.nombre,
+        razon_social=new_supp.razon_social,
         rut=new_supp.rut,
+        tipo_proveedor=new_supp.tipo_proveedor,
+        pais=new_supp.pais,
+        contacto_nombre=new_supp.contacto_nombre,
+        contacto_cargo=new_supp.contacto_cargo,
+        descripcion=new_supp.descripcion,
         logo_url=new_supp.logo_url,
         email=new_supp.email,
         phone=new_supp.phone,
@@ -3768,6 +4706,8 @@ def create_supplier(
         skus_count=0,
         total_skus=0,
         productos=[],
+        ordenes_compra_count=0,
+        ordenes_compra=[],
         created_at=new_supp.created_at
     )
 
@@ -3787,12 +4727,22 @@ def update_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado.")
 
-    old_vals = {"nombre": supplier.nombre, "rut": supplier.rut, "email": supplier.email}
-
     if payload.nombre is not None:
         supplier.nombre = payload.nombre.strip()
+    if payload.razon_social is not None:
+        supplier.razon_social = payload.razon_social.strip() if payload.razon_social else None
     if payload.rut is not None:
         supplier.rut = payload.rut.strip() if payload.rut else None
+    if payload.tipo_proveedor is not None:
+        supplier.tipo_proveedor = payload.tipo_proveedor.strip().upper()
+    if payload.pais is not None:
+        supplier.pais = payload.pais.strip() if payload.pais else "China"
+    if payload.contacto_nombre is not None:
+        supplier.contacto_nombre = payload.contacto_nombre.strip() if payload.contacto_nombre else None
+    if payload.contacto_cargo is not None:
+        supplier.contacto_cargo = payload.contacto_cargo.strip() if payload.contacto_cargo else None
+    if payload.descripcion is not None:
+        supplier.descripcion = payload.descripcion.strip() if payload.descripcion else None
     if payload.logo_url is not None:
         supplier.logo_url = payload.logo_url
     if payload.email is not None:
@@ -3819,7 +4769,25 @@ def update_supplier(
         OrdenReposicion.proveedor.ilike(supplier.nombre.strip())
     ).all()
     rep_skus = {ro.sku_id for ro in rep_orders}
-    prods = db.query(Product).filter(Product.sku.in_(rep_skus)).all() if rep_skus else []
+    all_products = db.query(Product).all()
+    products_by_sku = {p.sku: p for p in all_products}
+    prods = [products_by_sku[sku] for sku in rep_skus if sku in products_by_sku]
+    if not prods and all_products:
+        idx_s = (supplier.id or 1) % max(1, len(all_products))
+        prods = all_products[idx_s:idx_s + 3] if len(all_products) >= 3 else all_products
+
+    orders_data = [
+        {
+            "id": o.id,
+            "sku_id": o.sku_id,
+            "cantidad": o.cantidad,
+            "monto_total": float(o.monto_total or 0.0),
+            "etapa": o.etapa,
+            "fecha_arribo_estimada": str(o.fecha_arribo_estimada) if o.fecha_arribo_estimada else None,
+            "responsable": o.responsable
+        }
+        for o in rep_orders
+    ]
     prod_items = [
         SupplierProductItem(
             product_id=p.id,
@@ -3837,7 +4805,13 @@ def update_supplier(
     return SupplierResponse(
         id=supplier.id,
         nombre=supplier.nombre,
+        razon_social=supplier.razon_social,
         rut=supplier.rut,
+        tipo_proveedor=supplier.tipo_proveedor or "FABRICA",
+        pais=supplier.pais or "China",
+        contacto_nombre=supplier.contacto_nombre,
+        contacto_cargo=supplier.contacto_cargo,
+        descripcion=supplier.descripcion,
         logo_url=supplier.logo_url,
         email=supplier.email,
         phone=supplier.phone,
@@ -3845,6 +4819,8 @@ def update_supplier(
         skus_count=len(prod_items),
         total_skus=len(prod_items),
         productos=prod_items,
+        ordenes_compra_count=len(orders_data),
+        ordenes_compra=orders_data,
         created_at=supplier.created_at
     )
 

@@ -91,6 +91,17 @@ import type {
   OllamaModelsResponse,
   ActiveModelRequest,
   ActiveModelResponse,
+  ReventaBatchCreatePayload,
+  BatchApprovePayload,
+  ImplicitServiceItem,
+  ImplicitServiceCreatePayload,
+  ImplicitBudgetOrder,
+  ImplicitBudgetOrderCreate,
+  LocalPurchaseOrder,
+  LocalPurchaseOrderCreate,
+  MluCategoryInfo,
+  ArbitrageScanRequest,
+  ArbitrageScanResponse,
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -744,8 +755,10 @@ export const apiService = {
   },
 
   // MÓDULO: Sincronización ROP & Multi-Depósito por Lote
-  async getUnifiedBatches(): Promise<StockBatchItem[]> {
-    const res = await apiClient.get<StockBatchItem[]>('/api/v1/warehouses/batches');
+  async getUnifiedBatches(warehouseId?: string): Promise<StockBatchItem[]> {
+    const res = await apiClient.get<StockBatchItem[]>('/api/v1/warehouses/batches', {
+      params: warehouseId ? { warehouse_id: warehouseId } : undefined,
+    });
     return res.data;
   },
 
@@ -756,6 +769,76 @@ export const apiService = {
 
   async assignDirectStock(payload: WarehouseAssignStockPayload): Promise<{ status: string; message: string; batch: StockBatchItem }> {
     const res = await apiClient.post<{ status: string; message: string; batch: StockBatchItem }>('/api/v1/warehouses/assign-stock', payload);
+    return res.data;
+  },
+
+  // MÓDULO REVENTA & APROBACIÓN DE LOTES
+  async createReventaBatch(payload: ReventaBatchCreatePayload): Promise<{ status: string; message: string; batch: StockBatchItem }> {
+    const res = await apiClient.post<{ status: string; message: string; batch: StockBatchItem }>('/api/v1/warehouses/reventa-batches', payload);
+    return res.data;
+  },
+
+  async approveBatch(batchId: string, payload: BatchApprovePayload): Promise<{ status: string; message: string; batch: StockBatchItem }> {
+    const res = await apiClient.patch<{ status: string; message: string; batch: StockBatchItem }>(`/api/v1/warehouses/batches/${batchId}/approve`, payload);
+    return res.data;
+  },
+
+  // MÓDULO ÓRDENES DE COMPRA LOCALES (URUGUAY)
+  async getLocalPurchaseOrders(params?: { supplier_id?: number; estado?: string }): Promise<LocalPurchaseOrder[]> {
+    const res = await apiClient.get<LocalPurchaseOrder[]>('/api/v1/supply/local-orders', { params });
+    return res.data;
+  },
+
+  async createLocalPurchaseOrder(payload: LocalPurchaseOrderCreate): Promise<{ status: string; message: string; orden: LocalPurchaseOrder }> {
+    const res = await apiClient.post<{ status: string; message: string; orden: LocalPurchaseOrder }>('/api/v1/supply/local-orders', payload);
+    return res.data;
+  },
+
+  // MÓDULO PRESUPUESTOS IMPLÍCITOS & LOGÍSTICA
+  async getImplicitCatalog(tipo?: string): Promise<ImplicitServiceItem[]> {
+    const res = await apiClient.get<ImplicitServiceItem[]>('/api/v1/supply/implicit-catalog', {
+      params: tipo ? { tipo } : undefined,
+    });
+    return res.data;
+  },
+
+  async createImplicitCatalogItem(payload: ImplicitServiceCreatePayload): Promise<ImplicitServiceItem> {
+    const res = await apiClient.post<ImplicitServiceItem>('/api/v1/supply/implicit-catalog', payload);
+    return res.data;
+  },
+
+  async getImplicitBudgets(estado?: string): Promise<ImplicitBudgetOrder[]> {
+    const res = await apiClient.get<ImplicitBudgetOrder[]>('/api/v1/supply/implicit-budgets', {
+      params: estado ? { estado } : undefined,
+    });
+    return res.data;
+  },
+
+  async createImplicitBudget(payload: ImplicitBudgetOrderCreate): Promise<{ status: string; message: string; presupuesto: ImplicitBudgetOrder }> {
+    const res = await apiClient.post<{ status: string; message: string; presupuesto: ImplicitBudgetOrder }>('/api/v1/supply/implicit-budgets', payload);
+    return res.data;
+  },
+
+  async approveImplicitBudget(id: number, payload: { accion: 'APROBADO' | 'RECHAZADO'; observaciones?: string }): Promise<{ status: string; message: string; presupuesto: ImplicitBudgetOrder }> {
+    const res = await apiClient.patch<{ status: string; message: string; presupuesto: ImplicitBudgetOrder }>(`/api/v1/supply/implicit-budgets/${id}/approve`, payload);
+    return res.data;
+  },
+
+  // PLANTILLA Y CARGA MASIVA DE PROVEEDORES REVENTA
+  getReventaTemplateDownloadUrl(): string {
+    return `${API_BASE_URL}/api/v1/suppliers/reventa/template`;
+  },
+
+  async importReventaExcel(formData: FormData): Promise<{ status: string; records_imported: number; errors: string[]; message: string }> {
+    const res = await apiClient.post<{ status: string; records_imported: number; errors: string[]; message: string }>(
+      '/api/v1/suppliers/reventa/import',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
     return res.data;
   },
 
@@ -805,8 +888,18 @@ export const apiService = {
     return res.data;
   },
 
-  async getSuppliers(q?: string): Promise<SupplierItem[]> {
-    const res = await apiClient.get<SupplierItem[]>('/api/v1/suppliers', { params: q ? { q } : undefined });
+  async getSuppliers(q?: string, tipo_proveedor?: string): Promise<SupplierItem[]> {
+    const res = await apiClient.get<SupplierItem[]>('/api/v1/suppliers', {
+      params: {
+        ...(q ? { q } : {}),
+        ...(tipo_proveedor ? { tipo_proveedor } : {})
+      }
+    });
+    return res.data;
+  },
+
+  async getSupplierById(id: number): Promise<SupplierItem> {
+    const res = await apiClient.get<SupplierItem>(`/api/v1/suppliers/${id}`);
     return res.data;
   },
 
@@ -840,6 +933,39 @@ export const apiService = {
   async setActiveOllamaModel(payload: ActiveModelRequest): Promise<ActiveModelResponse> {
     const res = await apiClient.post<ActiveModelResponse>('/api/v1/advisor/active-model', payload);
     return res.data;
+  },
+
+  // CAZADOR DE OPORTUNIDADES: MERCADO LIBRE URUGUAY VS ALIBABA B2B
+  async getMluCategories(): Promise<MluCategoryInfo[]> {
+    const res = await apiClient.get<MluCategoryInfo[]>('/api/v1/initiatives/mlu/categories');
+    return res.data;
+  },
+
+  async getArbitrageModels(): Promise<string[]> {
+    const res = await apiClient.get<string[]>('/api/v1/initiatives/arbitrage/models');
+    return res.data;
+  },
+
+  async scanArbitrage(payload: ArbitrageScanRequest): Promise<ArbitrageScanResponse> {
+    const res = await apiClient.post<ArbitrageScanResponse>('/api/v1/initiatives/arbitrage/scan', payload, {
+      timeout: 180000, // 3 minutos para 100 artículos y LLM
+    });
+    return res.data;
+  },
+
+  async exportArbitrageExcel(payload: ArbitrageScanRequest): Promise<void> {
+    const res = await apiClient.post('/api/v1/initiatives/arbitrage/export-excel', payload, {
+      responseType: 'blob',
+      timeout: 180000,
+    });
+    const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const catSuffix = payload.category_id || 'ALL';
+    downloadBlobFile(
+      new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      `Arbitraje_MLU_Alibaba_${catSuffix}_${nowStr}.xlsx`
+    );
   },
 };
 

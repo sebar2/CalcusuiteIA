@@ -6,11 +6,13 @@ import {
   Download,
   Lightbulb,
   Globe,
-  BarChart2
+  BarChart2,
+  ShoppingBag
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { InitiativesStepper } from '../components/initiatives/InitiativesStepper';
+import { ArbitrageOpportunityHunter } from '../components/initiatives/ArbitrageOpportunityHunter';
 import type { 
   InitiativeEvaluationResponse, 
   EngineMode 
@@ -32,7 +34,7 @@ const sanitizeMarkdown = (raw?: string) => {
 export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> = ({ 
   engineMode = 'auto' 
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'stepper' | 'capex_standalone'>('stepper');
+  const [activeSubTab, setActiveSubTab] = useState<'arbitrage_hunter' | 'stepper' | 'capex_standalone'>('arbitrage_hunter');
 
   // Estado Pestaña Opcional: Factibilidad Financiera Standalone
   const [initiativeName, setInitiativeName] = useState<string>('Línea Nueva: Colchones Premium Dual-Foam');
@@ -102,6 +104,17 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
 
           <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
             <button
+              onClick={() => setActiveSubTab('arbitrage_hunter')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                activeSubTab === 'arbitrage_hunter'
+                  ? 'bg-white dark:bg-slate-700 text-[#00a2e8] dark:text-sky-300 shadow-xs'
+                  : 'text-[#535c69] dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <ShoppingBag size={13} />
+              <span>Cazador MLU vs. Alibaba</span>
+            </button>
+            <button
               onClick={() => setActiveSubTab('stepper')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 activeSubTab === 'stepper'
@@ -125,6 +138,11 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
             </button>
           </div>
         </div>
+
+        {/* SUBTAB 0: CAZADOR DE OPORTUNIDADES MLU VS ALIBABA */}
+        {activeSubTab === 'arbitrage_hunter' && (
+          <ArbitrageOpportunityHunter />
+        )}
 
         {/* SUBTAB 1: STEPPER INTERACTIVO EN 3 FASES */}
         {activeSubTab === 'stepper' && (

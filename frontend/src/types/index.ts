@@ -1016,23 +1016,25 @@ export interface StockLocationSummary {
 
 
 // --- GOBERNANZA MULTI-DEPÓSITO & ALMACENES FÍSICOS ---
-export type WarehouseType = 'CENTRAL' | 'SUCURSAL' | 'TRANSITO' | 'FABRICA' | string;
+export type WarehouseType = 'CENTRAL' | 'SUCURSAL' | 'TRANSITO' | 'FABRICA' | 'INTERNACIONAL' | 'URUGUAY' | string;
 
 export interface WarehouseItem {
   id: string;
   nombre: string;
   tipo: WarehouseType;
   ubicacion: string;
+  pais?: string | null;
   capacidad_unidades: number;
   activo: boolean;
   created_at?: string;
 }
 
 export interface WarehouseCreatePayload {
-  id: string;
+  id?: string;
   nombre: string;
   tipo?: WarehouseType;
   ubicacion: string;
+  pais?: string;
   capacidad_unidades?: number;
   activo?: boolean;
 }
@@ -1041,6 +1043,7 @@ export interface WarehouseUpdatePayload {
   nombre?: string;
   tipo?: WarehouseType;
   ubicacion?: string;
+  pais?: string;
   capacidad_unidades?: number;
   activo?: boolean;
 }
@@ -1167,23 +1170,38 @@ export interface SalesOrderGeneratePayload {
 }
 
 // --- SINCRONIZACIÓN ROP & MULTI-DEPÓSITO POR LOTE ---
-export type BatchStage = 'fabricacion' | 'transito' | 'deposito_central' | 'deposito_salto' | 'showroom_pocitos';
+export type BatchStage = 'fabricacion' | 'transito' | 'deposito_central' | 'deposito_salto' | 'showroom_pocitos' | string;
+export type LogisticStageColumn = 'fabrica' | 'deposito_internacional' | 'alta_mar' | 'proveedor_uy' | 'deposito_uruguay';
 
 export interface StockBatchItem {
   id: string;
   lote: string;
   sku: string;
+  sku_fabrica?: string | null;
+  lote_fabrica?: string | null;
   producto_nombre?: string;
   image_url?: string | null;
+  imagen_url?: string | null;
   cantidad: number;
-  etapa_logistica: BatchStage;
+  precio_venta?: number;
+  costo_compra?: number | null;
+  estado_aprobacion?: 'PENDIENTE_APROBACION' | 'APROBADO' | 'RECHAZADO' | string;
+  etapa?: string;
+  etapa_logistica?: BatchStage;
+  etapa_columna?: LogisticStageColumn | string;
   warehouse_id: string;
   warehouse_nombre?: string;
+  supplier_id?: number | null;
+  supplier_nombre?: string | null;
+  origen_pais?: string;
+  proveedor?: string;
+  dias_restantes?: number;
+  dias_restantes_eta?: number | null;
   buque_o_tracking?: string | null;
   fecha_despacho?: string | null;
   fecha_eta?: string | null;
-  dias_restantes_eta?: number | null;
-  origen_tipo: 'ROP' | 'STOCK_DIRECTO';
+  fecha_terminado?: string | null;
+  origen_tipo?: 'ROP' | 'STOCK_DIRECTO' | 'LICITACION_B2B' | 'REVENTA_LOCAL' | string;
   rop_order_id?: string | null;
   estado: string;
   observaciones?: string | null;
@@ -1340,19 +1358,42 @@ export interface SupplierProductItem {
 export interface SupplierItem {
   id: number;
   nombre: string;
+  razon_social?: string | null;
   rut?: string | null;
+  tipo_proveedor?: 'FABRICA' | 'NAVIERA_BUQUE' | 'LOGISTICA' | 'GENERAL' | string;
+  pais?: string | null;
+  contacto_nombre?: string | null;
+  contacto_cargo?: string | null;
+  descripcion?: string | null;
   logo_url?: string | null;
   email?: string | null;
   phone?: string | null;
   address?: string | null;
   total_skus: number;
+  skus_count?: number;
   productos: SupplierProductItem[];
+  ordenes_compra_count?: number;
+  ordenes_compra?: {
+    id: number | string;
+    sku_id: string;
+    cantidad: number;
+    monto_total: number;
+    etapa: string;
+    fecha_arribo_estimada?: string | null;
+    responsable?: string;
+  }[];
   created_at?: string;
 }
 
 export interface SupplierCreatePayload {
   nombre: string;
+  razon_social?: string;
   rut?: string;
+  tipo_proveedor?: string;
+  pais?: string;
+  contacto_nombre?: string;
+  contacto_cargo?: string;
+  descripcion?: string;
   logo_url?: string;
   email?: string;
   phone?: string;
@@ -1361,7 +1402,13 @@ export interface SupplierCreatePayload {
 
 export interface SupplierUpdatePayload {
   nombre?: string;
+  razon_social?: string;
   rut?: string;
+  tipo_proveedor?: string;
+  pais?: string;
+  contacto_nombre?: string;
+  contacto_cargo?: string;
+  descripcion?: string;
   logo_url?: string;
   email?: string;
   phone?: string;
@@ -1465,5 +1512,205 @@ export interface PricingAIBundlesResponse {
   bundles: AIBundleItem[];
 }
 
+// =====================================================================
+// PROVEEDORES REVENTA & LOTES LOCALES UY
+// =====================================================================
+export interface ReventaBatchCreatePayload {
+  supplier_id: number;
+  sku: string;
+  sku_proveedor?: string;
+  descripcion: string;
+  cantidad: number;
+  precio_venta: number;
+  costo_compra?: number;
+  warehouse_destino_id?: string;
+  observaciones?: string;
+}
+
+export interface BatchApprovePayload {
+  accion: 'APROBADO' | 'RECHAZADO';
+  notas?: string;
+}
+
+// =====================================================================
+// PRESUPUESTOS IMPLÍCITOS & LOGÍSTICA
+// =====================================================================
+export type TipoServicioLogistico = 'MARITIMO' | 'SEGURO' | 'ADUANA' | 'FLETE_CAMION' | 'OTRO';
+
+export interface ImplicitServiceItem {
+  id: number;
+  tipo_servicio: TipoServicioLogistico;
+  nombre_servicio: string;
+  descripcion?: string | null;
+  unidad_medida: string;
+  costo_referencia_usd: number;
+  moneda: string;
+  proveedor_sugerido_id?: number | null;
+  activo: boolean;
+}
+
+export interface ImplicitServiceCreatePayload {
+  tipo_servicio: TipoServicioLogistico;
+  nombre_servicio: string;
+  descripcion?: string;
+  unidad_medida?: string;
+  costo_referencia_usd: number;
+  moneda?: string;
+  proveedor_sugerido_id?: number;
+}
+
+export interface ImplicitBudgetItem {
+  id?: number;
+  servicio_catalogo_id?: number | null;
+  supplier_id?: number | null;
+  supplier_nombre?: string | null;
+  tipo_servicio: string;
+  concepto: string;
+  cantidad: number;
+  costo_unitario_usd: number;
+  subtotal_usd: number;
+  observaciones?: string | null;
+}
+
+export interface ImplicitBudgetOrder {
+  id: number;
+  numero_presupuesto: string;
+  titulo: string;
+  buque_o_embarque?: string | null;
+  orden_compra_importacion_id?: number | null;
+  total_usd: number;
+  moneda: string;
+  estado_aprobacion: 'BORRADOR' | 'PENDIENTE_APROBACION' | 'APROBADO' | 'RECHAZADO' | string;
+  aprobado_por_usuario?: string | null;
+  observaciones?: string | null;
+  created_at?: string;
+  items: ImplicitBudgetItem[];
+}
+
+export interface ImplicitBudgetOrderCreate {
+  titulo: string;
+  buque_o_embarque?: string;
+  orden_compra_importacion_id?: number;
+  items: {
+    servicio_catalogo_id?: number;
+    supplier_id?: number;
+    tipo_servicio: string;
+    concepto: string;
+    cantidad: number;
+    costo_unitario_usd: number;
+    observaciones?: string;
+  }[];
+  observaciones?: string;
+}
+
+// =====================================================================
+// ÓRDENES DE COMPRA LOCALES (URUGUAY / REVENTA)
+// =====================================================================
+export interface LocalPurchaseOrderItem {
+  sku: string;
+  sku_proveedor?: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  precio_venta_sugerido: number;
+}
+
+export interface LocalPurchaseOrderCreate {
+  supplier_id: number;
+  fecha_disponible: string;
+  destino_warehouse_id?: string;
+  observaciones?: string;
+  items: LocalPurchaseOrderItem[];
+}
+
+export interface LocalPurchaseOrder {
+  id: number;
+  numero_orden: string;
+  supplier_id: number;
+  supplier_nombre: string;
+  tipo_orden: string;
+  estado: string;
+  fecha_disponible?: string | null;
+  monto_total: number;
+  destino_warehouse_id?: string | null;
+  destino_warehouse_nombre?: string | null;
+  observaciones?: string | null;
+  created_at: string;
+  items: any[];
+}
 
 
+
+
+// =====================================================================
+// CAZADOR DE OPORTUNIDADES: MERCADO LIBRE URUGUAY VS ALIBABA B2B
+// =====================================================================
+export interface MluCategoryInfo {
+  id: string;
+  name: string;
+  path: string;
+  icon?: string;
+}
+
+export interface ArbitrageScanRequest {
+  category_id?: string;
+  article_name?: string;
+  min_price?: number;
+  max_price?: number;
+  currency?: 'UYU' | 'USD';
+  ollama_model?: string;
+  limit?: number;
+}
+
+export interface ArbitrageItemResponse {
+  ranking: number;
+  mlu_id: string;
+  mlu_title: string;
+  mlu_category_id: string;
+  mlu_category_name: string;
+  mlu_seller_name: string;
+  mlu_price_uyu: number;
+  mlu_price_usd: number;
+  mlu_sold_quantity: number;
+  mlu_permalink: string;
+  mlu_thumbnail?: string | null;
+  trend_signal: string;
+  b2b_english_query: string;
+  alibaba_supplier: string;
+  alibaba_years: string;
+  alibaba_verified: boolean;
+  alibaba_fob_price_usd: number;
+  alibaba_moq: number;
+  alibaba_search_url: string;
+  shipping_logistics_usd: number;
+  landed_cost_usd: number;
+  mlu_fee_usd: number;
+  net_margin_usd: number;
+  net_margin_pct: number;
+  markup: number;
+  roi_pct: number;
+  recommendation: string;
+  status_color: string;
+}
+
+export interface ArbitrageSummaryMetrics {
+  avg_net_margin_pct: number;
+  avg_markup: number;
+  high_profit_opportunities: number;
+  total_catalog_scanned: number;
+}
+
+export interface ArbitrageScanResponse {
+  status: string;
+  total_items: number;
+  category_analyzed: string;
+  article_filter?: string | null;
+  currency_filter: string;
+  min_price?: number | null;
+  max_price?: number | null;
+  exchange_rate_used: number;
+  ollama_model_used: string;
+  execution_time_seconds: number;
+  summary_metrics: ArbitrageSummaryMetrics;
+  items: ArbitrageItemResponse[];
+}

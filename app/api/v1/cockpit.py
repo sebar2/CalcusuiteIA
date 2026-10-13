@@ -191,6 +191,11 @@ KANBAN_STAGE_CONFIG = [
         "color_hex": "#f39c12"
     },
     {
+        "id": "proveedor_uy",
+        "name": "Proveedores Uy (Plaza)",
+        "color_hex": "#8b5cf6"
+    },
+    {
         "id": "ingresado",
         "name": "Ingresado / Stock Central",
         "color_hex": "#2ecc71"

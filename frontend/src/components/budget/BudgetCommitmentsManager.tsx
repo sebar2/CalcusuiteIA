@@ -9,6 +9,8 @@ import {
   Edit2,
   RefreshCw,
   TrendingDown,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type {
@@ -30,6 +32,7 @@ export const BudgetCommitmentsManager: React.FC<BudgetCommitmentsManagerProps> =
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuditingAI, setIsAuditingAI] = useState<boolean>(false);
   const [aiAuditResult, setAiAuditResult] = useState<BudgetCommitmentAIAuditResponse | null>(null);
+  const [isAiAccordionOpen, setIsAiAccordionOpen] = useState<boolean>(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Modal para Crear / Editar
@@ -276,64 +279,88 @@ export const BudgetCommitmentsManager: React.FC<BudgetCommitmentsManagerProps> =
         />
       </div>
 
-      {/* Banner / Tarjeta de Recomendaciones IA si se ejecutó auditoría */}
+      {/* Banner / Tarjeta de Recomendaciones IA si se ejecutó auditoría (Acordeón de Contención) */}
       {aiAuditResult && (
-        <div className="bg-gradient-to-br from-indigo-950 to-slate-950 text-white rounded-3xl p-5 border border-indigo-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-indigo-800/80">
+        <div className="bg-gradient-to-br from-indigo-950 to-slate-950 text-white rounded-2xl border border-indigo-800 shadow-xl overflow-hidden transition-all">
+          <div 
+            onClick={() => setIsAiAccordionOpen(!isAiAccordionOpen)}
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors select-none"
+          >
             <div className="flex items-center space-x-2.5">
-              <Sparkles size={18} className="text-amber-400" />
-              <h3 className="font-bold text-sm text-indigo-100">
-                Diagnóstico Predictivo de Contención Presupuestaria (IA FP&amp;A)
-              </h3>
+              <Sparkles size={18} className="text-amber-400 shrink-0" />
+              <div>
+                <h3 className="font-bold text-sm text-indigo-100 flex items-center space-x-2">
+                  <span>Diagnóstico Predictivo de Contención Presupuestaria (IA FP&amp;A)</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900 border border-indigo-700 text-indigo-200">
+                    {aiAuditResult.compromisos_urgentes_sugeridos.length} sugerencias
+                  </span>
+                </h3>
+              </div>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-900/80 border border-indigo-700 text-indigo-300">
-              Período: {aiAuditResult.periodo}
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-900/80 border border-indigo-700 text-indigo-300">
+                Período: {aiAuditResult.periodo}
+              </span>
+              <button
+                type="button"
+                className="p-1 rounded-md text-indigo-300 hover:text-white cursor-pointer"
+                title={isAiAccordionOpen ? "Colapsar diagnóstico" : "Expandir diagnóstico"}
+              >
+                {isAiAccordionOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
           </div>
 
-          <p className="text-xs text-indigo-200/90 leading-relaxed">
-            {aiAuditResult.diagnostico_ia}
-          </p>
+          {isAiAccordionOpen && (
+            <div className="p-5 pt-0 border-t border-indigo-800/60 space-y-4">
+              <p className="text-xs text-indigo-200/90 leading-relaxed mt-3">
+                {aiAuditResult.diagnostico_ia}
+              </p>
 
-          {aiAuditResult.compromisos_urgentes_sugeridos.length > 0 && (
-            <div className="space-y-2.5 pt-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block">
-                Tareas Urgentes Inferidas para Incorporar:
-              </span>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {aiAuditResult.compromisos_urgentes_sugeridos.map((sug, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-2xl bg-slate-900/90 border border-indigo-700/60 flex flex-col justify-between space-y-3"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">
-                          {sug.urgencia}
-                        </span>
-                        <span className="text-xs font-mono font-bold text-indigo-300">
-                          {formatCurrency(sug.monto || 0)}
-                        </span>
-                      </div>
-                      <p className="text-xs font-semibold text-slate-100 line-clamp-3">
-                        {sug.tarea}
-                      </p>
-                      <div className="text-[10px] text-slate-400 mt-2 space-y-0.5">
-                        <div>Área: <strong className="text-slate-300">{sug.area}</strong></div>
-                        <div>Responsable: <strong className="text-slate-300">{sug.responsable}</strong></div>
-                      </div>
-                    </div>
+              {aiAuditResult.compromisos_urgentes_sugeridos.length > 0 && (
+                <div className="space-y-2.5 pt-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 block">
+                    Tareas Urgentes Inferidas para Incorporar:
+                  </span>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {aiAuditResult.compromisos_urgentes_sugeridos.map((sug, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-2xl bg-slate-900/90 border border-indigo-700/60 flex flex-col justify-between space-y-3"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">
+                              {sug.urgencia}
+                            </span>
+                            <span className="text-xs font-mono font-bold text-indigo-300">
+                              {formatCurrency(sug.monto || 0)}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-100 line-clamp-3">
+                            {sug.tarea}
+                          </p>
+                          <div className="text-[10px] text-slate-400 mt-2 space-y-0.5">
+                            <div>Área: <strong className="text-slate-300">{sug.area}</strong></div>
+                            <div>Responsable: <strong className="text-slate-300">{sug.responsable}</strong></div>
+                          </div>
+                        </div>
 
-                    <button
-                      onClick={() => handleAdoptAiSuggestion(sug)}
-                      className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center space-x-1 cursor-pointer"
-                    >
-                      <Plus size={13} />
-                      <span>Incorporar al Plan</span>
-                    </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAdoptAiSuggestion(sug);
+                          }}
+                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center space-x-1 cursor-pointer"
+                        >
+                          <Plus size={13} />
+                          <span>Incorporar al Plan</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -418,18 +445,18 @@ export const BudgetCommitmentsManager: React.FC<BudgetCommitmentsManagerProps> =
                         <select
                           value={c.estado}
                           onChange={(e) => handleUpdateStatus(c.id, e.target.value)}
-                          className={`text-[11px] font-bold px-2 py-1 rounded-lg border focus:outline-none ${
+                          className={`text-[11px] font-bold px-2 py-1 rounded-lg border focus:outline-none dark:bg-slate-800 cursor-pointer ${
                             isCumplido
-                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-[#2ecc71] border-emerald-300'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-[#2ecc71] border-emerald-300 dark:border-emerald-800'
                               : c.estado === 'EN_CURSO'
-                              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 border-blue-300'
-                              : 'bg-amber-50 dark:bg-amber-950/50 text-[#f39c12] border-amber-300'
+                              ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800'
+                              : 'bg-amber-50 dark:bg-amber-950/50 text-[#f39c12] border-amber-300 dark:border-amber-800'
                           }`}
                         >
-                          <option value="PENDIENTE">PENDIENTE</option>
-                          <option value="EN_CURSO">EN CURSO</option>
-                          <option value="CUMPLIDO">CUMPLIDO</option>
-                          <option value="BLOQUEADO">BLOQUEADO</option>
+                          <option value="PENDIENTE" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">PENDIENTE</option>
+                          <option value="EN_CURSO" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">EN CURSO</option>
+                          <option value="CUMPLIDO" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">CUMPLIDO</option>
+                          <option value="BLOQUEADO" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">BLOQUEADO</option>
                         </select>
                       </td>
                       <td className="px-4 py-3 text-center">

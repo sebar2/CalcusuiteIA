@@ -351,7 +351,7 @@ export function AppContent() {
 
             {activeTab === 'stock_trace' && (
               <ErrorBoundary fallbackTitle="Error al cargar Trazabilidad Multi-Depósito">
-                <MultiLocationStockView />
+                <MultiLocationStockView currentRole={currentRole} />
               </ErrorBoundary>
             )}
 

@@ -1,8 +1,10 @@
+import time
 import asyncio
 import logging
 import traceback
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Response
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -17,10 +19,14 @@ from app.domain.schemas import (
     BusinessCaseRequest,
     CapexBreakdown,
     OpexBreakdown,
+    MluCategoryInfo,
+    ArbitrageScanRequest,
+    ArbitrageScanResponse,
 )
 from app.services.ai_advisor_service import AIAdvisorService
 from app.services.initiatives_service import calculate_financial_metrics
 from app.services.exchange_rate_service import ExchangeRateService
+from app.services.arbitrage_service import ArbitrageService
 from app.core.security import get_current_user, UserContext, record_audit_log
 
 logger = logging.getLogger(__name__)
@@ -205,3 +211,115 @@ async def benchmark_initiative(
         }
     )
     return await AIAdvisorService.benchmark_initiative(payload, db)
+
+
+# =========================================================================
+# CAZADOR DE OPORTUNIDADES: MERCADO LIBRE URUGUAY VS ALIBABA B2B (ARBITRAJE)
+# =========================================================================
+
+@router.get(
+    "/mlu/categories",
+    response_model=List[MluCategoryInfo],
+    summary="Listado oficial de las 28 categorías retail de Mercado Libre Uruguay"
+)
+async def get_mlu_categories_endpoint(
+    user: UserContext = Depends(get_current_user)
+):
+    """Retorna las 28 categorías transaccionales oficiales de MLU excluyendo clasificados."""
+    cats = ArbitrageService.get_categories()
+    return [MluCategoryInfo(**c) for c in cats]
+
+
+@router.get(
+    "/arbitrage/models",
+    response_model=List[str],
+    summary="Listado de modelos LLM locales disponibles en Ollama"
+)
+async def get_arbitrage_models_endpoint(
+    user: UserContext = Depends(get_current_user)
+):
+    """Consulta los modelos instalados en la instancia local de Ollama para traducción B2B."""
+    return await ArbitrageService.get_ollama_models()
+
+
+@router.post(
+    "/arbitrage/scan",
+    response_model=ArbitrageScanResponse,
+    summary="Escaneo masivo de arbitraje: Top Sellers MLU vs Costos FOB Alibaba"
+)
+async def scan_arbitrage_endpoint(
+    payload: ArbitrageScanRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    """
+    Rastrea hasta 100 artículos líderes en Mercado Libre Uruguay,
+    traduce términos con IA local a especificaciones industriales B2B en inglés,
+    costea contrapartes de fábricas auditadas en Alibaba y calcula el margen neto y ROI.
+    """
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="RUN_ARBITRAGE_SCAN",
+        resource=f"initiatives/arbitrage/{payload.category_id}",
+        details={
+            "category_id": payload.category_id,
+            "article_name": payload.article_name,
+            "currency": payload.currency,
+            "min_price": payload.min_price,
+            "max_price": payload.max_price,
+            "ollama_model": payload.ollama_model,
+            "limit": payload.limit
+        }
+    )
+    result = await ArbitrageService.process_arbitrage_scan(
+        category_id=payload.category_id,
+        article_name=payload.article_name,
+        min_price=payload.min_price,
+        max_price=payload.max_price,
+        currency=payload.currency,
+        ollama_model=payload.ollama_model,
+        limit=payload.limit or 100
+    )
+    return ArbitrageScanResponse(**result)
+
+
+@router.post(
+    "/arbitrage/export-excel",
+    summary="Descarga planilla ejecutiva Excel (.xlsx) con 100 artículos y fórmulas financieras vivas"
+)
+async def export_arbitrage_excel_endpoint(
+    payload: ArbitrageScanRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    """
+    Genera y descarga un reporte .xlsx estructurado con fórmulas vivas de rentabilidad,
+    Landed Cost a Montevideo y formato ejecutivo para evaluación de compras internacionales.
+    """
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="EXPORT_ARBITRAGE_EXCEL",
+        resource=f"initiatives/arbitrage/excel/{payload.category_id}",
+        details={"category_id": payload.category_id, "limit": payload.limit}
+    )
+    scan_data = await ArbitrageService.process_arbitrage_scan(
+        category_id=payload.category_id,
+        article_name=payload.article_name,
+        min_price=payload.min_price,
+        max_price=payload.max_price,
+        currency=payload.currency,
+        ollama_model=payload.ollama_model,
+        limit=payload.limit or 100
+    )
+    excel_bytes = ArbitrageService.generate_excel_report(scan_data)
+    filename = f"Arbitraje_MLU_Alibaba_{payload.category_id or 'ALL'}_{int(time.time())}.xlsx"
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

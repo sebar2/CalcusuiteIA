@@ -198,8 +198,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 <option value="sugerido">1. Sugerido (Stock &lt;= ROP)</option>
                 <option value="aprobacion">2. Pendiente de Aprobación</option>
                 <option value="fabricacion">3. En Fabricación</option>
-                <option value="transito">4. En Tránsito / Aduana</option>
-                <option value="ingresado">5. Ingresado / Stock Central</option>
+                <option value="transito">4. En Alta Mar / Aduana</option>
+                <option value="proveedor_uy">5. Proveedores Uy (Plaza)</option>
+                <option value="ingresado">6. Ingresado / Stock Central</option>
               </select>
             </div>
 

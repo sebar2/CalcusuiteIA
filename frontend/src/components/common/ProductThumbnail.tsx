@@ -38,13 +38,19 @@ export const ProductThumbnail: React.FC<ProductThumbnailProps> = ({
     );
   }
 
+  const resolvedSrc = src?.startsWith('http') || src?.startsWith('data:')
+    ? src
+    : src?.startsWith('/static')
+    ? (window.location.port === '5173' ? `http://localhost:8000${src}` : src)
+    : src;
+
   return (
     <div
       className={`relative overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/60 shrink-0 shadow-xs group ${box} ${className}`}
       title={alt}
     >
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
         loading="lazy"
         onError={() => setHasError(true)}

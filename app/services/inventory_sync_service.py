@@ -1,9 +1,12 @@
 import uuid
+import logging
 from datetime import date, datetime, timezone, timedelta
 from typing import List, Optional, Dict
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+
+logger = logging.getLogger(__name__)
 
 from app.models.entities import (
     StockLocationBatch,
@@ -50,15 +53,17 @@ class InventorySyncService:
     }
 
     def ensure_default_warehouses(self, db: Session):
-        """Garantiza la presencia de los 5 nodos logísticos maestros en la BD."""
+        """Garantiza la presencia de los nodos logísticos maestros en la BD."""
         default_whs = [
-            ("FAB-CHINA", "Fábrica de Origen (Shenzhen / Alemania)", "FABRICA", "Shenzhen, China", 50000),
-            ("TRANSITO-MAR", "Tránsito Marítimo / Aduana de Montevideo", "TRANSITO", "Ruta Marítima Océano Atlántico", 30000),
-            ("DEP-CENTRAL-MVD", "Depósito Central Montevideo", "CENTRAL", "Montevideo, Uruguay", 25000),
-            ("DEP-SALTO", "Depósito Regional Salto", "SUCURSAL", "Salto, Uruguay", 8000),
-            ("SHOWROOM-POCITOS", "Showroom Pocitos (Retiro / Venta)", "SUCURSAL", "Pocitos, Montevideo", 3000),
+            ("FAB-CHINA", "Fábrica de Origen (Shenzhen / Alemania)", "FABRICA", "Shenzhen, China", "China", 50000),
+            ("TRANSITO-MAR", "Tránsito Marítimo / Aduana de Montevideo", "TRANSITO", "Ruta Marítima Océano Atlántico", "China", 30000),
+            ("DEP-CENTRAL-MVD", "Depósito Central Montevideo", "CENTRAL", "Montevideo, Uruguay", "Uruguay", 25000),
+            ("DEP-SALTO", "Depósito Regional Salto", "SUCURSAL", "Salto, Uruguay", "Uruguay", 8000),
+            ("SHOWROOM-POCITOS", "Showroom Pocitos (Retiro / Venta)", "SUCURSAL", "Pocitos, Montevideo", "Uruguay", 3000),
+            ("wh-ningbo-hub", "Depósito Internacional Ningbo", "INTERNACIONAL", "Ningbo Port Logistics Park", "China", 60000),
+            ("wh-shenzhen-hub", "Depósito Consolidación Shenzhen", "INTERNACIONAL", "Yantian Bonded Area", "China", 45000),
         ]
-        for w_id, nom, tipo, ubic, cap in default_whs:
+        for w_id, nom, tipo, ubic, pais, cap in default_whs:
             existing = db.query(Warehouse).filter(Warehouse.id == w_id).first()
             if not existing:
                 wh = Warehouse(
@@ -66,6 +71,7 @@ class InventorySyncService:
                     nombre=nom,
                     tipo=tipo,
                     ubicacion=ubic,
+                    pais=pais,
                     capacidad_unidades=cap,
                     activo=True,
                 )
@@ -98,6 +104,7 @@ class InventorySyncService:
                     buque_o_tracking=f"PO-{order.id}-FAB-PROD",
                     fecha_despacho=today + timedelta(days=15),
                     fecha_eta=order.fecha_arribo_estimada,
+                    fecha_terminado=today + timedelta(days=10),
                     estado="EN_PRODUCCION",
                     observaciones=f"Orden #{order.id} del proveedor {order.proveedor} en fabricación.",
                 )
@@ -106,6 +113,7 @@ class InventorySyncService:
                 batch.ubicacion = "fabrica_origen"
                 batch.estado = "EN_PRODUCCION"
                 batch.buque_o_tracking = f"PO-{order.id}-FAB-PROD"
+                batch.fecha_terminado = today + timedelta(days=10)
                 batch.observaciones = f"Orden #{order.id} en fabricación."
 
         elif order.etapa == "transito":
@@ -136,6 +144,26 @@ class InventorySyncService:
                 inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
                 if inv:
                     inv.transito_maritimo = max(inv.transito_maritimo, order.cantidad)
+
+        elif order.etapa == "proveedor_uy":
+            # 2.5. Proveedores Uy / Reventa en plaza
+            if not batch:
+                batch = StockLocationBatch(
+                    id=lote_id,
+                    sku=order.sku_id,
+                    cantidad=order.cantidad,
+                    warehouse_id="DEP-CENTRAL-MVD",
+                    ubicacion="proveedor_uy",
+                    pais_origen="UY",
+                    estado="DISPONIBLE",
+                    estado_aprobacion="APROBADO",
+                    observaciones=f"Orden #{order.id} canalizada a proveedor plaza {order.proveedor}.",
+                )
+                db.add(batch)
+            else:
+                batch.ubicacion = "proveedor_uy"
+                batch.pais_origen = "UY"
+                batch.estado_aprobacion = "APROBADO"
 
         elif order.etapa == "ingresado":
             # 3. Ingresado al Depósito Central
@@ -174,39 +202,123 @@ class InventorySyncService:
         warehouse_id: Optional[str] = None
     ) -> List[StockBatchItem]:
         """
-        Retorna la lista normalizada de lotes asignados a los almacenes.
+        Retorna la lista normalizada de lotes asignados a las 4 etapas maestras logísticas:
+        1. Fábrica (Producción)
+        2. Depósito Internacional (Consolidación origen)
+        3. En Alta Mar (Buques / Tránsito marítimo)
+        4. Depósitos Uruguay (Stock físico nacionalizado)
         """
-        batches = db.query(StockLocationBatch).all()
+        try:
+            batches = db.query(StockLocationBatch).all()
+        except Exception as e:
+            if "fecha_terminado" in str(e) or "does not exist" in str(e) or "42703" in str(e):
+                logger.warning("Detectada columna faltante en base de datos. Auto-reparando esquema: %s", e)
+                from app.database.session import sync_table_columns
+                db.rollback()
+                sync_table_columns(db.connection())
+                batches = db.query(StockLocationBatch).all()
+            else:
+                raise
         today = date.today()
+        warehouses_map = {w.id: w for w in db.query(Warehouse).all()}
         result: List[StockBatchItem] = []
 
         for b in batches:
-            # Mapear ubicación a warehouse_id estandarizado
-            wh_id = self.WAREHOUSE_ID_MAP.get(b.ubicacion, "DEP-CENTRAL-MVD")
-            if warehouse_id and wh_id != warehouse_id and b.ubicacion != warehouse_id:
+            # Determinar warehouse_id estandarizado o personalizado
+            target_loc = b.warehouse_id or b.ubicacion
+            wh_id = self.WAREHOUSE_ID_MAP.get(target_loc, target_loc)
+            if warehouse_id and wh_id != warehouse_id and b.ubicacion != warehouse_id and b.warehouse_id != warehouse_id:
                 continue
 
-            # Determinar etapa enum
-            if wh_id == "FAB-CHINA" or b.ubicacion == "fabrica_origen":
+            wh_entity = warehouses_map.get(wh_id) or warehouses_map.get(b.ubicacion)
+            wh_tipo = wh_entity.tipo if wh_entity else None
+            wh_nombre = wh_entity.nombre if wh_entity else wh_id
+
+            # Clasificar en las 5 columnas maestras:
+            b_estado = (b.estado or "").upper()
+            b_ubic = (b.ubicacion or "").lower()
+            supp = b.supplier_rel
+            supp_tipo = (supp.tipo_proveedor or "").upper() if supp else ""
+            b_estado_aprob = getattr(b, "estado_aprobacion", "APROBADO")
+
+            if (
+                supp_tipo in ("PROVEEDOR_UY", "PROVEEDOR_REVENTA")
+                or b_ubic in ("proveedor_uy", "reventa_local")
+                or (b.observaciones and "reventa" in b.observaciones.lower())
+                or (b_estado_aprob == "PENDIENTE_APROBACION" and wh_id not in ("FAB-CHINA", "TRANSITO-MAR"))
+            ):
+                etapa_columna = "proveedor_uy"
+                etapa = BatchStage.CENTRAL
+            elif (
+                b_ubic in ("fabrica_origen", "fab-china", "fab-ningbo")
+                or wh_id == "FAB-CHINA"
+                or wh_tipo == "FABRICA"
+                or b_estado in ("EN_PRODUCCION", "EN_FABRICACION", "FABRICACION")
+            ):
+                etapa_columna = "fabrica"
                 etapa = BatchStage.FABRICACION
-            elif wh_id == "TRANSITO-MAR" or b.ubicacion == "transito_maritimo":
+            elif (
+                wh_tipo == "INTERNACIONAL"
+                or wh_id in ("wh-ningbo-hub", "wh-shenzhen-hub", "wh-hamburgo-hub")
+                or ("hub" in wh_id.lower() or "internacional" in wh_id.lower())
+                or (b_ubic == "deposito_internacional")
+            ):
+                etapa_columna = "deposito_internacional"
+                etapa = BatchStage.CENTRAL
+            elif (
+                b_ubic in ("transito_maritimo", "transito-mar")
+                or wh_id == "TRANSITO-MAR"
+                or wh_tipo == "TRANSITO"
+                or b_estado in ("EN_TRANSITO", "TRANSITO", "EMBARCADO")
+                or (b.buque_o_tracking and any(x in b.buque_o_tracking.lower() for x in ("cosco", "maersk", "msc", "bl-", "buque")))
+            ):
+                etapa_columna = "alta_mar"
                 etapa = BatchStage.TRANSITO
-            elif wh_id == "DEP-CENTRAL-MVD":
-                etapa = BatchStage.CENTRAL
-            elif wh_id == "DEP-SALTO":
-                etapa = BatchStage.SUCURSAL
-            elif wh_id == "SHOWROOM-POCITOS" or b.ubicacion == "showrooms_locales":
-                etapa = BatchStage.SHOWROOM
             else:
-                etapa = BatchStage.CENTRAL
+                etapa_columna = "deposito_uruguay"
+                if "pocitos" in wh_id.lower() or "showroom" in wh_id.lower():
+                    etapa = BatchStage.SHOWROOM
+                elif "salto" in wh_id.lower() or wh_tipo == "SUCURSAL":
+                    etapa = BatchStage.SUCURSAL
+                else:
+                    etapa = BatchStage.CENTRAL
 
             dias_rest = 0
             if b.fecha_eta:
                 dias_rest = max(0, (b.fecha_eta - today).days)
-            elif etapa == BatchStage.FABRICACION:
+            elif etapa_columna == "fabrica":
                 dias_rest = 14
+            elif etapa_columna == "alta_mar":
+                dias_rest = 21
 
-            prod_nombre = b.producto_rel.nombre if b.producto_rel else b.sku
+            prod = b.producto_rel
+            prod_nombre = prod.nombre if prod else b.sku
+            p_venta = float(prod.precio_lista) if (prod and prod.precio_lista) else 0.0
+            img_url = prod.image_url if prod else None
+
+            # Dual SKU & Lote
+            sku_fab = b.sku_fabrica or f"MK-{b.sku}-CN"
+            lot_fab = b.lote_fabrica or f"LOT-{b.id.replace('LOT-', '')}"
+
+            # Proveedor / Buque / Fábrica
+            supp = b.supplier_rel
+            if supp:
+                supp_id = supp.id
+                supp_nom = supp.nombre
+                origen_p = supp.pais or ("China" if b.pais_origen in ["CN", "China"] else "Alemania")
+            else:
+                supp_id = None
+                if etapa_columna == "alta_mar":
+                    supp_nom = b.buque_o_tracking or "MSC LAURA - Mediterranean Shipping"
+                elif etapa_columna == "fabrica":
+                    supp_nom = "Foshan Lighting Co. Ltd"
+                else:
+                    supp_nom = "Luminar Global Logistics"
+                origen_p = "China" if b.pais_origen in ["CN", "China"] else "Uruguay"
+
+            fecha_terminado_val = b.fecha_terminado
+            if not fecha_terminado_val and etapa_columna == "fabrica":
+                fecha_terminado_val = today + timedelta(days=12)
 
             obs_upper = (b.observaciones or "").upper()
             id_upper = (b.id or "").upper()
@@ -222,20 +334,31 @@ class InventorySyncService:
                     id=b.id,
                     lote=b.id,
                     sku=b.sku,
+                    sku_fabrica=sku_fab,
+                    lote_fabrica=lot_fab,
                     cantidad=b.cantidad,
+                    precio_venta=round(p_venta, 2),
                     etapa=etapa,
                     etapa_logistica=etapa,
+                    etapa_columna=etapa_columna,
                     warehouse_id=wh_id,
-                    origen_pais="China" if b.pais_origen in ["CN", "China"] else "Alemania",
-                    proveedor="Luminar Global Logistics",
+                    warehouse_nombre=wh_nombre,
+                    supplier_id=supp_id,
+                    supplier_nombre=supp_nom,
+                    origen_pais=origen_p,
+                    proveedor=supp_nom,
                     dias_restantes=dias_rest,
                     dias_restantes_eta=dias_rest,
                     fecha_eta=b.fecha_eta,
                     fecha_despacho=b.fecha_despacho,
+                    fecha_terminado=fecha_terminado_val,
                     producto_nombre=prod_nombre or b.sku,
                     buque_o_tracking=b.buque_o_tracking or "",
+                    imagen_url=img_url,
                     origen_tipo=orig_tipo_val,
-                    estado=b.estado or "DISPONIBLE",
+                    costo_compra=float(b.costo_compra) if getattr(b, "costo_compra", None) is not None else None,
+                    estado_aprobacion=getattr(b, "estado_aprobacion", "APROBADO") or "APROBADO",
+                    estado=b.estado or ("EN_PRODUCCION" if etapa_columna == "fabrica" else ("EN_TRANSITO" if etapa_columna == "alta_mar" else "DISPONIBLE")),
                     observaciones=b.observaciones or "",
                 )
             )
@@ -267,7 +390,10 @@ class InventorySyncService:
             ).first()
 
         if not batch:
-            raise ValueError(f"Lote {payload.lote} con SKU {payload.sku} no encontrado.")
+            raise ValueError(f"Lote '{payload.lote}' para SKU '{payload.sku}' no encontrado.")
+
+        if getattr(batch, "estado_aprobacion", "APROBADO") not in ("APROBADO", None):
+            raise ValueError(f"El lote '{batch.id}' no puede transferirse porque está en estado '{batch.estado_aprobacion}'. Requiere aprobación previa de Comercial o Directorio.")
 
         if batch.cantidad < payload.cantidad:
             raise ValueError(

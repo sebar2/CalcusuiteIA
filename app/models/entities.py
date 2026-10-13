@@ -232,6 +232,9 @@ class OrdenCompra(Base):
     responsable: Mapped[str] = mapped_column(String(100), nullable=False)
     fecha_emision: Mapped[date] = mapped_column(Date, default=lambda: datetime.now(timezone.utc).date(), nullable=False)
     fecha_arribo_estimada: Mapped[date] = mapped_column(Date, nullable=False)
+    tipo_orden: Mapped[str] = mapped_column(String(30), default="IMPORTACION", nullable=False) # IMPORTACION, LOCAL_REVENTA
+    fecha_disponible: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    monto_total: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=False)
 
     detalles: Mapped[List["OrdenCompraDetalle"]] = relationship(back_populates="orden", cascade="all, delete-orphan")
 
@@ -483,17 +486,25 @@ class StockLocationBatch(Base):
     buque_o_tracking: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     fecha_despacho: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     fecha_eta: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    fecha_terminado: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    sku_fabrica: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lote_fabrica: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
+    warehouse_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     estado: Mapped[str] = mapped_column(String(30), default="EN_TRANSITO", nullable=False) # EN_PRODUCCION, EN_TRANSITO, DISPONIBLE, TRANSFERIDO
+    estado_aprobacion: Mapped[str] = mapped_column(String(30), default="APROBADO", nullable=False) # APROBADO, PENDIENTE_APROBACION, RECHAZADO
+    costo_compra: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
     observaciones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     producto_rel: Mapped["Product"] = relationship(foreign_keys=[sku])
+    supplier_rel: Mapped[Optional["Supplier"]] = relationship(foreign_keys=[supplier_id])
 
 
 class Warehouse(Base):
     """
     Entidad Depósito / Almacén / Ubicación Logística
-    Tipos: 'CENTRAL', 'SUCURSAL', 'TRANSITO', 'FABRICA'
+    Tipos: 'CENTRAL', 'SUCURSAL', 'TRANSITO', 'FABRICA', 'INTERNACIONAL', 'URUGUAY'
     """
     __tablename__ = "warehouses"
 
@@ -501,6 +512,7 @@ class Warehouse(Base):
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
     tipo: Mapped[str] = mapped_column(String(30), default="SUCURSAL", nullable=False)
     ubicacion: Mapped[str] = mapped_column(String(150), nullable=False)
+    pais: Mapped[Optional[str]] = mapped_column(String(100), default="Uruguay", nullable=True)
     capacidad_unidades: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
@@ -546,12 +558,81 @@ class Supplier(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    razon_social: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     rut: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    tipo_proveedor: Mapped[str] = mapped_column(String(50), default="FABRICA", nullable=False, index=True) # FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL
+    pais: Mapped[Optional[str]] = mapped_column(String(100), default="China", nullable=True)
+    contacto_nombre: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    contacto_cargo: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+
+class ImplicitServiceCatalog(Base):
+    """
+    Catálogo de Servicios Logísticos e Implícitos de Importación (Landed Cost).
+    Rubros: 'MARITIMO', 'SEGURO', 'ADUANA', 'TRANSPORTE_CAMION'
+    """
+    __tablename__ = "implicit_service_catalog"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rubro: Mapped[str] = mapped_column(String(50), nullable=False, index=True) # MARITIMO, SEGURO, ADUANA, TRANSPORTE_CAMION
+    codigo: Mapped[str] = mapped_column(String(50), unique=True, nullable=False) # ej: 'SRV-MAR-40HQ', 'SRV-SEG-INT'
+    nombre_servicio: Mapped[str] = mapped_column(String(150), nullable=False)
+    proveedor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
+    costo_unitario_base: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=False)
+    moneda: Mapped[str] = mapped_column(String(10), default="USD", nullable=False)
+    descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    proveedor_rel: Mapped[Optional["Supplier"]] = relationship()
+
+
+class ImplicitBudgetOrder(Base):
+    """
+    Orden de Presupuesto Implícito / Gastos de Despacho & Servicios (Landed Costs).
+    Agrupa ítems de marítimo, seguros, aduana y camiones aprobables por Directorio.
+    """
+    __tablename__ = "implicit_budget_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    numero_orden: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True) # ej: 'PRE-IMP-2026-001'
+    titulo: Mapped[str] = mapped_column(String(200), nullable=False)
+    monto_total: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=False)
+    moneda: Mapped[str] = mapped_column(String(10), default="USD", nullable=False)
+    estado: Mapped[str] = mapped_column(String(30), default="PENDIENTE_APROBACION", nullable=False, index=True) # PENDIENTE_APROBACION, APROBADO, RECHAZADO
+    aprobado_por: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    fecha_aprobacion: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    observaciones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    items: Mapped[List["ImplicitBudgetItem"]] = relationship(back_populates="budget", cascade="all, delete-orphan")
+
+
+class ImplicitBudgetItem(Base):
+    """
+    Ítems o servicios individuales dentro de un Presupuesto Implícito.
+    """
+    __tablename__ = "implicit_budget_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(ForeignKey("implicit_budget_orders.id"), nullable=False, index=True)
+    rubro: Mapped[str] = mapped_column(String(50), nullable=False) # MARITIMO, SEGURO, ADUANA, TRANSPORTE_CAMION
+    service_id: Mapped[Optional[int]] = mapped_column(ForeignKey("implicit_service_catalog.id"), nullable=True)
+    supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True)
+    descripcion: Mapped[str] = mapped_column(String(200), nullable=False)
+    cantidad: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    costo_unitario: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    costo_total: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+
+    budget: Mapped["ImplicitBudgetOrder"] = relationship(back_populates="items")
+    service_rel: Mapped[Optional["ImplicitServiceCatalog"]] = relationship()
+    supplier_rel: Mapped[Optional["Supplier"]] = relationship()
 
 
 # Re-export de entidades del dominio complementarias

@@ -56,6 +56,121 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+def sync_table_columns(conn):
+    """
+    Sincroniza y asegura que todas las columnas añadidas a los modelos
+    existan en las tablas físicas de la base de datos, soportando de forma
+    nativa e idéntica tanto PostgreSQL 16 (pg8000/psycopg2) como SQLite.
+    Es no destructivo y totalmente idempotente.
+    """
+    from sqlalchemy import inspect
+    try:
+        inspector = inspect(conn)
+        existing_tables = set(inspector.get_table_names())
+    except Exception as e:
+        logger.warning("No se pudo inspeccionar las tablas para sincronización: %s", e)
+        return
+
+    def add_col_if_missing(table: str, col: str, col_type: str, default: str = None):
+        if table not in existing_tables:
+            return
+        try:
+            current_cols = {c["name"] for c in inspector.get_columns(table)}
+            if col not in current_cols:
+                def_part = f" DEFAULT {default}" if default else ""
+                sql = f"ALTER TABLE {table} ADD COLUMN {col} {col_type}{def_part}"
+                conn.execute(text(sql))
+                conn.commit()
+                logger.info("Migración no destructiva multi-dialecto: columna '%s' añadida a tabla '%s'.", col, table)
+        except Exception as e:
+            logger.warning("No se pudo añadir columna '%s' a '%s': %s", col, table, e)
+
+    # 1. stock_location_batches (Multi-Depósito, Dual-SKU y Fechas de fabricación)
+    add_col_if_missing("stock_location_batches", "fecha_terminado", "DATE")
+    add_col_if_missing("stock_location_batches", "sku_fabrica", "VARCHAR(100)")
+    add_col_if_missing("stock_location_batches", "lote_fabrica", "VARCHAR(100)")
+    add_col_if_missing("stock_location_batches", "supplier_id", "INTEGER")
+    add_col_if_missing("stock_location_batches", "warehouse_id", "VARCHAR(50)")
+
+    add_col_if_missing("stock_location_batches", "estado_aprobacion", "VARCHAR(30)", "'APROBADO'")
+    add_col_if_missing("stock_location_batches", "costo_compra", "NUMERIC(14, 4)")
+
+    # 2. suppliers (Directorio de Fábricas y Navieras/Buques)
+    add_col_if_missing("suppliers", "tipo_proveedor", "VARCHAR(50)", "'FABRICA'")
+    add_col_if_missing("suppliers", "razon_social", "VARCHAR(200)")
+    add_col_if_missing("suppliers", "pais", "VARCHAR(100)", "'China'")
+    add_col_if_missing("suppliers", "contacto_nombre", "VARCHAR(100)")
+    add_col_if_missing("suppliers", "contacto_cargo", "VARCHAR(100)")
+    add_col_if_missing("suppliers", "descripcion", "TEXT")
+
+    # 3. warehouses (Nodos Logísticos Internacionales y Nacionales)
+    add_col_if_missing("warehouses", "pais", "VARCHAR(100)", "'Uruguay'")
+
+    # 4. commercial_deals (CRM B2B)
+    add_col_if_missing("commercial_deals", "rut", "VARCHAR(50)")
+
+    # 5. centros_costo & acciones_compromisos (BCNF)
+    add_col_if_missing("centros_costo", "area_id", "INTEGER")
+    add_col_if_missing("centros_costo", "responsable_id", "INTEGER")
+    add_col_if_missing("acciones_compromisos", "monto", "NUMERIC(14, 4)", "0.0")
+    add_col_if_missing("acciones_compromisos", "urgencia", "VARCHAR(20)", "'MEDIA'")
+    add_col_if_missing("acciones_compromisos", "area_id", "VARCHAR(50)")
+    add_col_if_missing("acciones_compromisos", "responsable_id", "VARCHAR(50)")
+
+    # 6. categorias & productos
+    add_col_if_missing("categorias", "created_at", "TIMESTAMP")
+    add_col_if_missing("productos", "image_url", "VARCHAR(500)")
+
+    # 7. ordenes_compra (Plaza Local / Reventa)
+    add_col_if_missing("ordenes_compra", "tipo_orden", "VARCHAR(30)", "'IMPORTACION'")
+    add_col_if_missing("ordenes_compra", "fecha_disponible", "DATE")
+    add_col_if_missing("ordenes_compra", "monto_total", "NUMERIC(14, 4)", "0.0")
+
+    # 8. Semilla de Proveedores Uruguay y Servicios Implícitos si la tabla existe
+    if "suppliers" in existing_tables:
+        try:
+            # Proveedores Locales / Reventa
+            prov_uy_count = conn.execute(text("SELECT COUNT(*) FROM suppliers WHERE tipo_proveedor IN ('PROVEEDOR_UY', 'PROVEEDOR_REVENTA')")).scalar() or 0
+            if prov_uy_count == 0:
+                sample_uy = [
+                    ("Distribuidora Eléctrica del Plata", "Eléctrica del Plata S.A.", "214567890014", "PROVEEDOR_UY", "Uruguay", "Rodrigo Méndez", "Gerente de Ventas Mayorista", "rmendez@electricaplata.com.uy", "+598 2900 1122", "Rondeau 1450, Montevideo", "Distribuidor mayorista de plaza con stock inmediato para licitaciones y obras."),
+                    ("Ferretería & Luminarias Sur", "Luminarias del Sur Ltda.", "219876540019", "PROVEEDOR_REVENTA", "Uruguay", "Mariana Cabrera", "Ejecutiva de Cuentas B2B", "mcabrera@luminariassur.uy", "+598 2408 3344", "Av. 8 de Octubre 2700, Montevideo", "Proveedor de reventa de luminarias industriales y componentes de reposición local."),
+                    ("Logística & Despachos Portuarios MVD", "Despachos Portuarios del Este S.A.", "216543210012", "SERVICIO_LOGISTICO", "Uruguay", "Guzmán Pereyra", "Despachante de Aduanas", "gpereyra@despachosmvd.uy", "+598 2916 8899", "Zabala 1520, Montevideo", "Agencia aduanera y fletes terrestres puerto-depósito."),
+                ]
+                for n, rz, rut, tip, p, cn, cc, em, ph, ad, d in sample_uy:
+                    conn.execute(text("""
+                        INSERT INTO suppliers (nombre, razon_social, rut, tipo_proveedor, pais, contacto_nombre, contacto_cargo, email, phone, address, descripcion)
+                        VALUES (:n, :rz, :rut, :tip, :p, :cn, :cc, :em, :ph, :ad, :d)
+                    """), {"n": n, "rz": rz, "rut": rut, "tip": tip, "p": p, "cn": cn, "cc": cc, "em": em, "ph": ph, "ad": ad, "d": d})
+                conn.commit()
+        except Exception as e:
+            logger.warning("No se pudo sembrar proveedores Uy: %s", e)
+
+    # 9. Semilla de Catálogo de Servicios Implícitos (Landed Costs)
+    if "implicit_service_catalog" in existing_tables:
+        try:
+            srv_count = conn.execute(text("SELECT COUNT(*) FROM implicit_service_catalog")).scalar() or 0
+            if srv_count == 0:
+                services_base = [
+                    ("MARITIMO", "SRV-MAR-40HQ", "Flete Marítimo Contenedor 40' High Cube", 4200.00, "Flete marítimo puerto origen (China) a Puerto de Montevideo."),
+                    ("MARITIMO", "SRV-MAR-20ST", "Flete Marítimo Contenedor 20' Standard", 2600.00, "Flete marítimo contenedor chico de 20 pies."),
+                    ("MARITIMO", "SRV-MAR-LCL", "Flete Marítimo Carga Consolidada (Medio Contenedor LCL)", 1400.00, "Flete por metro cúbico / LCL consolidado en origen."),
+                    ("SEGURO", "SRV-SEG-INT", "Póliza de Seguro de Carga Internacional", 450.00, "Cobertura total contra todo riesgo en tránsito marítimo (All Risks)."),
+                    ("ADUANA", "SRV-ADU-DESP", "Honorarios de Despacho & Liberación Aduanera MVD", 650.00, "Gestión aduanera, tasas de puerto ANP y trámite DUA de importación."),
+                    ("TRANSPORTE_CAMION", "SRV-CAM-PORT", "Flete Terrestre Camión Puerto MVD a Depósito Central", 380.00, "Transporte en camión portacontenedor desde terminal portuaria a depósito."),
+                    ("TRANSPORTE_CAMION", "SRV-CAM-INT", "Flete Terrestre Camión Montevideo a Salto / Interior", 720.00, "Distribución de carga pesada a depósitos regionales del interior."),
+                ]
+                for r, c, nom, costo, desc in services_base:
+                    conn.execute(text("""
+                        INSERT INTO implicit_service_catalog (rubro, codigo, nombre_servicio, costo_unitario_base, moneda, descripcion, activo)
+                        VALUES (:r, :c, :nom, :costo, 'USD', :desc, :activo)
+                    """), {"r": r, "c": c, "nom": nom, "costo": costo, "desc": desc, "activo": True})
+                conn.commit()
+        except Exception as e:
+            logger.warning("No se pudo sembrar catálogo de servicios implícitos: %s", e)
+
+
 def run_non_destructive_migrations(target_engine: Engine = None):
     """
     Ejecuta migraciones no destructivas garantizando que la estructura BCNF
@@ -604,24 +719,57 @@ def run_non_destructive_migrations(target_engine: Engine = None):
         """))
         conn.commit()
 
+        # Migración segura para warehouses (columna pais)
+        cursor.execute("PRAGMA table_info(warehouses)")
+        wh_columns = [row[1] for row in cursor.fetchall()]
+        if "pais" not in wh_columns:
+            try:
+                conn.execute(text("ALTER TABLE warehouses ADD COLUMN pais VARCHAR(100) DEFAULT 'Uruguay'"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna pais a warehouses: %s", e)
+
         cursor.execute("SELECT COUNT(*) FROM warehouses")
         count_warehouses = cursor.fetchone()[0]
         if count_warehouses == 0:
             sample_warehouses = [
-                ("dep-central", "Central Montevideo", "CENTRAL", "Camino Carrasco 4500, Montevideo", 50000, 1),
-                ("loc-pocitos", "Local Pocitos Showroom", "SUCURSAL", "Av. Brasil 2890, Montevideo", 5000, 1),
-                ("zf-aduana", "Depósito Aduanero Zona Franca", "TRANSITO", "Zonamerica Edificio Beta", 25000, 1),
-                ("fab-ningbo", "Fábrica Serlux Ningbo", "FABRICA", "Ningbo High-Tech Industrial Zone, China", 100000, 1),
+                ("dep-central", "Central Montevideo", "CENTRAL", "Camino Carrasco 4500, Montevideo", "Uruguay", 50000, 1),
+                ("loc-pocitos", "Local Pocitos Showroom", "SUCURSAL", "Av. Brasil 2890, Montevideo", "Uruguay", 5000, 1),
+                ("dep-salto", "Depósito Regional Salto", "SUCURSAL", "Av. Barbieri 820, Salto", "Uruguay", 8000, 1),
+                ("zf-aduana", "Depósito Aduanero Zona Franca", "TRANSITO", "Zonamerica Edificio Beta", "Uruguay", 25000, 1),
+                ("wh-ningbo-hub", "Depósito Internacional Ningbo", "INTERNACIONAL", "Ningbo Port Logistics Park, Zhejiang", "China", 60000, 1),
+                ("wh-shenzhen-hub", "Depósito Consolidación Shenzhen", "INTERNACIONAL", "Yantian Bonded Area, Shenzhen", "China", 45000, 1),
+                ("wh-hamburgo-hub", "Depósito Hub Hamburgo", "INTERNACIONAL", "Freihafen Hamburg, Speicherstadt", "Alemania", 30000, 1),
             ]
-            for w_id, w_nom, w_tip, w_ubi, w_cap, w_act in sample_warehouses:
+            for w_id, w_nom, w_tip, w_ubi, w_pais, w_cap, w_act in sample_warehouses:
                 conn.execute(
                     text("""
-                        INSERT INTO warehouses (id, nombre, tipo, ubicacion, capacidad_unidades, activo)
-                        VALUES (:id, :nom, :tipo, :ubi, :cap, :act)
+                        INSERT INTO warehouses (id, nombre, tipo, ubicacion, pais, capacidad_unidades, activo)
+                        VALUES (:id, :nom, :tipo, :ubi, :pais, :cap, :act)
                     """),
-                    {"id": w_id, "nom": w_nom, "tipo": w_tip, "ubi": w_ubi, "cap": w_cap, "act": w_act}
+                    {"id": w_id, "nom": w_nom, "tipo": w_tip, "ubi": w_ubi, "pais": w_pais, "cap": w_cap, "act": w_act}
                 )
             conn.commit()
+        else:
+            # Asegurar que al menos existan depósitos internacionales de muestra
+            int_whs = [
+                ("wh-ningbo-hub", "Depósito Internacional Ningbo", "INTERNACIONAL", "Ningbo Port Logistics Park, Zhejiang", "China", 60000, 1),
+                ("wh-shenzhen-hub", "Depósito Consolidación Shenzhen", "INTERNACIONAL", "Yantian Bonded Area, Shenzhen", "China", 45000, 1),
+            ]
+            for w_id, w_nom, w_tip, w_ubi, w_pais, w_cap, w_act in int_whs:
+                cursor.execute("SELECT id FROM warehouses WHERE id = ?", (w_id,))
+                if not cursor.fetchone():
+                    try:
+                        conn.execute(
+                            text("""
+                                INSERT INTO warehouses (id, nombre, tipo, ubicacion, pais, capacidad_unidades, activo)
+                                VALUES (:id, :nom, :tipo, :ubi, :pais, :cap, :act)
+                            """),
+                            {"id": w_id, "nom": w_nom, "tipo": w_tip, "ubi": w_ubi, "pais": w_pais, "cap": w_cap, "act": w_act}
+                        )
+                        conn.commit()
+                    except Exception as e:
+                        logger.warning("No se pudo insertar almacén internacional %s: %s", w_id, e)
 
         # 15. Asegurar columnas y datos en acciones_compromisos
         conn.execute(text("""
@@ -732,13 +880,114 @@ def run_non_destructive_migrations(target_engine: Engine = None):
                 )
             conn.commit()
 
+        # Migración segura para suppliers (Fábricas y Buques / Navieras)
+        cursor.execute("PRAGMA table_info(suppliers)")
+        sup_columns = [row[1] for row in cursor.fetchall()]
+        if "tipo_proveedor" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN tipo_proveedor VARCHAR(50) DEFAULT 'FABRICA'"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna tipo_proveedor a suppliers: %s", e)
+        if "razon_social" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN razon_social VARCHAR(200)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna razon_social a suppliers: %s", e)
+        if "pais" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN pais VARCHAR(100) DEFAULT 'China'"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna pais a suppliers: %s", e)
+        if "contacto_nombre" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN contacto_nombre VARCHAR(100)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna contacto_nombre a suppliers: %s", e)
+        if "contacto_cargo" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN contacto_cargo VARCHAR(100)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna contacto_cargo a suppliers: %s", e)
+        if "descripcion" not in sup_columns:
+            try:
+                conn.execute(text("ALTER TABLE suppliers ADD COLUMN descripcion TEXT"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna descripcion a suppliers: %s", e)
+
+        # Migración segura para stock_location_batches (Trazabilidad Dual-SKU y Fechas)
+        cursor.execute("PRAGMA table_info(stock_location_batches)")
+        batch_columns = [row[1] for row in cursor.fetchall()]
+        if "sku_fabrica" not in batch_columns:
+            try:
+                conn.execute(text("ALTER TABLE stock_location_batches ADD COLUMN sku_fabrica VARCHAR(100)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna sku_fabrica a stock_location_batches: %s", e)
+        if "lote_fabrica" not in batch_columns:
+            try:
+                conn.execute(text("ALTER TABLE stock_location_batches ADD COLUMN lote_fabrica VARCHAR(100)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna lote_fabrica a stock_location_batches: %s", e)
+        if "fecha_terminado" not in batch_columns:
+            try:
+                conn.execute(text("ALTER TABLE stock_location_batches ADD COLUMN fecha_terminado DATE"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna fecha_terminado a stock_location_batches: %s", e)
+        if "supplier_id" not in batch_columns:
+            try:
+                conn.execute(text("ALTER TABLE stock_location_batches ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna supplier_id a stock_location_batches: %s", e)
+        if "warehouse_id" not in batch_columns:
+            try:
+                conn.execute(text("ALTER TABLE stock_location_batches ADD COLUMN warehouse_id VARCHAR(50)"))
+                conn.commit()
+            except Exception as e:
+                logger.warning("No se pudo añadir columna warehouse_id a stock_location_batches: %s", e)
+
+        # Semilla de proveedores canónicos: Fábricas y Navieras
+        cursor.execute("SELECT COUNT(*) FROM suppliers")
+        count_sup = cursor.fetchone()[0]
+        if count_sup == 0:
+            sample_suppliers = [
+                ("Foshan Lighting Co. Ltd", "Foshan Electrical and Lamp Co. Ltd", "CN-91440600190", "FABRICA", "China", "Chen Wei", "Director de Exportaciones", "cwei@foshanlighting.cn", "+86 757 8228 1234", "Foshan High-Tech Industrial Zone, Guangdong", "Fábrica principal de paneles LED y campanas industriales con certificación CE y RoHS."),
+                ("Ningbo Led Component Group", "Ningbo Electronics Import & Export Co.", "CN-91330201720", "FABRICA", "China", "Lin Zhao", "Jefe de Planta", "lzhao@ningboled.com", "+86 574 8770 9988", "Beilun District, Ningbo, Zhejiang", "Fabricante especializado en drivers de corriente constante regulables DALI y 1-10V."),
+                ("Shenzhen OptoTech Industry", "Shenzhen Opto Industrial Technologies Co.", "CN-91440300582", "FABRICA", "China", "Mei Huang", "Gerente Comercial LatAm", "mhuang@optotech.com.cn", "+86 755 2603 5500", "Nanshan Tech Park, Shenzhen", "Línea de proyectores reflectores exteriores Slim IP65 y tiras COB."),
+                ("MSC LAURA - Mediterranean Shipping", "MSC Mediterranean Shipping Company SA", "CH-CHE-106.533.456", "NAVIERA_BUQUE", "Suiza", "Capt. Marco Valente", "Agente Portuario MVD", "mvalente@msc.com", "+598 2916 4400", "Rambla 25 de Agosto 508, Montevideo", "Buque portacontenedor y naviera regular para ruta Lejano Oriente - Río de la Plata."),
+                ("Maersk Line Atlantic", "Maersk A/S", "DK-33165012", "NAVIERA_BUQUE", "Dinamarca", "Søren Hansen", "Representante Comercial", "shansen@maersk.com", "+598 2915 2211", "Plaza Independencia 811, Montevideo", "Servicio marítimo directo con despacho aduanero y tracking satelital en alta mar."),
+                ("Cosco Shipping Lines", "COSCO Shipping Lines Co. Ltd", "CN-91310000132", "NAVIERA_BUQUE", "China", "Wang Lei", "Logistics Coordinator", "wlei@coscon.com", "+86 21 6596 6666", "Dongdaming Road, Shanghai", "Naviera estatal china especializada en fletes marítimos transoceánicos."),
+            ]
+            for nom, rz, rut, tip, pais, c_nom, c_crg, em, ph, ad, desc in sample_suppliers:
+                conn.execute(
+                    text("""
+                        INSERT INTO suppliers (nombre, razon_social, rut, tipo_proveedor, pais, contacto_nombre, contacto_cargo, email, phone, address, descripcion)
+                        VALUES (:nom, :rz, :rut, :tip, :pais, :c_nom, :c_crg, :em, :ph, :ad, :desc)
+                    """),
+                    {
+                        "nom": nom, "rz": rz, "rut": rut, "tip": tip, "pais": pais,
+                        "c_nom": c_nom, "c_crg": c_crg, "em": em, "ph": ph, "ad": ad, "desc": desc
+                    }
+                )
+            conn.commit()
+
 
 def init_db(target_engine: Engine = None):
-    """Crea todas las tablas si no existen y corre migraciones seguras"""
+    """Crea todas las tablas si no existen y corre migraciones seguras multi-dialecto"""
     eng = target_engine or engine
     from app.models import entities  # Asegurar registro de modelos
     from app.domain import models   # Asegurar registro de modelos del dominio
     Base.metadata.create_all(bind=eng)
+    with eng.connect() as conn:
+        sync_table_columns(conn)
     if eng.dialect.name == "sqlite":
         run_non_destructive_migrations(eng)
 

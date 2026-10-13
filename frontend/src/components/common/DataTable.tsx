@@ -24,6 +24,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   searchPlaceholder?: string;
   keyExtractor: (row: T) => string | number;
+  onRowClick?: (row: T) => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -33,6 +34,7 @@ export function DataTable<T extends Record<string, any>>({
   emptyMessage = 'No se encontraron registros',
   searchPlaceholder = 'Buscar en tabla...',
   keyExtractor,
+  onRowClick,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -177,7 +179,10 @@ export function DataTable<T extends Record<string, any>>({
                 return (
                   <tr
                     key={`tr-${rowKey}-${rowIdx}`}
-                    className="hover:bg-sky-50/40 dark:hover:bg-slate-800/40 transition-colors"
+                    onClick={() => onRowClick && onRowClick(row)}
+                    className={`hover:bg-sky-50/40 dark:hover:bg-slate-800/40 transition-colors ${
+                      onRowClick ? 'cursor-pointer' : ''
+                    }`}
                   >
                     {columns.map((col, colIdx) => (
                       <td key={`td-${rowKey}-${col.key}-${colIdx}`} className="px-4 py-2.5 text-[#333333] dark:text-slate-200">

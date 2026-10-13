@@ -11,6 +11,11 @@ from app.api.v1.settings import router as settings_router
 from app.api.v1.cockpit import router as cockpit_router
 from app.api.v1.initiatives import router as initiatives_router
 from app.api.v1.auth import router as auth_router
+import os
+from fastapi.staticfiles import StaticFiles
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads")
+os.makedirs(os.path.join(UPLOAD_DIR, "products"), exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -116,6 +121,9 @@ app.include_router(settings_router)
 app.include_router(cockpit_router)
 app.include_router(initiatives_router)
 app.include_router(auth_router)
+
+# Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
+app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 if __name__ == "__main__":
     import uvicorn

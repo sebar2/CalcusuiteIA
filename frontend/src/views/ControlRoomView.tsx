@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Boxes, 
   AlertTriangle, 
@@ -8,15 +8,20 @@ import {
   ShieldAlert, 
   CheckCircle2, 
   ShoppingCart,
-  Edit2
+  Edit2,
+  X,
+  Eye
 } from 'lucide-react';
-import type { InventoryAlertItem, SupplyActionPlanResponse } from '../types';
+import type { InventoryAlertItem, SupplyActionPlanResponse, SupplierItem, WarehouseItem, UserRole } from '../types';
 import { MetricCard } from '../components/common/MetricCard';
 import { DataTable } from '../components/common/DataTable';
 import type { Column } from '../components/common/DataTable';
 import { InventoryQuickEditModal } from '../components/inventory/InventoryQuickEditModal';
 import { ProductThumbnail } from '../components/common/ProductThumbnail';
-import { apiService } from '../services/api';
+import { apiService, getStoredUser } from '../services/api';
+import { LocalPurchaseOrdersSection } from '../components/supply/LocalPurchaseOrdersSection';
+import { ImplicitBudgetsSection } from '../components/supply/ImplicitBudgetsSection';
+import { ReventaSuppliersSection } from '../components/supply/ReventaSuppliersSection';
 
 interface ControlRoomViewProps {
   inventory: InventoryAlertItem[];
@@ -25,6 +30,7 @@ interface ControlRoomViewProps {
   onlyAlerts: boolean;
   leadTimeFilter: boolean;
   searchQuery: string;
+  currentRole?: UserRole;
   onItemUpdated?: (updated: InventoryAlertItem) => void;
 }
 
@@ -34,16 +40,58 @@ export const ControlRoomView = ({
   onlyAlerts,
   leadTimeFilter,
   searchQuery,
+  currentRole,
   onItemUpdated,
 }: ControlRoomViewProps) => {
+  const effectiveRole = currentRole || (getStoredUser()?.role as UserRole) || 'controller_admin';
   const [localInventory, setLocalInventory] = useState<InventoryAlertItem[]>(inventory);
   const [editingItem, setEditingItem] = useState<InventoryAlertItem | null>(null);
+  const [inspectingItem, setInspectingItem] = useState<InventoryAlertItem | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const [copilotPlan, setCopilotPlan] = useState<SupplyActionPlanResponse | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [copilotError, setCopilotError] = useState<string | null>(null);
+
+  // Proveedores y Almacenes para Órdenes Uy, Presupuestos Implícitos y Reventa
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
+
+  const loadSuppliersAndWarehouses = async () => {
+    try {
+      const [sData, wData] = await Promise.all([
+        apiService.getSuppliers().catch(() => []),
+        apiService.getWarehouses().catch(() => []),
+      ]);
+      setSuppliers(sData);
+      setWarehouses(wData);
+    } catch (e) {
+      console.error('Error cargando proveedores en ControlRoomView', e);
+    }
+  };
+
+  useEffect(() => {
+    loadSuppliersAndWarehouses();
+  }, []);
+
+  const uySuppliers = useMemo(() => {
+    return suppliers.filter(
+      (s) =>
+        s.tipo_proveedor === 'PROVEEDOR_UY' ||
+        s.tipo_proveedor === 'PROVEEDOR_REVENTA' ||
+        s.tipo_proveedor === 'LOCAL' ||
+        s.pais?.toLowerCase() === 'uruguay'
+    );
+  }, [suppliers]);
+
+  const uyWarehouses = useMemo(() => {
+    return warehouses.filter(
+      (w) =>
+        w.tipo !== 'INTERNACIONAL' &&
+        (!w.pais || w.pais.toLowerCase() === 'uruguay')
+    );
+  }, [warehouses]);
 
   // Sincronizar estado local cuando el padre actualice el inventario
   useEffect(() => {
@@ -168,7 +216,7 @@ export const ControlRoomView = ({
       header: 'Punto Reorden (ROP)',
       width: '140px',
       render: (row) => (
-        <span className="text-[#535c69] font-mono">{Number(row.rop).toFixed(1)} u.</span>
+        <span className="text-slate-600 dark:text-slate-400 font-mono font-medium">{Number(row.rop).toFixed(1)} u.</span>
       ),
     },
     {
@@ -181,7 +229,7 @@ export const ControlRoomView = ({
         return (
           <span
             className={`font-semibold ${
-              isLow ? 'text-[#e74c3c]' : dohNum > 60 ? 'text-[#f39c12]' : 'text-[#2ecc71]'
+              isLow ? 'text-rose-600 dark:text-rose-400' : dohNum > 60 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
             }`}
           >
             {dohNum.toFixed(1)} d
@@ -194,7 +242,7 @@ export const ControlRoomView = ({
       header: 'Lead Time',
       width: '100px',
       render: (row) => (
-        <span className="text-[#535c69]">{Number(row.lead_time_dias).toFixed(0)} días</span>
+        <span className="text-slate-600 dark:text-slate-400 font-medium">{Number(row.lead_time_dias).toFixed(0)} días</span>
       ),
     },
     {
@@ -204,14 +252,14 @@ export const ControlRoomView = ({
       render: (row) => {
         if (row.is_alert) {
           return (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-[#e74c3c] border border-rose-200">
+            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/50 text-[#e74c3c] dark:text-rose-400 border border-rose-200 dark:border-rose-800">
               <ShieldAlert size={12} />
               <span>Quiebre / Reorden</span>
             </span>
           );
         }
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-[#2ecc71] border border-emerald-200">
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-[#2ecc71] dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
             <CheckCircle2 size={12} />
             <span>Stock Óptimo</span>
           </span>
@@ -220,21 +268,33 @@ export const ControlRoomView = ({
     },
     {
       key: 'sku',
-      header: 'Acción',
-      width: '100px',
+      header: 'Acciones',
+      width: '130px',
       render: (row) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingItem(row);
-            setIsEditModalOpen(true);
-          }}
-          className="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-semibold text-[#00a2e8] hover:text-white bg-sky-50 dark:bg-sky-950/40 hover:bg-[#00a2e8] dark:hover:bg-[#00a2e8] border border-sky-200 dark:border-sky-800 rounded-lg transition-all shadow-2xs cursor-pointer"
-          title="Ajuste rápido de existencias y parámetros"
-        >
-          <Edit2 size={12} />
-          <span>Ajustar</span>
-        </button>
+        <div className="flex items-center space-x-1.5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setInspectingItem(row);
+            }}
+            className="p-1 text-slate-500 hover:text-[#00a2e8] dark:text-slate-400 dark:hover:text-sky-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            title="Ver ficha técnica y desglose logístico"
+          >
+            <Eye size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingItem(row);
+              setIsEditModalOpen(true);
+            }}
+            className="inline-flex items-center space-x-1 px-2 py-1 text-[11px] font-semibold text-[#00a2e8] hover:text-white bg-sky-50 dark:bg-sky-950/40 hover:bg-[#00a2e8] dark:hover:bg-[#00a2e8] border border-sky-200 dark:border-sky-800 rounded-lg transition-all shadow-2xs cursor-pointer"
+            title="Ajuste rápido de existencias y parámetros"
+          >
+            <Edit2 size={11} />
+            <span>Ajustar</span>
+          </button>
+        </div>
       ),
     },
   ];
@@ -430,8 +490,182 @@ export const ControlRoomView = ({
           keyExtractor={(row) => row.sku}
           pageSizeDefault={10}
           searchPlaceholder="Filtrar por SKU o nombre de producto..."
+          onRowClick={(row) => setInspectingItem(row)}
         />
       </div>
+
+      {/* =====================================================================
+          MÓDULO 1: ÓRDENES DE COMPRA PARA PROVEEDORES DE URUGUAY (PLAZA / REVENTA)
+      ===================================================================== */}
+      <LocalPurchaseOrdersSection
+        uySuppliers={uySuppliers}
+        uyWarehouses={uyWarehouses}
+        canManageOrders={effectiveRole === 'controller_admin' || effectiveRole === 'analista_comercial'}
+      />
+
+      {/* =====================================================================
+          MÓDULO 2: PRESUPUESTOS IMPLÍCITOS & LOGÍSTICA (MARÍTIMO, SEGUROS, ADUANA, CAMIONES)
+      ===================================================================== */}
+      <ImplicitBudgetsSection
+        suppliers={suppliers}
+        currentRole={effectiveRole}
+      />
+
+      {/* =====================================================================
+          MÓDULO 3: PROVEEDORES REVENTA & CARGA MASIVA EXCEL / PLANTILLA MODELO
+      ===================================================================== */}
+      <ReventaSuppliersSection
+        uySuppliers={uySuppliers}
+        onDataChanged={loadSuppliersAndWarehouses}
+        currentRole={effectiveRole}
+      />
+
+      {/* Slide-Over Drawer para Inspección Profunda de SKU (Progressive Disclosure) */}
+      {inspectingItem && (
+        <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-150">
+          <div 
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setInspectingItem(null)}
+          />
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between overflow-y-auto z-10 animate-in slide-in-from-right duration-200">
+            <div className="space-y-5">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <span className="p-1.5 bg-sky-50 dark:bg-sky-950/50 text-[#00a2e8] rounded-lg">
+                    <Boxes size={18} />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
+                      Ficha Operativa de SKU
+                    </h3>
+                    <span className="font-mono text-xs font-bold text-[#00a2e8]">
+                      {inspectingItem.sku}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setInspectingItem(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Cerrar panel"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Product Info & Image */}
+              <div className="flex items-start space-x-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
+                <ProductThumbnail
+                  src={inspectingItem.image_url}
+                  alt={inspectingItem.nombre}
+                  sku={inspectingItem.sku}
+                  size="lg"
+                  className="w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug">
+                    {inspectingItem.nombre}
+                  </h4>
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 dark:bg-sky-950/50 text-[#00a2e8] border border-sky-200 dark:border-sky-800 mt-1">
+                    {inspectingItem.categoria}
+                  </span>
+                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Lead Time de Proveedor: <strong className="text-slate-800 dark:text-slate-200">{Number(inspectingItem.lead_time_dias).toFixed(0)} días</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estado y Diagnóstico */}
+              <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-2 text-xs font-semibold ${
+                inspectingItem.is_alert
+                  ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                  : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  {inspectingItem.is_alert ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />}
+                  <span>{inspectingItem.is_alert ? 'Alerta Crítica: Stock <= ROP' : 'Stock en Rango Óptimo'}</span>
+                </div>
+                <span className="font-mono text-xs font-bold">
+                  DOH: {Number(inspectingItem.doh).toFixed(1)} d
+                </span>
+              </div>
+
+              {/* Desglose Físico de Existencias */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+                  Distribución Multidepósito &amp; Tránsito:
+                </span>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Dep. Central</span>
+                    <strong className="text-sm font-mono text-slate-900 dark:text-slate-100">
+                      {inspectingItem.deposito_central ?? 0} u.
+                    </strong>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Tránsito Buque</span>
+                    <strong className="text-sm font-mono text-slate-900 dark:text-slate-100">
+                      {inspectingItem.transito_maritimo ?? 0} u.
+                    </strong>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Aduana / Puerto</span>
+                    <strong className="text-sm font-mono text-slate-900 dark:text-slate-100">
+                      {inspectingItem.aduana ?? 0} u.
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* ROP, Pipeline & Parámetros */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 space-y-2.5 text-xs">
+                <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                  <span>Stock Total Físico:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{inspectingItem.stock_actual} u.</span>
+                </div>
+                {inspectingItem.stock_comprometido_pipeline ? (
+                  <div className="flex justify-between items-center text-amber-600 dark:text-amber-400 font-semibold">
+                    <span>Comprometido en Deals CRM:</span>
+                    <span className="font-mono">{inspectingItem.stock_comprometido_pipeline} u.</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                  <span>Punto de Reorden (ROP):</span>
+                  <span className="font-mono font-bold text-[#00a2e8]">{Number(inspectingItem.rop).toFixed(1)} u.</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                  <span>Demanda Diaria Promedio:</span>
+                  <span className="font-mono">{Number(inspectingItem.demanda_diaria_promedio).toFixed(2)} u/día</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                  <span>Stock de Seguridad Mínimo:</span>
+                  <span className="font-mono">{Number(inspectingItem.stock_seguridad).toFixed(0)} u.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  setEditingItem(inspectingItem);
+                  setIsEditModalOpen(true);
+                }}
+                className="flex-1 py-2.5 bg-[#00a2e8] hover:bg-[#008ecb] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-sm cursor-pointer"
+              >
+                <Edit2 size={13} />
+                <span>Ajustar Parámetros ROP</span>
+              </button>
+              <button
+                onClick={() => setInspectingItem(null)}
+                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Express de Ajuste Rápido de Inventario */}
       <InventoryQuickEditModal

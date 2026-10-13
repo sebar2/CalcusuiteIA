@@ -36,3 +36,7 @@ node_modules/
 scratch/
 .DS_Store
 Thumbs.db
+
+# Uploads estáticos de productos
+app/static/uploads/products/*
+!app/static/uploads/products/.gitkeep
