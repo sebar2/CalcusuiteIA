@@ -454,6 +454,19 @@ export const logisticsApi = {
     return res.data;
   },
 
+  async downloadOrderRemitoPdf(orderId: number, numeroOrden: string): Promise<void> {
+    const res = await apiClient.get(`/api/v1/logistics/orders/${orderId}/remito-pdf`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Remito_${numeroOrden || orderId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
   // TRACKING GPS
   async getLiveTracking(): Promise<LiveFleetMarker[]> {
     const res = await apiClient.get<LiveFleetMarker[]>('/api/v1/logistics/tracking/live');

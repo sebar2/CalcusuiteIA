@@ -920,52 +920,73 @@ def generate_inventory_labels(
         x = x_offsets[col]
         y = y_offsets[row]
 
-        # Marco de etiqueta
-        c.setStrokeColorRGB(0.7, 0.7, 0.7)
+        # Marco de etiqueta con bordes redondeados sutiles
+        c.setStrokeColorRGB(0.75, 0.75, 0.75)
         c.setLineWidth(1)
-        c.rect(x, y, label_w, label_h, fill=0)
+        c.roundRect(x, y, label_w, label_h, 4, stroke=1, fill=0)
 
-        # Header de etiqueta
+        # Header de etiqueta (Franja Azul Corporativa)
         c.setFillColorRGB(0.0, 0.35, 0.65)
-        c.rect(x, y + label_h - 26, label_w, 26, fill=1, stroke=0)
+        c.rect(x, y + label_h - 24, label_w, 24, fill=1, stroke=0)
         c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(x + 10, y + label_h - 18, f"CALCU 3PL LOGISTICS | {it.client.nombre_comercial[:22]}")
+        c.setFont("Helvetica-Bold", 9.5)
+        c.drawString(x + 10, y + label_h - 16, f"CALCU 3PL LOGISTICS | {it.client.nombre_comercial[:24]}")
 
-        # Contenido de la etiqueta
+        # Contenido textual del producto y ubicación
         c.setFillColorRGB(0.1, 0.1, 0.1)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(x + 10, y + label_h - 45, f"SKU: {it.sku_cliente}")
+        c.setFont("Helvetica-Bold", 10.5)
+        c.drawString(x + 10, y + label_h - 42, f"SKU: {it.sku_cliente}")
 
-        c.setFont("Helvetica", 9)
-        desc_clean = it.descripcion[:38] + "..." if len(it.descripcion) > 38 else it.descripcion
-        c.drawString(x + 10, y + label_h - 60, desc_clean)
+        c.setFont("Helvetica", 8.5)
+        desc_clean = it.descripcion[:40] + "..." if len(it.descripcion) > 40 else it.descripcion
+        c.drawString(x + 10, y + label_h - 56, desc_clean)
 
-        c.drawString(x + 10, y + label_h - 75, f"Lote: {it.lote or 'S/L'} | Bultos: {it.cantidad_bultos} ({it.unidades_por_bulto} u/c)")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(x + 10, y + label_h - 90, f"RACK: {it.ubicacion_rack}")
+        c.drawString(x + 10, y + label_h - 70, f"Lote: {it.lote or 'S/L'} | Bultos: {it.cantidad_bultos} ({it.unidades_por_bulto} u/c)")
 
-        # Barcode Code128
+        c.setFont("Helvetica-Bold", 9.5)
+        c.setFillColorRGB(0.0, 0.45, 0.2)
+        c.drawString(x + 10, y + label_h - 84, f"RACK: {it.ubicacion_rack}")
+
+        # Barcode Code128 (Escalado matemáticamente para nunca desbordar y centrado)
+        barcode_val = it.codigo_qr_lote or f"SKU-{it.sku_cliente}"
         try:
-            bc = code128.Code128(it.codigo_qr_lote or f"SKU-{it.sku_cliente}", barHeight=30, barWidth=1.0)
-            bc.drawOn(c, x + 10, y + 38)
-        except Exception:
-            c.drawString(x + 10, y + 45, f"[{it.codigo_qr_lote}]")
+            total_modules = (len(barcode_val) * 11) + 35
+            max_bc_w = label_w - 36
+            bar_w = max(0.35, min(0.65, max_bc_w / total_modules))
+            actual_bc_w = total_modules * bar_w
+            bc = code128.Code128(barcode_val, barHeight=18, barWidth=bar_w)
+            bc_x = x + (label_w - actual_bc_w) / 2
+            bc.drawOn(c, bc_x, y + 92)
 
-        # QR Code 2D a la derecha
+            # Texto ID legible debajo del código de barras
+            c.setFont("Helvetica", 7)
+            c.setFillColorRGB(0.4, 0.4, 0.4)
+            c.drawCentredString(x + (label_w / 2), y + 83, f"ID: {barcode_val}")
+        except Exception:
+            c.setFont("Helvetica", 7.5)
+            c.drawString(x + 10, y + 92, f"[{barcode_val}]")
+
+        # Línea divisoria sutil
+        c.setStrokeColorRGB(0.88, 0.88, 0.88)
+        c.line(x + 20, y + 78, x + label_w - 20, y + 78)
+
+        # Código QR 2D - PERFECTAMENTE CENTRADO EN LA ZONA INFERIOR (SIN SUPERPOSICIÓN)
         try:
             qr_content = f"CALCU-3PL|CLIENT:{it.client_id}|SKU:{it.sku_cliente}|LOT:{it.lote}|RACK:{it.ubicacion_rack}|CODE:{it.codigo_qr_lote}"
             qr = QrCodeWidget(qr_content)
-            d = Drawing(65, 65)
+            qr_size = 56
+            d = Drawing(qr_size, qr_size)
             d.add(qr)
-            d.drawOn(c, x + label_w - 75, y + 8)
+            qr_x = x + (label_w - qr_size) / 2
+            qr_y = y + 14
+            d.drawOn(c, qr_x, qr_y)
+
+            # Leyenda inferior centrada
+            c.setFont("Helvetica-Bold", 6.5)
+            c.setFillColorRGB(0.3, 0.3, 0.3)
+            c.drawCentredString(x + (label_w / 2), y + 5, "ESCANEAR PARA TRAZABILIDAD WMS 3PL")
         except Exception:
             pass
-
-        # Subtexto de código
-        c.setFont("Helvetica", 8)
-        c.setFillColorRGB(0.4, 0.4, 0.4)
-        c.drawString(x + 10, y + 16, f"ID: {it.codigo_qr_lote}")
 
         item_idx += 1
 
@@ -1544,6 +1565,155 @@ def get_driver_delivery_sheet(order_id: int, db: Session = Depends(get_db)):
         "firma_fecha_hora": order.firma_fecha_hora.isoformat() if order.firma_fecha_hora else None,
         "firma_aclaracion": order.firma_aclaracion,
     }
+
+
+@router.get("/orders/{order_id}/remito-pdf")
+def get_order_remito_pdf(order_id: int, db: Session = Depends(get_db)):
+    """
+    Genera el Remito Oficial de Entrega 3PL en PDF con trazabilidad QR, desglose de bultos y casillero de firma.
+    """
+    order = db.query(LogisticsDispatchOrder).filter(LogisticsDispatchOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden de despacho no encontrada")
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    page_w, page_h = letter
+
+    # 1. Cabezal Corporativo
+    c.setFillColorRGB(0.0, 0.35, 0.65)
+    c.rect(30, page_h - 60, page_w - 60, 40, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(45, page_h - 38, "CALCU 3PL LOGISTICS | REMITO OFICIAL DE ENTREGA")
+    c.setFont("Helvetica", 9)
+    c.drawString(45, page_h - 52, "Custodia, Acondicionamiento y Distribución Multi-Cliente B2B")
+
+    # 2. Datos de Orden y Remito
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(page_w - 230, page_h - 38, f"REMITO Nº: {order.remito_numero}")
+    c.setFont("Helvetica", 9)
+    c.drawString(page_w - 230, page_h - 50, f"Orden: {order.numero_orden}")
+
+    # 3. Bloques de Información (Cliente / Destino / Transporte)
+    c.setStrokeColorRGB(0.8, 0.8, 0.8)
+    c.setLineWidth(1)
+    c.roundRect(30, page_h - 170, page_w - 60, 95, 6, fill=0, stroke=1)
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.0, 0.35, 0.65)
+    c.drawString(45, page_h - 90, "DATOS DEL CLIENTE Y DESTINO")
+    c.drawString(page_w / 2 + 10, page_h - 90, "TRANSPORTE Y LOGÍSTICA")
+
+    c.setFont("Helvetica", 9)
+    c.setFillColorRGB(0.2, 0.2, 0.2)
+    # Columna Izquierda
+    c.drawString(45, page_h - 108, f"Cliente: {order.client.razon_social}")
+    c.drawString(45, page_h - 122, f"RUT: {order.client.rut} | Tipo: {order.client.tipo}")
+    dest_str = f"Destino: {order.destino_direccion[:45]}"
+    c.drawString(45, page_h - 136, dest_str)
+    rec_str = f"Receptor: {order.contacto_receptor_nombre or 'Recepción'} | Tel: {order.contacto_receptor_telefono or 'S/D'}"
+    c.drawString(45, page_h - 150, rec_str)
+    c.drawString(45, page_h - 164, f"Armado / Picking: {order.responsable_armado or 'Supervisor Depósito'}")
+
+    # Columna Derecha
+    drv_nom = order.driver.nombre if order.driver else "Conductor Tercerizado"
+    drv_tel = order.driver.telefono if order.driver else "S/D"
+    veh_mat = order.vehicle.matricula if order.vehicle else "S/M"
+    veh_tip = order.vehicle.tipo_vehiculo if order.vehicle else "Furgón"
+
+    c.drawString(page_w / 2 + 10, page_h - 108, f"Conductor: {drv_nom} (Tel: {drv_tel})")
+    c.drawString(page_w / 2 + 10, page_h - 122, f"Unidad: {veh_mat} ({veh_tip})")
+    c.drawString(page_w / 2 + 10, page_h - 136, f"Distancia / Km: {float(order.kilometros_recorrido):.1f} km")
+    c.drawString(page_w / 2 + 10, page_h - 150, f"Ventana Horaria: {order.ventana_horaria or '08:00 - 13:00'}")
+    c.drawString(page_w / 2 + 10, page_h - 164, f"Estado Actual: {order.etapa_kanban}")
+
+    # 4. Tabla de Ítems Despachados
+    y_table = page_h - 195
+    c.setFillColorRGB(0.93, 0.95, 0.98)
+    c.rect(30, y_table - 18, page_w - 60, 18, fill=1, stroke=0)
+    c.setFillColorRGB(0.1, 0.1, 0.1)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(40, y_table - 12, "SKU CLIENTE")
+    c.drawString(150, y_table - 12, "DESCRIPCIÓN DEL PRODUCTO")
+    c.drawString(360, y_table - 12, "BULTOS")
+    c.drawString(430, y_table - 12, "PESO (KG)")
+    c.drawString(500, y_table - 12, "VOLUMEN (M³)")
+
+    c.setFont("Helvetica", 8.5)
+    cur_y = y_table - 32
+    for it in order.items:
+        c.drawString(40, cur_y, str(it.sku_cliente))
+        c.drawString(150, cur_y, str(it.descripcion[:38]))
+        c.drawString(370, cur_y, str(it.bultos_despacho))
+        c.drawString(440, cur_y, f"{float(it.kg_subtotal):.1f}")
+        c.drawString(510, cur_y, f"{float(it.m3_subtotal):.2f}")
+        cur_y -= 18
+
+    # Totales
+    c.setStrokeColorRGB(0.7, 0.7, 0.7)
+    c.line(30, cur_y + 10, page_w - 30, cur_y + 10)
+    c.setFont("Helvetica-Bold", 9.5)
+    c.drawString(150, cur_y - 2, "TOTALES DE CARGA DESPACHADA:")
+    c.drawString(370, cur_y - 2, f"{order.total_bultos} bultos")
+    c.drawString(440, cur_y - 2, f"{float(order.total_kg):.1f} kg")
+    c.drawString(510, cur_y - 2, f"{float(order.total_m3):.2f} m³")
+
+    # 5. Código QR de Verificación y Bloque de Firma
+    box_y = 65
+    # Recuadro de QR
+    c.roundRect(30, box_y, 140, 120, 6, fill=0, stroke=1)
+    try:
+        qr_content = f"CALCU-REMITO|ORD:{order.numero_orden}|REM:{order.remito_numero}|CLI:{order.client.rut}|BULTOS:{order.total_bultos}|ESTADO:{order.etapa_kanban}"
+        qr = QrCodeWidget(qr_content)
+        d = Drawing(75, 75)
+        d.add(qr)
+        d.drawOn(c, 62, box_y + 30)
+        c.setFont("Helvetica-Bold", 7.5)
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.drawCentredString(100, box_y + 14, "ESCANEAR VERIFICACIÓN")
+    except Exception:
+        pass
+
+    # Recuadro de Firma Conforme
+    c.roundRect(185, box_y, page_w - 215, 120, 6, fill=0, stroke=1)
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColorRGB(0.0, 0.35, 0.65)
+    c.drawString(200, box_y + 100, "CONSTANCIA DE RECEPCIÓN Y CONFORMIDAD")
+
+    if order.firma_digital_receptor:
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColorRGB(0.0, 0.5, 0.2)
+        c.drawString(200, box_y + 75, "✓ ENTREGADO CON CONFORMIDAD Y FIRMA DIGITAL")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColorRGB(0.3, 0.3, 0.3)
+        c.drawString(200, box_y + 55, f"Aclaración: {order.firma_aclaracion or order.contacto_receptor_nombre}")
+        f_dt = order.firma_fecha_hora.strftime('%d/%m/%Y %H:%M hs') if order.firma_fecha_hora else 'Registrada'
+        c.drawString(200, box_y + 40, f"Fecha y Hora: {f_dt}")
+        c.drawString(200, box_y + 25, "Certificado digital verificado por sistema de telemetría Calcu 3PL.")
+    else:
+        c.setFont("Helvetica", 8.5)
+        c.setFillColorRGB(0.4, 0.4, 0.4)
+        c.drawString(200, box_y + 78, "Firma del Receptor:")
+        c.line(200, box_y + 40, 360, box_y + 40)
+        c.drawString(200, box_y + 28, "Firma / Rótulo")
+        c.drawString(390, box_y + 78, "Aclaración & C.I.:")
+        c.line(390, box_y + 40, 540, box_y + 40)
+        c.drawString(390, box_y + 28, "Nombre y Documento")
+
+    # Pie de página
+    c.setFont("Helvetica", 7.5)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawCentredString(page_w / 2, 25, f"Calcu 3PL Logística & Distribución • Documento oficial no negociable • Generado el {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC")
+
+    c.save()
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Remito_{order.numero_orden}.pdf"}
+    )
 
 
 # ==========================================

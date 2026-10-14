@@ -35,3 +35,42 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #b0bec5;
 }
+
+/* Estilos de Impresión de Documentos (Remitos y Liquidaciones Oficiales) */
+@media print {
+  @page {
+    size: letter;
+    margin: 12mm;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  /* Ocultar todo por defecto */
+  body * {
+    visibility: hidden;
+  }
+  /* Hacer visible únicamente el documento a imprimir */
+  .printable-document,
+  .printable-document * {
+    visibility: visible;
+  }
+  .printable-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  /* Forzar ocultamiento de elementos interactivos de la aplicación */
+  aside,
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+}
