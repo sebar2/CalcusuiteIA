@@ -28,6 +28,15 @@ const TendersBuyersView = lazy(() => import('./views/tenders/TendersBuyersView')
 const TendersCalendarView = lazy(() => import('./views/tenders/TendersCalendarView').then(m => ({ default: m.TendersCalendarView })));
 const TendersQuoterView = lazy(() => import('./views/tenders/TendersQuoterView').then(m => ({ default: m.TendersQuoterView })));
 
+// 3PL LOGÍSTICA & DISTRIBUCIÓN
+const LogisticsClientsView = lazy(() => import('./views/logistics/LogisticsClientsView').then(m => ({ default: m.LogisticsClientsView })));
+const LogisticsFleetView = lazy(() => import('./views/logistics/LogisticsFleetView').then(m => ({ default: m.LogisticsFleetView })));
+const LogisticsInventoryView = lazy(() => import('./views/logistics/LogisticsInventoryView').then(m => ({ default: m.LogisticsInventoryView })));
+const LogisticsKanbanView = lazy(() => import('./views/logistics/LogisticsKanbanView').then(m => ({ default: m.LogisticsKanbanView })));
+const LogisticsTrackingView = lazy(() => import('./views/logistics/LogisticsTrackingView').then(m => ({ default: m.LogisticsTrackingView })));
+const LogisticsOrdersView = lazy(() => import('./views/logistics/LogisticsOrdersView').then(m => ({ default: m.LogisticsOrdersView })));
+const LogisticsFinanceView = lazy(() => import('./views/logistics/LogisticsFinanceView').then(m => ({ default: m.LogisticsFinanceView })));
+
 const ViewLoading = () => (
   <div className="h-96 flex flex-col items-center justify-center space-y-3 text-slate-400">
     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -464,6 +473,48 @@ export function AppContent() {
                   engineMode={engineMode}
                   currentRole={currentRole}
                 />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-clients' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Clientes 3PL">
+                <LogisticsClientsView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-fleet' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Flota & Choferes 3PL">
+                <LogisticsFleetView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-inventory' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Depósito & Stock 3PL">
+                <LogisticsInventoryView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-kanban' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Kanban Operativo 3PL">
+                <LogisticsKanbanView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-tracking' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Ruteo & Tracking GPS en Vivo">
+                <LogisticsTrackingView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-orders' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Órdenes de Servicio Logístico">
+                <LogisticsOrdersView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'logistics-finance' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Costos & Rentabilidad 3PL">
+                <LogisticsFinanceView />
               </ErrorBoundary>
             )}
 

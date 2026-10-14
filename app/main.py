@@ -13,6 +13,7 @@ from app.api.v1.initiatives import router as initiatives_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.procurement import router as procurement_router, b2b_tenders_router
 from app.api.v1.suppliers import router as suppliers_catalog_router
+from app.api.v1.logistics import router as logistics_router, seed_logistics_demo
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         ETLService.seed_demo_data(db)
+        seed_logistics_demo(db)
     finally:
         db.close()
     yield
@@ -126,6 +128,7 @@ app.include_router(auth_router)
 app.include_router(procurement_router)
 app.include_router(b2b_tenders_router)
 app.include_router(suppliers_catalog_router)
+app.include_router(logistics_router)
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

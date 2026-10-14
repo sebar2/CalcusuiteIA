@@ -20,6 +20,11 @@ import {
   Landmark,
   Calendar,
   Calculator,
+  Building2,
+  MapPin,
+  Receipt,
+  CircleDollarSign,
+  ClipboardList,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -38,6 +43,13 @@ export type ActiveTab =
   | 'tenders_buyers'
   | 'tenders_calendar'
   | 'tenders_cotizador'
+  | 'logistics-clients'
+  | 'logistics-fleet'
+  | 'logistics-inventory'
+  | 'logistics-kanban'
+  | 'logistics-tracking'
+  | 'logistics-orders'
+  | 'logistics-finance'
   | 'initiatives' 
   | 'variance' 
   | 'reports' 
@@ -112,6 +124,60 @@ export const Sidebar = ({
           label: 'Catálogos de Proveedores',
           shortLabel: 'Catálogos',
           icon: BookOpen,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+        },
+      ],
+    },
+    {
+      title: '3PL Logística & Distribución',
+      items: [
+        {
+          id: 'logistics-clients',
+          label: 'Clientes 3PL (Retail & PyMEs)',
+          shortLabel: 'Clientes 3PL',
+          icon: Building2,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'logistics-fleet',
+          label: 'Flota & Personal Tercerizado',
+          shortLabel: 'Flota & Choferes',
+          icon: Truck,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+        },
+        {
+          id: 'logistics-inventory',
+          label: 'Depósito & Stock 3PL (WMS)',
+          shortLabel: 'Depósito 3PL',
+          icon: Boxes,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+        },
+        {
+          id: 'logistics-kanban',
+          label: 'Kanban Operativo 3PL',
+          shortLabel: 'Kanban 3PL',
+          icon: ClipboardList,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+        },
+        {
+          id: 'logistics-tracking',
+          label: 'Ruteo & Tracking GPS en Vivo',
+          shortLabel: 'Tracking GPS',
+          icon: MapPin,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+        },
+        {
+          id: 'logistics-orders',
+          label: 'Órdenes de Servicio Logístico',
+          shortLabel: 'Órdenes 3PL',
+          icon: Receipt,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'logistics-finance',
+          label: 'Costos & Rentabilidad 3PL',
+          shortLabel: 'Rentabilidad 3PL',
+          icon: CircleDollarSign,
           roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
         },
       ],

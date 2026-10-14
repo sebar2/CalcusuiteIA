@@ -1027,6 +1027,7 @@ def init_db(target_engine: Engine = None):
     """Crea todas las tablas si no existen y corre migraciones seguras multi-dialecto"""
     eng = target_engine or engine
     from app.models import entities  # Asegurar registro de modelos
+    from app.models import logistics_entities  # Asegurar registro de modelos 3PL Logística
     from app.domain import models   # Asegurar registro de modelos del dominio
     Base.metadata.create_all(bind=eng)
     with eng.connect() as conn:
