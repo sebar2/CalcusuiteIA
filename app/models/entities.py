@@ -569,7 +569,34 @@ class Supplier(Base):
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    rubro: Mapped[Optional[str]] = mapped_column(String(100), default="Iluminación", nullable=True, index=True)
+    condicion_pago: Mapped[Optional[str]] = mapped_column(String(50), default="30 días", nullable=True, index=True) # Contado, 30 días, 60 días, Crédito Abierto
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    catalog_items: Mapped[List["SupplierCatalogItem"]] = relationship(back_populates="supplier", cascade="all, delete-orphan")
+
+
+class SupplierCatalogItem(Base):
+    """
+    Catálogo de Productos de Proveedores (Plaza / Reventa / Mayorista).
+    Permite comparar costo de compra vs. precio de venta a comercios (PVM) y al público (PVP).
+    Rigor contable: Decimal y Numeric(14, 4) sin tipos float.
+    """
+    __tablename__ = "supplier_catalog_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True)
+    sku_proveedor: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    sku_calcu: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    nombre: Mapped[str] = mapped_column(String(255), nullable=False)
+    rubro: Mapped[str] = mapped_column(String(100), default="Iluminación", nullable=False, index=True)
+    costo_compra: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    precio_venta_comercios: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False) # PVM / Mayorista
+    precio_venta_publico: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False) # PVP / Público
+    stock_estimado: Mapped[str] = mapped_column(String(50), default="En Stock MVD", nullable=False) # ej. "En Stock MVD", "24-48 hs", "Agotado"
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    supplier: Mapped["Supplier"] = relationship(back_populates="catalog_items")
 
 
 class ImplicitServiceCatalog(Base):

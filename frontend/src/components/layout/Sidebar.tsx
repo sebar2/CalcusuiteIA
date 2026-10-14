@@ -9,11 +9,17 @@ import {
   Layers,
   GitPullRequest,
   Briefcase,
-  Building2,
   Handshake,
   Ship,
   Users,
   Truck,
+  BookOpen,
+  Radio,
+  Coins,
+  ShieldCheck,
+  Landmark,
+  Calendar,
+  Calculator,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -24,7 +30,14 @@ export type ActiveTab =
   | 'crm'
   | 'clients'
   | 'suppliers'
+  | 'supplier-catalogs'
   | 'tenders'
+  | 'tenders_radar'
+  | 'tenders_benchmarks'
+  | 'tenders_competitors'
+  | 'tenders_buyers'
+  | 'tenders_calendar'
+  | 'tenders_cotizador'
   | 'initiatives' 
   | 'variance' 
   | 'reports' 
@@ -94,6 +107,60 @@ export const Sidebar = ({
           icon: Truck,
           roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
         },
+        {
+          id: 'supplier-catalogs',
+          label: 'Catálogos de Proveedores',
+          shortLabel: 'Catálogos',
+          icon: BookOpen,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+        },
+      ],
+    },
+    {
+      title: 'Licitaciones & Mercado Público',
+      items: [
+        {
+          id: 'tenders_radar',
+          label: 'Radar de Convocatorias',
+          shortLabel: 'Radar SICE',
+          icon: Radio,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'tenders_benchmarks',
+          label: 'Precios & SICE',
+          shortLabel: 'Precios & SICE',
+          icon: Coins,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'tenders_competitors',
+          label: 'Competidores & Proveedores',
+          shortLabel: 'Competidores',
+          icon: ShieldCheck,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'tenders_buyers',
+          label: 'Compradores & Intendencias',
+          shortLabel: 'Compradores',
+          icon: Landmark,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'tenders_calendar',
+          label: 'Calendario & Logística MVD',
+          shortLabel: 'Calendario',
+          icon: Calendar,
+          roles: ['controller_admin', 'comercial', 'analista_comercial', 'operaciones'],
+        },
+        {
+          id: 'tenders_cotizador',
+          label: 'Cotizador & Dictamen B2B',
+          shortLabel: 'Cotizador B2B',
+          icon: Calculator,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
       ],
     },
     {
@@ -130,13 +197,6 @@ export const Sidebar = ({
           label: 'Pipeline Comercial (CRM)',
           shortLabel: 'Pipeline CRM',
           icon: Handshake,
-          roles: ['controller_admin', 'comercial', 'analista_comercial'],
-        },
-        {
-          id: 'tenders',
-          label: 'Licitaciones & Proyectos B2B',
-          shortLabel: 'Licitaciones B2B',
-          icon: Building2,
           roles: ['controller_admin', 'comercial', 'analista_comercial'],
         },
         {

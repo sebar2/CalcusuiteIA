@@ -83,7 +83,7 @@ class SupplierBase(BaseModel):
     nombre: str
     razon_social: Optional[str] = None
     rut: Optional[str] = None
-    tipo_proveedor: str = Field(default="FABRICA")  # FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL
+    tipo_proveedor: str = Field(default="FABRICA")  # FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL, PROVEEDOR_UY, PROVEEDOR_REVENTA
     pais: Optional[str] = Field(default="China")
     contacto_nombre: Optional[str] = None
     contacto_cargo: Optional[str] = None
@@ -92,6 +92,8 @@ class SupplierBase(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    rubro: Optional[str] = "Iluminación"
+    condicion_pago: Optional[str] = "30 días"
 
 class SupplierCreate(SupplierBase):
     pass
@@ -109,6 +111,8 @@ class SupplierUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    rubro: Optional[str] = None
+    condicion_pago: Optional[str] = None
 
 class SupplierProductItem(BaseModel):
     product_id: Optional[int] = None
@@ -128,7 +132,41 @@ class SupplierResponse(SupplierBase):
     productos: List[SupplierProductItem] = []
     ordenes_compra_count: int = 0
     ordenes_compra: Optional[List[Dict[str, Any]]] = None
+    catalog_items_count: int = 0
     created_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SupplierCatalogItemBase(BaseModel):
+    sku_proveedor: str
+    sku_calcu: Optional[str] = None
+    nombre: str
+    rubro: str = "Iluminación"
+    costo_compra: Decimal = Decimal('0.0000')
+    precio_venta_comercios: Decimal = Decimal('0.0000')
+    precio_venta_publico: Decimal = Decimal('0.0000')
+    stock_estimado: str = "En Stock MVD"
+
+class SupplierCatalogItemCreate(SupplierCatalogItemBase):
+    pass
+
+class SupplierCatalogItemUpdate(BaseModel):
+    sku_proveedor: Optional[str] = None
+    sku_calcu: Optional[str] = None
+    nombre: Optional[str] = None
+    rubro: Optional[str] = None
+    costo_compra: Optional[Decimal] = None
+    precio_venta_comercios: Optional[Decimal] = None
+    precio_venta_publico: Optional[Decimal] = None
+    stock_estimado: Optional[str] = None
+
+class SupplierCatalogItemResponse(SupplierCatalogItemBase):
+    id: int
+    supplier_id: int
+    descuento_comercios_pct: Decimal = Decimal('0.00')
+    margen_reventa_pct: Decimal = Decimal('0.00')
+    markup_costo_pct: Decimal = Decimal('0.00')
+    updated_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 

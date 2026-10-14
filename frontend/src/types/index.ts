@@ -1432,7 +1432,7 @@ export interface SupplierItem {
   nombre: string;
   razon_social?: string | null;
   rut?: string | null;
-  tipo_proveedor?: 'FABRICA' | 'NAVIERA_BUQUE' | 'LOGISTICA' | 'GENERAL' | string;
+  tipo_proveedor?: 'FABRICA' | 'NAVIERA_BUQUE' | 'LOGISTICA' | 'GENERAL' | 'PROVEEDOR_UY' | 'PROVEEDOR_REVENTA' | string;
   pais?: string | null;
   contacto_nombre?: string | null;
   contacto_cargo?: string | null;
@@ -1441,8 +1441,11 @@ export interface SupplierItem {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  rubro?: string | null;
+  condicion_pago?: string | null;
   total_skus: number;
   skus_count?: number;
+  catalog_items_count?: number;
   productos: SupplierProductItem[];
   ordenes_compra_count?: number;
   ordenes_compra?: {
@@ -1470,6 +1473,8 @@ export interface SupplierCreatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  rubro?: string;
+  condicion_pago?: string;
 }
 
 export interface SupplierUpdatePayload {
@@ -1485,6 +1490,79 @@ export interface SupplierUpdatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  rubro?: string;
+  condicion_pago?: string;
+}
+
+export interface SupplierCatalogProductItem {
+  id: number;
+  supplier_id: number;
+  sku_proveedor: string;
+  sku_calcu?: string | null;
+  nombre: string;
+  rubro: string;
+  costo_compra: number;
+  precio_venta_comercios: number;
+  precio_venta_publico: number;
+  descuento_comercios_pct: number;
+  margen_reventa_pct: number;
+  markup_costo_pct: number;
+  stock_estimado: string;
+  updated_at?: string;
+}
+
+export interface SupplierCatalogProductsResponse {
+  success: boolean;
+  supplier_id: number;
+  supplier_name: string;
+  total: number;
+  items: SupplierCatalogProductItem[];
+}
+
+export interface SupplierCatalogTenderAwardItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitName: string;
+  unitPrice: number;
+  totalPrice: number;
+  currency: string;
+}
+
+export interface SupplierCatalogTenderContract {
+  id: string;
+  ocid?: string;
+  title: string;
+  buyerName: string;
+  date: string;
+  amount: number;
+  currency: string;
+  status: string;
+  itemsCount: number;
+  items: SupplierCatalogTenderAwardItem[];
+}
+
+export interface SupplierCatalogTendersResponse {
+  success: boolean;
+  supplier: {
+    id: number;
+    nombre: string;
+    razon_social?: string | null;
+    rut?: string | null;
+    tipo_proveedor?: string;
+    rubro?: string;
+  };
+  remote_matched: boolean;
+  total_contracts: number;
+  contracts: SupplierCatalogTenderContract[];
+}
+
+export interface SupplierCatalogUploadResponse {
+  success: boolean;
+  message: string;
+  processed: number;
+  created: number;
+  updated: number;
 }
 
 // =====================================================================

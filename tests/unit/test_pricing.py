@@ -74,3 +74,42 @@ def test_marginal_ratio_zero_selling_price():
     cost = Decimal('50.00')
     ratio = calculate_marginal_ratio(selling_price, cost)
     assert ratio == Decimal('0')
+
+
+def test_catalog_pricing_metrics():
+    """
+    Validar cálculos de catálogo de proveedores:
+    PVP = 200, PVM = 150, Costo = 100
+    - Descuento a comercios: ((200 - 150) / 200) * 100 = 25.00%
+    - Margen bruto reventa: ((150 - 100) / 150) * 100 = 33.33%
+    - Markup sobre costo: ((200 - 100) / 100) * 100 = 100.00%
+    """
+    from app.engine.pricing import (
+        calculate_trade_discount,
+        calculate_resale_gross_margin,
+        calculate_cost_markup,
+        calculate_catalog_item_metrics,
+    )
+    cost = Decimal('100.00')
+    pvm = Decimal('150.00')
+    pvp = Decimal('200.00')
+
+    assert calculate_trade_discount(pvp, pvm) == Decimal('25.00')
+    assert calculate_resale_gross_margin(pvm, cost) == Decimal('33.33')
+    assert calculate_cost_markup(pvp, cost) == Decimal('100.00')
+
+    metrics = calculate_catalog_item_metrics(cost, pvm, pvp)
+    assert metrics["descuento_comercios_pct"] == Decimal('25.00')
+    assert metrics["margen_reventa_pct"] == Decimal('33.33')
+    assert metrics["markup_costo_pct"] == Decimal('100.00')
+
+
+def test_catalog_pricing_edge_cases():
+    from app.engine.pricing import (
+        calculate_trade_discount,
+        calculate_resale_gross_margin,
+        calculate_cost_markup,
+    )
+    assert calculate_trade_discount(Decimal('0'), Decimal('10')) == Decimal('0.00')
+    assert calculate_resale_gross_margin(Decimal('0'), Decimal('10')) == Decimal('0.00')
+    assert calculate_cost_markup(Decimal('50'), Decimal('0')) == Decimal('0.00')

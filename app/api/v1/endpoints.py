@@ -4642,12 +4642,16 @@ def update_client(
 )
 def list_suppliers(
     q: Optional[str] = Query(None, description="Búsqueda por nombre o RUT"),
-    tipo_proveedor: Optional[str] = Query(None, description="Filtrar por tipo: FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL"),
+    tipo_proveedor: Optional[str] = Query(None, description="Filtrar por tipo: FABRICA, NAVIERA_BUQUE, LOGISTICA, GENERAL, PROVEEDOR_UY, PROVEEDOR_REVENTA"),
+    tipo: Optional[str] = Query(None, description="Filtrar por tipo: TODOS, LOCAL (Uruguay), EXTERIOR (China/Exterior)"),
+    rubro: Optional[str] = Query(None, description="Filtrar por rubro comercial: Iluminación, Obra Civil, Ferretería, Electromecánica, etc."),
+    condicion_pago: Optional[str] = Query(None, description="Filtrar por condición de pago: Contado, 30 días, 60 días, Crédito Abierto"),
+    search: Optional[str] = Query(None, description="Búsqueda universal por RUT, Razón Social o Nombre Comercial"),
     db: Session = Depends(get_db)
 ):
     """
     Retorna el directorio de proveedores, fábricas y buques con catálogo de SKUs,
-    órdenes de compra asociadas y trazabilidad logística.
+    órdenes de compra asociadas, filtros por tipo/rubro/condiciones y trazabilidad logística.
     """
     total_suppliers = db.query(Supplier).count()
     if total_suppliers == 0:
@@ -4752,11 +4756,49 @@ def list_suppliers(
         db.commit()
 
     query = db.query(Supplier)
-    if tipo_proveedor and tipo_proveedor.strip():
-        query = query.filter(Supplier.tipo_proveedor == tipo_proveedor.strip().upper())
-    if q and q.strip():
-        term = f"%{q.strip()}%"
-        query = query.filter(or_(Supplier.nombre.ilike(term), Supplier.rut.ilike(term)))
+
+    # Búsqueda Universal
+    search_term = (search or q or "").strip()
+    if search_term:
+        term = f"%{search_term}%"
+        query = query.filter(
+            or_(
+                Supplier.nombre.ilike(term),
+                Supplier.rut.ilike(term),
+                Supplier.razon_social.ilike(term),
+            )
+        )
+
+    # Filtro Tipo (Plaza Local vs Fábrica Internacional)
+    tipo_filter = (tipo or tipo_proveedor or "").strip().upper()
+    if tipo_filter and tipo_filter != "TODOS":
+        if tipo_filter in ("LOCAL", "UY", "PLAZA", "PLAZA LOCAL", "URUGUAY", "PROVEEDOR_UY", "PROVEEDOR_REVENTA"):
+            query = query.filter(
+                or_(
+                    Supplier.tipo_proveedor.in_(["PROVEEDOR_UY", "PROVEEDOR_REVENTA", "LOCAL"]),
+                    Supplier.pais.ilike("%uruguay%"),
+                )
+            )
+        elif tipo_filter in ("EXTERIOR", "CHINA", "FABRICA", "INTERNACIONAL", "NAVIERA_BUQUE"):
+            query = query.filter(
+                or_(
+                    Supplier.tipo_proveedor.in_(["FABRICA", "NAVIERA_BUQUE", "EXTERIOR"]),
+                    Supplier.pais.ilike("%china%"),
+                    Supplier.pais.ilike("%suiza%"),
+                    Supplier.pais.ilike("%dinamarca%"),
+                    Supplier.pais != "Uruguay",
+                )
+            )
+        else:
+            query = query.filter(Supplier.tipo_proveedor == tipo_filter)
+
+    # Filtro por Rubro
+    if rubro and rubro.strip() and rubro.strip().lower() != "todos":
+        query = query.filter(Supplier.rubro.ilike(f"%{rubro.strip()}%"))
+
+    # Filtro por Condición de Pago
+    if condicion_pago and condicion_pago.strip() and condicion_pago.strip().lower() != "todos":
+        query = query.filter(Supplier.condicion_pago.ilike(f"%{condicion_pago.strip()}%"))
 
     suppliers = query.order_by(Supplier.nombre.asc()).all()
     all_products = db.query(Product).all()
@@ -4810,6 +4852,7 @@ def list_suppliers(
             for p in prods
         ]
 
+        catalog_count = len(s.catalog_items) if hasattr(s, "catalog_items") and s.catalog_items else 0
         results.append(SupplierResponse(
             id=s.id,
             nombre=s.nombre,
@@ -4824,11 +4867,14 @@ def list_suppliers(
             email=s.email,
             phone=s.phone,
             address=s.address,
+            rubro=s.rubro or "Iluminación",
+            condicion_pago=s.condicion_pago or "30 días",
             skus_count=len(prod_items),
             total_skus=len(prod_items),
             productos=prod_items,
             ordenes_compra_count=len(matched_orders),
             ordenes_compra=matched_orders,
+            catalog_items_count=catalog_count,
             created_at=s.created_at
         ))
 
@@ -4885,6 +4931,7 @@ def get_supplier_by_id(
         for p in prods
     ]
 
+    catalog_count = len(s.catalog_items) if hasattr(s, "catalog_items") and s.catalog_items else 0
     return SupplierResponse(
         id=s.id,
         nombre=s.nombre,
@@ -4899,11 +4946,14 @@ def get_supplier_by_id(
         email=s.email,
         phone=s.phone,
         address=s.address,
+        rubro=s.rubro or "Iluminación",
+        condicion_pago=s.condicion_pago or "30 días",
         skus_count=len(prod_items),
         total_skus=len(prod_items),
         productos=prod_items,
         ordenes_compra_count=len(orders_data),
         ordenes_compra=orders_data,
+        catalog_items_count=catalog_count,
         created_at=s.created_at
     )
 
@@ -4938,7 +4988,9 @@ def create_supplier(
         logo_url=payload.logo_url,
         email=payload.email.strip() if payload.email else None,
         phone=payload.phone.strip() if payload.phone else None,
-        address=payload.address.strip() if payload.address else None
+        address=payload.address.strip() if payload.address else None,
+        rubro=payload.rubro.strip() if payload.rubro else "Iluminación",
+        condicion_pago=payload.condicion_pago.strip() if payload.condicion_pago else "30 días"
     )
     db.add(new_supp)
     db.commit()
@@ -4967,11 +5019,14 @@ def create_supplier(
         email=new_supp.email,
         phone=new_supp.phone,
         address=new_supp.address,
+        rubro=new_supp.rubro or "Iluminación",
+        condicion_pago=new_supp.condicion_pago or "30 días",
         skus_count=0,
         total_skus=0,
         productos=[],
         ordenes_compra_count=0,
         ordenes_compra=[],
+        catalog_items_count=0,
         created_at=new_supp.created_at
     )
 
@@ -5015,6 +5070,10 @@ def update_supplier(
         supplier.phone = payload.phone.strip() if payload.phone else None
     if payload.address is not None:
         supplier.address = payload.address.strip() if payload.address else None
+    if payload.rubro is not None:
+        supplier.rubro = payload.rubro.strip() if payload.rubro else "Iluminación"
+    if payload.condicion_pago is not None:
+        supplier.condicion_pago = payload.condicion_pago.strip() if payload.condicion_pago else "30 días"
 
     db.commit()
     db.refresh(supplier)
@@ -5066,6 +5125,7 @@ def update_supplier(
         for p in prods
     ]
 
+    catalog_count = len(supplier.catalog_items) if hasattr(supplier, "catalog_items") and supplier.catalog_items else 0
     return SupplierResponse(
         id=supplier.id,
         nombre=supplier.nombre,
@@ -5080,11 +5140,14 @@ def update_supplier(
         email=supplier.email,
         phone=supplier.phone,
         address=supplier.address,
+        rubro=supplier.rubro or "Iluminación",
+        condicion_pago=supplier.condicion_pago or "30 días",
         skus_count=len(prod_items),
         total_skus=len(prod_items),
         productos=prod_items,
         ordenes_compra_count=len(orders_data),
         ordenes_compra=orders_data,
+        catalog_items_count=catalog_count,
         created_at=supplier.created_at
     )
 

@@ -718,11 +718,98 @@ async def get_top_suppliers(
     return res
 
 
+def normalize_supplier_recent_contracts(raw_contracts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Normaliza los contratos estatales del competidor:
+    - Extrae el nombre real del organismo comprador (buyer.name)
+    - Calcula el monto real a partir de los ítems y precios unitarios
+    - Extrae la descripción real del pliego o ítem adjudicado
+    - Desglosa los ítems con cantidades, unidades y precios
+    - Elimina tarjetas vacías que mostraban 'Contrato Estatal - Organismo - UYU $ 0,00'
+    """
+    normalized = []
+    for c in raw_contracts:
+        buyer_obj = c.get("buyer") or {}
+        buyer_name = buyer_obj.get("name") or c.get("buyerName") or "Organismo Estatal"
+
+        contract_date = c.get("date") or c.get("sourceYear") or ""
+        if isinstance(contract_date, str) and "T" in contract_date:
+            contract_date = contract_date.split("T")[0]
+
+        awards = c.get("awards") or []
+        items_list = []
+        calc_total = Decimal("0.00")
+        curr = c.get("currency") or "UYU"
+        title = c.get("title") or ""
+
+        for aw in awards:
+            if not title and aw.get("title") and not str(aw.get("title")).startswith("X/"):
+                title = aw.get("title")
+            aw_date = aw.get("date")
+            if not contract_date and aw_date:
+                contract_date = str(aw_date).split("T")[0]
+
+            for itm in (aw.get("items") or []):
+                cls = itm.get("classification") or {}
+                desc = cls.get("description") or itm.get("description") or "Ítem Adjudicado"
+                if not title or str(title).startswith("X/"):
+                    title = desc
+
+                qty = itm.get("quantity") or 1
+                unit_info = itm.get("unit") or {}
+                u_name = unit_info.get("name") or itm.get("unitName") or "UNIDAD"
+                val_info = unit_info.get("value") or {}
+                u_price = val_info.get("amount") or itm.get("avgPrice") or 0
+                if val_info.get("currency"):
+                    curr = val_info.get("currency")
+
+                try:
+                    price_dec = Decimal(str(u_price)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                    total_dec = (Decimal(str(qty)) * price_dec).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                except Exception:
+                    price_dec = Decimal("0.00")
+                    total_dec = Decimal("0.00")
+
+                calc_total += total_dec
+
+                items_list.append({
+                    "id": str(itm.get("id") or ""),
+                    "description": desc,
+                    "quantity": qty,
+                    "unitName": u_name,
+                    "unitPrice": float(price_dec),
+                    "totalPrice": float(total_dec),
+                    "currency": curr,
+                })
+
+        final_amount = float(calc_total) if calc_total > Decimal("0.00") else float(c.get("amount") or 0)
+        if not title:
+            title = f"Adjudicación {c.get('id') or ''}".strip()
+
+        # Eliminar las tarjetas dummy que dicen 'Contrato Estatal - Organismo - UYU $ 0,00'
+        if final_amount > 0 or items_list or (title and title != "Contrato Estatal"):
+            normalized.append({
+                "id": str(c.get("id") or c.get("_id") or ""),
+                "ocid": c.get("ocid"),
+                "title": title,
+                "buyerName": buyer_name,
+                "date": str(contract_date),
+                "amount": final_amount,
+                "currency": curr,
+                "status": c.get("status") or "Adjudicado",
+                "itemsCount": len(items_list),
+                "items": items_list,
+            })
+
+    return normalized
+
+
 @router.get("/suppliers/{supplier_id:path}")
 async def get_supplier_detail(supplier_id: str):
     """
     Ficha de inteligencia del competidor: contratos adjudicados, organismos compradores,
     montos en UYU/USD y datos de registro RUPE.
+    Garantiza montos reales, nombres de organismos y desglose de ítems adjudicados.
     """
     res = await procurement_client.get_supplier_detail(supplier_id)
     if not res.get("success"):
@@ -730,6 +817,8 @@ async def get_supplier_detail(supplier_id: str):
             status_code=res.get("status_code", 502),
             detail=res.get("message", f"No se encontró ficha del proveedor {supplier_id}"),
         )
+    if isinstance(res.get("data"), dict) and "recentContracts" in res["data"]:
+        res["data"]["recentContracts"] = normalize_supplier_recent_contracts(res["data"]["recentContracts"])
     return res
 
 

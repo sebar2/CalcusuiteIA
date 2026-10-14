@@ -10,18 +10,30 @@ import {
   Package,
   Edit2,
   X,
-  ExternalLink
+  ExternalLink,
+  BookOpen,
+  CreditCard,
+  Globe2
 } from 'lucide-react';
 import api from '../../services/api';
 import type { SupplierItem, SupplierProductItem } from '../../types';
 
-export const SuppliersView: React.FC = () => {
+export interface SuppliersViewProps {
+  onNavigateToCatalogs?: (supplierId: number) => void;
+}
+
+export const SuppliersView: React.FC<SuppliersViewProps> = ({ onNavigateToCatalogs }) => {
   const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Drawer de SKUs / Catálogo
+  // Filtros Avanzados
+  const [tipoFilter, setTipoFilter] = useState<'todos' | 'plaza' | 'exterior'>('todos');
+  const [rubroFilter, setRubroFilter] = useState<string>('TODOS');
+  const [condicionFilter, setCondicionFilter] = useState<string>('TODAS');
+
+  // Drawer de SKUs / Catálogo Rápido
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
 
   // Modal Alta / Edición
@@ -30,6 +42,9 @@ export const SuppliersView: React.FC = () => {
   const [formData, setFormData] = useState({
     nombre: '',
     rut: '',
+    tipo_proveedor: 'plaza',
+    rubro: 'Iluminación',
+    condicion_pago: '30 días',
     logo_url: '',
     email: '',
     phone: '',
@@ -37,11 +52,16 @@ export const SuppliersView: React.FC = () => {
   });
   const [saving, setSaving] = useState<boolean>(false);
 
-  const fetchSuppliers = async (query?: string) => {
+  const fetchSuppliers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.getSuppliers(query);
+      const data = await api.getSuppliers({
+        tipo: tipoFilter !== 'todos' ? tipoFilter : undefined,
+        rubro: rubroFilter !== 'TODOS' ? rubroFilter : undefined,
+        condicion_pago: condicionFilter !== 'TODAS' ? condicionFilter : undefined,
+        search: search.trim() || undefined
+      });
       setSuppliers(data);
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Error al cargar proveedores.');
@@ -52,11 +72,11 @@ export const SuppliersView: React.FC = () => {
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [tipoFilter, rubroFilter, condicionFilter]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchSuppliers(search);
+    fetchSuppliers();
   };
 
   const openCreateModal = () => {
@@ -64,6 +84,9 @@ export const SuppliersView: React.FC = () => {
     setFormData({
       nombre: '',
       rut: '',
+      tipo_proveedor: 'plaza',
+      rubro: 'Iluminación',
+      condicion_pago: '30 días',
       logo_url: 'https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=120&auto=format&fit=crop&q=80',
       email: '',
       phone: '',
@@ -77,6 +100,9 @@ export const SuppliersView: React.FC = () => {
     setFormData({
       nombre: s.nombre,
       rut: s.rut || '',
+      tipo_proveedor: s.tipo_proveedor || 'plaza',
+      rubro: s.rubro || 'Iluminación',
+      condicion_pago: s.condicion_pago || '30 días',
       logo_url: s.logo_url || '',
       email: s.email || '',
       phone: s.phone || '',
@@ -97,7 +123,7 @@ export const SuppliersView: React.FC = () => {
         await api.createSupplier(formData);
       }
       setIsModalOpen(false);
-      await fetchSuppliers(search);
+      await fetchSuppliers();
     } catch (err: any) {
       alert(err?.response?.data?.detail || 'Error al guardar proveedor.');
     } finally {
@@ -107,7 +133,7 @@ export const SuppliersView: React.FC = () => {
 
   // KPIs
   const totalSkus = useMemo(() => {
-    return suppliers.reduce((acc, s) => acc + (s.total_skus || 0), 0);
+    return suppliers.reduce((acc, s) => acc + (s.total_skus || 0) + (s.catalog_items_count || 0), 0);
   }, [suppliers]);
 
   const avgLeadTime = useMemo(() => {
@@ -122,7 +148,7 @@ export const SuppliersView: React.FC = () => {
   }, [suppliers]);
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div className="space-y-6 animate-fadeIn pb-16">
       {/* Encabezado y Toolbar Modern SaaS */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
         <div>
@@ -135,18 +161,18 @@ export const SuppliersView: React.FC = () => {
                 Directorio B2B | Proveedores & Abastecimiento
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Fichas de proveedores estratégicos, lead times de entrega y catálogo de SKUs suministrados.
+                Fichas de proveedores homologados, condiciones comerciales, lead times y catálogos vinculados.
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <form onSubmit={handleSearch} className="relative">
+          <form onSubmit={handleSearchSubmit} className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre o RUT..."
+              placeholder="Buscar por RUT o Nombre..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 w-56 md:w-64"
@@ -177,7 +203,7 @@ export const SuppliersView: React.FC = () => {
 
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">SKUs en Catálogo</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Líneas / SKUs Totales</p>
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{totalSkus}</p>
           </div>
           <div className="p-3 bg-amber-50 dark:bg-amber-900/30 rounded-xl text-amber-600 dark:text-amber-400">
@@ -196,6 +222,81 @@ export const SuppliersView: React.FC = () => {
         </div>
       </div>
 
+      {/* Barra de Filtros Avanzados */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Chips de Tipo de Proveedor */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          <button
+            onClick={() => setTipoFilter('todos')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              tipoFilter === 'todos'
+                ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setTipoFilter('plaza')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              tipoFilter === 'plaza'
+                ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            🇺🇾 Plaza Local Uy
+          </button>
+          <button
+            onClick={() => setTipoFilter('exterior')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              tipoFilter === 'exterior'
+                ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            🌍 Exterior / China
+          </button>
+        </div>
+
+        {/* Desplegables de Rubro y Condiciones */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Rubro:</span>
+            <select
+              value={rubroFilter}
+              onChange={(e) => setRubroFilter(e.target.value)}
+              aria-label="Filtrar por Rubro comercial"
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              <option value="TODOS">Todos los Rubros</option>
+              <option value="Iluminación">Iluminación</option>
+              <option value="Obra Civil">Obra Civil</option>
+              <option value="Ferretería">Ferretería</option>
+              <option value="Electromecánica">Electromecánica</option>
+              <option value="Mobiliario Corporativo">Mobiliario Corporativo</option>
+              <option value="Equipamiento Hospitalario">Equipamiento Hospitalario</option>
+              <option value="General">General</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Condición:</span>
+            <select
+              value={condicionFilter}
+              onChange={(e) => setCondicionFilter(e.target.value)}
+              aria-label="Filtrar por Condición de Pago"
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              <option value="TODAS">Todas las Condiciones</option>
+              <option value="Contado">Contado</option>
+              <option value="30 días">30 días</option>
+              <option value="60 días">60 días</option>
+              <option value="Crédito Abierto">Crédito Abierto</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Grid de Proveedores */}
       {loading ? (
         <div className="py-20 text-center">
@@ -210,7 +311,7 @@ export const SuppliersView: React.FC = () => {
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400">
           <Truck className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
           <p className="text-base font-semibold text-slate-800 dark:text-slate-200">No se encontraron proveedores</p>
-          <p className="text-xs mt-1">Registra un nuevo proveedor o asigna proveedores a tus productos de inventario.</p>
+          <p className="text-xs mt-1">Ajuste los filtros o registre un nuevo proveedor en la plataforma.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -235,11 +336,16 @@ export const SuppliersView: React.FC = () => {
                       <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base leading-snug group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
                         {s.nombre}
                       </h3>
-                      {s.rut && (
-                        <span className="inline-block px-2 py-0.5 mt-0.5 rounded text-[11px] font-mono font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                          RUT: {s.rut}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        {s.rut && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            RUT: {s.rut}
+                          </span>
+                        )}
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                          {s.rubro || 'General'}
                         </span>
-                      )}
+                      </div>
                     </div>
                   </div>
 
@@ -252,8 +358,20 @@ export const SuppliersView: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Badges y Términos */}
+                <div className="mt-3.5 flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="px-2 py-0.5 rounded-md font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                    <Globe2 className="w-3 h-3 text-slate-400" />
+                    {s.tipo_proveedor === 'exterior' ? 'Exterior / Fábrica' : 'Plaza Local Uy'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
+                    <CreditCard className="w-3 h-3 text-indigo-500" />
+                    {s.condicion_pago || 'Contado'}
+                  </span>
+                </div>
+
                 {/* Datos de contacto */}
-                <div className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                <div className="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                   {s.email && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -279,29 +397,39 @@ export const SuppliersView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Catálogo y Acción */}
-              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              {/* Catálogo y Botones de Acción */}
+              <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                 <div>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Líneas Suministradas</span>
-                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    {s.total_skus} {s.total_skus === 1 ? 'producto' : 'productos'}
+                  <span className="text-[10px] text-slate-400 block font-medium">Catálogo & SKUs</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    {(s.catalog_items_count || 0) > 0 ? `${s.catalog_items_count} en lista` : `${s.total_skus || 0} ítems`}
                   </span>
                 </div>
 
-                <button
-                  onClick={() => setSelectedSupplier(s)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
-                >
-                  <span>Ver Catálogo</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setSelectedSupplier(s)}
+                    title="Ver SKUs rápidos"
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 text-xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => onNavigateToCatalogs ? onNavigateToCatalogs(s.id) : setSelectedSupplier(s)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-sm"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Ver Catálogo & Contratos</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Drawer Lateral de Catálogo de SKUs */}
+      {/* Drawer Lateral de Catálogo Rápido */}
       {selectedSupplier && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-sm flex justify-end animate-fadeIn">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl p-6 flex flex-col justify-between border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
@@ -315,7 +443,7 @@ export const SuppliersView: React.FC = () => {
                   />
                   <div>
                     <h2 className="font-bold text-slate-900 dark:text-slate-100 text-base">{selectedSupplier.nombre}</h2>
-                    <p className="text-xs text-slate-500">Catálogo: {selectedSupplier.total_skus} SKUs</p>
+                    <p className="text-xs text-slate-500">Catálogo: {selectedSupplier.total_skus} SKUs asignados</p>
                   </div>
                 </div>
                 <button
@@ -325,6 +453,24 @@ export const SuppliersView: React.FC = () => {
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
+              {onNavigateToCatalogs && (
+                <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between">
+                  <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">
+                    ¿Desea gestionar la matriz PVP/PVM o contratos?
+                  </span>
+                  <button
+                    onClick={() => {
+                      const id = selectedSupplier.id;
+                      setSelectedSupplier(null);
+                      onNavigateToCatalogs(id);
+                    }}
+                    className="px-2.5 py-1 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    Ir a Catálogos
+                  </button>
+                </div>
+              )}
 
               <div className="mt-6">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
@@ -350,18 +496,18 @@ export const SuppliersView: React.FC = () => {
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                           />
                           <div className="min-w-0">
-                            <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400 block">
-                              {p.sku}
-                            </span>
-                            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{p.nombre}</p>
-                            <span className="text-[11px] text-slate-500">Lead time: {p.lead_time_dias}d</span>
+                            <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{p.nombre}</h5>
+                            <span className="text-[10px] font-mono text-slate-500">{p.sku}</span>
                           </div>
                         </div>
 
                         <div className="text-right flex-shrink-0">
-                          <span className="text-[10px] text-slate-500 block">Costo Ref.</span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                            ${(p.costo_unitario || 0).toLocaleString('es-CL')}
+                          <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block font-mono">
+                            UYU $ {p.costo_unitario?.toLocaleString('es-UY') || 0}
+                          </span>
+                          <span className="text-[10px] text-slate-500 flex items-center justify-end gap-1">
+                            <Clock className="w-2.5 h-2.5" />
+                            {p.lead_time_dias || 7}d
                           </span>
                         </div>
                       </div>
@@ -371,25 +517,25 @@ export const SuppliersView: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => setSelectedSupplier(null)}
-                className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
+                className="w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl transition-colors"
               >
-                Cerrar Catálogo
+                Cerrar Panel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Crear / Editar Proveedor */}
+      {/* Modal Alta / Edición de Proveedor */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">
-                {editingSupplier ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                {editingSupplier ? 'Editar Ficha Proveedor' : 'Registrar Nuevo Proveedor'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -412,15 +558,62 @@ export const SuppliersView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">RUT Proveedor</label>
-                <input
-                  type="text"
-                  placeholder="Ej: 77.102.304-5"
-                  value={formData.rut}
-                  onChange={(e) => setFormData({ ...formData, rut: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">RUT Proveedor</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 219998880012"
+                    value={formData.rut}
+                    onChange={(e) => setFormData({ ...formData, rut: e.target.value })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tipo de Proveedor</label>
+                  <select
+                    value={formData.tipo_proveedor}
+                    onChange={(e) => setFormData({ ...formData, tipo_proveedor: e.target.value })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="plaza">Plaza Local Uy</option>
+                    <option value="exterior">Fábrica Exterior / China</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Rubro / Vertical</label>
+                  <select
+                    value={formData.rubro}
+                    onChange={(e) => setFormData({ ...formData, rubro: e.target.value })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="Iluminación">Iluminación</option>
+                    <option value="Obra Civil">Obra Civil</option>
+                    <option value="Ferretería">Ferretería</option>
+                    <option value="Electromecánica">Electromecánica</option>
+                    <option value="Mobiliario Corporativo">Mobiliario Corporativo</option>
+                    <option value="Equipamiento Hospitalario">Equipamiento Hospitalario</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Condición Comercial</label>
+                  <select
+                    value={formData.condicion_pago}
+                    onChange={(e) => setFormData({ ...formData, condicion_pago: e.target.value })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="Contado">Contado</option>
+                    <option value="30 días">30 días</option>
+                    <option value="60 días">60 días</option>
+                    <option value="Crédito Abierto">Crédito Abierto</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -439,7 +632,7 @@ export const SuppliersView: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email de Pedidos</label>
                   <input
                     type="email"
-                    placeholder="ventas@proveedor.cl"
+                    placeholder="ventas@proveedor.com.uy"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -449,7 +642,7 @@ export const SuppliersView: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Teléfono</label>
                   <input
                     type="tel"
-                    placeholder="+56 2 2345 6789"
+                    placeholder="+598 2900 1234"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -461,7 +654,7 @@ export const SuppliersView: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Dirección Centro Logístico</label>
                 <input
                   type="text"
-                  placeholder="Parque Industrial ENEA, Pudahuel"
+                  placeholder="Ruta 101 Km 24, Canelones"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"

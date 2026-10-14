@@ -128,3 +128,50 @@ def simulate_discount(
         "below_threshold_15pct": below_threshold,
         "is_viable": not below_threshold and unit_cm > Decimal('0')
     }
+
+
+def calculate_trade_discount(pvp: Decimal, pvm: Decimal) -> Decimal:
+    """
+    Descuento a Comercios (%): ((PVP - PVM) / PVP) * 100
+    Si PVP es cero o negativo, retorna Decimal('0.00').
+    """
+    if pvp <= Decimal('0'):
+        return Decimal('0.00')
+    discount = ((pvp - pvm) / pvp) * Decimal('100')
+    return discount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def calculate_resale_gross_margin(pvm: Decimal, cost: Decimal) -> Decimal:
+    """
+    Margen Bruto de Reventa (%): ((PVM - Costo) / PVM) * 100
+    Si PVM es cero o negativo, retorna Decimal('0.00').
+    """
+    if pvm <= Decimal('0'):
+        return Decimal('0.00')
+    margin = ((pvm - cost) / pvm) * Decimal('100')
+    return margin.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def calculate_cost_markup(pvp: Decimal, cost: Decimal) -> Decimal:
+    """
+    Markup sobre Costo (%): ((PVP - Costo) / Costo) * 100
+    Si Costo es cero o negativo, retorna Decimal('0.00').
+    """
+    if cost <= Decimal('0'):
+        return Decimal('0.00')
+    markup = ((pvp - cost) / cost) * Decimal('100')
+    return markup.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def calculate_catalog_item_metrics(cost: Decimal, pvm: Decimal, pvp: Decimal) -> Dict[str, Decimal]:
+    """
+    Calcula de forma unificada y con rigor Decimal:
+    - Descuento a comercios %: ((PVP - PVM) / PVP) * 100
+    - Margen bruto de reventa %: ((PVM - Costo) / PVM) * 100
+    - Markup sobre costo %: ((PVP - Costo) / Costo) * 100
+    """
+    return {
+        "descuento_comercios_pct": calculate_trade_discount(pvp, pvm),
+        "margen_reventa_pct": calculate_resale_gross_margin(pvm, cost),
+        "markup_costo_pct": calculate_cost_markup(pvp, cost),
+    }

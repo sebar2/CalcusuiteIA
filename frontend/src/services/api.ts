@@ -92,6 +92,10 @@ import type {
   SupplierItem,
   SupplierCreatePayload,
   SupplierUpdatePayload,
+  SupplierCatalogProductItem,
+  SupplierCatalogProductsResponse,
+  SupplierCatalogTendersResponse,
+  SupplierCatalogUploadResponse,
   CostCenterBudgetCreatePayload,
   CostCenterBudgetUpdatePayload,
   CostCenterBudgetSingleResponse,
@@ -952,13 +956,32 @@ export const apiService = {
     return res.data;
   },
 
-  async getSuppliers(q?: string, tipo_proveedor?: string): Promise<SupplierItem[]> {
-    const res = await apiClient.get<SupplierItem[]>('/api/v1/suppliers', {
-      params: {
-        ...(q ? { q } : {}),
-        ...(tipo_proveedor ? { tipo_proveedor } : {})
-      }
-    });
+  async getSuppliers(
+    filterOrQuery?: string | {
+      q?: string;
+      search?: string;
+      tipo?: string;
+      tipo_proveedor?: string;
+      rubro?: string;
+      condicion_pago?: string;
+    },
+    legacyTipoProveedor?: string
+  ): Promise<SupplierItem[]> {
+    let params: Record<string, string> = {};
+
+    if (typeof filterOrQuery === 'string') {
+      if (filterOrQuery.trim()) params.q = filterOrQuery.trim();
+      if (legacyTipoProveedor?.trim()) params.tipo_proveedor = legacyTipoProveedor.trim();
+    } else if (filterOrQuery && typeof filterOrQuery === 'object') {
+      if (filterOrQuery.search) params.search = filterOrQuery.search;
+      if (filterOrQuery.q) params.q = filterOrQuery.q;
+      if (filterOrQuery.tipo) params.tipo = filterOrQuery.tipo;
+      if (filterOrQuery.tipo_proveedor) params.tipo_proveedor = filterOrQuery.tipo_proveedor;
+      if (filterOrQuery.rubro) params.rubro = filterOrQuery.rubro;
+      if (filterOrQuery.condicion_pago) params.condicion_pago = filterOrQuery.condicion_pago;
+    }
+
+    const res = await apiClient.get<SupplierItem[]>('/api/v1/suppliers', { params });
     return res.data;
   },
 
@@ -974,6 +997,97 @@ export const apiService = {
 
   async updateSupplier(id: number, payload: SupplierUpdatePayload): Promise<SupplierItem> {
     const res = await apiClient.put<SupplierItem>(`/api/v1/suppliers/${id}`, payload);
+    return res.data;
+  },
+
+  // =========================================================================
+  // CATÁLOGOS DE PROVEEDORES: PRODUCTOS (PVP/PVM), INGESTA EXCEL Y LICITACIONES
+  // =========================================================================
+
+  async getSupplierCatalogProducts(
+    supplierId: number,
+    params?: { rubro?: string; search?: string }
+  ): Promise<SupplierCatalogProductsResponse> {
+    const res = await apiClient.get<SupplierCatalogProductsResponse>(
+      `/api/v1/suppliers/${supplierId}/catalog/products`,
+      { params }
+    );
+    return res.data;
+  },
+
+  async saveSupplierCatalogProduct(
+    supplierId: number,
+    payload: {
+      sku_proveedor: string;
+      sku_calcu?: string | null;
+      nombre: string;
+      rubro?: string;
+      costo_compra: number;
+      precio_venta_comercios: number;
+      precio_venta_publico: number;
+      stock_estimado?: string;
+    }
+  ): Promise<SupplierCatalogProductItem> {
+    const res = await apiClient.post<SupplierCatalogProductItem>(
+      `/api/v1/suppliers/${supplierId}/catalog/products`,
+      payload
+    );
+    return res.data;
+  },
+
+  async updateSupplierCatalogProduct(
+    supplierId: number,
+    itemId: number,
+    payload: Partial<{
+      sku_proveedor: string;
+      sku_calcu: string | null;
+      nombre: string;
+      rubro: string;
+      costo_compra: number;
+      precio_venta_comercios: number;
+      precio_venta_publico: number;
+      stock_estimado: string;
+    }>
+  ): Promise<SupplierCatalogProductItem> {
+    const res = await apiClient.put<SupplierCatalogProductItem>(
+      `/api/v1/suppliers/${supplierId}/catalog/products/${itemId}`,
+      payload
+    );
+    return res.data;
+  },
+
+  async deleteSupplierCatalogProduct(
+    supplierId: number,
+    itemId: number
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.delete<{ success: boolean; message: string }>(
+      `/api/v1/suppliers/${supplierId}/catalog/products/${itemId}`
+    );
+    return res.data;
+  },
+
+  async uploadSupplierCatalogSpreadsheet(
+    supplierId: number,
+    file: File
+  ): Promise<SupplierCatalogUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post<SupplierCatalogUploadResponse>(
+      `/api/v1/suppliers/${supplierId}/catalog/upload`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return res.data;
+  },
+
+  async getSupplierCatalogTenders(supplierId: number): Promise<SupplierCatalogTendersResponse> {
+    const res = await apiClient.get<SupplierCatalogTendersResponse>(
+      `/api/v1/suppliers/${supplierId}/catalog/tenders`
+    );
     return res.data;
   },
 

@@ -30,6 +30,8 @@ import {
   Zap,
   Copy,
   Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -53,9 +55,11 @@ import type {
 } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
-interface TendersViewProps {
+export interface TendersViewProps {
   engineMode?: EngineMode;
   currentRole?: UserRole;
+  initialTab?: 'radar' | 'benchmarks' | 'competitors' | 'buyers' | 'calendar' | 'cotizador';
+  hideTabBar?: boolean;
 }
 
 export const CANONICAL_VERTICALS: BiddingVerticalItem[] = [
@@ -107,9 +111,19 @@ const renderSafeValue = (val: any, fallback: string = 'No especificado'): React.
 export const TendersView: React.FC<TendersViewProps> = ({
   engineMode = 'auto',
   currentRole = 'controller_admin',
+  initialTab = 'radar',
+  hideTabBar = false,
 }) => {
   // Pestaña activa
-  const [activeTab, setActiveTab] = useState<'radar' | 'benchmarks' | 'competitors' | 'buyers' | 'calendar' | 'cotizador'>('radar');
+  const [activeTab, setActiveTab] = useState<'radar' | 'benchmarks' | 'competitors' | 'buyers' | 'calendar' | 'cotizador'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const [expandedContractIdx, setExpandedContractIdx] = useState<number | null>(null);
 
   // Notificaciones de usuario
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -759,79 +773,81 @@ export const TendersView: React.FC<TendersViewProps> = ({
         {/* =================================================================== */}
         {/* NAVEGACIÓN POR PESTAÑAS (TABS) */}
         {/* =================================================================== */}
-        <div className="flex flex-wrap items-center gap-2 mt-6 border-t border-slate-800/80 pt-4">
-          <button
-            onClick={() => setActiveTab('radar')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'radar'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Radio className="w-4 h-4" />
-            <span>Tab 1: 📡 Radar en Vivo</span>
-          </button>
+        {!hideTabBar && (
+          <div className="flex flex-wrap items-center gap-2 mt-6 border-t border-slate-800/80 pt-4">
+            <button
+              onClick={() => setActiveTab('radar')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'radar'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Radio className="w-4 h-4" />
+              <span>Tab 1: 📡 Radar en Vivo</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('benchmarks')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'benchmarks'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Tab 2: 📊 Inteligencia de Precios SICE</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('benchmarks')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'benchmarks'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Tab 2: 📊 Inteligencia de Precios SICE</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('competitors')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'competitors'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Tab 3: 🕵️ Competidores (Proveedores)</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('competitors')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'competitors'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>Tab 3: 🕵️ Competidores (Proveedores)</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('buyers')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'buyers'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Landmark className="w-4 h-4" />
-            <span>Tab 4: 🏛️ Compradores & Intendencias</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('buyers')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'buyers'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Landmark className="w-4 h-4" />
+              <span>Tab 4: 🏛️ Compradores & Intendencias</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'calendar'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Tab 5: 📅 Vencimientos & Control Logístico</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'calendar'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Tab 5: 📅 Vencimientos & Control Logístico</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('cotizador')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ml-auto ${
-              activeTab === 'cotizador'
-                ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30'
-                : 'bg-slate-800/60 text-amber-400 hover:text-amber-300 hover:bg-slate-800'
-            }`}
-          >
-            <Calculator className="w-4 h-4" />
-            <span>💼 Cotizador & Dictamen B2B</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('cotizador')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ml-auto ${
+                activeTab === 'cotizador'
+                  ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30'
+                  : 'bg-slate-800/60 text-amber-400 hover:text-amber-300 hover:bg-slate-800'
+              }`}
+            >
+              <Calculator className="w-4 h-4" />
+              <span>💼 Cotizador & Dictamen B2B</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* =================================================================== */}
@@ -1442,21 +1458,84 @@ export const TendersView: React.FC<TendersViewProps> = ({
                     </div>
 
                     <div>
-                      <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                        Contratos Recientes Adjudicados
+                      <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        <span>Contratos Recientes Adjudicados</span>
+                        <span className="text-[11px] text-slate-500 font-normal">
+                          {(selectedSupplierDetail.recentContracts || []).length} registros
+                        </span>
                       </h5>
-                      <div className="space-y-2 max-h-56 overflow-y-auto">
-                        {(selectedSupplierDetail.recentContracts || []).map((c: any, idx: number) => (
-                          <div key={idx} className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
-                            <p className="font-semibold text-slate-200 line-clamp-1">{c.title || 'Contrato Estatal'}</p>
-                            <div className="flex justify-between text-slate-400 mt-1 text-[11px]">
-                              <span>{c.buyerName || 'Organismo'}</span>
-                              <span className="text-emerald-400 font-bold">
-                                {c.currency || 'UYU'} ${formatCurrency(c.amount || 0)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                        {(selectedSupplierDetail.recentContracts || [])
+                          .filter((c: any) => {
+                            const amt = Number(c.amount || 0);
+                            const items = c.items || c.awards?.[0]?.items || [];
+                            const t = c.title || c.awards?.[0]?.title || '';
+                            return amt > 0 || items.length > 0 || (t && t !== 'Contrato Estatal');
+                          })
+                          .map((c: any, idx: number) => {
+                            const contractTitle = c.title || c.awards?.[0]?.title || c.awards?.[0]?.items?.[0]?.classification?.description || `Licitación Adjudicada #${idx + 1}`;
+                            const buyer = c.buyerName || c.buyer?.name || 'Organismo Estatal';
+                            const dateVal = c.date ? (typeof c.date === 'string' && c.date.includes('T') ? c.date.split('T')[0] : String(c.date)) : '';
+                            const curr = c.currency || c.awards?.[0]?.items?.[0]?.unit?.value?.currency || 'UYU';
+                            const rawItems = c.items || c.awards?.[0]?.items || [];
+                            const isExpanded = expandedContractIdx === idx;
+
+                            return (
+                              <div key={idx} className="p-3 bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all rounded-xl text-xs space-y-1.5 shadow-sm">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-semibold text-slate-100 line-clamp-2 leading-snug">{contractTitle}</p>
+                                  {rawItems.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedContractIdx(isExpanded ? null : idx)}
+                                      className="text-slate-400 hover:text-white shrink-0 p-1 rounded-md hover:bg-slate-800 transition-colors"
+                                      title={isExpanded ? "Ocultar desglose de partidas" : "Ver partidas adjudicadas"}
+                                    >
+                                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-indigo-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between text-slate-400 text-[11px] gap-2 pt-0.5">
+                                  <span className="truncate max-w-[200px] text-slate-300 flex items-center gap-1.5 font-medium">
+                                    <Building2 className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    {buyer}
+                                  </span>
+                                  {dateVal && (
+                                    <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                      {dateVal}
+                                    </span>
+                                  )}
+                                  <span className="text-emerald-400 font-bold ml-auto font-mono text-xs">
+                                    {curr} ${formatCurrency(c.amount || 0)}
+                                  </span>
+                                </div>
+
+                                {isExpanded && rawItems.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-slate-800/80 space-y-1.5 bg-slate-900/80 p-2.5 rounded-lg">
+                                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                                      Partidas Adjudicadas ({rawItems.length}):
+                                    </span>
+                                    {rawItems.map((it: any, iIdx: number) => {
+                                      const itDesc = it.description || it.classification?.description || 'Partida adjudicada';
+                                      const itQty = it.quantity || 1;
+                                      const itUnit = it.unitName || it.unit?.name || 'UNIDAD';
+                                      const itPrice = it.unitPrice || it.unit?.value?.amount || 0;
+                                      const itCurr = it.currency || it.unit?.value?.currency || curr;
+                                      const itTotal = it.totalPrice || (itQty * itPrice);
+                                      return (
+                                        <div key={iIdx} className="flex justify-between items-center text-[10px] text-slate-300 py-1 border-b border-slate-800/40 last:border-0 gap-2">
+                                          <span className="truncate max-w-[190px]">• {itDesc} <span className="text-slate-500 font-mono">({itQty} {itUnit})</span></span>
+                                          <span className="font-mono text-emerald-400 font-medium shrink-0">
+                                            {itCurr} ${formatCurrency(itTotal)}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   </div>

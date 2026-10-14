@@ -103,6 +103,8 @@ def sync_table_columns(conn):
     add_col_if_missing("suppliers", "contacto_nombre", "VARCHAR(100)")
     add_col_if_missing("suppliers", "contacto_cargo", "VARCHAR(100)")
     add_col_if_missing("suppliers", "descripcion", "TEXT")
+    add_col_if_missing("suppliers", "rubro", "VARCHAR(100)", "'Iluminación'")
+    add_col_if_missing("suppliers", "condicion_pago", "VARCHAR(50)", "'30 días'")
 
     # 3. warehouses (Nodos Logísticos Internacionales y Nacionales)
     add_col_if_missing("warehouses", "pais", "VARCHAR(100)", "'Uruguay'")
@@ -169,6 +171,47 @@ def sync_table_columns(conn):
                 conn.commit()
         except Exception as e:
             logger.warning("No se pudo sembrar catálogo de servicios implícitos: %s", e)
+
+    # 10. Semilla de Catálogo de Productos de Proveedores (PVP / PVM / Costo)
+    if "supplier_catalog_items" in existing_tables:
+        try:
+            cat_count = conn.execute(text("SELECT COUNT(*) FROM supplier_catalog_items")).scalar() or 0
+            if cat_count == 0:
+                suppliers_rows = conn.execute(text("SELECT id, nombre FROM suppliers ORDER BY id ASC LIMIT 5")).fetchall()
+                if suppliers_rows:
+                    sample_catalog = [
+                        ("SKU-PROV-LUM01", "SKU-LED-P6060", "Panel LED 60x60 40W 4000K Backlight", "Iluminación", 12.50, 19.80, 29.90, "En Stock MVD"),
+                        ("SKU-PROV-LUM02", "SKU-CAMP-150W", "Campana Industrial LED UFO 150W IP65", "Iluminación", 34.00, 52.00, 78.50, "En Stock MVD"),
+                        ("SKU-PROV-LUM03", "SKU-VIAL-100W", "Luminaria Alumbrado Público LED 100W", "Iluminación", 45.00, 68.00, 99.00, "24-48 hs"),
+                        ("SKU-PROV-DRV01", "SKU-DALI-75W", "Driver Inteligente DALI 75W Regulable", "Electromecánica", 18.20, 27.50, 39.00, "En Stock MVD"),
+                        ("SKU-PROV-OBR01", None, "Pintura Epoxi Industrial Alto Tránsito 20L", "Obra Civil", 42.00, 64.00, 95.00, "En Stock MVD"),
+                        ("SKU-PROV-FER01", None, "Juego de Herramientas Aisladas 1000V", "Ferretería", 22.00, 33.50, 49.90, "48-72 hs"),
+                    ]
+                    for idx, row in enumerate(suppliers_rows):
+                        supp_id = row[0]
+                        start_i = idx % len(sample_catalog)
+                        assigned_items = sample_catalog[start_i: start_i + 3]
+                        if len(assigned_items) < 2:
+                            assigned_items = sample_catalog[:3]
+                        for sku_p, sku_c, nom, rub, c_comp, p_com, p_pub, st_est in assigned_items:
+                            conn.execute(text("""
+                                INSERT INTO supplier_catalog_items (supplier_id, sku_proveedor, sku_calcu, nombre, rubro, costo_compra, precio_venta_comercios, precio_venta_publico, stock_estimado, updated_at)
+                                VALUES (:sid, :sp, :sc, :nom, :rub, :cc, :pvc, :pvp, :st, CURRENT_TIMESTAMP)
+                            """), {
+                                "sid": supp_id,
+                                "sp": f"{sku_p}-{supp_id}",
+                                "sc": sku_c,
+                                "nom": nom,
+                                "rub": rub,
+                                "cc": c_comp,
+                                "pvc": p_com,
+                                "pvp": p_pub,
+                                "st": st_est,
+                            })
+                    conn.commit()
+                    logger.info("Catálogo inicial de productos de proveedores sembrado exitosamente.")
+        except Exception as e:
+            logger.warning("No se pudo sembrar catálogo inicial de proveedores: %s", e)
 
 
 def run_non_destructive_migrations(target_engine: Engine = None):

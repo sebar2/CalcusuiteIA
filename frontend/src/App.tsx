@@ -20,6 +20,13 @@ const ExecutiveReportsView = lazy(() => import('./views/ExecutiveReportsView').t
 const EtlIngestView = lazy(() => import('./views/EtlIngestView').then(m => ({ default: m.EtlIngestView })));
 const ClientsView = lazy(() => import('./views/directory/ClientsView').then(m => ({ default: m.ClientsView })));
 const SuppliersView = lazy(() => import('./views/directory/SuppliersView').then(m => ({ default: m.SuppliersView })));
+const SupplierCatalogsView = lazy(() => import('./views/SupplierCatalogsView').then(m => ({ default: m.SupplierCatalogsView })));
+const TendersRadarView = lazy(() => import('./views/tenders/TendersRadarView').then(m => ({ default: m.TendersRadarView })));
+const TendersBenchmarksView = lazy(() => import('./views/tenders/TendersBenchmarksView').then(m => ({ default: m.TendersBenchmarksView })));
+const TendersCompetitorsView = lazy(() => import('./views/tenders/TendersCompetitorsView').then(m => ({ default: m.TendersCompetitorsView })));
+const TendersBuyersView = lazy(() => import('./views/tenders/TendersBuyersView').then(m => ({ default: m.TendersBuyersView })));
+const TendersCalendarView = lazy(() => import('./views/tenders/TendersCalendarView').then(m => ({ default: m.TendersCalendarView })));
+const TendersQuoterView = lazy(() => import('./views/tenders/TendersQuoterView').then(m => ({ default: m.TendersQuoterView })));
 
 const ViewLoading = () => (
   <div className="h-96 flex flex-col items-center justify-center space-y-3 text-slate-400">
@@ -44,6 +51,7 @@ export function AppContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('auto');
+  const [selectedSupplierForCatalogId, setSelectedSupplierForCatalogId] = useState<number | null>(null);
 
   useEffect(() => {
     const handleLoginEvent = (e: Event) => {
@@ -371,7 +379,20 @@ export function AppContent() {
 
             {activeTab === 'suppliers' && (
               <ErrorBoundary fallbackTitle="Error al cargar Directorio de Proveedores">
-                <SuppliersView />
+                <SuppliersView 
+                  onNavigateToCatalogs={(supplierId: number) => {
+                    setSelectedSupplierForCatalogId(supplierId);
+                    setActiveTab('supplier-catalogs');
+                  }}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'supplier-catalogs' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Catálogos de Proveedores">
+                <SupplierCatalogsView 
+                  initialSupplierId={selectedSupplierForCatalogId} 
+                />
               </ErrorBoundary>
             )}
 
@@ -386,6 +407,60 @@ export function AppContent() {
             {activeTab === 'tenders' && (
               <ErrorBoundary fallbackTitle="Error al cargar Licitaciones & Proyectos B2B">
                 <TendersView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_radar' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Radar de Convocatorias">
+                <TendersRadarView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_benchmarks' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Precios & SICE">
+                <TendersBenchmarksView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_competitors' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Competidores & Proveedores">
+                <TendersCompetitorsView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_buyers' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Compradores & Intendencias">
+                <TendersBuyersView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_calendar' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Calendario & Logística MVD">
+                <TendersCalendarView 
+                  engineMode={engineMode}
+                  currentRole={currentRole}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenders_cotizador' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Cotizador & Dictamen B2B">
+                <TendersQuoterView 
                   engineMode={engineMode}
                   currentRole={currentRole}
                 />
