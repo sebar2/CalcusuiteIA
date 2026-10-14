@@ -1406,6 +1406,73 @@ class TenderEvaluateRequest(BaseModel):
 TenderQuoteRequest = TenderEvaluateRequest
 
 
+# --- MÓDULO LICITACIONES B2B: MULTI-RUBRO & GESTIÓN DE KEYWORDS ---
+class BiddingKeywordItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    vertical_id: str
+    keyword: str
+    tipo: str = "INCLUSION" # "INCLUSION" | "EXCLUSION"
+    peso: float = 1.0
+    fuente: str = "MANUAL"
+    created_at: Optional[datetime] = None
+
+
+class BiddingKeywordCreate(BaseModel):
+    keyword: str
+    tipo: str = "INCLUSION" # "INCLUSION" | "EXCLUSION"
+    peso: float = 1.0
+
+
+class BiddingKeywordBulkCreate(BaseModel):
+    keywords: List[str]
+    tipo: str = "INCLUSION"
+    peso: float = 1.0
+
+
+class BiddingVerticalItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    nombre: str
+    icon: str = "📋"
+    color_badge: str = "blue"
+    descripcion: Optional[str] = None
+    activo: bool = True
+    keywords_count: Optional[int] = 0
+    keywords: Optional[List[BiddingKeywordItem]] = None
+
+
+class BiddingVerticalCreate(BaseModel):
+    id: str
+    nombre: str
+    icon: str = "📋"
+    color_badge: str = "blue"
+    descripcion: Optional[str] = None
+    activo: bool = True
+
+
+class BiddingAIExpandKeywordsRequest(BaseModel):
+    vertical_id: Optional[str] = None
+    rubro_nombre: Optional[str] = None
+    query: Optional[str] = None
+    model: Optional[str] = None
+    include_exclusions: bool = True
+
+
+class BiddingAIExpandKeywordsResponse(BaseModel):
+    status: str = "success"
+    vertical_id: Optional[str] = None
+    query: Optional[str] = None
+    model_used: str
+    sinonimos_sugeridos: List[str]
+    keywords_inclusion_sugeridas: List[str]
+    keywords_exclusion_sugeridas: List[str]
+    explicacion: str
+    es_fallback_heuristico: bool = False
+
+
 class DialecticalDebateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1654,12 +1721,33 @@ class StockBatchItem(BaseModel):
 
 
 class WarehouseTransferPayload(BaseModel):
-    lote: str
-    sku: str
+    lote: Optional[str] = None
+    sku: Optional[str] = None
     cantidad: int = Field(..., gt=0)
-    origen_id: str
-    destino_id: str
+    origen_id: Optional[str] = None
+    destino_id: Optional[str] = None
+    batch_id: Optional[str] = None
+    origen_warehouse_id: Optional[str] = None
+    destino_warehouse_id: Optional[str] = None
     observaciones: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_transfer_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Aliases bidireccionales
+            lote_val = data.get("lote") or data.get("batch_id")
+            data["lote"] = lote_val
+            data["batch_id"] = lote_val
+
+            orig_val = data.get("origen_id") or data.get("origen_warehouse_id")
+            data["origen_id"] = orig_val
+            data["origen_warehouse_id"] = orig_val
+
+            dest_val = data.get("destino_id") or data.get("destino_warehouse_id")
+            data["destino_id"] = dest_val
+            data["destino_warehouse_id"] = dest_val
+        return data
 
 
 class WarehouseAssignStockPayload(BaseModel):
@@ -1840,6 +1928,14 @@ class TenderLiveFeedResponse(BaseModel):
 class TenderImportFeedRequest(BaseModel):
     feed_item_id: str
     proyecto_nombre: Optional[str] = None
+
+
+class TenderFeedSyncRequest(BaseModel):
+    model: Optional[str] = None
+    vertical_id: Optional[str] = None
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+    append_mode: bool = False
 
 
 # --- Stock Location & Batches Schemas ---

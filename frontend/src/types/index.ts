@@ -1291,12 +1291,84 @@ export interface TenderImportFeedRequest {
   proyecto_nombre?: string;
 }
 
+export interface TenderFeedSyncRequest {
+  model?: string;
+  vertical_id?: string;
+  limit?: number;
+  offset?: number;
+  append_mode?: boolean;
+}
+
 export interface TenderImportFeedResponse {
   status: string;
   message: string;
   tender_id: string;
   feed_item: TenderFeedItem;
   evaluation: any;
+}
+
+// =====================================================================
+// LICITACIONES B2B: MOTOR MULTI-RUBRO & AGENTES IA LOCALES
+// =====================================================================
+export interface BiddingKeywordItem {
+  id: number;
+  vertical_id: string;
+  keyword: string;
+  tipo: 'INCLUSION' | 'EXCLUSION' | string;
+  peso: number;
+  fuente: string;
+  created_at?: string;
+}
+
+export interface BiddingKeywordCreate {
+  keyword: string;
+  tipo: 'INCLUSION' | 'EXCLUSION' | string;
+  peso?: number;
+}
+
+export interface BiddingKeywordBulkCreate {
+  keywords: string[];
+  tipo: 'INCLUSION' | 'EXCLUSION' | string;
+  peso?: number;
+}
+
+export interface BiddingVerticalItem {
+  id: string;
+  nombre: string;
+  icon: string;
+  color_badge: string;
+  descripcion?: string | null;
+  activo: boolean;
+  keywords_count?: number;
+}
+
+export interface BiddingVerticalCreate {
+  id: string;
+  nombre: string;
+  icon?: string;
+  color_badge?: string;
+  descripcion?: string | null;
+  activo?: boolean;
+}
+
+export interface BiddingAIExpandKeywordsRequest {
+  vertical_id?: string;
+  rubro_nombre?: string;
+  query?: string;
+  model?: string;
+  include_exclusions?: boolean;
+}
+
+export interface BiddingAIExpandKeywordsResponse {
+  status: string;
+  vertical_id?: string;
+  query?: string;
+  model_used: string;
+  sinonimos_sugeridos: string[];
+  keywords_inclusion_sugeridas: string[];
+  keywords_exclusion_sugeridas: string[];
+  explicacion: string;
+  es_fallback_heuristico: boolean;
 }
 
 // =====================================================================

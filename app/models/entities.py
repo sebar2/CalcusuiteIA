@@ -645,3 +645,44 @@ from app.domain.models import (
 )
 
 
+class BiddingVertical(Base):
+    """
+    Rubro Comercial para Licitaciones B2B (Multi-Rubro Agnóstico).
+    Desacopla la plataforma de marcas fijas permitiendo gestionar
+    Iluminación, Mobiliario, Obra Civil, Electromecánica, Salud, Redes y Servicios.
+    """
+    __tablename__ = "bidding_verticals"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True) # ej: 'ILUMINACION_EFICIENCIA', 'OBRA_CIVIL'
+    nombre: Mapped[str] = mapped_column(String(100), nullable=False)
+    icon: Mapped[str] = mapped_column(String(20), default="📋", nullable=False)
+    color_badge: Mapped[str] = mapped_column(String(30), default="blue", nullable=False)
+    descripcion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    keywords: Mapped[List["BiddingKeyword"]] = relationship(
+        back_populates="vertical_rel", cascade="all, delete-orphan"
+    )
+
+
+class BiddingKeyword(Base):
+    """
+    Palabras Clave de Inclusión y Exclusión por Rubro Comercial.
+    Alimenta los filtros de pliegos de compras públicas (ARCE/UY)
+    y el motor asistido por Agente Ollama Local.
+    """
+    __tablename__ = "bidding_keywords"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vertical_id: Mapped[str] = mapped_column(ForeignKey("bidding_verticals.id"), nullable=False, index=True)
+    keyword: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    tipo: Mapped[str] = mapped_column(String(20), default="INCLUSION", nullable=False) # 'INCLUSION' | 'EXCLUSION'
+    peso: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=Decimal("1.00"), nullable=False)
+    fuente: Mapped[str] = mapped_column(String(30), default="MANUAL", nullable=False) # 'MANUAL' | 'AI_SUGGESTED'
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    vertical_rel: Mapped["BiddingVertical"] = relationship(back_populates="keywords")
+
+
+

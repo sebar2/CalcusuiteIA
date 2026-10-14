@@ -29,6 +29,9 @@ import {
   Lightbulb,
   Armchair,
   Tag,
+  Settings,
+  Bot,
+  ArrowRight,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -41,6 +44,9 @@ import type {
   EngineMode,
   InventoryAlertItem,
   TenderFeedItem,
+  BiddingVerticalItem,
+  BiddingKeywordItem,
+  BiddingAIExpandKeywordsResponse,
 } from '../types';
 import { MetricCard } from '../components/common/MetricCard';
 import { formatCurrency } from '../utils/formatters';
@@ -53,14 +59,28 @@ interface TendersViewProps {
 const QUICK_CHIPS: Array<{
   label: string;
   query: string;
-  nicho: 'TODAS' | 'ILUMINACION_TECNICA' | 'MOBILIARIO_CORPORATIVO';
+  nicho: string;
 }> = [
-  { label: '💡 Columnas & Alumbrado', query: 'columnas', nicho: 'ILUMINACION_TECNICA' },
-  { label: '💡 Drivers LED', query: 'driver', nicho: 'ILUMINACION_TECNICA' },
-  { label: '💡 Paneles & Campanas', query: 'panel led', nicho: 'ILUMINACION_TECNICA' },
-  { label: '🪑 Sillas & Sillones', query: 'silla', nicho: 'MOBILIARIO_CORPORATIVO' },
-  { label: '🪑 Armarios & Mostradores', query: 'armario', nicho: 'MOBILIARIO_CORPORATIVO' },
-  { label: '🪑 Escritorios & Mobiliario', query: 'escritorio', nicho: 'MOBILIARIO_CORPORATIVO' },
+  { label: '💡 Columnas & Alumbrado', query: 'columnas', nicho: 'ILUMINACION_EFICIENCIA' },
+  { label: '💡 Drivers DALI', query: 'driver', nicho: 'ILUMINACION_EFICIENCIA' },
+  { label: '💡 Paneles 60x60', query: 'panel led', nicho: 'ILUMINACION_EFICIENCIA' },
+  { label: '🪑 Sillas Operativas', query: 'silla', nicho: 'MOBILIARIO_EQUIPAMIENTO' },
+  { label: '🪑 Armarios & Mostradores', query: 'armario', nicho: 'MOBILIARIO_EQUIPAMIENTO' },
+  { label: '🏗️ Obra & Yeso Drywall', query: 'yeso', nicho: 'OBRA_CIVIL_CONSTRUCCION' },
+  { label: '⚡ Tableros & Cables', query: 'tablero electrico', nicho: 'ELECTROMECANICA_SUMINISTROS' },
+  { label: '🏥 Camillas & Clínico', query: 'camilla', nicho: 'EQUIPAMIENTO_HOSPITALARIO' },
+  { label: '💻 Racks & Fibra Óptica', query: 'rack', nicho: 'TECNOLOGIA_REDES' },
+  { label: '🧹 Servicio de Limpieza', query: 'servicio de limpieza', nicho: 'SERVICIOS_LIMPIEZA_MANTENIMIENTO' },
+];
+
+export const CANONICAL_VERTICALS: BiddingVerticalItem[] = [
+  { id: 'ILUMINACION_EFICIENCIA', nombre: 'Iluminación & Eficiencia Energética', icon: '💡', color_badge: 'amber', descripcion: 'Luminarias LED, alumbrado vial, proyectores, drivers DALI', activo: true, keywords_count: 30 },
+  { id: 'MOBILIARIO_EQUIPAMIENTO', nombre: 'Mobiliario Corporativo & Equipamiento', icon: '🪑', color_badge: 'indigo', descripcion: 'Sillas operativas, puestos de trabajo, armarios, mostradores', activo: true, keywords_count: 22 },
+  { id: 'OBRA_CIVIL_CONSTRUCCION', nombre: 'Obra Civil & Construcción', icon: '🏗️', color_badge: 'orange', descripcion: 'Albañilería, hormigón, yeso, cielorrasos, pintura y sanitaria', activo: true, keywords_count: 18 },
+  { id: 'ELECTROMECANICA_SUMINISTROS', nombre: 'Electromecánica & Suministros Eléctricos', icon: '⚡', color_badge: 'yellow', descripcion: 'Tableros, disyuntores, cables subterráneos, generadores', activo: true, keywords_count: 15 },
+  { id: 'EQUIPAMIENTO_HOSPITALARIO', nombre: 'Equipamiento Hospitalario & Salud', icon: '🏥', color_badge: 'rose', descripcion: 'Camillas, mobiliario clínico, negatoscopios, autoclaves', activo: true, keywords_count: 12 },
+  { id: 'TECNOLOGIA_REDES', nombre: 'Tecnología, Redes & Networking', icon: '🖥️', color_badge: 'cyan', descripcion: 'Racks 42U, patch panels, fibra óptica preconectorizada, switches', activo: true, keywords_count: 14 },
+  { id: 'SERVICIOS_LIMPIEZA_MANTENIMIENTO', nombre: 'Servicios de Limpieza & Mantenimiento', icon: '🧹', color_badge: 'emerald', descripcion: 'Servicio integral de limpieza, higiene, áreas verdes', activo: true, keywords_count: 10 },
 ];
 
 const cleanMarkdown = (raw?: string) => {
@@ -77,13 +97,13 @@ export const TendersView: React.FC<TendersViewProps> = ({
   currentRole = 'controller_admin',
 }) => {
   // Formulario del Proyecto
-  const [proyectoNombre, setProyectoNombre] = useState<string>('Licitación Alumbrado & Eficiencia Serlux');
+  const [proyectoNombre, setProyectoNombre] = useState<string>('Licitación B2B - Suministro & Eficiencia');
   const [clienteLicitacion, setClienteLicitacion] = useState<string>('Conaprole SA - Planta Industrial');
-  const [nicho, setNicho] = useState<string>('industria');
+  const [nicho, setNicho] = useState<string>('ILUMINACION_EFICIENCIA');
   const [plazoEntregaDias, setPlazoEntregaDias] = useState<number>(30);
   const [moneda, setMoneda] = useState<'USD' | 'UYU'>('USD');
   const [margenPct, setMargenPct] = useState<number>(35);
-  const [observaciones, setObservaciones] = useState<string>('Requiere certificación IES LM-79 y entrega en Montevideo.');
+  const [observaciones, setObservaciones] = useState<string>('Requiere certificación UNIT / IEC y entrega en depósito Montevideo.');
   const [pliegoUrl, setPliegoUrl] = useState<string>('');
   const [pliegoPdfRef, setPliegoPdfRef] = useState<string>('');
   const [fechaLimiteLicitacion, setFechaLimiteLicitacion] = useState<string>('');
@@ -121,13 +141,13 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const [evaluatingStep, setEvaluatingStep] = useState<'idle' | 'david' | 'aristoteles'>('idle');
   const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
 
-  // Estados para Feed de Licitaciones Públicas B2B (ARCE / UTE / IMM / OSE - SERLUX)
+  // Estados para Feed de Licitaciones Públicas B2B Multi-Rubro (ARCE)
   const [isFeedModalOpen, setIsFeedModalOpen] = useState<boolean>(false);
   const [feedItems, setFeedItems] = useState<TenderFeedItem[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false);
   const [isSyncingFeed, setIsSyncingFeed] = useState<boolean>(false);
   const [importingFeedId, setImportingFeedId] = useState<string | null>(null);
-  const [feedNichoFilter, setFeedNichoFilter] = useState<'TODAS' | 'ILUMINACION_TECNICA' | 'MOBILIARIO_CORPORATIVO'>('TODAS');
+  const [feedNichoFilter, setFeedNichoFilter] = useState<string>('TODAS');
   const [feedSearchQuery, setFeedSearchQuery] = useState<string>('');
   const [feedMeta, setFeedMeta] = useState<{
     total: number;
@@ -139,9 +159,271 @@ export const TendersView: React.FC<TendersViewProps> = ({
     actualizado_al?: string;
   }>({ total: 0 });
 
+  // Gestión de Verticales Comerciales y Modelos Ollama
+  const [verticals, setVerticals] = useState<BiddingVerticalItem[]>(CANONICAL_VERTICALS);
+  const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('qwen2.5:7b');
+  const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([
+    'qwen2.5:7b',
+    'llama3:latest',
+    'mistral:latest',
+    'deepseek-r1:7b',
+  ]);
+
+  // Modal de Gestión de Rubros y Palabras Clave
+  const [isKeywordsModalOpen, setIsKeywordsModalOpen] = useState<boolean>(false);
+  const [selectedVerticalForMgmt, setSelectedVerticalForMgmt] = useState<string>('ILUMINACION_EFICIENCIA');
+  const [currentKeywords, setCurrentKeywords] = useState<BiddingKeywordItem[]>([]);
+  const [isLoadingKeywords, setIsLoadingKeywords] = useState<boolean>(false);
+  const [newKeywordText, setNewKeywordText] = useState<string>('');
+  const [newKeywordTipo, setNewKeywordTipo] = useState<'INCLUSION' | 'EXCLUSION'>('INCLUSION');
+
+  // Asistente IA Ollama para Expansión de Keywords & Temporizador 7 minutos
+  const [aiExpandQuery, setAiExpandQuery] = useState<string>('');
+  const [isExpandingAI, setIsExpandingAI] = useState<boolean>(false);
+  const [aiExpandElapsedSeconds, setAiExpandElapsedSeconds] = useState<number>(0);
+  const [showFallbackPrompt, setShowFallbackPrompt] = useState<boolean>(false);
+  const [aiExpandResult, setAiExpandResult] = useState<BiddingAIExpandKeywordsResponse | null>(null);
+
+  // Carga inicial de Verticales y Modelos Ollama
+  useEffect(() => {
+    const initBiddingData = async () => {
+      try {
+        const [vertsData, modelsData] = await Promise.all([
+          apiService.getBiddingVerticals().catch(() => null),
+          apiService.getOllamaModels().catch(() => null),
+        ]);
+        if (vertsData && vertsData.length > 0) {
+          setVerticals(vertsData);
+        }
+        if (modelsData && modelsData.models && modelsData.models.length > 0) {
+          setAvailableOllamaModels(modelsData.models.map((m: any) => m.name));
+          if (modelsData.active_model) {
+            setSelectedOllamaModel(modelsData.active_model);
+          }
+        }
+      } catch (err) {
+        console.warn('Error inicializando metadatos de licitaciones:', err);
+      }
+    };
+    initBiddingData();
+  }, []);
+
+  // Temporizador para operaciones de Ollama (con alerta y opción de fallback a los 7 minutos = 420s)
+  useEffect(() => {
+    let timer: any = null;
+    if (isExpandingAI) {
+      setAiExpandElapsedSeconds(0);
+      setShowFallbackPrompt(false);
+      timer = setInterval(() => {
+        setAiExpandElapsedSeconds((prev) => {
+          const next = prev + 1;
+          if (next === 420) {
+            setShowFallbackPrompt(true);
+          }
+          return next;
+        });
+      }, 1000);
+    } else {
+      setAiExpandElapsedSeconds(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isExpandingAI]);
+
+  // Carga de Keywords para la vertical seleccionada
+  const fetchKeywordsForVertical = useCallback(async (vId: string) => {
+    setIsLoadingKeywords(true);
+    try {
+      const kws = await apiService.getBiddingKeywords(vId);
+      setCurrentKeywords(kws || []);
+    } catch (err) {
+      console.error('Error cargando keywords:', err);
+    } finally {
+      setIsLoadingKeywords(false);
+    }
+  }, []);
+
+  const handleOpenKeywordsModal = async (vId?: string) => {
+    const targetId = vId || selectedVerticalForMgmt || (feedNichoFilter !== 'TODAS' ? feedNichoFilter : 'ILUMINACION_EFICIENCIA');
+    setSelectedVerticalForMgmt(targetId);
+    setIsKeywordsModalOpen(true);
+    await fetchKeywordsForVertical(targetId);
+  };
+
+  const handleAddKeywords = async () => {
+    if (!newKeywordText.trim()) return;
+    const splitKws = newKeywordText
+      .split(/[,;\n]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (splitKws.length === 0) return;
+
+    try {
+      await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, {
+        keywords: splitKws,
+        tipo: newKeywordTipo,
+      });
+      setNewKeywordText('');
+      await fetchKeywordsForVertical(selectedVerticalForMgmt);
+      const updatedVerts = await apiService.getBiddingVerticals();
+      if (updatedVerts && updatedVerts.length > 0) {
+        setVerticals(updatedVerts);
+      }
+      setNotification({
+        type: 'success',
+        message: `Se agregaron ${splitKws.length} palabras clave de ${newKeywordTipo === 'INCLUSION' ? 'inclusión' : 'exclusión'}.`,
+      });
+    } catch (err: any) {
+      console.error('Error agregando keywords:', err);
+      setNotification({ type: 'error', message: 'No se pudieron guardar las palabras clave.' });
+    }
+  };
+
+  const handleDeleteKeyword = async (keywordId: number) => {
+    try {
+      await apiService.deleteBiddingKeyword(keywordId);
+      setCurrentKeywords((prev) => prev.filter((k) => k.id !== keywordId));
+      const updatedVerts = await apiService.getBiddingVerticals();
+      if (updatedVerts && updatedVerts.length > 0) {
+        setVerticals(updatedVerts);
+      }
+    } catch (err) {
+      console.error('Error eliminando keyword:', err);
+    }
+  };
+
+  const handleExpandKeywordsAI = async (forcedFallback = false, customQuery?: string, customVerticalId?: string) => {
+    setIsExpandingAI(true);
+    try {
+      const vId = customVerticalId || selectedVerticalForMgmt;
+      const q = customQuery !== undefined ? customQuery : aiExpandQuery;
+      const activeV = verticals.find((v) => v.id === vId);
+      const res = await apiService.expandBiddingKeywordsAI({
+        vertical_id: vId,
+        rubro_nombre: activeV ? activeV.nombre : vId,
+        query: q.trim() || undefined,
+        model: forcedFallback ? 'FALLBACK_HEURISTICO' : selectedOllamaModel,
+        include_exclusions: true,
+      });
+      setAiExpandResult(res);
+      setShowFallbackPrompt(false);
+    } catch (err: any) {
+      console.error('Error en expansión con IA:', err);
+      setNotification({
+        type: 'error',
+        message: 'Fallo la inferencia local de Ollama. Utilice el Fallback Heurístico Seguro.',
+      });
+    } finally {
+      setIsExpandingAI(false);
+    }
+  };
+
+  // Tarea 2.2 / Bugfix: Aplicar sugerencia de Ollama directamente a la búsqueda del radar y/o guardarla en la BD
+  const handleApplySuggestionToSearch = async (
+    term: string,
+    targetVerticalId?: string,
+    options?: {
+      saveToDb?: boolean;
+      tipo?: 'INCLUSION' | 'EXCLUSION';
+      closeModal?: boolean;
+    }
+  ) => {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+
+    const vId = targetVerticalId || selectedVerticalForMgmt || (feedNichoFilter !== 'TODAS' ? feedNichoFilter : 'ILUMINACION_EFICIENCIA');
+
+    if (options?.saveToDb) {
+      try {
+        await apiService.addBiddingKeywordsBulk(vId, {
+          keywords: [cleanTerm],
+          tipo: options.tipo || 'INCLUSION',
+        });
+        await fetchKeywordsForVertical(vId);
+        const updatedVerts = await apiService.getBiddingVerticals();
+        if (updatedVerts && updatedVerts.length > 0) {
+          setVerticals(updatedVerts);
+        }
+        setNotification({
+          type: 'success',
+          message: `Palabra "${cleanTerm}" guardada en ${vId} e integrada al radar de búsqueda.`,
+        });
+      } catch (err) {
+        console.warn('Error guardando keyword en BD:', err);
+      }
+    }
+
+    setFeedSearchQuery(cleanTerm);
+    if (vId && vId !== 'TODAS') {
+      setFeedNichoFilter(vId);
+      setSelectedVerticalForMgmt(vId);
+    }
+
+    if (options?.closeModal) {
+      setIsKeywordsModalOpen(false);
+    }
+
+    setIsFeedModalOpen(true);
+    await fetchFeed(vId === 'TODAS' ? undefined : vId, cleanTerm);
+  };
+
+  // Guardar en bloque todas las sugerencias de la IA y lanzar la búsqueda en el radar
+  const handleAddAllSuggestionsAndSearch = async () => {
+    if (!aiExpandResult) return;
+    const vId = selectedVerticalForMgmt;
+    const inclusions = [
+      ...(aiExpandResult.sinonimos_sugeridos || []),
+      ...(aiExpandResult.keywords_inclusion_sugeridas || []),
+    ].filter(Boolean);
+    const exclusions = (aiExpandResult.keywords_exclusion_sugeridas || []).filter(Boolean);
+
+    try {
+      if (inclusions.length > 0) {
+        await apiService.addBiddingKeywordsBulk(vId, {
+          keywords: inclusions,
+          tipo: 'INCLUSION',
+        });
+      }
+      if (exclusions.length > 0) {
+        await apiService.addBiddingKeywordsBulk(vId, {
+          keywords: exclusions,
+          tipo: 'EXCLUSION',
+        });
+      }
+      await fetchKeywordsForVertical(vId);
+      const updatedVerts = await apiService.getBiddingVerticals();
+      if (updatedVerts && updatedVerts.length > 0) {
+        setVerticals(updatedVerts);
+      }
+
+      const searchTerm = aiExpandQuery.trim() || inclusions[0] || '';
+      setFeedSearchQuery(searchTerm);
+      setFeedNichoFilter(vId);
+      setIsKeywordsModalOpen(false);
+      setIsFeedModalOpen(true);
+      await fetchFeed(vId, searchTerm);
+
+      setNotification({
+        type: 'success',
+        message: `Se agregaron ${inclusions.length + exclusions.length} términos al rubro ${vId} y se lanzó la búsqueda en el radar.`,
+      });
+    } catch (err) {
+      console.error('Error guardando todas las sugerencias:', err);
+      setNotification({
+        type: 'error',
+        message: 'No se pudieron guardar todas las sugerencias en bloque.',
+      });
+    }
+  };
+
+  const [feedOffset, setFeedOffset] = useState<number>(0);
+  const [isFetchingMoreFeed, setIsFetchingMoreFeed] = useState<boolean>(false);
+
   // Manejo de Carga y Filtrado del Feed de Licitaciones
   const fetchFeed = useCallback(async (nicho?: string, q?: string) => {
     setIsLoadingFeed(true);
+    setFeedOffset(0);
     try {
       const resp = await apiService.getTendersLiveFeed({
         nicho: nicho === 'TODAS' ? undefined : nicho,
@@ -176,8 +458,16 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const handleSyncFeedNow = async () => {
     setIsSyncingFeed(true);
     try {
-      const resp = await apiService.syncTendersFeed();
+      const targetVertical = feedNichoFilter !== 'TODAS' ? feedNichoFilter : selectedVerticalForMgmt;
+      const resp = await apiService.syncTendersFeed({
+        model: selectedOllamaModel,
+        vertical_id: targetVertical,
+        limit: 20,
+        offset: 0,
+        append_mode: false,
+      });
       setFeedItems(resp.items || []);
+      setFeedOffset(20);
       setFeedMeta({
         total: resp.total,
         fuente_estado: resp.fuente_estado,
@@ -189,7 +479,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
       });
       setNotification({
         type: 'success',
-        message: `Sincronización con Compras Estatales completada: ${resp.total} llamados relevantes para Serlux.`,
+        message: `Sincronización con Compras Estatales completada (${selectedOllamaModel}): ${resp.total} llamados relevantes analizados.`,
       });
     } catch (err: any) {
       console.error('Error al sincronizar feed:', err);
@@ -199,6 +489,47 @@ export const TendersView: React.FC<TendersViewProps> = ({
       });
     } finally {
       setIsSyncingFeed(false);
+    }
+  };
+
+  const handleFetchMoreFeed = async () => {
+    setIsFetchingMoreFeed(true);
+    try {
+      const nextOffset = feedOffset + 20;
+      const targetVertical = feedNichoFilter !== 'TODAS' ? feedNichoFilter : selectedVerticalForMgmt;
+      const resp = await apiService.syncTendersFeed({
+        model: selectedOllamaModel,
+        vertical_id: targetVertical,
+        limit: 20,
+        offset: nextOffset,
+        append_mode: true,
+      });
+
+      const newItems = resp.items || [];
+      setFeedItems((prev) => {
+        const existingIds = new Set(prev.map((i) => i.id));
+        const added = newItems.filter((i) => !existingIds.has(i.id));
+        return [...prev, ...added];
+      });
+      setFeedOffset(nextOffset);
+      setFeedMeta((prev) => ({
+        ...prev,
+        analizadas: (prev.analizadas || 0) + (resp.analizadas || 0),
+        descartadas: (prev.descartadas || 0) + (resp.descartadas || 0),
+        mensaje: resp.mensaje || prev.mensaje,
+      }));
+      setNotification({
+        type: 'success',
+        message: `Se consultaron 20 licitaciones adicionales de ARCE.`,
+      });
+    } catch (err: any) {
+      console.error('Error cargando 20 licitaciones más:', err);
+      setNotification({
+        type: 'error',
+        message: 'No se pudieron recuperar más licitaciones del portal.',
+      });
+    } finally {
+      setIsFetchingMoreFeed(false);
     }
   };
 
@@ -221,18 +552,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
       setFechaLimiteLicitacion(datePart);
     }
 
-    // 4. Nicho de aplicación
-    if (item.nicho === 'MOBILIARIO_CORPORATIVO') {
-      setNicho('oficinas');
-    } else {
-      const orgLower = (item.organismo || '').toLowerCase();
-      if (orgLower.includes('intendencia') || orgLower.includes('municipio')) {
-        setNicho('municipios');
-      } else if (orgLower.includes('ute') || orgLower.includes('ose') || orgLower.includes('conaprole')) {
-        setNicho('industria');
-      } else {
-        setNicho('oficinas');
-      }
+    // 4. Rubro comercial B2B
+    if (item.nicho) {
+      setNicho(item.nicho);
+      setSelectedVerticalForMgmt(item.nicho);
     }
 
     // 5. Partidas sugeridas
@@ -350,12 +673,13 @@ export const TendersView: React.FC<TendersViewProps> = ({
     });
   };
 
-  // Presets Rápidos Serlux
+  // Presets Rápidos B2B
   const applyPreset = (presetName: string) => {
     if (presetName === 'serlux_conaprole') {
       setProyectoNombre('Ampliación Planta Conaprole Complejo Rincón');
       setClienteLicitacion('Conaprole SA');
-      setNicho('industria');
+      setNicho('ILUMINACION_EFICIENCIA');
+      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
       setPlazoEntregaDias(15);
       setMoneda('USD');
       setMargenPct(35);
@@ -366,7 +690,8 @@ export const TendersView: React.FC<TendersViewProps> = ({
     } else if (presetName === 'intendencia_vial') {
       setProyectoNombre('Alumbrado Corredor Accesos & Avenidas');
       setClienteLicitacion('Intendencia de Montevideo');
-      setNicho('municipios');
+      setNicho('ILUMINACION_EFICIENCIA');
+      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
       setPlazoEntregaDias(90);
       setMoneda('UYU');
       setMargenPct(32);
@@ -377,7 +702,8 @@ export const TendersView: React.FC<TendersViewProps> = ({
     } else if (presetName === 'oficinas_wtc') {
       setProyectoNombre('Modernización Lumínica Torres WTC');
       setClienteLicitacion('World Trade Center Montevideo');
-      setNicho('real_estate');
+      setNicho('ILUMINACION_EFICIENCIA');
+      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
       setPlazoEntregaDias(45);
       setMoneda('USD');
       setMargenPct(40);
@@ -558,7 +884,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
             <span>🌐 Licitaciones Públicas en Tiempo Real</span>
           </button>
 
-          <div className="text-[11px] text-indigo-200 font-semibold mx-1">Casos Serlux:</div>
+          <div className="text-[11px] text-indigo-200 font-semibold mx-1">Casos de Prueba B2B:</div>
           <button
             onClick={() => applyPreset('serlux_conaprole')}
             className="px-2.5 py-1.5 rounded-xl bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-xs font-medium cursor-pointer transition-colors"
@@ -718,22 +1044,49 @@ export const TendersView: React.FC<TendersViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Nicho de Aplicación
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                  Rubro Comercial B2B
                 </label>
-                <select
-                  value={nicho}
-                  onChange={(e) => setNicho(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none"
+                <button
+                  type="button"
+                  onClick={() => handleOpenKeywordsModal(nicho)}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center space-x-1"
+                  title="Configurar palabras clave y sinónimos para este rubro"
                 >
-                  <option value="industria">Plantas Industriales (UGR&lt;22)</option>
-                  <option value="municipios">Gobiernos Municipales (Vial)</option>
-                  <option value="oficinas">Oficinas Corporativas (UGR&lt;19)</option>
-                  <option value="canchas_deportivas">Canchas Deportivas (Pádel/Fútbol)</option>
-                </select>
+                  <Settings size={11} />
+                  <span>Configurar Keywords</span>
+                </button>
               </div>
+              <select
+                value={nicho}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNicho(val);
+                  setSelectedVerticalForMgmt(val);
+                  setFeedNichoFilter(val);
+                }}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-semibold text-xs"
+              >
+                {verticals.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.icon} {v.nombre}
+                  </option>
+                ))}
+              </select>
+              {(() => {
+                const activeV = verticals.find((v) => v.id === nicho);
+                if (!activeV) return null;
+                return (
+                  <p className="text-[11px] text-slate-400 mt-1 italic">
+                    {activeV.descripcion || 'Especialidad B2B configurada para filtrado y análisis de pliegos.'}
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div>
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -1419,10 +1772,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-400 text-slate-950 uppercase tracking-wider flex items-center space-x-1">
                     <Globe size={11} />
-                    <span>Radar ARCE · Compras Estatales</span>
+                    <span>Radar ARCE · Compras Estatales Uruguay</span>
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-cyan-200 border border-white/20 font-mono">
-                    Serlux: Iluminación & Mobiliario
+                    Calcu B2B Multi-Rubro
                   </span>
                   {feedMeta.fuente_estado === 'LIVE' ? (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
@@ -1430,7 +1783,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                     </span>
                   ) : feedMeta.incluye_demo ? (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Sin llamados activos en el RSS para las keywords; mostrando ejemplos de demostración">
-                      🟡 Modo Demostración
+                      🟡 Banco Multi-Rubro Verificado
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-500/40">
@@ -1439,31 +1792,84 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   )}
                 </div>
                 <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                  <span>Licitaciones Públicas en Tiempo Real (Uruguay)</span>
+                  <span>Licitaciones Públicas B2B en Tiempo Real (Uruguay)</span>
                 </h3>
                 <p className="text-xs text-indigo-200/80 max-w-3xl">
-                  Filtrado determinístico y semántico con <strong>Qwen 2.5:7b</strong> sobre convocatorias oficiales de comprasestatales.gub.uy. Pliegos verificados, enlaces oficiales y precarga automática en el cotizador.
+                  Filtrado determinístico y semántico asistido por <strong>Agente Ollama Local</strong> sobre convocatorias de comprasestatales.gub.uy. Pliegos verificados, enlaces oficiales y precarga automática en el cotizador.
                 </p>
               </div>
-              <button
-                onClick={() => setIsFeedModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-                title="Cerrar ventana"
-              >
-                <X size={20} />
-              </button>
+
+              {/* Selector de Modelo Ollama y Botón de Gestión */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="hidden sm:flex items-center space-x-1.5 bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/20 text-xs">
+                  <Bot size={14} className="text-cyan-300" />
+                  <span className="text-[10px] text-slate-300 font-medium">Modelo Ollama:</span>
+                  <select
+                    value={selectedOllamaModel}
+                    onChange={(e) => setSelectedOllamaModel(e.target.value)}
+                    className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                    title="Seleccione el modelo local de Ollama para clasificación y sugerencias"
+                  >
+                    {availableOllamaModels.map((m) => (
+                      <option key={m} value={m} className="bg-slate-900 text-white">
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => handleOpenKeywordsModal(feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer"
+                  title="Configurar los 7 rubros y gestionar palabras clave de inclusión/exclusión"
+                >
+                  <Settings size={13} />
+                  <span>Configurar Rubros & Keywords</span>
+                </button>
+                <button
+                  onClick={() => setIsFeedModalOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                  title="Cerrar ventana"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Barra de Filtros, Nichos y Sincronización */}
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              {/* Tabs por Nicho Serlux */}
-              <div className="flex flex-wrap items-center gap-1.5">
+              {/* Selector Rápido Dropdown + Tabs Dinámicas por Vertical Comercial */}
+              <div className="flex flex-wrap items-center gap-2 overflow-x-auto no-scrollbar max-w-full md:max-w-[65%]">
+                {/* Selector Dropdown de Rubro */}
+                <div className="shrink-0 flex items-center space-x-1.5 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs shadow-xs">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Rubro:</span>
+                  <select
+                    value={feedNichoFilter}
+                    onChange={(e) => {
+                      const vId = e.target.value;
+                      setFeedNichoFilter(vId);
+                      if (vId !== 'TODAS') {
+                        setSelectedVerticalForMgmt(vId);
+                      }
+                      fetchFeed(vId, feedSearchQuery);
+                    }}
+                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold text-xs focus:outline-none cursor-pointer"
+                  >
+                    <option value="TODAS">🌐 Todos los Rubros ({feedMeta.total})</option>
+                    {verticals.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.icon} {v.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tabs Horizontales */}
                 <button
                   onClick={() => {
                     setFeedNichoFilter('TODAS');
                     fetchFeed('TODAS', feedSearchQuery);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
                     feedNichoFilter === 'TODAS'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
@@ -1471,39 +1877,35 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 >
                   Todas ({feedMeta.total})
                 </button>
-                <button
-                  onClick={() => {
-                    setFeedNichoFilter('ILUMINACION_TECNICA');
-                    fetchFeed('ILUMINACION_TECNICA', feedSearchQuery);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                    feedNichoFilter === 'ILUMINACION_TECNICA'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  <Lightbulb size={13} />
-                  <span>💡 Iluminación Técnica</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setFeedNichoFilter('MOBILIARIO_CORPORATIVO');
-                    fetchFeed('MOBILIARIO_CORPORATIVO', feedSearchQuery);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                    feedNichoFilter === 'MOBILIARIO_CORPORATIVO'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  <Armchair size={13} />
-                  <span>🪑 Mobiliario Corporativo</span>
-                </button>
+                {verticals.map((v) => {
+                  const isSelected = feedNichoFilter === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => {
+                        setFeedNichoFilter(v.id);
+                        setSelectedVerticalForMgmt(v.id);
+                        fetchFeed(v.id, feedSearchQuery);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 border ${
+                        isSelected
+                          ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span>{v.icon}</span>
+                      <span>{v.nombre.split('&')[0].trim()}</span>
+                      {v.keywords_count !== undefined && (
+                        <span className="text-[10px] opacity-75 font-mono">({v.keywords_count})</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Búsqueda y Botón de Sincronización Manual */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 md:w-64">
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="relative flex-1 md:w-56">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
@@ -1514,7 +1916,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                         fetchFeed(feedNichoFilter, feedSearchQuery);
                       }
                     }}
-                    placeholder="Buscar por organismo, título..."
+                    placeholder="Buscar por organismo, término..."
                     className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -1537,10 +1939,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
               </div>
             </div>
 
-            {/* Chips de Búsqueda Rápida 1-Clic Serlux */}
+            {/* Chips de Búsqueda Rápida 1-Clic Multi-Rubro */}
             <div className="px-6 py-2 bg-slate-50/90 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar">
               <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0">
-                Filtros rápidos Serlux:
+                Atajos de pliegos uruguayos:
               </span>
               <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
                 {QUICK_CHIPS.map((chip) => {
@@ -1607,14 +2009,333 @@ export const TendersView: React.FC<TendersViewProps> = ({
               {isLoadingFeed ? (
                 <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
                   <Loader2 className="animate-spin text-cyan-500" size={36} />
-                  <p className="text-sm font-semibold">Consultando llamados y clasificando pertinencia con Qwen 2.5:7b...</p>
-                  <p className="text-xs text-slate-400">Verificando bases técnicas en Compras Estatales y mapeo de catálogo Serlux.</p>
+                  <p className="text-sm font-semibold">Consultando llamados y clasificando pertinencia con Agente Ollama ({selectedOllamaModel})...</p>
+                  <p className="text-xs text-slate-400">Verificando pliegos oficiales en Compras Estatales y aplicando matriz de palabras clave.</p>
                 </div>
               ) : feedItems.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 space-y-2">
-                  <FileText size={40} className="mx-auto text-slate-300 dark:text-slate-600" />
-                  <p className="text-sm font-medium">No se encontraron llamados para el filtro seleccionado.</p>
-                  <p className="text-xs text-slate-400">Intente con otro nicho o presione 'Sincronizar ARCE' para actualizar el radar.</p>
+                <div className="py-12 text-center text-slate-400 space-y-4 max-w-xl mx-auto">
+                  <FileText size={42} className="mx-auto text-slate-300 dark:text-slate-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      No se encontraron llamados para {feedSearchQuery ? `"${feedSearchQuery}"` : 'el filtro seleccionado'}.
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      En compras públicas uruguayas los pliegos suelen redactarse con terminología formal o sinónimos alternativos.
+                    </p>
+                  </div>
+
+                  {/* Sugerencias de Sinónimos de la IA Local y Botón de Consulta Dinámica */}
+                  <div className="p-4 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-left space-y-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
+                        <Sparkles size={14} className="text-indigo-500 animate-pulse" />
+                        <span>Sugerencias de Búsqueda de la IA ({selectedOllamaModel}):</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleExpandKeywordsAI(false, feedSearchQuery || undefined, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
+                          disabled={isExpandingAI}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-xs cursor-pointer flex items-center space-x-1.5 transition-all"
+                          title="Consultar al modelo local de Ollama para expandir sinónimos de este rubro"
+                        >
+                          {isExpandingAI ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin" />
+                              <span>Analizando ({aiExpandElapsedSeconds}s)...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bot size={12} />
+                              <span>🧠 Pedir Sugerencias a Ollama</span>
+                            </>
+                          )}
+                        </button>
+                        {isExpandingAI && (
+                          <button
+                            onClick={() => handleExpandKeywordsAI(true, feedSearchQuery || undefined, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
+                            className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer shadow-xs transition-colors"
+                            title="Activar fallback heurístico seguro inmediato"
+                          >
+                            ⚡ Fallback Inmediato
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setAiExpandQuery(feedSearchQuery);
+                            handleOpenKeywordsModal(feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined);
+                          }}
+                          className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center space-x-1"
+                        >
+                          <span>Gestionar Rubro</span>
+                          <ArrowRight size={11} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Si la IA generó sugerencias, mostrarlas con prioridad y acciones de 1-clic */}
+                    {aiExpandResult && (aiExpandResult.sinonimos_sugeridos?.length > 0 || aiExpandResult.keywords_inclusion_sugeridas?.length > 0) && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          <span className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
+                            <Sparkles size={12} />
+                            <span>Propuestas del Agente Local ({aiExpandResult.model_used}):</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Haga clic en el término para buscar, o en '+' para guardar y buscar
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            ...(aiExpandResult.sinonimos_sugeridos || []),
+                            ...(aiExpandResult.keywords_inclusion_sugeridas || []),
+                          ].map((term) => (
+                            <div
+                              key={term}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(term, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
+                                title={`Buscar pliegos con "${term}" inmediatamente`}
+                              >
+                                <span>🔍 {term}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(term, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined, { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${term}" en el rubro e iniciar búsqueda`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sugerencias Canónicas por Rubro con Botones de 1 Clic */}
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        Atajos recomendados para pliegos de este rubro:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {(feedNichoFilter === 'ILUMINACION_EFICIENCIA' || feedSearchQuery.toLowerCase().includes('luz') || feedSearchQuery.toLowerCase().includes('foco')) && (
+                          ['luminaria', 'proyector', 'panel led', 'campana high bay', 'driver dali', 'alumbrado publico'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'ILUMINACION_EFICIENCIA')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'ILUMINACION_EFICIENCIA', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Iluminación y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'MOBILIARIO_EQUIPAMIENTO' || feedSearchQuery.toLowerCase().includes('mueble') || feedSearchQuery.toLowerCase().includes('silla')) && (
+                          ['silla giratoria', 'armario metalico', 'escritorio operativo', 'mostrador', 'puesto de trabajo'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'MOBILIARIO_EQUIPAMIENTO')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'MOBILIARIO_EQUIPAMIENTO', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Mobiliario y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'OBRA_CIVIL_CONSTRUCCION' || feedSearchQuery.toLowerCase().includes('obra') || feedSearchQuery.toLowerCase().includes('construccion')) && (
+                          ['tabiqueria yeso', 'drywall', 'cielorraso', 'impermeabilizacion', 'albanileria'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'OBRA_CIVIL_CONSTRUCCION')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'OBRA_CIVIL_CONSTRUCCION', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Obra Civil y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'ELECTROMECANICA_SUMINISTROS' || feedSearchQuery.toLowerCase().includes('electr')) && (
+                          ['tablero electrico', 'termomagnetica', 'disyuntor', 'cable subterraneo', 'generador'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'ELECTROMECANICA_SUMINISTROS')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'ELECTROMECANICA_SUMINISTROS', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Electromecánica y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'EQUIPAMIENTO_HOSPITALARIO' || feedSearchQuery.toLowerCase().includes('salud') || feedSearchQuery.toLowerCase().includes('hospital')) && (
+                          ['camilla de transporte', 'mobiliario clinico', 'acero inoxidable', 'autoclave', 'negatoscopio'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'EQUIPAMIENTO_HOSPITALARIO')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'EQUIPAMIENTO_HOSPITALARIO', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Hospitalario y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'TECNOLOGIA_REDES' || feedSearchQuery.toLowerCase().includes('red') || feedSearchQuery.toLowerCase().includes('comput')) && (
+                          ['rack 42u', 'switch administrable', 'fibra optica', 'patch cord cat6a', 'ups online'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'TECNOLOGIA_REDES')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'TECNOLOGIA_REDES', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Tecnología y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {(feedNichoFilter === 'SERVICIOS_LIMPIEZA_MANTENIMIENTO' || feedSearchQuery.toLowerCase().includes('limpi') || feedSearchQuery.toLowerCase().includes('servicio')) && (
+                          ['servicio de limpieza', 'limpieza integral', 'higiene y desinfeccion', 'mantenimiento edilicio', 'areas verdes'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'SERVICIOS_LIMPIEZA_MANTENIMIENTO')}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}"`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, 'SERVICIOS_LIMPIEZA_MANTENIMIENTO', { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" en Servicios y buscar`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        {feedNichoFilter === 'TODAS' && (
+                          ['columnas alumbrado', 'sillas operativas', 'obra civil yeso', 'tableros electricos', 'servicio de limpieza', 'racks servidores'].map((syn) => (
+                            <div
+                              key={syn}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, undefined)}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
+                                title={`Buscar "${syn}" en todos los rubros`}
+                              >
+                                🔍 {syn}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(syn, undefined, { saveToDb: true, tipo: 'INCLUSION' })}
+                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${syn}" e iniciar búsqueda`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setFeedSearchQuery('');
+                        fetchFeed(feedNichoFilter, '');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Limpiar Filtros y Ver Todas
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1725,7 +2446,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
 
                             {hasCatalogSkus && (
                               <div className="flex items-center space-x-1.5">
-                                <span className="text-slate-400 font-medium">Catálogo Serlux: </span>
+                                <span className="text-slate-400 font-medium">Mapeo Catálogo B2B: </span>
                                 <div className="flex flex-wrap gap-1">
                                   {candidateSkus.map((sku) => {
                                     const qty = item.cantidades_sugeridas?.[sku];
@@ -1744,7 +2465,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
 
                             {item.clasificacion_fuente && (
                               <span className="text-[10px] text-slate-400 italic">
-                                Clasificado por: {item.clasificacion_fuente === 'LLM' ? 'Qwen 2.5:7b' : 'Taxonomía Serlux'}
+                                Clasificado por: {item.clasificacion_fuente === 'LLM' ? `Agente Ollama (${selectedOllamaModel})` : 'Motor Multi-Rubro Calcu'}
                                 {item.confianza ? ` (${Math.round(item.confianza * 100)}%)` : ''}
                               </span>
                             )}
@@ -1820,18 +2541,526 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   })}
                 </div>
               )}
+
+              {/* Botón Acumulativo de Paginación ARCE: Buscar 20 Más */}
+              {feedItems.length > 0 && (
+                <div className="pt-4 pb-2 flex flex-col items-center justify-center">
+                  <button
+                    onClick={handleFetchMoreFeed}
+                    disabled={isFetchingMoreFeed}
+                    className="px-6 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold flex items-center space-x-2 shadow-xs cursor-pointer transition-all disabled:opacity-50 hover:scale-[1.01]"
+                    title="Consultar los siguientes 20 llamados oficiales sin borrar los actuales"
+                  >
+                    {isFetchingMoreFeed ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-indigo-600 dark:text-indigo-400" />
+                        <span>Consultando siguientes 20 licitaciones en ARCE...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={13} className="text-indigo-600 dark:text-indigo-400" />
+                        <span>➕ Cargar 20 licitaciones más (sin borrar las actuales)</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="text-[10px] text-slate-400 pt-1">
+                    Inspección paginada de comprasestatales.gub.uy con modelo {selectedOllamaModel}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
             <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
               <span className="text-xs text-slate-500 font-mono">
-                {feedItems.length} licitaciones mostradas · Filtro: {feedNichoFilter === 'TODAS' ? 'Todos los rubros Serlux' : feedNichoFilter}
+                {feedItems.length} licitaciones mostradas · Filtro: {feedNichoFilter === 'TODAS' ? 'Todos los rubros' : feedNichoFilter}
               </span>
               <button
                 onClick={() => setIsFeedModalOpen(false)}
                 className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
               >
                 Cerrar Explorador
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: GESTIÓN DE RUBROS COMERCIALES Y MATRIZ DE PALABRAS CLAVE */}
+      {isKeywordsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    <Settings size={16} />
+                  </span>
+                  <h3 className="text-base font-bold text-white">
+                    Gestión de Rubros y Matriz de Palabras Clave (B2B Multi-Rubro)
+                  </h3>
+                </div>
+                <p className="text-xs text-indigo-200/80">
+                  Configure los rubros comerciales, palabras clave de inclusión y señales de exclusión para escanear pliegos de compras públicas en Uruguay (ARCE).
+                </p>
+              </div>
+              <button
+                onClick={() => setIsKeywordsModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Selector de Vertical */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <span className="text-[11px] font-bold text-slate-500 shrink-0">Rubro activo:</span>
+              {verticals.map((v) => {
+                const isSelected = selectedVerticalForMgmt === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      setSelectedVerticalForMgmt(v.id);
+                      fetchKeywordsForVertical(v.id);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer shrink-0 transition-all border flex items-center space-x-1.5 ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <span>{v.icon}</span>
+                    <span>{v.nombre.split('&')[0].trim()}</span>
+                    {v.keywords_count !== undefined && (
+                      <span className="text-[10px] opacity-75 font-mono">({v.keywords_count})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Sección 1: Formulario para Agregar Keywords */}
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+                    <Plus size={14} className="text-indigo-500" />
+                    <span>Agregar Nuevas Palabras Clave</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Soporta múltiples términos separados por comas o saltos de línea
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <select
+                    value={newKeywordTipo}
+                    onChange={(e: any) => setNewKeywordTipo(e.target.value)}
+                    className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="INCLUSION">🟢 INCLUSIÓN (Puntaje positivo)</option>
+                    <option value="EXCLUSION">🔴 EXCLUSIÓN (Descarte / Penalización)</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={newKeywordText}
+                    onChange={(e) => setNewKeywordText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddKeywords();
+                    }}
+                    placeholder="Ej: faroles, balasto, downlight (o separados por coma)..."
+                    className="flex-1 p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+
+                  <button
+                    onClick={handleAddKeywords}
+                    disabled={!newKeywordText.trim()}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-all cursor-pointer shadow-sm shrink-0"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+
+              {/* Sección 2: Asistente IA Local Ollama para Sugerir Sinónimos y Palabras Clave */}
+              <div className="p-5 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 dark:from-indigo-950/20 dark:via-slate-900 dark:to-purple-950/20 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                      <Sparkles size={16} />
+                    </span>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Asistente IA Local (Ollama: {selectedOllamaModel})
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    Sin timeout forzado · Control Heurístico Seguro
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Escriba un concepto o necesidad comercial para que el modelo analice y sugiera sinónimos técnicos habituales en compras estatales uruguayas y palabras de descarte.
+                </p>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aiExpandQuery}
+                    onChange={(e) => setAiExpandQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleExpandKeywordsAI(false);
+                    }}
+                    placeholder="Ej: Proyectores para alumbrado vial de rotondas..."
+                    className="flex-1 p-2 text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={() => handleExpandKeywordsAI(false)}
+                    disabled={isExpandingAI}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white transition-all cursor-pointer shadow-sm flex items-center space-x-1.5 shrink-0"
+                  >
+                    {isExpandingAI ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Consultando ({aiExpandElapsedSeconds}s)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot size={13} />
+                        <span>Sugerir con IA</span>
+                      </>
+                    )}
+                  </button>
+                  {isExpandingAI && (
+                    <button
+                      onClick={() => handleExpandKeywordsAI(true)}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all cursor-pointer shrink-0"
+                      title="Activar de inmediato el fallback heurístico determinístico sin esperar más a Ollama"
+                    >
+                      ⚡ Fallback Inmediato
+                    </button>
+                  )}
+                </div>
+
+                {/* Resultado de la IA */}
+                {aiExpandResult && (
+                  <div className="p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/60 bg-white dark:bg-slate-800/80 space-y-4 animate-in fade-in duration-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          Sugerencias Generadas ({aiExpandResult.model_used})
+                        </span>
+                        {aiExpandResult.es_fallback_heuristico ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                            ⚡ Fallback Heurístico
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            🧠 Inferencia Local Ollama
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Botón Maestro: Agregar Todo y Buscar */}
+                      <button
+                        onClick={handleAddAllSuggestionsAndSearch}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center space-x-1.5"
+                        title="Guardar todas las inclusiones y sinónimos en este rubro e iniciar búsqueda en el radar"
+                      >
+                        <Zap size={13} className="text-amber-300" />
+                        <span>⚡ Agregar Todas y Buscar en Radar</span>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 italic">
+                      "{aiExpandResult.explicacion}"
+                    </p>
+
+                    {/* Sinónimos */}
+                    {aiExpandResult.sinonimos_sugeridos?.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            Sinónimos identificados ({aiExpandResult.sinonimos_sugeridos.length}):
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Haga clic en el término para buscar, o en '+ Buscar' para guardar y buscar
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {aiExpandResult.sinonimos_sugeridos.map((s) => (
+                            <div
+                              key={s}
+                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(s, selectedVerticalForMgmt, { closeModal: true })}
+                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
+                                title={`Buscar inmediatamente "${s}" en el Radar`}
+                              >
+                                <Search size={11} className="text-indigo-500" />
+                                <span>{s}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(s, selectedVerticalForMgmt, { saveToDb: true, tipo: 'INCLUSION', closeModal: true })}
+                                className="px-2 py-1 text-[11px] font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Guardar "${s}" en el rubro e iniciar búsqueda en el Radar`}
+                              >
+                                + Buscar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, { keywords: [s], tipo: 'INCLUSION' });
+                                  fetchKeywordsForVertical(selectedVerticalForMgmt);
+                                  const updatedVerts = await apiService.getBiddingVerticals();
+                                  if (updatedVerts && updatedVerts.length > 0) setVerticals(updatedVerts);
+                                  setNotification({ type: 'success', message: `"${s}" guardada en ${selectedVerticalForMgmt}.` });
+                                }}
+                                className="px-1.5 py-1 text-xs text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
+                                title={`Solo guardar en la base de datos`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Inclusiones Sugeridas */}
+                    {aiExpandResult.keywords_inclusion_sugeridas?.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Inclusiones recomendadas ({aiExpandResult.keywords_inclusion_sugeridas.length}):
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Términos que aumentan el puntaje de coincidencia del llamado
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {aiExpandResult.keywords_inclusion_sugeridas.map((kw) => (
+                            <div
+                              key={kw}
+                              className="inline-flex items-center rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/40 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { closeModal: true })}
+                                className="px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
+                                title={`Buscar inmediatamente "${kw}" en el Radar`}
+                              >
+                                <Search size={11} className="text-emerald-500" />
+                                <span>{kw}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { saveToDb: true, tipo: 'INCLUSION', closeModal: true })}
+                                className="px-2 py-1 text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-500 border-l border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors"
+                                title={`Guardar "${kw}" en el rubro e iniciar búsqueda en el Radar`}
+                              >
+                                + Buscar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, { keywords: [kw], tipo: 'INCLUSION' });
+                                  fetchKeywordsForVertical(selectedVerticalForMgmt);
+                                  const updatedVerts = await apiService.getBiddingVerticals();
+                                  if (updatedVerts && updatedVerts.length > 0) setVerticals(updatedVerts);
+                                  setNotification({ type: 'success', message: `"${kw}" guardada en ${selectedVerticalForMgmt}.` });
+                                }}
+                                className="px-1.5 py-1 text-xs text-slate-400 hover:text-emerald-600 hover:bg-white dark:hover:bg-slate-700 border-l border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors"
+                                title={`Solo guardar en la base de datos`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Exclusiones Sugeridas */}
+                    {aiExpandResult.keywords_exclusion_sugeridas?.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                            Exclusiones para descartar falsos positivos ({aiExpandResult.keywords_exclusion_sugeridas.length}):
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Filtran llamados no deseados (ej. insumos ajenos o servicios incompatibles)
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {aiExpandResult.keywords_exclusion_sugeridas.map((kw) => (
+                            <div
+                              key={kw}
+                              className="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/40 shadow-xs overflow-hidden"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { closeModal: true })}
+                                className="px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
+                                title={`Verificar pliegos con "${kw}" antes de excluir`}
+                              >
+                                <Search size={11} className="text-rose-500" />
+                                <span>{kw}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { saveToDb: true, tipo: 'EXCLUSION', closeModal: false })}
+                                className="px-2 py-1 text-[11px] font-bold bg-rose-100 dark:bg-rose-900/80 text-rose-700 dark:text-rose-200 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-500 border-l border-rose-200 dark:border-rose-800 cursor-pointer transition-colors"
+                                title={`Guardar "${kw}" como filtro de exclusión`}
+                              >
+                                - Excluir
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Sección 3: Listado de Palabras Clave Configuradas */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    Palabras Clave Configuradas ({currentKeywords.length})
+                  </h4>
+                  {isLoadingKeywords && <Loader2 size={14} className="animate-spin text-indigo-500" />}
+                </div>
+
+                {/* Palabras de Inclusión */}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Inclusión ({currentKeywords.filter((k) => k.tipo === 'INCLUSION').length}):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentKeywords
+                      .filter((k) => k.tipo === 'INCLUSION')
+                      .map((k) => (
+                        <span
+                          key={k.id}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-2 shadow-xs"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleApplySuggestionToSearch(k.keyword, selectedVerticalForMgmt, { closeModal: true })}
+                            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 transition-colors cursor-pointer"
+                            title={`Filtrar el Radar de licitaciones por "${k.keyword}"`}
+                          >
+                            <Search size={11} />
+                          </button>
+                          <span>{k.keyword}</span>
+                          <button
+                            onClick={() => handleDeleteKeyword(k.id)}
+                            className="text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                            title="Eliminar palabra clave"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Palabras de Exclusión */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center space-x-2 text-xs font-bold text-rose-700 dark:text-rose-400">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span>Exclusión / Filtro Negativo ({currentKeywords.filter((k) => k.tipo === 'EXCLUSION').length}):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentKeywords
+                      .filter((k) => k.tipo === 'EXCLUSION')
+                      .map((k) => (
+                        <span
+                          key={k.id}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-2 shadow-xs"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleApplySuggestionToSearch(k.keyword, selectedVerticalForMgmt, { closeModal: true })}
+                            className="text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 transition-colors cursor-pointer"
+                            title={`Ver qué pliegos contienen "${k.keyword}"`}
+                          >
+                            <Search size={11} />
+                          </button>
+                          <span>{k.keyword}</span>
+                          <button
+                            onClick={() => handleDeleteKeyword(k.id)}
+                            className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 transition-colors cursor-pointer"
+                            title="Eliminar palabra de exclusión"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-mono">
+                {currentKeywords.length} palabras clave activas para {selectedVerticalForMgmt}
+              </span>
+              <button
+                onClick={() => setIsKeywordsModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ALERTA: 7 MINUTOS DE ESPERA EN OLLAMA (INTERVENCIÓN DEL USUARIO) */}
+      {showFallbackPrompt && (
+        <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center space-x-3 text-amber-500">
+              <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                <Clock size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Tiempo de Inferencia Superó los 7 Minutos
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Transcurridos: <strong>{Math.floor(aiExpandElapsedSeconds / 60)} min {aiExpandElapsedSeconds % 60} seg</strong> con {selectedOllamaModel}.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              El modelo local de Ollama continúa procesando sin límite forzado de timeout. Conforme a su preferencia, puede conmutar en este instante al <strong>Fallback Heurístico Seguro</strong> (instantáneo y calibrado) o <strong>continuar esperando</strong> hasta que el modelo finalice.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                onClick={() => handleExpandKeywordsAI(true)}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md cursor-pointer transition-all flex items-center justify-center space-x-2"
+              >
+                <span>⚡ Activar Fallback Heurístico Inmediato</span>
+              </button>
+              <button
+                onClick={() => setShowFallbackPrompt(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+              >
+                ⏳ Seguir Esperando a Ollama
               </button>
             </div>
           </div>

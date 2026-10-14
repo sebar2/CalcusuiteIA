@@ -199,7 +199,8 @@ class InventorySyncService:
     def list_unified_batches(
         self,
         db: Session,
-        warehouse_id: Optional[str] = None
+        warehouse_id: Optional[str] = None,
+        exclude_test_batches: bool = False
     ) -> List[StockBatchItem]:
         """
         Retorna la lista normalizada de lotes asignados a las 4 etapas maestras logísticas:
@@ -209,14 +210,20 @@ class InventorySyncService:
         4. Depósitos Uruguay (Stock físico nacionalizado)
         """
         try:
-            batches = db.query(StockLocationBatch).all()
+            query = db.query(StockLocationBatch)
+            if exclude_test_batches:
+                query = query.filter(~StockLocationBatch.id.like("LOT-%-TEST-%"), ~StockLocationBatch.id.like("LOT-2026-TEST%"))
+            batches = query.all()
         except Exception as e:
             if "fecha_terminado" in str(e) or "does not exist" in str(e) or "42703" in str(e):
                 logger.warning("Detectada columna faltante en base de datos. Auto-reparando esquema: %s", e)
                 from app.database.session import sync_table_columns
                 db.rollback()
                 sync_table_columns(db.connection())
-                batches = db.query(StockLocationBatch).all()
+                query = db.query(StockLocationBatch)
+                if exclude_test_batches:
+                    query = query.filter(~StockLocationBatch.id.like("LOT-%-TEST-%"), ~StockLocationBatch.id.like("LOT-2026-TEST%"))
+                batches = query.all()
             else:
                 raise
         today = date.today()
@@ -377,27 +384,34 @@ class InventorySyncService:
         orig_wh = self.WAREHOUSE_ID_MAP.get(payload.origen_id, payload.origen_id)
         dest_wh = self.WAREHOUSE_ID_MAP.get(payload.destino_id, payload.destino_id)
 
-        # Buscar lote de origen
-        batch = db.query(StockLocationBatch).filter(
-            StockLocationBatch.id == payload.lote,
-            StockLocationBatch.sku == payload.sku
-        ).first()
+        # Buscar lote de origen por id o por combinación (id, sku)
+        batch = None
+        if payload.lote:
+            if payload.sku:
+                batch = db.query(StockLocationBatch).filter(
+                    StockLocationBatch.id == payload.lote,
+                    StockLocationBatch.sku == payload.sku
+                ).first()
+            if not batch:
+                batch = db.query(StockLocationBatch).filter(
+                    StockLocationBatch.id == payload.lote
+                ).first()
 
-        if not batch:
+        if not batch and payload.sku:
             # Fallback buscar lote por SKU en esa ubicación
             batch = db.query(StockLocationBatch).filter(
                 StockLocationBatch.sku == payload.sku
             ).first()
 
         if not batch:
-            raise ValueError(f"Lote '{payload.lote}' para SKU '{payload.sku}' no encontrado.")
+            raise ValueError(f"Lote '{payload.lote or payload.batch_id}' para SKU '{payload.sku or 'N/A'}' no encontrado.")
 
         if getattr(batch, "estado_aprobacion", "APROBADO") not in ("APROBADO", None):
             raise ValueError(f"El lote '{batch.id}' no puede transferirse porque está en estado '{batch.estado_aprobacion}'. Requiere aprobación previa de Comercial o Directorio.")
 
         if batch.cantidad < payload.cantidad:
             raise ValueError(
-                f"Stock insuficiente en lote {payload.lote}: disponible {batch.cantidad}, requerido {payload.cantidad}."
+                f"Stock insuficiente en lote {batch.id}: disponible {batch.cantidad}, requerido {payload.cantidad}."
             )
 
         cant_mover = payload.cantidad
@@ -411,6 +425,7 @@ class InventorySyncService:
                 sku=batch.sku,
                 cantidad=cant_mover,
                 ubicacion=self.LOCATION_REVERSE_MAP.get(dest_wh, "deposito_central"),
+                warehouse_id=dest_wh,
                 pais_origen=batch.pais_origen,
                 buque_o_tracking=f"TRANSFER-{orig_wh}-A-{dest_wh}",
                 fecha_despacho=date.today(),
@@ -423,6 +438,7 @@ class InventorySyncService:
         else:
             # Traslado completo
             batch.ubicacion = self.LOCATION_REVERSE_MAP.get(dest_wh, "deposito_central")
+            batch.warehouse_id = dest_wh
             batch.buque_o_tracking = f"TRANSFER-{orig_wh}-A-{dest_wh}"
             if payload.observaciones:
                 batch.observaciones = f"{batch.observaciones or ''} | {payload.observaciones}".strip()

@@ -17,6 +17,9 @@ import {
   Search,
   Store,
   Clock,
+  Eye,
+  EyeOff,
+  Building2,
 } from 'lucide-react';
 import { apiService, getStoredUser } from '../services/api';
 import type {
@@ -53,6 +56,10 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
   // Filtros globales
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [selectedOrigenTipo, setSelectedOrigenTipo] = useState<string>('ALL');
+  const [hideTestBatches, setHideTestBatches] = useState<boolean>(true); // Limpieza visual activa por defecto
+
+  // Modal / Panel: Master de Almacenes Uruguay (Metros cúbicos, ocupación y valorización)
+  const [isMasterAlmacenesOpen, setIsMasterAlmacenesOpen] = useState<boolean>(false);
 
   // Filtros individuales por columna maestra (Multi-Select: uno, varios o todos)
   const [selectedFactoryIds, setSelectedFactoryIds] = useState<string[]>(['ALL']);
@@ -251,9 +258,14 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
         (selectedOrigenTipo === 'ROP_REPOSICION' && (rawOrigen.includes('ROP') || rawOrigen.includes('REPO'))) ||
         (selectedOrigenTipo === 'STOCK_DIRECTO' && (rawOrigen.includes('DIRECT') || rawOrigen === 'STOCK_DIRECTO'));
 
+      const isTestBatch = id.includes('test') || lote.includes('test');
+      if (hideTestBatches && isTestBatch) {
+        return false;
+      }
+
       return matchSearch && matchOrigen;
     });
-  }, [unifiedBatches, searchFilter, selectedOrigenTipo]);
+  }, [unifiedBatches, searchFilter, selectedOrigenTipo, hideTestBatches]);
 
   // Subconjuntos de lotes para cada una de las 5 Columnas Maestras
   const col1Batches = useMemo(() => {
@@ -648,17 +660,25 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
               </span>
             </div>
 
-            {/* SKU / Lote Fábrica */}
-            <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
-              <span className="font-mono bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded">
-                Fábrica: {batch.sku_fabrica || `MK-${batch.sku}-CN`}
-              </span>
-              {batch.lote_fabrica && (
+            {/* Ubicación Física Destacada para Depósitos Uruguay */}
+            {stageType === 'deposito_uruguay' ? (
+              <div className="mt-1 flex items-center space-x-1.5 text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-200/80 dark:border-emerald-800/60 font-semibold">
+                <MapPin size={13} className="text-emerald-600 flex-shrink-0" />
+                <span className="truncate">{batch.warehouse_nombre || batch.warehouse_id}</span>
+              </div>
+            ) : (
+              /* SKU / Lote Fábrica para etapas internacionales */
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
                 <span className="font-mono bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded">
-                  Lote: {batch.lote_fabrica}
+                  Fábrica: {batch.sku_fabrica || `MK-${batch.sku}-CN`}
                 </span>
-              )}
-            </div>
+                {batch.lote_fabrica && (
+                  <span className="font-mono bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded">
+                    Lote: {batch.lote_fabrica}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Descripción Producto */}
             {batch.producto_nombre && (
@@ -668,6 +688,20 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
             )}
           </div>
         </div>
+
+        {/* Acordeón secundario de trazabilidad de origen solo para Depósitos Uruguay */}
+        {stageType === 'deposito_uruguay' && (batch.sku_fabrica || batch.lote_fabrica || batch.proveedor) && (
+          <details className="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-800/40 p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-700/40 cursor-pointer">
+            <summary className="font-medium hover:text-slate-600 dark:hover:text-slate-300 select-none">
+              🏷️ Trazabilidad de Origen & Fábrica
+            </summary>
+            <div className="mt-1 space-y-0.5 pt-1 border-t border-slate-200/40 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 font-mono">
+              <div>Fábrica SKU: {batch.sku_fabrica || `MK-${batch.sku}-CN`}</div>
+              {batch.lote_fabrica && <div>Lote Origen: {batch.lote_fabrica}</div>}
+              <div>Proveedor: {batch.supplier_nombre || batch.proveedor || 'Importación'}</div>
+            </div>
+          </details>
+        )}
 
         {/* PRECIO DE VENTA (ESTRICTAMENTE SIN COSTOS FOB/CIF CONFIDENCIALES) */}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
@@ -1022,18 +1056,46 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
           />
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="text-slate-400">Origen de Producción:</span>
-          <select
-            value={selectedOrigenTipo}
-            onChange={(e) => setSelectedOrigenTipo(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium"
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-1.5">
+            <span className="text-slate-400">Origen:</span>
+            <select
+              value={selectedOrigenTipo}
+              onChange={(e) => setSelectedOrigenTipo(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 font-medium"
+            >
+              <option value="ALL">Todos los orígenes</option>
+              <option value="ROP_REPOSICION">ROP (Reposición / Kanban)</option>
+              <option value="STOCK_DIRECTO">Stock Directo</option>
+              <option value="LICITACION_B2B">Licitación B2B</option>
+            </select>
+          </div>
+
+          {/* Toggle Limpieza de Lotes de Prueba */}
+          <button
+            type="button"
+            onClick={() => setHideTestBatches(!hideTestBatches)}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-all ${
+              hideTestBatches
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+            }`}
+            title={hideTestBatches ? "Lotes de prueba ocultos (Vista operativa limpia)" : "Mostrando todos los lotes incluidos los de testing"}
           >
-            <option value="ALL">Todos los orígenes</option>
-            <option value="ROP_REPOSICION">ROP (Reposición / Kanban)</option>
-            <option value="STOCK_DIRECTO">Stock Directo</option>
-            <option value="LICITACION_B2B">Licitación B2B</option>
-          </select>
+            {hideTestBatches ? <EyeOff size={13} /> : <Eye size={13} />}
+            <span>{hideTestBatches ? "Ocultando Tests" : "Mostrando Tests"}</span>
+          </button>
+
+          {/* Botón Gestión Master de Almacenes Uruguay */}
+          <button
+            type="button"
+            onClick={() => setIsMasterAlmacenesOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg font-bold shadow-xs transition-all hover:scale-[1.01]"
+            title="Abrir panel maestro de almacenes, m³ ocupados y transferencias locales"
+          >
+            <Building2 size={13} />
+            <span>Almacenes Uruguay</span>
+          </button>
         </div>
       </div>
 
@@ -2172,6 +2234,132 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
         uySuppliers={uySuppliers}
         canManageCost={canManageCostAndApproval}
       />
+
+      {/* =====================================================================
+          MODAL: MASTER DE ALMACENES URUGUAY & CONTROL DE CAPACIDAD FÍSICA
+      ===================================================================== */}
+      {isMasterAlmacenesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl p-6 shadow-2xl space-y-5 my-8">
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+                  <Building2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    Master de Almacenes Uruguay & Gestión Física
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Capacidad física, ocupación en unidades y ejecución de transferencias inter-depósito locales.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMasterAlmacenesOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Grid de Almacenes Uruguay con métricas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {uyWarehouses.map((wh) => {
+                const whBatches = col5Batches.filter((b) => b.warehouse_id === wh.id);
+                const totalStock = whBatches.reduce((acc, b) => acc + (b.cantidad || 0), 0);
+                const capacity = wh.capacidad_unidades || 10000;
+                const occupancyPct = Math.min(100, Math.round((totalStock / capacity) * 100));
+                const totalValorUSD = whBatches.reduce(
+                  (acc, b) => acc + (b.cantidad || 0) * (b.precio_venta || 0),
+                  0
+                );
+
+                return (
+                  <div
+                    key={wh.id}
+                    className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-md">
+                          {wh.id}
+                        </span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400">
+                          {wh.tipo}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 mt-2">
+                        {wh.nombre}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center space-x-1 mt-0.5">
+                        <MapPin size={11} className="flex-shrink-0" />
+                        <span className="truncate">{wh.ubicacion}</span>
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                        <span>Stock Ocupado:</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">
+                          {totalStock.toLocaleString('es-UY')} / {capacity.toLocaleString('es-UY')} u.
+                        </span>
+                      </div>
+
+                      {/* Barra de Progreso de Ocupación */}
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            occupancyPct > 85 ? 'bg-rose-500' : occupancyPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${occupancyPct}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400">
+                        <span>Ocupación: {occupancyPct}%</span>
+                        <span>{whBatches.length} lotes activos</span>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-200/40 dark:border-slate-700/40">
+                        <span className="text-slate-400 text-[11px]">Inventario Valorizado:</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          ${totalValorUSD.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMasterAlmacenesOpen(false);
+                          handleOpenWarehouseFicha(wh.id);
+                        }}
+                        className="flex-1 py-1.5 px-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-600 text-center transition-colors"
+                      >
+                        Ver Detalle Stock
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Red Logística Local: 3 Nodos Activos en Uruguay (Central MVD, Pocitos y Salto).
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMasterAlmacenesOpen(false)}
+                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+              >
+                Cerrar Panel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

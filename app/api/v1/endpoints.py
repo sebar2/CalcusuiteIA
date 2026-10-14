@@ -47,6 +47,8 @@ from app.models.entities import (
     ImplicitServiceCatalog,
     ImplicitBudgetOrder,
     ImplicitBudgetItem,
+    BiddingVertical,
+    BiddingKeyword,
 )
 from app.domain.schemas import (
     ETLUploadResponse,
@@ -138,6 +140,7 @@ from app.domain.schemas import (
     WarehouseStockItem,
     TenderLiveFeedResponse,
     TenderImportFeedRequest,
+    TenderFeedSyncRequest,
     ApplyScenarioRequest,
     ApplyScenarioResponse,
     BudgetScenarioRequest,
@@ -147,6 +150,13 @@ from app.domain.schemas import (
     AIBundleItem,
     BundleProductItem,
     WaterfallStep,
+    BiddingVerticalItem,
+    BiddingVerticalCreate,
+    BiddingKeywordItem,
+    BiddingKeywordCreate,
+    BiddingKeywordBulkCreate,
+    BiddingAIExpandKeywordsRequest,
+    BiddingAIExpandKeywordsResponse,
 )
 from app.services.budget_planner_service import BudgetPlannerService
 from app.services.tenders_service import tenders_service
@@ -2260,11 +2270,25 @@ def get_tenders_live_feed(
 @router.post(
     "/tenders/feed/sync",
     response_model=TenderLiveFeedResponse,
-    summary="Fuerza la sincronización del feed contra el RSS/OCDS oficial de ARCE"
+    summary="Fuerza la sincronización del feed contra el RSS/OCDS oficial de ARCE usando el modelo Ollama y vertical configurados"
 )
-def sync_tenders_live_feed(user: UserContext = Depends(get_current_user)):
+def sync_tenders_live_feed(
+    payload: Optional[TenderFeedSyncRequest] = None,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
     from app.services.tenders_feed_service import tenders_feed_service
-    return tenders_feed_service.get_live_feed(force_sync=True)
+    req = payload or TenderFeedSyncRequest()
+    return tenders_feed_service.get_live_feed(
+        nicho=req.vertical_id,
+        force_sync=True,
+        model=req.model,
+        vertical_id=req.vertical_id,
+        limit=req.limit,
+        offset=req.offset,
+        append_mode=req.append_mode,
+        db=db,
+    )
 
 
 @router.post(
@@ -2291,6 +2315,221 @@ def import_tender_feed_item(
         details={"feed_item_id": payload.feed_item_id}
     )
     return res
+
+
+# --- GESTIÓN DE VERTICALES COMERCIALES B2B & PALABRAS CLAVE ---
+
+@router.get(
+    "/bidding/verticals",
+    response_model=List[BiddingVerticalItem],
+    summary="Lista todas las verticales comerciales activas con conteo de palabras clave"
+)
+def list_bidding_verticals(db: Session = Depends(get_db)):
+    verticals = db.query(BiddingVertical).filter(BiddingVertical.activo == True).all()  # noqa: E712
+    results = []
+    for v in verticals:
+        kw_count = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == v.id).count()
+        results.append(BiddingVerticalItem(
+            id=v.id,
+            nombre=v.nombre,
+            icon=v.icon,
+            color_badge=v.color_badge,
+            descripcion=v.descripcion,
+            activo=v.activo,
+            keywords_count=kw_count,
+        ))
+    return results
+
+
+@router.post(
+    "/bidding/verticals",
+    response_model=BiddingVerticalItem,
+    summary="Crea un nuevo rubro o vertical comercial para licitaciones B2B"
+)
+def create_bidding_vertical(
+    payload: BiddingVerticalCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    existing = db.query(BiddingVertical).filter(BiddingVertical.id == payload.id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"La vertical con ID '{payload.id}' ya existe.")
+
+    vertical = BiddingVertical(
+        id=payload.id.strip().upper(),
+        nombre=payload.nombre.strip(),
+        icon=payload.icon or "📋",
+        color_badge=payload.color_badge or "blue",
+        descripcion=payload.descripcion,
+        activo=payload.activo,
+    )
+    db.add(vertical)
+    db.commit()
+    db.refresh(vertical)
+
+    record_audit_log(
+        db=db,
+        user_id=user.user_id,
+        role=user.role,
+        action="CREATE_BIDDING_VERTICAL",
+        resource=f"bidding_verticals/{vertical.id}",
+        details={"nombre": vertical.nombre}
+    )
+    return BiddingVerticalItem(
+        id=vertical.id,
+        nombre=vertical.nombre,
+        icon=vertical.icon,
+        color_badge=vertical.color_badge,
+        descripcion=vertical.descripcion,
+        activo=vertical.activo,
+        keywords_count=0
+    )
+
+
+@router.put(
+    "/bidding/verticals/{vertical_id}",
+    response_model=BiddingVerticalItem,
+    summary="Actualiza metadatos de un rubro comercial"
+)
+def update_bidding_vertical(
+    vertical_id: str,
+    payload: BiddingVerticalCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    vertical = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
+    if not vertical:
+        raise HTTPException(status_code=404, detail="Vertical no encontrada.")
+
+    vertical.nombre = payload.nombre.strip()
+    vertical.icon = payload.icon or vertical.icon
+    vertical.color_badge = payload.color_badge or vertical.color_badge
+    vertical.descripcion = payload.descripcion
+    vertical.activo = payload.activo
+    db.commit()
+    db.refresh(vertical)
+
+    kw_count = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == vertical.id).count()
+    return BiddingVerticalItem(
+        id=vertical.id,
+        nombre=vertical.nombre,
+        icon=vertical.icon,
+        color_badge=vertical.color_badge,
+        descripcion=vertical.descripcion,
+        activo=vertical.activo,
+        keywords_count=kw_count
+    )
+
+
+@router.get(
+    "/bidding/verticals/{vertical_id}/keywords",
+    response_model=List[BiddingKeywordItem],
+    summary="Obtiene las palabras clave de inclusión y exclusión de un rubro comercial"
+)
+def get_bidding_keywords(vertical_id: str, db: Session = Depends(get_db)):
+    kws = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == vertical_id).order_by(BiddingKeyword.tipo.desc(), BiddingKeyword.keyword.asc()).all()
+    return [
+        BiddingKeywordItem(
+            id=k.id,
+            vertical_id=k.vertical_id,
+            keyword=k.keyword,
+            tipo=k.tipo,
+            peso=float(k.peso),
+            fuente=k.fuente,
+            created_at=k.created_at
+        ) for k in kws
+    ]
+
+
+@router.post(
+    "/bidding/verticals/{vertical_id}/keywords",
+    summary="Agrega palabras clave (individual o en bloque) a un rubro comercial"
+)
+def add_bidding_keywords(
+    vertical_id: str,
+    payload: BiddingKeywordBulkCreate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    vert = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
+    if not vert:
+        raise HTTPException(status_code=404, detail="Vertical no encontrada.")
+
+    tipo = (payload.tipo or "INCLUSION").upper()
+    peso = Decimal(str(payload.peso or 1.0))
+    created_count = 0
+
+    for raw_kw in payload.keywords:
+        kw_clean = raw_kw.strip().lower()
+        if not kw_clean:
+            continue
+        existing = db.query(BiddingKeyword).filter(
+            BiddingKeyword.vertical_id == vertical_id,
+            BiddingKeyword.keyword == kw_clean,
+            BiddingKeyword.tipo == tipo
+        ).first()
+        if not existing:
+            new_kw = BiddingKeyword(
+                vertical_id=vertical_id,
+                keyword=kw_clean,
+                tipo=tipo,
+                peso=peso,
+                fuente="MANUAL",
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(new_kw)
+            created_count += 1
+
+    db.commit()
+    return {"status": "success", "message": f"Se agregaron {created_count} palabras clave a la vertical {vertical_id}."}
+
+
+@router.delete(
+    "/bidding/keywords/{keyword_id}",
+    summary="Elimina una palabra clave configurada"
+)
+def delete_bidding_keyword(
+    keyword_id: int,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user)
+):
+    kw = db.query(BiddingKeyword).filter(BiddingKeyword.id == keyword_id).first()
+    if not kw:
+        raise HTTPException(status_code=404, detail="Palabra clave no encontrada.")
+    db.delete(kw)
+    db.commit()
+    return {"status": "success", "message": f"Palabra clave #{keyword_id} eliminada."}
+
+
+@router.post(
+    "/bidding/ai/expand-keywords",
+    response_model=BiddingAIExpandKeywordsResponse,
+    summary="Asistente IA Local (Ollama) para expandir sinónimos y palabras clave por rubro"
+)
+def ai_expand_keywords(
+    payload: BiddingAIExpandKeywordsRequest,
+    db: Session = Depends(get_db)
+):
+    from app.services.tenders_feed_service import expand_keywords_with_ai
+    res = expand_keywords_with_ai(
+        query=payload.query,
+        vertical_id=payload.vertical_id,
+        rubro_nombre=payload.rubro_nombre,
+        model=payload.model,
+        include_exclusions=payload.include_exclusions
+    )
+    return BiddingAIExpandKeywordsResponse(
+        status=res.get("status", "success"),
+        vertical_id=res.get("vertical_id"),
+        query=res.get("query"),
+        model_used=res.get("model_used", "Local LLM"),
+        sinonimos_sugeridos=res.get("sinonimos_sugeridos", []),
+        keywords_inclusion_sugeridas=res.get("keywords_inclusion_sugeridas", []),
+        keywords_exclusion_sugeridas=res.get("keywords_exclusion_sugeridas", []),
+        explicacion=res.get("explicacion", ""),
+        es_fallback_heuristico=res.get("es_fallback_heuristico", False),
+    )
+
 
 
 @router.get(
@@ -2846,10 +3085,13 @@ def assign_direct_warehouse_stock(
 )
 def list_unified_warehouse_batches(
     warehouse_id: Optional[str] = Query(None, description="Filtrar por ID de depósito"),
+    exclude_test_batches: bool = Query(False, description="Ocultar lotes de prueba sintéticos"),
     db: Session = Depends(get_db)
 ):
     from app.services.inventory_sync_service import inventory_sync_service
-    return inventory_sync_service.list_unified_batches(db, warehouse_id=warehouse_id)
+    return inventory_sync_service.list_unified_batches(
+        db, warehouse_id=warehouse_id, exclude_test_batches=exclude_test_batches
+    )
 
 
 # ==============================================================================

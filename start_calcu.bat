@@ -128,10 +128,10 @@ if "%DB_CHOICE%"=="2" (
 
 echo.
 echo [*] Abriendo Backend FastAPI (:8000)...
-start "Calcu Backend (:8000)" cmd /k "color 0A && cd /d ""%~dp0"" && set ""DATABASE_URL=%TARGET_DB%"" && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+start "Calcu Backend (:8000)" cmd /k "color 0A & cd /d %~dp0 & set DATABASE_URL=%TARGET_DB% & python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo [*] Abriendo Frontend React Vite (:5173)...
-start "Calcu Frontend (:5173)" cmd /k "color 0E && cd /d ""%~dp0frontend"" && npm run dev"
+start "Calcu Frontend (:5173)" cmd /k "color 0E & cd /d %~dp0frontend & npm run dev"
 
 echo.
 echo [OK] Ambos servicios iniciados en terminales independientes.

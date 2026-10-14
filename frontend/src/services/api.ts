@@ -77,7 +77,14 @@ import type {
   WarehouseStockItem,
   TenderLiveFeedResponse,
   TenderImportFeedRequest,
+  TenderFeedSyncRequest,
   TenderImportFeedResponse,
+  BiddingVerticalItem,
+  BiddingVerticalCreate,
+  BiddingKeywordItem,
+  BiddingKeywordBulkCreate,
+  BiddingAIExpandKeywordsRequest,
+  BiddingAIExpandKeywordsResponse,
   PricingAIBundlesResponse,
   ClientItem,
   ClientCreatePayload,
@@ -755,9 +762,12 @@ export const apiService = {
   },
 
   // MÓDULO: Sincronización ROP & Multi-Depósito por Lote
-  async getUnifiedBatches(warehouseId?: string): Promise<StockBatchItem[]> {
+  async getUnifiedBatches(warehouseId?: string, excludeTestBatches?: boolean): Promise<StockBatchItem[]> {
     const res = await apiClient.get<StockBatchItem[]>('/api/v1/warehouses/batches', {
-      params: warehouseId ? { warehouse_id: warehouseId } : undefined,
+      params: {
+        ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+        ...(excludeTestBatches !== undefined ? { exclude_test_batches: excludeTestBatches } : {}),
+      },
     });
     return res.data;
   },
@@ -848,13 +858,52 @@ export const apiService = {
     return res.data;
   },
 
-  async syncTendersFeed(): Promise<TenderLiveFeedResponse> {
-    const res = await apiClient.post<TenderLiveFeedResponse>('/api/v1/tenders/feed/sync');
+  async syncTendersFeed(payload?: TenderFeedSyncRequest): Promise<TenderLiveFeedResponse> {
+    const res = await apiClient.post<TenderLiveFeedResponse>('/api/v1/tenders/feed/sync', payload);
     return res.data;
   },
 
   async importTenderFeedItem(payload: TenderImportFeedRequest): Promise<TenderImportFeedResponse> {
     const res = await apiClient.post<TenderImportFeedResponse>('/api/v1/tenders/import-feed-item', payload);
+    return res.data;
+  },
+
+  // MÓDULO: Licitaciones B2B Multi-Rubro & Gestión de Verticales/Keywords
+  async getBiddingVerticals(): Promise<BiddingVerticalItem[]> {
+    const res = await apiClient.get<BiddingVerticalItem[]>('/api/v1/bidding/verticals');
+    return res.data;
+  },
+
+  async createBiddingVertical(payload: BiddingVerticalCreate): Promise<BiddingVerticalItem> {
+    const res = await apiClient.post<BiddingVerticalItem>('/api/v1/bidding/verticals', payload);
+    return res.data;
+  },
+
+  async updateBiddingVertical(verticalId: string, payload: BiddingVerticalCreate): Promise<BiddingVerticalItem> {
+    const res = await apiClient.put<BiddingVerticalItem>(`/api/v1/bidding/verticals/${verticalId}`, payload);
+    return res.data;
+  },
+
+  async getBiddingKeywords(verticalId: string): Promise<BiddingKeywordItem[]> {
+    const res = await apiClient.get<BiddingKeywordItem[]>(`/api/v1/bidding/verticals/${verticalId}/keywords`);
+    return res.data;
+  },
+
+  async addBiddingKeywordsBulk(verticalId: string, payload: BiddingKeywordBulkCreate): Promise<{ status: string; message: string }> {
+    const res = await apiClient.post<{ status: string; message: string }>(`/api/v1/bidding/verticals/${verticalId}/keywords`, payload);
+    return res.data;
+  },
+
+  async deleteBiddingKeyword(keywordId: number): Promise<{ status: string; message: string }> {
+    const res = await apiClient.delete<{ status: string; message: string }>(`/api/v1/bidding/keywords/${keywordId}`);
+    return res.data;
+  },
+
+  async expandBiddingKeywordsAI(payload: BiddingAIExpandKeywordsRequest): Promise<BiddingAIExpandKeywordsResponse> {
+    // Sin timeout estricto para modelos locales de Ollama (timeout: 0 desactiva el timeout en axios)
+    const res = await apiClient.post<BiddingAIExpandKeywordsResponse>('/api/v1/bidding/ai/expand-keywords', payload, {
+      timeout: 0,
+    });
     return res.data;
   },
 
