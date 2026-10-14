@@ -47,8 +47,11 @@ export interface LogisticsDriverItem {
   telefono: string;
   tipo_licencia: string;
   tipo_relacion: 'FLETERO_TERCERIZADO' | 'CADETE' | 'OPERARIO_DEPOSITO' | string;
+  modalidad_pago?: 'VIAJE_KM' | 'POR_HORA' | 'POR_JORNAL' | string;
   tarifa_base_viaje: number;
   tarifa_km: number;
+  tarifa_hora?: number;
+  tarifa_jornal?: number;
   disponibilidad_semanal?: string | Record<string, any> | null;
   activo: boolean;
   viajes_hechos: number;

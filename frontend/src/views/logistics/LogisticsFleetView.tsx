@@ -68,8 +68,11 @@ export const LogisticsFleetView: React.FC = () => {
     telefono: '',
     tipo_licencia: 'CAT_B',
     tipo_relacion: 'FLETERO_TERCERIZADO',
+    modalidad_pago: 'VIAJE_KM', // 'VIAJE_KM' | 'POR_HORA' | 'POR_JORNAL'
     tarifa_base_viaje: 35.0,
     tarifa_km: 0.85,
+    tarifa_hora: 250.0,
+    tarifa_jornal: 2000.0,
     activo: true,
   });
 
@@ -115,8 +118,11 @@ export const LogisticsFleetView: React.FC = () => {
       telefono: '',
       tipo_licencia: 'CAT_B',
       tipo_relacion: 'FLETERO_TERCERIZADO',
+      modalidad_pago: 'VIAJE_KM',
       tarifa_base_viaje: 35.0,
       tarifa_km: 0.85,
+      tarifa_hora: 250.0,
+      tarifa_jornal: 2000.0,
       activo: true,
     });
     setWeeklyAvailability(DEFAULT_SCHEDULE);
@@ -131,8 +137,11 @@ export const LogisticsFleetView: React.FC = () => {
       telefono: d.telefono,
       tipo_licencia: d.tipo_licencia,
       tipo_relacion: d.tipo_relacion,
+      modalidad_pago: d.modalidad_pago || (d.tipo_relacion === 'OPERARIO_DEPOSITO' ? 'POR_HORA' : 'VIAJE_KM'),
       tarifa_base_viaje: d.tarifa_base_viaje,
       tarifa_km: d.tarifa_km,
+      tarifa_hora: d.tarifa_hora ?? 250.0,
+      tarifa_jornal: d.tarifa_jornal ?? 2000.0,
       activo: d.activo,
     });
 
@@ -174,34 +183,30 @@ export const LogisticsFleetView: React.FC = () => {
     e.preventDefault();
     try {
       const scheduleJson = JSON.stringify(weeklyAvailability);
+      const payloadData = {
+        nombre: driverForm.nombre,
+        documento: driverForm.documento,
+        telefono: driverForm.telefono,
+        tipo_licencia: driverForm.tipo_licencia,
+        tipo_relacion: driverForm.tipo_relacion,
+        modalidad_pago: driverForm.modalidad_pago,
+        tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
+        tarifa_km: Number(driverForm.tarifa_km),
+        tarifa_hora: Number(driverForm.tarifa_hora),
+        tarifa_jornal: Number(driverForm.tarifa_jornal),
+        disponibilidad_semanal: scheduleJson,
+        activo: driverForm.activo,
+      };
+
       if (editingDriverId) {
-        await logisticsApi.updateDriver(editingDriverId, {
-          nombre: driverForm.nombre,
-          documento: driverForm.documento,
-          telefono: driverForm.telefono,
-          tipo_licencia: driverForm.tipo_licencia,
-          tipo_relacion: driverForm.tipo_relacion,
-          tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
-          tarifa_km: Number(driverForm.tarifa_km),
-          disponibilidad_semanal: scheduleJson,
-          activo: driverForm.activo,
-        });
+        await logisticsApi.updateDriver(editingDriverId, payloadData);
       } else {
-        await logisticsApi.createDriver({
-          nombre: driverForm.nombre,
-          documento: driverForm.documento,
-          telefono: driverForm.telefono,
-          tipo_licencia: driverForm.tipo_licencia,
-          tipo_relacion: driverForm.tipo_relacion,
-          tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
-          tarifa_km: Number(driverForm.tarifa_km),
-          disponibilidad_semanal: scheduleJson,
-        });
+        await logisticsApi.createDriver(payloadData);
       }
       setIsDriverModalOpen(false);
       loadData();
     } catch (err: any) {
-      alert(`Error al guardar conductor: ${err.response?.data?.detail || err.message}`);
+      alert(`Error al guardar conductor/operario: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -492,7 +497,7 @@ export const LogisticsFleetView: React.FC = () => {
                   <th className="py-3 px-4">Documento / Tel</th>
                   <th className="py-3 px-4">Libreta / Vínculo</th>
                   <th className="py-3 px-4">Disponibilidad Semanal</th>
-                  <th className="py-3 px-4">Tarifas (Base / km)</th>
+                  <th className="py-3 px-4">Esquema de Pago & Tarifas</th>
                   <th className="py-3 px-4 text-center">Viajes</th>
                   <th className="py-3 px-4 text-right">Acción</th>
                 </tr>
@@ -543,8 +548,33 @@ export const LogisticsFleetView: React.FC = () => {
                           <span className="text-[10px] text-slate-400 italic">Sin horario definido</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
-                        ${d.tarifa_base_viaje.toFixed(2)} base / ${d.tarifa_km.toFixed(2)} km
+                      <td className="py-3 px-4">
+                        {d.tipo_relacion === 'OPERARIO_DEPOSITO' || d.modalidad_pago === 'POR_HORA' || d.modalidad_pago === 'POR_JORNAL' ? (
+                          <div className="flex flex-col space-y-0.5">
+                            <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 w-fit">
+                              {d.modalidad_pago === 'POR_JORNAL' ? 'Por Jornal' : 'Por Hora'}
+                            </span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">
+                              {d.modalidad_pago === 'POR_JORNAL'
+                                ? `$${(d.tarifa_jornal || 0).toFixed(2)} / jornal`
+                                : `$${(d.tarifa_hora || 0).toFixed(2)} / hora`}
+                            </span>
+                            {(d.tarifa_jornal || 0) > 0 && d.modalidad_pago !== 'POR_JORNAL' && (
+                              <span className="text-[10px] text-slate-400">
+                                Jornal: ${(d.tarifa_jornal || 0).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100">
+                              ${d.tarifa_base_viaje.toFixed(2)} base
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              + ${d.tarifa_km.toFixed(2)} / km
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
@@ -641,38 +671,141 @@ export const LogisticsFleetView: React.FC = () => {
                   <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Vínculo Laboral</label>
                   <select
                     value={driverForm.tipo_relacion}
-                    onChange={(e) => setDriverForm({ ...driverForm, tipo_relacion: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDriverForm((prev) => ({
+                        ...prev,
+                        tipo_relacion: val,
+                        modalidad_pago: val === 'OPERARIO_DEPOSITO' ? 'POR_HORA' : prev.modalidad_pago,
+                      }));
+                    }}
                     className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                   >
-                    <option value="FLETERO_TERCERIZADO">Fletero Tercerizado</option>
-                    <option value="CADETE">Cadete / Delivery</option>
-                    <option value="OPERARIO_DEPOSITO">Operario de Depósito</option>
+                    <option value="FLETERO_TERCERIZADO">Fletero Tercerizado (Reparto)</option>
+                    <option value="CADETE">Cadete / Delivery Urbano</option>
+                    <option value="OPERARIO_DEPOSITO">Operario de Depósito / Picking</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa Base ($ / Viaje)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={driverForm.tarifa_base_viaje}
-                    onChange={(e) => setDriverForm({ ...driverForm, tarifa_base_viaje: parseFloat(e.target.value) || 0 })}
-                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa ($ / km)</label>
-                  <input
-                    type="number"
-                    step="0.05"
-                    value={driverForm.tarifa_km}
-                    onChange={(e) => setDriverForm({ ...driverForm, tarifa_km: parseFloat(e.target.value) || 0 })}
-                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                  />
+              {/* Modalidad de Liquidación / Pago */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Modalidad de Liquidación / Pago</label>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDriverForm({ ...driverForm, modalidad_pago: 'VIAJE_KM' })}
+                    className={`py-1.5 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
+                      driverForm.modalidad_pago === 'VIAJE_KM'
+                        ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 shadow-2xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    🚗 Por Viaje / Km
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDriverForm({ ...driverForm, modalidad_pago: 'POR_HORA' })}
+                    className={`py-1.5 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
+                      driverForm.modalidad_pago === 'POR_HORA'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 shadow-2xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    ⏱️ Por Hora ($/h)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDriverForm({ ...driverForm, modalidad_pago: 'POR_JORNAL' })}
+                    className={`py-1.5 px-2 text-xs font-semibold rounded-lg border text-center transition-all cursor-pointer ${
+                      driverForm.modalidad_pago === 'POR_JORNAL'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 shadow-2xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    📅 Por Jornal ($/día)
+                  </button>
                 </div>
               </div>
+
+              {/* Si es Operario de Depósito o pago por Hora / Jornal */}
+              {(driverForm.tipo_relacion === 'OPERARIO_DEPOSITO' || driverForm.modalidad_pago === 'POR_HORA' || driverForm.modalidad_pago === 'POR_JORNAL') && (
+                <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl border border-indigo-200/70 dark:border-indigo-900/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                      Tarifas de Operario de Depósito / Personal Logístico
+                    </span>
+                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                      Liquidación activa: {driverForm.modalidad_pago === 'POR_JORNAL' ? 'Jornal' : 'Por Hora'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                        <span>Tarifa por Hora ($ / hr)</span>
+                        {driverForm.modalidad_pago === 'POR_HORA' && (
+                          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">Activo</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        step="5"
+                        placeholder="250"
+                        value={driverForm.tarifa_hora}
+                        onChange={(e) => setDriverForm({ ...driverForm, tarifa_hora: parseFloat(e.target.value) || 0 })}
+                        className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center justify-between">
+                        <span>Tarifa por Jornal ($ / día)</span>
+                        {driverForm.modalidad_pago === 'POR_JORNAL' && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Activo</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        step="50"
+                        placeholder="2000"
+                        value={driverForm.tarifa_jornal}
+                        onChange={(e) => setDriverForm({ ...driverForm, tarifa_jornal: parseFloat(e.target.value) || 0 })}
+                        className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Si es Fletero o pago por Viaje/Km */}
+              {(driverForm.tipo_relacion !== 'OPERARIO_DEPOSITO' || driverForm.modalidad_pago === 'VIAJE_KM') && (
+                <div className="p-3 bg-sky-50/50 dark:bg-sky-950/30 rounded-xl border border-sky-200/70 dark:border-sky-900/50 space-y-2">
+                  <span className="text-xs font-bold text-sky-900 dark:text-sky-200">
+                    Tarifas de Distribución / Fletero Tercerizado
+                  </span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa Base ($ / Viaje)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={driverForm.tarifa_base_viaje}
+                        onChange={(e) => setDriverForm({ ...driverForm, tarifa_base_viaje: parseFloat(e.target.value) || 0 })}
+                        className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa ($ / km)</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={driverForm.tarifa_km}
+                        onChange={(e) => setDriverForm({ ...driverForm, tarifa_km: parseFloat(e.target.value) || 0 })}
+                        className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Matriz de Disponibilidad Semanal */}
               <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">

@@ -249,7 +249,9 @@ export const LogisticsInventoryView: React.FC = () => {
       .filter(([_, qty]) => qty > 0)
       .map(([id, qty]) => ({
         inventory_id: Number(id),
+        cantidad: qty,
         bultos_solicitados: qty,
+        es_unidades: false,
       }));
 
     if (itemsToSend.length === 0) {
@@ -263,15 +265,15 @@ export const LogisticsInventoryView: React.FC = () => {
         client_id: Number(pickingClientId),
         branch_id: pickingBranchId && pickingBranchId !== 'custom' ? Number(pickingBranchId) : undefined,
         destino_direccion: pickingCustomAddress,
-        contacto_receptor_nombre: pickingContactName,
-        contacto_receptor_telefono: pickingContactPhone,
-        responsable_armado: pickingSupervisor,
+        contacto_receptor_nombre: pickingContactName.trim() || 'Recepción Cliente',
+        contacto_receptor_telefono: pickingContactPhone.trim() || 'S/D',
+        responsable_armado: pickingSupervisor.trim() || 'Supervisor Depósito',
         fecha_entrega_estimada: pickingDate,
         ventana_horaria: pickingWindow,
         items: itemsToSend,
       });
 
-      alert(`✅ ¡Orden ${res.numero_orden} creada con éxito!\n• Descontados ${res.total_bultos} bultos del stock en depósito.\n• Sincronizada con Kanban: "Acondicionamiento / Etiquetado".\n• QR de Despacho: ${res.codigo_qr}`);
+      alert(`✅ ¡Orden ${res.numero_orden} creada con éxito!\n• Descontados ${res.total_bultos} bultos del stock en depósito.\n• Sincronizada con Kanban: "Acondicionamiento / Etiquetado".\n• QR de Despacho: ${res.codigo_qr || res.numero_orden}`);
       setIsPickingModalOpen(false);
       loadData();
     } catch (err: any) {

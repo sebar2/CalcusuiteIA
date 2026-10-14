@@ -74,8 +74,12 @@ class LogisticsDriverCreate(BaseModel):
     telefono: str
     tipo_licencia: str = "CAT_B"
     tipo_relacion: str = "FLETERO_TERCERIZADO"
-    tarifa_base_viaje: float = 35.0
-    tarifa_km: float = 0.85
+    modalidad_pago: Optional[str] = "VIAJE_KM"  # VIAJE_KM, POR_HORA, POR_JORNAL
+    tarifa_base_viaje: Optional[float] = 35.0
+    tarifa_km: Optional[float] = 0.85
+    tarifa_hora: Optional[float] = 0.0
+    tarifa_jornal: Optional[float] = 0.0
+    disponibilidad_semanal: Optional[str] = None
     activo: bool = True
 
 
@@ -184,8 +188,11 @@ class LogisticsDriverUpdate(BaseModel):
     telefono: Optional[str] = None
     tipo_licencia: Optional[str] = None
     tipo_relacion: Optional[str] = None
+    modalidad_pago: Optional[str] = None
     tarifa_base_viaje: Optional[float] = None
     tarifa_km: Optional[float] = None
+    tarifa_hora: Optional[float] = None
+    tarifa_jornal: Optional[float] = None
     disponibilidad_semanal: Optional[str] = None  # JSON string con Lunes a Domingo y turnos
     activo: Optional[bool] = None
 
@@ -202,16 +209,18 @@ class LogisticsVehicleUpdate(BaseModel):
 
 class PickingItemRequest(BaseModel):
     inventory_id: int
-    cantidad: int
+    cantidad: Optional[int] = None
+    bultos_solicitados: Optional[int] = None
+    unidades_solicitadas: Optional[int] = None
     es_unidades: bool = False  # False: bultos/cajas, True: unidades sueltas
 
 
 class PickingOrderCreate(BaseModel):
     client_id: int
     branch_id: Optional[int] = None
-    responsable_armado: str
-    contacto_receptor_nombre: str
-    contacto_receptor_telefono: str
+    responsable_armado: Optional[str] = "Supervisor Depósito"
+    contacto_receptor_nombre: Optional[str] = "Contacto Entrega"
+    contacto_receptor_telefono: Optional[str] = "S/D"
     destino_direccion: Optional[str] = None
     destino_coordenadas: Optional[str] = None
     ventana_horaria: Optional[str] = "09:00 - 13:00"
@@ -504,8 +513,11 @@ def list_drivers(db: Session = Depends(get_db)):
             "telefono": d.telefono,
             "tipo_licencia": d.tipo_licencia,
             "tipo_relacion": d.tipo_relacion,
-            "tarifa_base_viaje": float(d.tarifa_base_viaje),
-            "tarifa_km": float(d.tarifa_km),
+            "modalidad_pago": getattr(d, "modalidad_pago", "VIAJE_KM") or "VIAJE_KM",
+            "tarifa_base_viaje": float(d.tarifa_base_viaje or 0.0),
+            "tarifa_km": float(d.tarifa_km or 0.0),
+            "tarifa_hora": float(getattr(d, "tarifa_hora", 0.0) or 0.0),
+            "tarifa_jornal": float(getattr(d, "tarifa_jornal", 0.0) or 0.0),
             "disponibilidad_semanal": d.disponibilidad_semanal,
             "activo": d.activo,
             "viajes_hechos": int(viajes_hechos),
@@ -517,40 +529,49 @@ def list_drivers(db: Session = Depends(get_db)):
 
 @router.post("/fleet/drivers")
 def create_driver(payload: LogisticsDriverCreate, db: Session = Depends(get_db)):
-    """Registra o edita un chofer / fletero tercerizado."""
+    """Registra o edita un chofer / fletero tercerizado / operario de logística."""
     existing = db.query(LogisticsDriver).filter(LogisticsDriver.documento == payload.documento).first()
     if existing:
-        existing.nombre = payload.nombre
-        existing.telefono = payload.telefono
-        existing.tipo_licencia = payload.tipo_licencia
-        existing.tipo_relacion = payload.tipo_relacion
-        existing.tarifa_base_viaje = Decimal(str(payload.tarifa_base_viaje))
-        existing.tarifa_km = Decimal(str(payload.tarifa_km))
+        existing.nombre = payload.nombre.strip()
+        existing.telefono = payload.telefono.strip()
+        existing.tipo_licencia = payload.tipo_licencia.strip()
+        existing.tipo_relacion = payload.tipo_relacion.strip()
+        existing.modalidad_pago = payload.modalidad_pago or "VIAJE_KM"
+        existing.tarifa_base_viaje = Decimal(str(payload.tarifa_base_viaje or 0.0))
+        existing.tarifa_km = Decimal(str(payload.tarifa_km or 0.0))
+        existing.tarifa_hora = Decimal(str(payload.tarifa_hora or 0.0))
+        existing.tarifa_jornal = Decimal(str(payload.tarifa_jornal or 0.0))
+        if payload.disponibilidad_semanal is not None:
+            existing.disponibilidad_semanal = payload.disponibilidad_semanal
         existing.activo = payload.activo
         driver = existing
     else:
         driver = LogisticsDriver(
-            nombre=payload.nombre,
-            documento=payload.documento,
-            telefono=payload.telefono,
-            tipo_licencia=payload.tipo_licencia,
-            tipo_relacion=payload.tipo_relacion,
-            tarifa_base_viaje=Decimal(str(payload.tarifa_base_viaje)),
-            tarifa_km=Decimal(str(payload.tarifa_km)),
+            nombre=payload.nombre.strip(),
+            documento=payload.documento.strip(),
+            telefono=payload.telefono.strip(),
+            tipo_licencia=payload.tipo_licencia.strip(),
+            tipo_relacion=payload.tipo_relacion.strip(),
+            modalidad_pago=payload.modalidad_pago or "VIAJE_KM",
+            tarifa_base_viaje=Decimal(str(payload.tarifa_base_viaje or 0.0)),
+            tarifa_km=Decimal(str(payload.tarifa_km or 0.0)),
+            tarifa_hora=Decimal(str(payload.tarifa_hora or 0.0)),
+            tarifa_jornal=Decimal(str(payload.tarifa_jornal or 0.0)),
+            disponibilidad_semanal=payload.disponibilidad_semanal,
             activo=payload.activo,
         )
         db.add(driver)
     db.commit()
     db.refresh(driver)
-    return {"message": "Chofer guardado con éxito", "id": driver.id}
+    return {"message": "Personal/Chofer guardado con éxito", "id": driver.id}
 
 
 @router.put("/fleet/drivers/{driver_id}")
 def update_driver(driver_id: int, payload: LogisticsDriverUpdate, db: Session = Depends(get_db)):
-    """Edita los datos de un chofer/operario incluyendo su matriz de disponibilidad semanal."""
+    """Edita los datos de un chofer/operario incluyendo su matriz de disponibilidad semanal y esquemas de pago."""
     driver = db.query(LogisticsDriver).filter(LogisticsDriver.id == driver_id).first()
     if not driver:
-        raise HTTPException(status_code=404, detail="Chofer no encontrado")
+        raise HTTPException(status_code=404, detail="Chofer/Operario no encontrado")
 
     if payload.nombre is not None:
         driver.nombre = payload.nombre.strip()
@@ -562,10 +583,16 @@ def update_driver(driver_id: int, payload: LogisticsDriverUpdate, db: Session = 
         driver.tipo_licencia = payload.tipo_licencia.strip()
     if payload.tipo_relacion is not None:
         driver.tipo_relacion = payload.tipo_relacion.strip()
+    if payload.modalidad_pago is not None:
+        driver.modalidad_pago = payload.modalidad_pago.strip()
     if payload.tarifa_base_viaje is not None:
         driver.tarifa_base_viaje = Decimal(str(payload.tarifa_base_viaje))
     if payload.tarifa_km is not None:
         driver.tarifa_km = Decimal(str(payload.tarifa_km))
+    if payload.tarifa_hora is not None:
+        driver.tarifa_hora = Decimal(str(payload.tarifa_hora))
+    if payload.tarifa_jornal is not None:
+        driver.tarifa_jornal = Decimal(str(payload.tarifa_jornal))
     if payload.disponibilidad_semanal is not None:
         driver.disponibilidad_semanal = payload.disponibilidad_semanal
     if payload.activo is not None:
@@ -573,7 +600,7 @@ def update_driver(driver_id: int, payload: LogisticsDriverUpdate, db: Session = 
 
     db.commit()
     db.refresh(driver)
-    return {"message": "Chofer actualizado con éxito", "id": driver.id}
+    return {"message": "Personal/Chofer actualizado con éxito", "id": driver.id}
 
 
 @router.get("/fleet/vehicles")
@@ -1010,31 +1037,35 @@ def create_picking_order(payload: PickingOrderCreate, db: Session = Depends(get_
         if not inv:
             raise HTTPException(status_code=404, detail=f"Ítem de inventario ID {p_item.inventory_id} no pertenece al cliente")
 
-        if p_item.cantidad <= 0:
+        effective_qty = p_item.cantidad
+        if effective_qty is None:
+            effective_qty = p_item.bultos_solicitados or p_item.unidades_solicitadas or 0
+
+        if effective_qty <= 0:
             raise HTTPException(status_code=400, detail=f"Cantidad debe ser mayor a 0 para {inv.sku_cliente}")
 
-        if p_item.es_unidades:
+        if p_item.es_unidades or (p_item.unidades_solicitadas is not None and p_item.bultos_solicitados is None):
             unid_pack = inv.unidades_por_bulto or 1
-            bultos_deducir = math.ceil(p_item.cantidad / unid_pack)
+            bultos_deducir = math.ceil(effective_qty / unid_pack)
             if inv.cantidad_bultos < bultos_deducir:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitadas: {p_item.cantidad} unidades ({bultos_deducir} bultos equivalentes). Stock disponible: {inv.cantidad_bultos} bultos."
+                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitadas: {effective_qty} unidades ({bultos_deducir} bultos equivalentes). Stock disponible: {inv.cantidad_bultos} bultos."
                 )
             inv.cantidad_bultos -= bultos_deducir
             bultos_linea = bultos_deducir
             kg_linea = Decimal(str(inv.peso_unitario_kg)) * Decimal(str(bultos_deducir))
             m3_linea = Decimal(str(inv.volumen_unitario_m3)) * Decimal(str(bultos_deducir))
         else:
-            if inv.cantidad_bultos < p_item.cantidad:
+            if inv.cantidad_bultos < effective_qty:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitados: {p_item.cantidad} bultos. Stock disponible: {inv.cantidad_bultos} bultos."
+                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitados: {effective_qty} bultos. Stock disponible: {inv.cantidad_bultos} bultos."
                 )
-            inv.cantidad_bultos -= p_item.cantidad
-            bultos_linea = p_item.cantidad
-            kg_linea = Decimal(str(inv.peso_unitario_kg)) * Decimal(str(p_item.cantidad))
-            m3_linea = Decimal(str(inv.volumen_unitario_m3)) * Decimal(str(p_item.cantidad))
+            inv.cantidad_bultos -= effective_qty
+            bultos_linea = effective_qty
+            kg_linea = Decimal(str(inv.peso_unitario_kg)) * Decimal(str(effective_qty))
+            m3_linea = Decimal(str(inv.volumen_unitario_m3)) * Decimal(str(effective_qty))
 
         tot_bultos += bultos_linea
         tot_kg += kg_linea
@@ -1066,7 +1097,7 @@ def create_picking_order(payload: PickingOrderCreate, db: Session = Depends(get_
         etapa_kanban="ETIQUETADO_VAS",  # Sincronizado en Etapa 2: Acondicionamiento / Etiquetado
         destino_direccion=direccion,
         destino_coordenadas=coords or "-34.9011,-56.1645",
-        responsable_armado=payload.responsable_armado.strip(),
+        responsable_armado=(payload.responsable_armado or "Supervisor Depósito").strip(),
         contacto_receptor_nombre=contacto_nombre.strip() if contacto_nombre else None,
         contacto_receptor_telefono=contacto_tel.strip() if contacto_tel else None,
         ventana_horaria=payload.ventana_horaria,
@@ -1104,6 +1135,7 @@ def create_picking_order(payload: PickingOrderCreate, db: Session = Depends(get_
         "message": f"Orden de picking {order.numero_orden} armada con éxito y enviada a 'Acondicionamiento / Etiquetado'",
         "id": order.id,
         "numero_orden": order.numero_orden,
+        "codigo_qr": f"ORDER-{order.numero_orden}",
         "etapa_kanban": order.etapa_kanban,
         "total_bultos": order.total_bultos,
         "total_kg": float(order.total_kg),

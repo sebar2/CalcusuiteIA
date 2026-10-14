@@ -80,8 +80,11 @@ class LogisticsDriver(Base):
     telefono = Column(String(50), nullable=False)
     tipo_licencia = Column(String(20), nullable=False, default="CAT_B")  # CAT_B, CAT_C, CAT_F
     tipo_relacion = Column(String(50), default="FLETERO_TERCERIZADO")    # FLETERO_TERCERIZADO, CADETE, OPERARIO_DEPOSITO
+    modalidad_pago = Column(String(30), default="VIAJE_KM")               # VIAJE_KM, POR_HORA, POR_JORNAL
     tarifa_base_viaje = Column(Numeric(14, 4), default=Decimal("0.0"))
     tarifa_km = Column(Numeric(14, 4), default=Decimal("0.0"))
+    tarifa_hora = Column(Numeric(14, 4), default=Decimal("0.0"))
+    tarifa_jornal = Column(Numeric(14, 4), default=Decimal("0.0"))
     disponibilidad_semanal = Column(Text, nullable=True)  # JSON: disponibilidad semanal Lun-Dom y turnos
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

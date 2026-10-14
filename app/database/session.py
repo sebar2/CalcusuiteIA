@@ -130,6 +130,9 @@ def sync_table_columns(conn):
     add_col_if_missing("ordenes_compra", "monto_total", "NUMERIC(14, 4)", "0.0")
 
     # 7.1. 3PL Logística & Distribución (Campos nuevos de picking, disponibilidad y sucursales)
+    add_col_if_missing("logistics_drivers", "modalidad_pago", "VARCHAR(30)", "'VIAJE_KM'")
+    add_col_if_missing("logistics_drivers", "tarifa_hora", "NUMERIC(14, 4)", "0.0")
+    add_col_if_missing("logistics_drivers", "tarifa_jornal", "NUMERIC(14, 4)", "0.0")
     add_col_if_missing("logistics_drivers", "disponibilidad_semanal", "TEXT")
     add_col_if_missing("logistics_dispatch_orders", "branch_id", "INTEGER")
     add_col_if_missing("logistics_dispatch_orders", "responsable_armado", "VARCHAR(150)")
@@ -1009,6 +1012,30 @@ def run_non_destructive_migrations(target_engine: Engine = None):
                 conn.commit()
             except Exception as e:
                 logger.warning("No se pudo añadir columna warehouse_id a stock_location_batches: %s", e)
+
+        # Migración segura para logistics_drivers (Modalidad de pago y tarifas operario hora/jornal)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logistics_drivers'")
+        if cursor.fetchone():
+            cursor.execute("PRAGMA table_info(logistics_drivers)")
+            driver_columns = [row[1] for row in cursor.fetchall()]
+            if "modalidad_pago" not in driver_columns:
+                try:
+                    conn.execute(text("ALTER TABLE logistics_drivers ADD COLUMN modalidad_pago VARCHAR(30) DEFAULT 'VIAJE_KM'"))
+                    conn.commit()
+                except Exception as e:
+                    logger.warning("No se pudo añadir columna modalidad_pago a logistics_drivers: %s", e)
+            if "tarifa_hora" not in driver_columns:
+                try:
+                    conn.execute(text("ALTER TABLE logistics_drivers ADD COLUMN tarifa_hora NUMERIC(14, 4) DEFAULT 0.0"))
+                    conn.commit()
+                except Exception as e:
+                    logger.warning("No se pudo añadir columna tarifa_hora a logistics_drivers: %s", e)
+            if "tarifa_jornal" not in driver_columns:
+                try:
+                    conn.execute(text("ALTER TABLE logistics_drivers ADD COLUMN tarifa_jornal NUMERIC(14, 4) DEFAULT 0.0"))
+                    conn.commit()
+                except Exception as e:
+                    logger.warning("No se pudo añadir columna tarifa_jornal a logistics_drivers: %s", e)
 
         # Semilla de proveedores canónicos: Fábricas y Navieras
         cursor.execute("SELECT COUNT(*) FROM suppliers")
