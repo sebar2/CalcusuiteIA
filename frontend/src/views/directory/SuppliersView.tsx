@@ -29,7 +29,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ onNavigateToCatalo
   const [error, setError] = useState<string | null>(null);
 
   // Filtros Avanzados
-  const [tipoFilter, setTipoFilter] = useState<'todos' | 'plaza' | 'exterior'>('todos');
+  const [tipoFilter, setTipoFilter] = useState<'todos' | 'plaza' | 'exterior' | 'licitaciones'>('todos');
   const [rubroFilter, setRubroFilter] = useState<string>('TODOS');
   const [condicionFilter, setCondicionFilter] = useState<string>('TODAS');
 
@@ -256,6 +256,16 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ onNavigateToCatalo
           >
             🌍 Exterior / China
           </button>
+          <button
+            onClick={() => setTipoFilter('licitaciones')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              tipoFilter === 'licitaciones'
+                ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            🏛️ Licitaciones / Estatal
+          </button>
         </div>
 
         {/* Desplegables de Rubro y Condiciones */}
@@ -362,7 +372,11 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ onNavigateToCatalo
                 <div className="mt-3.5 flex items-center gap-2 flex-wrap text-[11px]">
                   <span className="px-2 py-0.5 rounded-md font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1">
                     <Globe2 className="w-3 h-3 text-slate-400" />
-                    {s.tipo_proveedor === 'exterior' ? 'Exterior / Fábrica' : 'Plaza Local Uy'}
+                    {s.tipo_proveedor === 'licitaciones'
+                      ? '🏛️ Contratista Estatal'
+                      : s.tipo_proveedor === 'exterior'
+                      ? '🌍 Exterior / Fábrica'
+                      : '🇺🇾 Plaza Local Uy'}
                   </span>
                   <span className="px-2 py-0.5 rounded-md font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
                     <CreditCard className="w-3 h-3 text-indigo-500" />
@@ -579,6 +593,7 @@ export const SuppliersView: React.FC<SuppliersViewProps> = ({ onNavigateToCatalo
                   >
                     <option value="plaza">Plaza Local Uy</option>
                     <option value="exterior">Fábrica Exterior / China</option>
+                    <option value="licitaciones">🏛️ Contratista Estatal / Licitaciones</option>
                   </select>
                 </div>
               </div>

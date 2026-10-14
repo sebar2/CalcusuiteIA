@@ -32,6 +32,12 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  Download,
+  ExternalLink,
+  Mail,
+  Phone,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -155,6 +161,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const [callsTotal, setCallsTotal] = useState<number>(0);
   const [callsSearchQuery, setCallsSearchQuery] = useState<string>('');
   const [callsBuyerFilter, setCallsBuyerFilter] = useState<string>('');
+  const [callsStartDateFrom, setCallsStartDateFrom] = useState<string>('');
+  const [callsStartDateTo, setCallsStartDateTo] = useState<string>('');
+  const [callsEndDateFrom, setCallsEndDateFrom] = useState<string>('');
+  const [callsEndDateTo, setCallsEndDateTo] = useState<string>('');
   const [isLoadingMoreCalls, setIsLoadingMoreCalls] = useState<boolean>(false);
 
   // Modal de Resumen IA de Pliego
@@ -205,12 +215,19 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState<boolean>(false);
   const [selectedSupplierDetail, setSelectedSupplierDetail] = useState<any | null>(null);
   const [isLoadingSupplierDetail, setIsLoadingSupplierDetail] = useState<boolean>(false);
+  const [isImportingCompetitor, setIsImportingCompetitor] = useState<boolean>(false);
+  const [importedCompetitorRuts, setImportedCompetitorRuts] = useState<Set<string>>(new Set());
 
   // =========================================================================
   // TAB 4: RADIOGRAFÍA DE COMPRADORES & INTENDENCIAS
   // =========================================================================
   const [buyersList, setBuyersList] = useState<ProcurementBuyerItem[]>([]);
   const [buyersSearchQuery, setBuyersSearchQuery] = useState<string>('');
+  const [buyerStartDate, setBuyerStartDate] = useState<string>('');
+  const [buyerEndDate, setBuyerEndDate] = useState<string>('');
+  const [selectedBuyerDetail, setSelectedBuyerDetail] = useState<any | null>(null);
+  const [isLoadingBuyerDetail, setIsLoadingBuyerDetail] = useState<boolean>(false);
+  const [isBuyerModalOpen, setIsBuyerModalOpen] = useState<boolean>(false);
   const [intendenciasData, setIntendenciasData] = useState<any | null>(null);
   const [isLoadingIntendencias, setIsLoadingIntendencias] = useState<boolean>(false);
 
@@ -277,6 +294,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
         q: callsSearchQuery.trim() || undefined,
         buyer: callsBuyerFilter.trim() || undefined,
         sort: 'closingSoon',
+        start_date_from: callsStartDateFrom || undefined,
+        start_date_to: callsStartDateTo || undefined,
+        end_date_from: callsEndDateFrom || undefined,
+        end_date_to: callsEndDateTo || undefined,
       });
 
       if (resp.success && resp.data) {
@@ -296,7 +317,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
       setIsLoadingCalls(false);
       setIsLoadingMoreCalls(false);
     }
-  }, [callsSearchQuery, callsBuyerFilter]);
+  }, [callsSearchQuery, callsBuyerFilter, callsStartDateFrom, callsStartDateTo, callsEndDateFrom, callsEndDateTo]);
 
   useEffect(() => {
     if (activeTab === 'radar' && openCalls.length === 0) {
@@ -597,6 +618,40 @@ export const TendersView: React.FC<TendersViewProps> = ({
     }
   };
 
+  const handleImportCompetitor = async (detail: any) => {
+    if (!detail) return;
+    setIsImportingCompetitor(true);
+    try {
+      const sName = detail.supplier?.name || detail.name || 'Proveedor Estatal';
+      const sRut = detail.rupe?.rut || detail.supplier?.supplierId || detail.rut || '';
+      const sContracts = detail.recentContracts || detail.contracts || [];
+
+      const res = await apiService.importCompetitorToSuppliers({
+        id: detail.supplier?.id || detail.id,
+        nombre: sName,
+        razon_social: detail.rupe?.razonSocial || sName,
+        rut: sRut,
+        rubro: detail.supplier?.topCategories?.[0] || 'Licitaciones & Suministros',
+        contracts: sContracts,
+      });
+
+      if (res.success) {
+        if (sRut) setImportedCompetitorRuts((prev) => new Set(prev).add(sRut));
+        setNotification({
+          type: 'success',
+          message: `¡Éxito! ${sName} homologado en Proveedores con ${res.imported_items_count} productos en su catálogo comercial.`,
+        });
+      }
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: err?.response?.data?.detail || 'Error al guardar el competidor en proveedores.',
+      });
+    } finally {
+      setIsImportingCompetitor(false);
+    }
+  };
+
   // =========================================================================
   // CARGAS PARA TAB 4: COMPRADORES & INTENDENCIAS
   // =========================================================================
@@ -619,6 +674,29 @@ export const TendersView: React.FC<TendersViewProps> = ({
       setIsLoadingIntendencias(false);
     }
   }, [buyersSearchQuery]);
+
+  const handleSelectBuyer = async (deptOrBuyer: any) => {
+    setIsLoadingBuyerDetail(true);
+    setSelectedBuyerDetail(null);
+    setIsBuyerModalOpen(true);
+    try {
+      const bId = deptOrBuyer.name || deptOrBuyer.id || deptOrBuyer.code;
+      const res = await apiService.getProcurementBuyerDetail(bId, {
+        start_date: buyerStartDate || undefined,
+        end_date: buyerEndDate || undefined,
+      });
+      if (res.success && res.data) {
+        setSelectedBuyerDetail(res.data);
+      }
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: 'No se pudo cargar la radiografía del organismo comprador.',
+      });
+    } finally {
+      setIsLoadingBuyerDetail(false);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'buyers' && buyersList.length === 0) {
@@ -784,7 +862,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               }`}
             >
               <Radio className="w-4 h-4" />
-              <span>Tab 1: 📡 Radar en Vivo</span>
+              <span>📡 Radar de Convocatorias</span>
             </button>
 
             <button
@@ -796,7 +874,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               }`}
             >
               <BarChart3 className="w-4 h-4" />
-              <span>Tab 2: 📊 Inteligencia de Precios SICE</span>
+              <span>🪙 Precios & SICE</span>
             </button>
 
             <button
@@ -808,7 +886,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Tab 3: 🕵️ Competidores (Proveedores)</span>
+              <span>🛡️ Competidores & Proveedores</span>
             </button>
 
             <button
@@ -820,7 +898,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               }`}
             >
               <Landmark className="w-4 h-4" />
-              <span>Tab 4: 🏛️ Compradores & Intendencias</span>
+              <span>🏛️ Compradores & Intendencias</span>
             </button>
 
             <button
@@ -832,7 +910,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               }`}
             >
               <Calendar className="w-4 h-4" />
-              <span>Tab 5: 📅 Vencimientos & Control Logístico</span>
+              <span>📅 Calendario & Logística MVD</span>
             </button>
 
             <button
@@ -933,6 +1011,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   onClick={() => {
                     setCallsSearchQuery('');
                     setCallsBuyerFilter('');
+                    setCallsStartDateFrom('');
+                    setCallsStartDateTo('');
+                    setCallsEndDateFrom('');
+                    setCallsEndDateTo('');
                     fetchRadarCalls(1, false);
                   }}
                   className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300"
@@ -940,6 +1022,57 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+
+            {/* Fila 2: Filtros por Fechas de Apertura y Cierre */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3.5 border-t border-slate-800 text-xs">
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  📅 Apertura Desde
+                </label>
+                <input
+                  type="date"
+                  value={callsStartDateFrom}
+                  onChange={(e) => setCallsStartDateFrom(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  📅 Apertura Hasta
+                </label>
+                <input
+                  type="date"
+                  value={callsStartDateTo}
+                  onChange={(e) => setCallsStartDateTo(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  ⏰ Cierre Desde
+                </label>
+                <input
+                  type="date"
+                  value={callsEndDateFrom}
+                  onChange={(e) => setCallsEndDateFrom(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  ⏰ Cierre Hasta
+                </label>
+                <input
+                  type="date"
+                  value={callsEndDateTo}
+                  onChange={(e) => setCallsEndDateTo(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
               </div>
             </div>
           </div>
@@ -954,7 +1087,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
             <div className="py-16 text-center bg-slate-900 border border-slate-800 rounded-2xl">
               <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-2" />
               <h3 className="text-base font-semibold text-white">No se hallaron convocatorias abiertas</h3>
-              <p className="text-xs text-slate-400 mt-1">Pruebe ampliando el criterio de búsqueda o seleccionando otro rubro.</p>
+              <p className="text-xs text-slate-400 mt-1">Pruebe ampliando el criterio de búsqueda o seleccionando otro rango de fechas.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -967,6 +1100,9 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 {openCalls.map((call) => {
                   const compraId = String(call.compraId);
                   const isSaved = savedTenders.some((s) => s.id === compraId);
+                  const startDateStr = (call.tenderPeriod?.startDate || (call as any).datePublished || (call as any).date)
+                    ? String(call.tenderPeriod?.startDate || (call as any).datePublished || (call as any).date).split('T')[0]
+                    : 'Sin fecha';
                   const endDateStr = call.tenderPeriod?.endDate ? call.tenderPeriod.endDate.split('T')[0] : 'Sin fecha';
 
                   return (
@@ -989,14 +1125,22 @@ export const TendersView: React.FC<TendersViewProps> = ({
                           {call.title}
                         </h3>
 
+                        {/* Fechas de Apertura y Cierre */}
+                        <div className="grid grid-cols-2 gap-2 text-xs py-2 px-3 bg-slate-800/60 rounded-xl border border-slate-700/60 my-2">
+                          <div className="flex items-center gap-1.5 text-slate-300">
+                            <Calendar className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span>Apertura: <strong className="text-emerald-300 font-mono">{startDateStr}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-slate-300">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            <span>Cierre: <strong className="text-amber-300 font-mono">{endDateStr}</strong></span>
+                          </div>
+                        </div>
+
                         <div className="space-y-1.5 text-xs text-slate-400 mb-4">
                           <div className="flex items-center gap-2">
                             <Building2 className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
                             <span className="truncate">{call.buyer?.name || 'Organismo Estatal'}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                            <span>Cierre de ofertas: <strong>{endDateStr}</strong></span>
                           </div>
                           {call.procurementMethodDetails && (
                             <div className="flex items-center gap-2">
@@ -1448,13 +1592,51 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 ) : selectedSupplierDetail ? (
                   <div className="space-y-4">
                     <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
-                      <h4 className="text-sm font-bold text-white">{selectedSupplierDetail.supplier?.name}</h4>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">
-                        RUT: {selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '-'}
-                      </p>
-                      <p className="text-xs text-emerald-400 font-semibold mt-1">
-                        Total Contratos: {selectedSupplierDetail.supplier?.totalContracts || 0}
-                      </p>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-bold text-white">{selectedSupplierDetail.supplier?.name}</h4>
+                          <p className="text-xs text-slate-400 font-mono mt-0.5">
+                            RUT: {selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '-'}
+                          </p>
+                          <p className="text-xs text-emerald-400 font-semibold mt-1">
+                            Total Contratos: {selectedSupplierDetail.supplier?.totalContracts || 0}
+                          </p>
+                        </div>
+                        {(() => {
+                          const rut = selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '';
+                          const isImported = rut && importedCompetitorRuts.has(rut);
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleImportCompetitor(selectedSupplierDetail)}
+                              disabled={isImportingCompetitor || isImported}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all shrink-0 ${
+                                isImported
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
+                                  : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-indigo-500/20'
+                              }`}
+                              title={isImported ? "Este competidor ya fue importado a Proveedores y Catálogo" : "Importar a Proveedores (Licitaciones) y Catálogo con todos sus contratos"}
+                            >
+                              {isImportingCompetitor ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Guardando...</span>
+                                </>
+                              ) : isImported ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span>✅ Homologado en Proveedores</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>📥 Guardar en Proveedores & Catálogo</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()}
+                      </div>
                     </div>
 
                     <div>
@@ -1584,23 +1766,98 @@ export const TendersView: React.FC<TendersViewProps> = ({
               Distribución de compra por comuna y modalidades de adjudicación (Compra Directa vs Licitación Abreviada vs Licitación Pública).
             </p>
 
-            <div className="flex gap-2 mb-6">
-              <input
-                type="text"
-                value={buyersSearchQuery}
-                onChange={(e) => setBuyersSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && fetchBuyersData()}
-                placeholder="Buscar organismo comprador o intendencia (ej. UTE, OSE, Intendencia de Canelones)..."
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500"
-              />
-              <button
-                onClick={fetchBuyersData}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl text-sm font-semibold flex items-center gap-2"
-              >
-                <Search className="w-4 h-4" />
-                <span>Buscar</span>
-              </button>
+            {/* Barra de Filtros y Búsqueda con Fechas */}
+            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 mb-6 space-y-3">
+              <div className="flex flex-col lg:flex-row gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={buyersSearchQuery}
+                    onChange={(e) => setBuyersSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchBuyersData()}
+                    placeholder="Buscar organismo comprador o intendencia (ej. UTE, OSE, Canelones)..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] text-slate-400 font-medium">Apertura:</span>
+                    <input
+                      type="date"
+                      value={buyerStartDate}
+                      onChange={(e) => setBuyerStartDate(e.target.value)}
+                      className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]"
+                      title="Fecha de Apertura Desde"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] text-slate-400 font-medium">Cierre:</span>
+                    <input
+                      type="date"
+                      value={buyerEndDate}
+                      onChange={(e) => setBuyerEndDate(e.target.value)}
+                      className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]"
+                      title="Fecha de Cierre Hasta"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchBuyersData}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shrink-0 transition-colors shadow-sm"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span>Filtrar</span>
+                  </button>
+                  {(buyerStartDate || buyerEndDate || buyersSearchQuery) && (
+                    <button
+                      onClick={() => {
+                        setBuyerStartDate('');
+                        setBuyerEndDate('');
+                        setBuyersSearchQuery('');
+                        setTimeout(fetchBuyersData, 50);
+                      }}
+                      className="text-slate-400 hover:text-white px-2.5 py-2 text-xs border border-slate-700 rounded-xl hover:bg-slate-800 transition-colors"
+                      title="Limpiar filtros"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
+
+            {/* Listado de Organismos Estatales Específicos Encontrados */}
+            {buyersList.length > 0 && (
+              <div className="mb-6 space-y-3">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-indigo-400" />
+                  <span>Organismos Públicos Encontrados ({buyersList.length})</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {buyersList.map((buyer: any, bIdx: number) => (
+                    <div
+                      key={bIdx}
+                      onClick={() => handleSelectBuyer(buyer)}
+                      className="p-3.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer transition-all hover:shadow-lg group"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <h5 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                          {buyer.name}
+                        </h5>
+                        <span className="text-xs font-bold text-emerald-400 font-mono shrink-0">
+                          ${formatCurrency(buyer.totalSpendingUYU || buyer.totalSpending || 0)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>{buyer.totalContracts || 0} contratos</span>
+                        <span className="text-indigo-400 group-hover:underline flex items-center gap-1">
+                          Ver Pliegos & Ficha ➔
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {isLoadingIntendencias ? (
               <div className="py-12 text-center text-slate-400">
@@ -1610,46 +1867,61 @@ export const TendersView: React.FC<TendersViewProps> = ({
             ) : intendenciasData?.departments ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {intendenciasData.departments.map((dept: any, idx: number) => (
-                  <div key={idx} className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-bold text-white">{dept.name}</h4>
-                      <span className="text-xs font-semibold text-emerald-400">
-                        ${formatCurrency(dept.totalSpendingUYU || dept.totalSpend || 0)} UYU
-                      </span>
+                  <div
+                    key={idx}
+                    onClick={() => handleSelectBuyer(dept)}
+                    className="p-4 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer transition-all hover:shadow-lg group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                          {dept.name}
+                        </h4>
+                        <span className="text-xs font-semibold text-emerald-400 font-mono">
+                          ${formatCurrency(dept.totalSpendingUYU || dept.totalSpend || 0)} UYU
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-slate-400 space-y-1">
+                        <div className="flex justify-between">
+                          <span>Contratos Registrados:</span>
+                          <strong className="text-white font-mono">{dept.totalContracts || 0}</strong>
+                        </div>
+                        {dept.methodsBreakdown && (
+                          <div className="mt-2 pt-2 border-t border-slate-700/60">
+                            <span className="text-[11px] text-slate-400 block mb-1">Modalidades de Compra:</span>
+                            <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden flex">
+                              <div
+                                style={{ width: `${dept.methodsBreakdown.publica || 30}%` }}
+                                className="bg-indigo-500 h-full"
+                                title="Licitación Pública"
+                              />
+                              <div
+                                style={{ width: `${dept.methodsBreakdown.abreviada || 40}%` }}
+                                className="bg-amber-500 h-full"
+                                title="Licitación Abreviada"
+                              />
+                              <div
+                                style={{ width: `${dept.methodsBreakdown.directa || 30}%` }}
+                                className="bg-emerald-500 h-full"
+                                title="Compra Directa"
+                              />
+                            </div>
+                            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                              <span>Pública</span>
+                              <span>Abreviada</span>
+                              <span>Directa</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="text-xs text-slate-400 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Contratos:</span>
-                        <strong className="text-white">{dept.totalContracts || 0}</strong>
-                      </div>
-                      {dept.methodsBreakdown && (
-                        <div className="mt-2 pt-2 border-t border-slate-700/60">
-                          <span className="text-[11px] text-slate-400 block mb-1">Modalidades de Compra:</span>
-                          <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden flex">
-                            <div
-                              style={{ width: `${dept.methodsBreakdown.publica || 30}%` }}
-                              className="bg-indigo-500 h-full"
-                              title="Licitación Pública"
-                            />
-                            <div
-                              style={{ width: `${dept.methodsBreakdown.abreviada || 40}%` }}
-                              className="bg-amber-500 h-full"
-                              title="Licitación Abreviada"
-                            />
-                            <div
-                              style={{ width: `${dept.methodsBreakdown.directa || 30}%` }}
-                              className="bg-emerald-500 h-full"
-                              title="Compra Directa"
-                            />
-                          </div>
-                          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                            <span>Pública</span>
-                            <span>Abreviada</span>
-                            <span>Directa</span>
-                          </div>
-                        </div>
-                      )}
+                    <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400">Expediente oficial</span>
+                      <span className="text-indigo-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                        Ver Contacto & Pliegos ➔
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -2561,6 +2833,205 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =================================================================== */}
+      {/* MODAL: RADIOGRAFÍA DE COMPRADOR / INTENDENCIA & DESCARGA DE PLIEGOS */}
+      {/* =================================================================== */}
+      {isBuyerModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header del Modal */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                  <Landmark className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    {selectedBuyerDetail?.name || 'Ficha del Organismo Comprador'}
+                  </h3>
+                  <span className="text-xs text-slate-400 font-mono">
+                    RUT: {selectedBuyerDetail?.rut || selectedBuyerDetail?.id || 'No registrado'}
+                    {selectedBuyerDetail?.department && ` • Comuna / Dpto: ${selectedBuyerDetail.department}`}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBuyerModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Contenido Scrollable */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs flex-1">
+              {isLoadingBuyerDetail ? (
+                <div className="py-24 text-center text-slate-400 space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-400" />
+                  <p className="font-semibold text-sm text-slate-200">
+                    Cargando expediente, datos de contacto y pliegos oficiales...
+                  </p>
+                  <p className="text-slate-500 text-xs">
+                    Consultando compras estatales y antecedentes licitatorios.
+                  </p>
+                </div>
+              ) : selectedBuyerDetail ? (
+                <div className="space-y-6">
+                  {/* Tarjetas de Datos de Contacto */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="p-3.5 bg-slate-800/70 border border-slate-700/60 rounded-xl space-y-1">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                        <Mail className="w-3.5 h-3.5 text-indigo-400" /> Email de Compras
+                      </span>
+                      <p className="text-xs font-semibold text-white truncate" title={selectedBuyerDetail.contact?.email || selectedBuyerDetail.email || 'compras@gub.uy'}>
+                        {selectedBuyerDetail.contact?.email || selectedBuyerDetail.email || 'compras@gub.uy'}
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-800/70 border border-slate-700/60 rounded-xl space-y-1">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400" /> Teléfono Central
+                      </span>
+                      <p className="text-xs font-semibold text-white">
+                        {selectedBuyerDetail.contact?.phone || selectedBuyerDetail.phone || '+598 2900 0000'}
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-800/70 border border-slate-700/60 rounded-xl space-y-1">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" /> Dirección Física
+                      </span>
+                      <p className="text-xs font-semibold text-white truncate" title={selectedBuyerDetail.contact?.address || selectedBuyerDetail.address || 'Montevideo, Uruguay'}>
+                        {selectedBuyerDetail.contact?.address || selectedBuyerDetail.address || 'Montevideo, Uruguay'}
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-800/70 border border-slate-700/60 rounded-xl space-y-1">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-medium">
+                        <Globe className="w-3.5 h-3.5 text-cyan-400" /> Portal Web Oficial
+                      </span>
+                      {selectedBuyerDetail.website || selectedBuyerDetail.contact?.website ? (
+                        <a
+                          href={selectedBuyerDetail.website || selectedBuyerDetail.contact?.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-indigo-400 hover:underline flex items-center gap-1 truncate"
+                        >
+                          <span>Visitar Portal</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : (
+                        <p className="text-xs font-semibold text-slate-400">gub.uy</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Resumen de Contrataciones */}
+                  <div className="flex flex-wrap items-center justify-between p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl gap-4">
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Total Contratos</span>
+                        <strong className="text-sm text-white font-mono">{selectedBuyerDetail.totalContracts || (selectedBuyerDetail.contracts || []).length}</strong>
+                      </div>
+                      <div className="h-6 w-px bg-slate-800" />
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Gasto Total Estimado</span>
+                        <strong className="text-sm text-emerald-400 font-mono">
+                          UYU ${formatCurrency(selectedBuyerDetail.totalSpend || selectedBuyerDetail.totalSpendingUYU || 0)}
+                        </strong>
+                      </div>
+                    </div>
+                    {(buyerStartDate || buyerEndDate) && (
+                      <div className="text-[11px] text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-lg">
+                        Filtro Activo: {buyerStartDate || 'Inicio'} ➔ {buyerEndDate || 'Fin'}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Listado de Contratos con Link a Pliego */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                      <span>Licitaciones y Contratos Registrados ({(selectedBuyerDetail.contracts || []).length})</span>
+                      <span className="text-[11px] text-slate-400 font-normal">Pliegos Oficiales SICE / Compras Estatales</span>
+                    </h4>
+
+                    {(selectedBuyerDetail.contracts || []).length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800/80">
+                        No se registraron contratos en el período seleccionado.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                        {(selectedBuyerDetail.contracts || []).map((contract: any, cIdx: number) => {
+                          const cTitle = contract.title || contract.description || `Licitación #${contract.id || cIdx + 1}`;
+                          const cDate = contract.date ? (typeof contract.date === 'string' && contract.date.includes('T') ? contract.date.split('T')[0] : String(contract.date)) : 'Fecha s/d';
+                          const cAmount = Number(contract.amount || contract.totalValue || 0);
+                          const cCurr = contract.currency || 'UYU';
+                          const pliegoUrl = contract.pliego_url || `https://www.comprasestatales.gub.uy/consultas/detalle/mostrar-llamado/id/${contract.id || contract.compra_id || ''}`;
+
+                          return (
+                            <div
+                              key={cIdx}
+                              className="p-3.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                            >
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-start gap-2">
+                                  <FileText className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                                  <div>
+                                    <h5 className="font-semibold text-white text-xs leading-snug">{cTitle}</h5>
+                                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1 font-mono">
+                                      <span>Fecha: {cDate}</span>
+                                      {contract.modalidad && (
+                                        <span className="bg-slate-900 px-1.5 py-0.5 rounded text-[10px] text-indigo-300 border border-slate-800">
+                                          {contract.modalidad}
+                                        </span>
+                                      )}
+                                      {cAmount > 0 && (
+                                        <span className="text-emerald-400 font-bold">
+                                          {cCurr} ${formatCurrency(cAmount)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 flex items-center gap-2">
+                                <a
+                                  href={pliegoUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-3 py-1.5 bg-indigo-600/90 hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                                  title="Ver o descargar el pliego oficial de bases y condiciones"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Pliego Oficial (PDF / DOC)</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-12">No se encontró detalle para este organismo.</p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex justify-end">
+              <button
+                onClick={() => setIsBuyerModalOpen(false)}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-semibold text-xs transition-colors"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

@@ -4789,8 +4789,15 @@ def list_suppliers(
                     Supplier.pais != "Uruguay",
                 )
             )
+        elif tipo_filter in ("LICITACIONES", "ESTATAL", "LICITACION", "CONTRATISTA_ESTATAL"):
+            query = query.filter(
+                or_(
+                    Supplier.tipo_proveedor.ilike("%licitacion%"),
+                    Supplier.tipo_proveedor.ilike("%estatal%"),
+                )
+            )
         else:
-            query = query.filter(Supplier.tipo_proveedor == tipo_filter)
+            query = query.filter(Supplier.tipo_proveedor.ilike(f"%{tipo_filter}%"))
 
     # Filtro por Rubro
     if rubro and rubro.strip() and rubro.strip().lower() != "todos":

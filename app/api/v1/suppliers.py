@@ -17,6 +17,7 @@ from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -557,3 +558,209 @@ async def get_supplier_catalog_tenders(
         "total_contracts": len(normalized_contracts),
         "contracts": normalized_contracts,
     }
+
+
+# =============================================================================
+# 4. INGESTA AUTOMATIZADA: COMPETIDOR -> PROVEEDOR & CATÁLOGO
+# =============================================================================
+
+class ImportCompetitorRequest(BaseModel):
+    id: Optional[str] = None
+    nombre: str
+    razon_social: Optional[str] = None
+    rut: Optional[str] = None
+    rubro: Optional[str] = "Licitaciones & Suministros"
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    contracts: Optional[List[Dict[str, Any]]] = None
+
+
+@router.post("/import-competitor")
+async def import_competitor_to_suppliers(
+    payload: ImportCompetitorRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Importa un competidor de compras estatales (SICE/ARCE) como proveedor homologado de Calcu.
+    Tipifica como 'licitaciones' y vuelca todos sus contratos y renglones adjudicados a su catálogo.
+    """
+    if not payload.nombre or not payload.nombre.strip():
+        raise HTTPException(status_code=400, detail="El nombre del proveedor es obligatorio.")
+
+    clean_rut = (payload.rut or "").strip()
+    supplier = None
+    if clean_rut:
+        supplier = db.query(Supplier).filter(Supplier.rut == clean_rut).first()
+
+    if not supplier and payload.nombre:
+        supplier = db.query(Supplier).filter(Supplier.nombre.ilike(payload.nombre.strip())).first()
+
+    if supplier:
+        # Actualizar a tipo licitaciones si no lo tiene
+        supplier.tipo_proveedor = "licitaciones"
+        if payload.razon_social and not supplier.razon_social:
+            supplier.razon_social = payload.razon_social
+        if clean_rut and not supplier.rut:
+            supplier.rut = clean_rut
+        if payload.rubro and (not supplier.rubro or supplier.rubro in ("General", "Iluminación")):
+            supplier.rubro = payload.rubro
+        if payload.email and not supplier.email:
+            supplier.email = payload.email
+        if payload.phone and not supplier.phone:
+            supplier.phone = payload.phone
+        if payload.address and not supplier.address:
+            supplier.address = payload.address
+    else:
+        supplier = Supplier(
+            nombre=payload.nombre.strip(),
+            razon_social=payload.razon_social or payload.nombre.strip(),
+            rut=clean_rut or None,
+            tipo_proveedor="licitaciones",
+            rubro=payload.rubro or "Licitaciones & Suministros",
+            condicion_pago="30 días",
+            pais="Uruguay",
+            email=payload.email or f"compras@{re.sub(r'[^a-zA-Z0-9]', '', payload.nombre.lower())}.com.uy",
+            phone=payload.phone or "+598 2900 0000",
+            address=payload.address or "Montevideo, Uruguay",
+            logo_url="https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=120&auto=format&fit=crop&q=80",
+        )
+        db.add(supplier)
+        db.flush()
+
+    # Obtener contratos del payload o consultar API remota
+    contracts_to_process = payload.contracts or []
+    if not contracts_to_process and payload.id:
+        try:
+            remote_detail = await procurement_client.get_supplier_detail(payload.id)
+            if remote_detail.get("success") and remote_detail.get("data"):
+                data_obj = remote_detail["data"]
+                contracts_to_process = data_obj.get("recentContracts") or data_obj.get("contracts") or []
+        except Exception as exc:
+            logger.warning("No se pudo obtener detalle remoto adicional para competidor: %s", exc)
+
+    imported_items_count = 0
+    now = datetime.now(timezone.utc)
+
+    for c_idx, c in enumerate(contracts_to_process):
+        # Extraer renglones/ítems adjudicados
+        items_list = c.get("items") or []
+        if not items_list and c.get("awards"):
+            first_award = c["awards"][0] if isinstance(c["awards"], list) and len(c["awards"]) > 0 else {}
+            items_list = first_award.get("items") or []
+
+        buyer_name = c.get("buyerName") or (c.get("buyer") or {}).get("name") or "Organismo Estatal"
+        contract_title = c.get("title") or f"Contrato de Suministro #{c_idx+1}"
+
+        if not items_list:
+            # Si el contrato no tiene desglose de ítems, creamos un ítem representativo del contrato
+            c_amount = _to_decimal(c.get("amount") or 0)
+            if c_amount > Decimal("0.00"):
+                item_sku = f"LIC-{supplier.id}-{c_idx+1}"
+                existing_item = db.query(SupplierCatalogItem).filter(
+                    SupplierCatalogItem.supplier_id == supplier.id,
+                    SupplierCatalogItem.sku_proveedor == item_sku,
+                ).first()
+
+                cost = c_amount
+                pvm = (cost * Decimal("1.15")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                pvp = (cost * Decimal("1.30")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+                if existing_item:
+                    existing_item.nombre = f"{contract_title} ({buyer_name})"[:250]
+                    existing_item.costo_compra = cost
+                    existing_item.precio_venta_comercios = pvm
+                    existing_item.precio_venta_publico = pvp
+                    existing_item.updated_at = now
+                else:
+                    new_item = SupplierCatalogItem(
+                        supplier_id=supplier.id,
+                        sku_proveedor=item_sku,
+                        sku_calcu=None,
+                        nombre=f"{contract_title} ({buyer_name})"[:250],
+                        rubro=supplier.rubro or "Licitaciones",
+                        costo_compra=cost,
+                        precio_venta_comercios=pvm,
+                        precio_venta_publico=pvp,
+                        stock_estimado="Contrato Estatal / SICE",
+                        updated_at=now,
+                    )
+                    db.add(new_item)
+                imported_items_count += 1
+            continue
+
+        for i_idx, itm in enumerate(items_list):
+            desc = itm.get("description") or itm.get("name") or f"Renglón #{i_idx+1}"
+            u_price = _to_decimal(
+                itm.get("unitPrice") or
+                itm.get("unit", {}).get("value", {}).get("amount") or
+                itm.get("totalPrice") or 0
+            )
+            raw_sku = itm.get("id") or itm.get("siceCode") or f"{c_idx+1}-{i_idx+1}"
+            item_sku = f"LIC-{supplier.id}-{raw_sku}"[:95]
+
+            # Si el precio unitario es 0, intentar calcular por total / cantidad
+            if u_price <= Decimal("0.00") and itm.get("totalPrice") and itm.get("quantity"):
+                try:
+                    qty = Decimal(str(itm.get("quantity")))
+                    if qty > 0:
+                        u_price = (_to_decimal(itm["totalPrice"]) / qty).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                except Exception:
+                    pass
+
+            if u_price <= Decimal("0.00"):
+                u_price = Decimal("100.0000")  # Valor base referencial
+
+            cost = u_price
+            pvm = (cost * Decimal("1.15")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            pvp = (cost * Decimal("1.30")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+            existing_item = db.query(SupplierCatalogItem).filter(
+                SupplierCatalogItem.supplier_id == supplier.id,
+                SupplierCatalogItem.sku_proveedor == item_sku,
+            ).first()
+
+            item_name = f"{desc} [{buyer_name}]"[:250]
+            if existing_item:
+                existing_item.nombre = item_name
+                existing_item.costo_compra = cost
+                existing_item.precio_venta_comercios = pvm
+                existing_item.precio_venta_publico = pvp
+                existing_item.rubro = supplier.rubro or "Licitaciones"
+                existing_item.stock_estimado = "Contrato Estatal / SICE"
+                existing_item.updated_at = now
+            else:
+                new_item = SupplierCatalogItem(
+                    supplier_id=supplier.id,
+                    sku_proveedor=item_sku,
+                    sku_calcu=None,
+                    nombre=item_name,
+                    rubro=supplier.rubro or "Licitaciones",
+                    costo_compra=cost,
+                    precio_venta_comercios=pvm,
+                    precio_venta_publico=pvp,
+                    stock_estimado="Contrato Estatal / SICE",
+                    updated_at=now,
+                )
+                db.add(new_item)
+            imported_items_count += 1
+
+    db.commit()
+    db.refresh(supplier)
+
+    return {
+        "success": True,
+        "message": f"Proveedor '{supplier.nombre}' homologado en Calcu como Contratista Estatal con {imported_items_count} ítems en catálogo.",
+        "supplier": {
+            "id": supplier.id,
+            "nombre": supplier.nombre,
+            "razon_social": supplier.razon_social,
+            "rut": supplier.rut,
+            "tipo_proveedor": supplier.tipo_proveedor,
+            "rubro": supplier.rubro,
+            "catalog_items_count": len(supplier.catalog_items),
+        },
+        "imported_items_count": imported_items_count,
+        "imported_contracts_count": len(contracts_to_process),
+    }
+

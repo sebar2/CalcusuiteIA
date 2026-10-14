@@ -11,7 +11,7 @@ export const TendersBenchmarksView: React.FC<ModularTendersViewProps> = ({ engin
   return (
     <TendersView
       initialTab="benchmarks"
-      hideTabBar={false}
+      hideTabBar={true}
       engineMode={engineMode}
       currentRole={currentRole}
     />

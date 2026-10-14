@@ -11,7 +11,7 @@ export const TendersRadarView: React.FC<ModularTendersViewProps> = ({ engineMode
   return (
     <TendersView
       initialTab="radar"
-      hideTabBar={false}
+      hideTabBar={true}
       engineMode={engineMode}
       currentRole={currentRole}
     />

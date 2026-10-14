@@ -11,7 +11,7 @@ export const TendersQuoterView: React.FC<ModularTendersViewProps> = ({ engineMod
   return (
     <TendersView
       initialTab="cotizador"
-      hideTabBar={false}
+      hideTabBar={true}
       engineMode={engineMode}
       currentRole={currentRole}
     />

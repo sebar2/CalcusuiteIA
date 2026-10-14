@@ -11,7 +11,7 @@ export const TendersCalendarView: React.FC<ModularTendersViewProps> = ({ engineM
   return (
     <TendersView
       initialTab="calendar"
-      hideTabBar={false}
+      hideTabBar={true}
       engineMode={engineMode}
       currentRole={currentRole}
     />

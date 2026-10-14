@@ -97,6 +97,27 @@ export const SupplierCatalogsView: React.FC<SupplierCatalogsViewProps> = ({ init
     fetchSuppliers();
   }, [initialSupplierId]);
 
+  // Proveedores a mostrar según el modo activo (Licitaciones filtra contratistas)
+  const displayedSuppliers = useMemo(() => {
+    if (activeMode === 'tenders') {
+      const tenderSuppliers = suppliers.filter(
+        (s) => s.tipo_proveedor === 'licitaciones' || (s.catalog_items_count && s.catalog_items_count > 0)
+      );
+      return tenderSuppliers.length > 0 ? tenderSuppliers : suppliers;
+    }
+    return suppliers;
+  }, [suppliers, activeMode]);
+
+  // Sincronizar selección al cambiar modo si el proveedor no está en la lista filtrada
+  useEffect(() => {
+    if (displayedSuppliers.length > 0) {
+      const exists = displayedSuppliers.some((s) => s.id === selectedSupplierId);
+      if (!exists) {
+        setSelectedSupplierId(displayedSuppliers[0].id);
+      }
+    }
+  }, [displayedSuppliers, selectedSupplierId]);
+
   // Proveedor seleccionado actual
   const currentSupplier = useMemo(() => {
     return suppliers.find((s) => s.id === selectedSupplierId) || null;
@@ -333,9 +354,9 @@ export const SupplierCatalogsView: React.FC<SupplierCatalogsViewProps> = ({ init
               aria-label="Seleccionar Proveedor Estratégico"
               className="w-full pl-3 pr-8 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none shadow-sm cursor-pointer"
             >
-              {suppliers.map((s) => (
+              {displayedSuppliers.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.nombre} {s.rut ? `(RUT: ${s.rut})` : ''} - {s.rubro || 'General'}
+                  {s.tipo_proveedor === 'licitaciones' ? '🏛️ ' : ''}{s.nombre} {s.rut ? `(RUT: ${s.rut})` : ''} - {s.rubro || 'General'}
                 </option>
               ))}
             </select>

@@ -1159,6 +1159,10 @@ export const apiService = {
     method?: string;
     sort?: string;
     ends_before?: string;
+    start_date_from?: string;
+    start_date_to?: string;
+    end_date_from?: string;
+    end_date_to?: string;
   }): Promise<ProcurementCallsResponse> {
     const res = await apiClient.get<ProcurementCallsResponse>('/api/v1/procurement/open-calls', { params });
     return res.data;
@@ -1291,6 +1295,32 @@ export const apiService = {
 
   async getProcurementIntendencias(): Promise<ProcurementIntendenciasResponse> {
     const res = await apiClient.get<ProcurementIntendenciasResponse>('/api/v1/procurement/intendencias');
+    return res.data;
+  },
+
+  async getProcurementBuyerDetail(buyerId: string, params?: { start_date?: string; end_date?: string }): Promise<any> {
+    const res = await apiClient.get<any>(`/api/v1/procurement/buyers/${encodeURIComponent(buyerId)}`, { params });
+    return res.data;
+  },
+
+  async importCompetitorToSuppliers(payload: {
+    id?: string;
+    nombre: string;
+    razon_social?: string;
+    rut?: string;
+    rubro?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    contracts?: any[];
+  }): Promise<{
+    success: boolean;
+    message: string;
+    supplier: any;
+    imported_items_count: number;
+    imported_contracts_count: number;
+  }> {
+    const res = await apiClient.post('/api/v1/suppliers/import-competitor', payload);
     return res.data;
   },
 
