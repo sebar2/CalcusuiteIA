@@ -1786,3 +1786,397 @@ export interface ArbitrageScanResponse {
   summary_metrics: ArbitrageSummaryMetrics;
   items: ArbitrageItemResponse[];
 }
+
+
+// =====================================================================
+// HUB DE LICITACIONES E INTELIGENCIA ESTATAL B2B (URUGUAY PROCUREMENT API)
+// =====================================================================
+
+export interface ProcurementCallItem {
+  _id?: string;
+  compraId: number | string;
+  title: string;
+  buyer?: {
+    id?: string;
+    name?: string;
+  };
+  procuringEntity?: {
+    id?: string;
+    name?: string;
+  };
+  status?: string;
+  publishDate?: string;
+  firstSeenAt?: string;
+  tenderPeriod?: {
+    startDate?: string;
+    endDate?: string;
+  };
+  procurementMethodDetails?: string;
+  classificationSet?: string[];
+  ocid?: string;
+  amount?: number;
+  currency?: string;
+}
+
+export interface ProcurementCallsResponse {
+  success: boolean;
+  data: {
+    calls: ProcurementCallItem[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages?: number;
+    };
+  };
+  message?: string;
+}
+
+export interface ProcurementCallSummaryData {
+  objeto?: string;
+  requisitosClave?: string | string[];
+  documentacionRequerida?: string | string[];
+  formaCotizacion?: string;
+  plazos?: string | {
+    recepcionOfertas?: string;
+    aperturaOfertas?: string;
+    consultas?: string;
+    [key: string]: any;
+  };
+  plazoEjecucion?: string;
+  garantias?: string | Record<string, any>;
+  criteriosEvaluacion?: string | string[];
+  montoReferencia?: string;
+  observaciones?: string | string[];
+  model?: string;
+  generatedAt?: string;
+  sourceDocs?: string[];
+  disclaimer?: string;
+  docsSignature?: string;
+}
+
+export interface ProcurementCallSummaryResponse {
+  success: boolean;
+  data: {
+    available: boolean;
+    summary?: ProcurementCallSummaryData;
+    stale?: boolean;
+    generating?: boolean;
+  };
+}
+
+export interface ProcurementBaselineItem {
+  currency: string;
+  unitName: string;
+  n: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+}
+
+export interface ProcurementSupplierWinSummary {
+  id: string;
+  name: string;
+  spendUYU: number;
+  lines: number;
+}
+
+export interface ProcurementBuyerSummary {
+  id: string;
+  name: string;
+  spendUYU: number;
+  lines: number;
+}
+
+export interface ProcurementBenchmarkItem {
+  classificationId?: string;
+  siceCode?: string;
+  codigoArticulo?: string;
+  label: string;
+  description?: string;
+  descripcion?: string;
+  product?: {
+    contractCount?: number;
+    buyerCount?: number;
+    supplierCount?: number;
+    totalUYU?: number;
+    firstYear?: number;
+    lastYear?: number;
+    topSuppliers?: ProcurementSupplierWinSummary[];
+    topBuyers?: ProcurementBuyerSummary[];
+  };
+  priceBaselines?: ProcurementBaselineItem[];
+  medianValue?: number;
+  precioMediano?: number;
+  minValue?: number;
+  maxValue?: number;
+  currency?: string;
+  unitName?: string;
+  sampleCount?: number;
+  contractCount?: number;
+  totalContratos?: number;
+  topSuppliers?: ProcurementSupplierWinSummary[];
+  recentContracts?: Array<{
+    id?: string;
+    name?: string;
+    proveedor?: string;
+    organismo?: string;
+    buyer?: string;
+    fecha?: string;
+    precio?: number;
+    spendUYU?: number;
+    lines?: number;
+  }>;
+  topBuyers?: ProcurementBuyerSummary[];
+  hasHistory?: boolean;
+}
+
+export interface ProcurementCallBenchmarksResponse {
+  success: boolean;
+  compraId?: string;
+  data: {
+    compraId?: string;
+    benchmarks?: ProcurementBenchmarkItem[];
+    items?: ProcurementBenchmarkItem[];
+  };
+}
+
+export interface ProcurementTechnicalOpinionRequest {
+  vertical_id?: string;
+  model?: string;
+  custom_notes?: string;
+  titulo?: string;
+  organismo?: string;
+  monto_estimado?: number;
+  plazo_entrega_dias?: number;
+  summary?: any;
+  benchmarks?: any;
+}
+
+export interface ProcurementTechnicalOpinionResponse {
+  compra_id: string;
+  vertical_id: string;
+  perito_rol: string;
+  perito_nombre: string;
+  dictamen_markdown: string;
+  viable: boolean;
+  alerta_riesgo?: string | null;
+  fuente_ia: string;
+}
+
+export interface ProcurementSaveTrackingPayload {
+  compra_id: string;
+  proyecto_nombre: string;
+  cliente_licitacion: string;
+  nicho?: string;
+  fecha_apertura?: string;
+  plazo_entrega_dias?: number;
+  moneda?: string;
+  monto_referencia?: number;
+  pliego_url?: string;
+  observaciones?: string;
+}
+
+export interface ProcurementCompetitiveMarkupRequest {
+  sku?: string;
+  costo_nacionalizado?: number;
+  product_code?: string;
+  precio_mediana_sice?: number;
+  moneda?: string;
+  cantidad_solicitada?: number;
+  tasa_cambio_brou?: number;
+  descuento_estrategico_pct?: number;
+}
+
+export interface ProcurementCompetitiveMarkupResponse {
+  sku?: string;
+  product_code?: string;
+  descripcion_producto?: string;
+  costo_nacionalizado_mvd: number;
+  precio_mediana_sice: number;
+  precio_ganador_sugerido: number;
+  rango_competitivo_min: number;
+  rango_competitivo_max: number;
+  markup_pct: number;
+  margen_bruto_pct: number;
+  contribucion_unitaria: number;
+  contribucion_total: number;
+  moneda: string;
+  probabilidad_ganar: 'ALTA' | 'MEDIA' | 'RIESGOSA' | string;
+  diagnostico_estrategico: string;
+}
+
+export interface ProcurementProductItem {
+  _id?: string;
+  code: string;
+  description: string;
+  canonicalName?: string;
+  lineCount?: number;
+  contractCount?: number;
+  buyerCount?: number;
+  supplierCount?: number;
+  totalUYU?: number;
+  currencies?: string[];
+  unitName?: string;
+  rubroPath?: string;
+  famiName?: string;
+  subfName?: string;
+  clasName?: string;
+  subcName?: string;
+  priceUnits?: any[];
+}
+
+export interface ProcurementProductsResponse {
+  success: boolean;
+  data: {
+    products: ProcurementProductItem[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages?: number;
+    };
+  };
+}
+
+export interface ProcurementProductDetailResponse {
+  success: boolean;
+  data: ProcurementProductItem & {
+    topBuyers?: Array<{ buyerId: string; name: string; totalUYU: number; contractCount: number }>;
+    topSuppliers?: Array<{ supplierId: string; name: string; totalUYU: number; contractCount: number }>;
+    byYear?: Array<{ year: number; totalUYU: number; contractCount: number }>;
+    variants?: any[];
+  };
+}
+
+export interface ProcurementSupplierItem {
+  _id?: string;
+  id?: string;
+  supplierId?: string;
+  name: string;
+  totalValue?: number;
+  totalAmount?: number;
+  totalContracts?: number;
+  transactionCount?: number;
+  avgContractValue?: number;
+  rank?: number;
+  category?: string;
+  description?: string;
+  buyerCount?: number;
+  buyers?: any[];
+  topCategories?: any[];
+}
+
+export interface ProcurementSuppliersResponse {
+  success: boolean;
+  data: {
+    suppliers: ProcurementSupplierItem[];
+    pagination?: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages?: number;
+    };
+  };
+}
+
+export interface ProcurementSupplierDetailResponse {
+  success: boolean;
+  data: {
+    supplier: ProcurementSupplierItem;
+    dei?: any;
+    rupe?: {
+      rut?: string;
+      razonSocial?: string;
+      estado?: string;
+      vigencia?: string;
+    };
+    contact?: any;
+    recentContracts?: Array<{
+      id?: string;
+      compraId?: string;
+      title?: string;
+      buyerName?: string;
+      amount?: number;
+      currency?: string;
+      date?: string;
+      method?: string;
+    }>;
+  };
+}
+
+export interface ProcurementBuyerItem {
+  _id?: string;
+  buyerId?: string;
+  name: string;
+  totalSpending?: number;
+  totalContracts?: number;
+  supplierCount?: number;
+  avgContractValue?: number;
+  topCategories?: any[];
+}
+
+export interface ProcurementBuyersResponse {
+  success: boolean;
+  data: {
+    buyers: ProcurementBuyerItem[];
+    pagination?: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages?: number;
+    };
+  };
+}
+
+export interface ProcurementIntendenciasResponse {
+  success: boolean;
+  data: {
+    departments: Array<{
+      name: string;
+      code?: string;
+      totalSpendingUYU?: number;
+      totalSpend?: number;
+      totalContracts?: number;
+      methodsBreakdown?: {
+        directa?: number;
+        abreviada?: number;
+        publica?: number;
+      };
+      topSuppliers?: Array<{ name: string; totalUYU: number }>;
+    }>;
+    byYear?: any[];
+    national?: any;
+    calculatedAt?: string;
+  };
+}
+
+export interface ProcurementCalendarItem {
+  compraId: string;
+  title: string;
+  buyer: string;
+  status: string;
+  endDate: string;
+  sourceUrl?: string;
+  saved: boolean;
+  matched: boolean;
+  category?: string[];
+  dias_restantes?: number;
+  semaforo_logistico: 'VERDE' | 'AMARILLO' | 'ROJO';
+  semaforo_color: 'emerald' | 'amber' | 'rose' | string;
+  diagnostico_logistico: string;
+  stock_mvd_disponible: number;
+  stock_transito: number;
+}
+
+export interface ProcurementCalendarResponse {
+  success: boolean;
+  data: {
+    items: ProcurementCalendarItem[];
+    total: number;
+    deposito_central_mvd_unidades: number;
+    transito_maritimo_unidades: number;
+    timestamp?: string;
+  };
+}

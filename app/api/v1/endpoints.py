@@ -2326,6 +2326,9 @@ def import_tender_feed_item(
 )
 def list_bidding_verticals(db: Session = Depends(get_db)):
     verticals = db.query(BiddingVertical).filter(BiddingVertical.activo == True).all()  # noqa: E712
+    if not verticals:
+        ETLService.seed_bidding_verticals(db)
+        verticals = db.query(BiddingVertical).filter(BiddingVertical.activo == True).all()  # noqa: E712
     results = []
     for v in verticals:
         kw_count = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == v.id).count()
@@ -2427,6 +2430,11 @@ def update_bidding_vertical(
     summary="Obtiene las palabras clave de inclusión y exclusión de un rubro comercial"
 )
 def get_bidding_keywords(vertical_id: str, db: Session = Depends(get_db)):
+    vert = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
+    if not vert:
+        ETLService.seed_bidding_verticals(db)
+        vert = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
+
     kws = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == vertical_id).order_by(BiddingKeyword.tipo.desc(), BiddingKeyword.keyword.asc()).all()
     return [
         BiddingKeywordItem(
@@ -2453,7 +2461,21 @@ def add_bidding_keywords(
 ):
     vert = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
     if not vert:
-        raise HTTPException(status_code=404, detail="Vertical no encontrada.")
+        ETLService.seed_bidding_verticals(db)
+        vert = db.query(BiddingVertical).filter(BiddingVertical.id == vertical_id).first()
+        if not vert:
+            vert = BiddingVertical(
+                id=vertical_id.strip().upper(),
+                nombre=vertical_id.replace("_", " ").title(),
+                icon="📋",
+                color_badge="blue",
+                descripcion=f"Rubro comercial {vertical_id}",
+                activo=True,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(vert)
+            db.commit()
+            db.refresh(vert)
 
     tipo = (payload.tipo or "INCLUSION").upper()
     peso = Decimal(str(payload.peso or 1.0))

@@ -103,7 +103,7 @@ def test_tenders_feed_service_uses_cache():
     assert feed1.status == "success"
 
     # Verificar presencia en memory_cache
-    cache_key = "tenders:live_feed:TODAS:luminaria"
+    cache_key = "tenders:live_feed:TODAS:luminaria:default:0:20"
     assert memory_cache.is_valid(cache_key) is True
 
     # Segunda consulta inmediata

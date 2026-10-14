@@ -109,6 +109,21 @@ import type {
   MluCategoryInfo,
   ArbitrageScanRequest,
   ArbitrageScanResponse,
+  ProcurementCallsResponse,
+  ProcurementCallSummaryResponse,
+  ProcurementCallBenchmarksResponse,
+  ProcurementTechnicalOpinionRequest,
+  ProcurementTechnicalOpinionResponse,
+  ProcurementSaveTrackingPayload,
+  ProcurementCompetitiveMarkupRequest,
+  ProcurementCompetitiveMarkupResponse,
+  ProcurementProductsResponse,
+  ProcurementProductDetailResponse,
+  ProcurementSuppliersResponse,
+  ProcurementSupplierDetailResponse,
+  ProcurementBuyersResponse,
+  ProcurementIntendenciasResponse,
+  ProcurementCalendarResponse,
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -1015,6 +1030,162 @@ export const apiService = {
       }),
       `Arbitraje_MLU_Alibaba_${catSuffix}_${nowStr}.xlsx`
     );
+  },
+
+  // =====================================================================
+  // HUB DE LICITACIONES E INTELIGENCIA ESTATAL B2B (URUGUAY PROCUREMENT API)
+  // =====================================================================
+  async getProcurementOpenCalls(params?: {
+    limit?: number;
+    offset?: number;
+    page?: number;
+    q?: string;
+    buyer?: string;
+    category?: string;
+    method?: string;
+    sort?: string;
+    ends_before?: string;
+  }): Promise<ProcurementCallsResponse> {
+    const res = await apiClient.get<ProcurementCallsResponse>('/api/v1/procurement/open-calls', { params });
+    return res.data;
+  },
+
+  async getProcurementCallSummary(compraId: string | number): Promise<ProcurementCallSummaryResponse> {
+    const res = await apiClient.get<ProcurementCallSummaryResponse>(`/api/v1/procurement/open-calls/${compraId}/summary`);
+    return res.data;
+  },
+
+  async getProcurementCallBenchmarks(compraId: string | number): Promise<ProcurementCallBenchmarksResponse> {
+    const res = await apiClient.get<ProcurementCallBenchmarksResponse>(`/api/v1/procurement/open-calls/${compraId}/benchmarks`);
+    return res.data;
+  },
+
+  async getProcurementTechnicalOpinion(
+    compraId: string | number,
+    payload: ProcurementTechnicalOpinionRequest
+  ): Promise<ProcurementTechnicalOpinionResponse> {
+    const res = await apiClient.post<ProcurementTechnicalOpinionResponse>(
+      `/api/v1/procurement/open-calls/${compraId}/technical-opinion`,
+      payload
+    );
+    return res.data;
+  },
+
+  async auditExpertTender(
+    compraId: string | number,
+    payload: ProcurementTechnicalOpinionRequest
+  ): Promise<ProcurementTechnicalOpinionResponse> {
+    const res = await apiClient.post<ProcurementTechnicalOpinionResponse>(
+      `/api/v1/procurement/open-calls/${compraId}/audit-expert`,
+      payload
+    );
+    return res.data;
+  },
+
+  async saveProcurementTracking(
+    compraId: string | number,
+    payload: ProcurementSaveTrackingPayload
+  ): Promise<{ status: string; message: string }> {
+    const res = await apiClient.post<{ status: string; message: string }>(
+      `/api/v1/procurement/open-calls/${compraId}/save-tracking`,
+      payload
+    );
+    return res.data;
+  },
+
+  async getProcurementSavedTracking(): Promise<any[]> {
+    const res = await apiClient.get<any[]>('/api/v1/procurement/saved-tracking');
+    return res.data;
+  },
+
+  async deleteProcurementSavedTracking(tenderId: string): Promise<{ status: string; message: string }> {
+    const res = await apiClient.delete<{ status: string; message: string }>(
+      `/api/v1/procurement/saved-tracking/${tenderId}`
+    );
+    return res.data;
+  },
+
+  async getProcurementProducts(params?: {
+    q?: string;
+    page?: number;
+    limit?: number;
+    sort_by?: string;
+  }): Promise<ProcurementProductsResponse> {
+    const res = await apiClient.get<ProcurementProductsResponse>('/api/v1/procurement/products', { params });
+    return res.data;
+  },
+
+  async getProcurementProductDetail(code: string): Promise<ProcurementProductDetailResponse> {
+    const res = await apiClient.get<ProcurementProductDetailResponse>(`/api/v1/procurement/products/${encodeURIComponent(code)}`);
+    return res.data;
+  },
+
+  async calculateCompetitiveMarkup(
+    payload: ProcurementCompetitiveMarkupRequest
+  ): Promise<ProcurementCompetitiveMarkupResponse> {
+    const res = await apiClient.post<ProcurementCompetitiveMarkupResponse>(
+      '/api/v1/procurement/competitive-markup',
+      payload
+    );
+    return res.data;
+  },
+
+  async getProcurementSuppliers(params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sort_by?: string;
+    sort_order?: string;
+  }): Promise<ProcurementSuppliersResponse> {
+    const res = await apiClient.get<ProcurementSuppliersResponse>('/api/v1/procurement/suppliers', { params });
+    return res.data;
+  },
+
+  async getProcurementSuppliersAutocomplete(
+    search: string,
+    limit: number = 10
+  ): Promise<{ success: boolean; data: Array<{ value: string; label: string; meta?: any }> }> {
+    const res = await apiClient.get<{ success: boolean; data: Array<{ value: string; label: string; meta?: any }> }>(
+      '/api/v1/procurement/suppliers/autocomplete',
+      { params: { search, limit } }
+    );
+    return res.data;
+  },
+
+  async getProcurementTopSuppliers(limit: number = 15, year?: number): Promise<any> {
+    const res = await apiClient.get<any>('/api/v1/procurement/suppliers/top', { params: { limit, year } });
+    return res.data;
+  },
+
+  async getProcurementSupplierDetail(supplierId: string): Promise<ProcurementSupplierDetailResponse> {
+    const res = await apiClient.get<ProcurementSupplierDetailResponse>(
+      `/api/v1/procurement/suppliers/${encodeURIComponent(supplierId)}`
+    );
+    return res.data;
+  },
+
+  async getProcurementBuyers(params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sort_by?: string;
+    sort_order?: string;
+  }): Promise<ProcurementBuyersResponse> {
+    const res = await apiClient.get<ProcurementBuyersResponse>('/api/v1/procurement/buyers', { params });
+    return res.data;
+  },
+
+  async getProcurementIntendencias(): Promise<ProcurementIntendenciasResponse> {
+    const res = await apiClient.get<ProcurementIntendenciasResponse>('/api/v1/procurement/intendencias');
+    return res.data;
+  },
+
+  async getProcurementCalendar(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Promise<ProcurementCalendarResponse> {
+    const res = await apiClient.get<ProcurementCalendarResponse>('/api/v1/procurement/calendar', { params });
+    return res.data;
   },
 };
 

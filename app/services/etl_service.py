@@ -37,8 +37,11 @@ from app.models.entities import (
     SalesOrder,
     SalesOrderItem,
     CommercialDeal,
-    CommercialDealItem
+    CommercialDealItem,
+    BiddingVertical,
+    BiddingKeyword
 )
+from datetime import timezone
 
 class ETLService:
     MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # Límite estricto de 10 MB
@@ -1135,5 +1138,140 @@ class ETLService:
                     estado=est,
                     origen=orig
                 ))
+
+        # -------------------------------------------------------------
+        # 4. Sembrar Verticales de Licitaciones B2B & Palabras Clave
+        # -------------------------------------------------------------
+        cls.seed_bidding_verticals(db)
+
+        db.commit()
+
+    @classmethod
+    def seed_bidding_verticals(cls, db: Session) -> None:
+        """Carga las 7 verticales comerciales canónicas y sus palabras clave si la tabla está vacía."""
+        if db.query(BiddingVertical).count() > 0:
+            return
+
+        verticals_seed = [
+            ("ILUMINACION_EFICIENCIA", "Iluminación & Eficiencia Energética", "💡", "amber", "Luminarias LED, proyectores, alumbrado público, drivers DALI, fotocélulas, columnas y balastos."),
+            ("MOBILIARIO_EQUIPAMIENTO", "Mobiliario Corporativo & Equipamiento", "🪑", "indigo", "Mobiliario de oficina, puestos operativos, sillas ergonómicas, armarios metálicos y mostradores."),
+            ("OBRA_CIVIL_CONSTRUCCION", "Obra Civil & Construcción", "🏗️", "orange", "Albañilería, hormigón, yeso, cielorrasos, impermeabilización, tabiquería y refacciones edilicias."),
+            ("ELECTROMECANICA_SUMINISTROS", "Suministros Electromecánicos", "⚡", "cyan", "Grupos electrógenos, tableros eléctricos, transformadores, cableado industrial, motores y bombas."),
+            ("EQUIPAMIENTO_HOSPITALARIO", "Equipamiento Médico & Hospitalario", "🏥", "rose", "Mobiliario clínico, camillas, autoclaves, instrumental médico, monitores y equipamiento de salud."),
+            ("TECNOLOGIA_REDES", "Tecnología, Redes & Conectividad", "💻", "purple", "Servidores, cableado estructurado, fibra óptica, switches, racks, UPS y equipamiento IT."),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "Servicios & Mantenimiento Integral", "🧹", "emerald", "Servicios de limpieza integral, higiene, mantenimiento de instalaciones, conserjería y desinfección."),
+        ]
+
+        now = datetime.now(timezone.utc)
+        for v_id, nom, ico, col, desc in verticals_seed:
+            db.add(BiddingVertical(
+                id=v_id,
+                nombre=nom,
+                icon=ico,
+                color_badge=col,
+                descripcion=desc,
+                activo=True,
+                created_at=now
+            ))
+        db.flush()
+
+        keywords_seed = [
+            # Iluminación
+            ("ILUMINACION_EFICIENCIA", "luminaria", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "led", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "panel led", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "campana", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "high bay", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "proyector", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "alumbrado", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "driver", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "dali", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "fotocelula", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "columna", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "brazo", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "downlight", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "plafon", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "luz de emergencia", "INCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "alta tension", "EXCLUSION"),
+            ("ILUMINACION_EFICIENCIA", "pintura vial", "EXCLUSION"),
+
+            # Mobiliario
+            ("MOBILIARIO_EQUIPAMIENTO", "mobiliario", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "silla", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "sillon", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "armario", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "escritorio", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "mostrador", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "estanteria", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "biblioteca", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "puesto de trabajo", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "mampara", "INCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "silla de ruedas", "EXCLUSION"),
+            ("MOBILIARIO_EQUIPAMIENTO", "articulos de oficina", "EXCLUSION"),
+
+            # Obra Civil
+            ("OBRA_CIVIL_CONSTRUCCION", "obra civil", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "hormigon", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "albanileria", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "yeso", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "drywall", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "revoque", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "impermeabilizacion", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "cielorraso", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "pintura edilicia", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "techado", "INCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "obra vial", "EXCLUSION"),
+            ("OBRA_CIVIL_CONSTRUCCION", "asfalto", "EXCLUSION"),
+
+            # Electromecánica
+            ("ELECTROMECANICA_SUMINISTROS", "generador", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "grupo electrogeno", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "transformador", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "tablero electrico", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "bomba de agua", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "cable subterraneo", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "motor electrico", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "llave termica", "INCLUSION"),
+            ("ELECTROMECANICA_SUMINISTROS", "subestacion", "INCLUSION"),
+
+            # Equipamiento Hospitalario
+            ("EQUIPAMIENTO_HOSPITALARIO", "camilla", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "autoclave", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "monitor multiparametrico", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "instrumental quirurgico", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "electrocardiografo", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "desfibrilador", "INCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "medicamentos", "EXCLUSION"),
+            ("EQUIPAMIENTO_HOSPITALARIO", "reactivos de laboratorio", "EXCLUSION"),
+
+            # Tecnología & Redes
+            ("TECNOLOGIA_REDES", "servidor", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "rack", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "switch", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "fibra optica", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "cableado estructurado", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "ups", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "firewall", "INCLUSION"),
+            ("TECNOLOGIA_REDES", "punto de acceso", "INCLUSION"),
+
+            # Servicios & Limpieza
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "servicio de limpieza", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "limpieza integral", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "mantenimiento edilicio", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "conserjeria", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "desinfeccion", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "higiene ambiental", "INCLUSION"),
+            ("SERVICIOS_LIMPIEZA_MANTENIMIENTO", "lavado de vidrios", "INCLUSION"),
+        ]
+
+        for vert_id, kw, tip in keywords_seed:
+            db.add(BiddingKeyword(
+                vertical_id=vert_id,
+                keyword=kw,
+                tipo=tip,
+                peso=Decimal("1.00"),
+                fuente="PRECARGA",
+                created_at=now
+            ))
 
         db.commit()

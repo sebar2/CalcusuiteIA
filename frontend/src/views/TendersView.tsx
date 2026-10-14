@@ -1,77 +1,62 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
-  Building2,
-  DollarSign,
+  Radio,
+  BarChart3,
+  Users,
+  Landmark,
+  Calendar,
+  Calculator,
+  Search,
+  RefreshCw,
+  Sparkles,
+  Save,
+  Trash2,
+  Plus,
+  Eye,
+  FileText,
   Clock,
+  DollarSign,
+  Building2,
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
-  Plus,
-  Trash2,
-  Sparkles,
-  Save,
-  Copy,
-  Layers,
-  TrendingUp,
-  Mail,
-  Zap,
-  Scale,
-  Check,
-  Globe,
-  Download,
-  ExternalLink,
-  FileText,
+  AlertCircle,
+  Truck,
   X,
   Loader2,
-  Search,
-  RefreshCw,
-  Lightbulb,
-  Armchair,
   Tag,
-  Settings,
-  Bot,
   ArrowRight,
+  Zap,
+  Copy,
+  Info,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
-  TenderEvaluateRequest,
-  TenderEvaluateResponse,
-  TenderItemSecure,
-  TenderItemEvaluationResult,
-  TenderSummaryItem,
   UserRole,
   EngineMode,
-  InventoryAlertItem,
-  TenderFeedItem,
   BiddingVerticalItem,
   BiddingKeywordItem,
   BiddingAIExpandKeywordsResponse,
+  ProcurementCallItem,
+  ProcurementCallSummaryData,
+  ProcurementBenchmarkItem,
+  ProcurementProductItem,
+  ProcurementSupplierItem,
+  ProcurementBuyerItem,
+  ProcurementCalendarItem,
+  ProcurementCompetitiveMarkupResponse,
+  TenderEvaluateRequest,
+  TenderEvaluateResponse,
+  TenderItemSecure,
+  TenderSummaryItem,
 } from '../types';
-import { MetricCard } from '../components/common/MetricCard';
 import { formatCurrency } from '../utils/formatters';
 
 interface TendersViewProps {
   engineMode?: EngineMode;
   currentRole?: UserRole;
 }
-
-const QUICK_CHIPS: Array<{
-  label: string;
-  query: string;
-  nicho: string;
-}> = [
-  { label: '💡 Columnas & Alumbrado', query: 'columnas', nicho: 'ILUMINACION_EFICIENCIA' },
-  { label: '💡 Drivers DALI', query: 'driver', nicho: 'ILUMINACION_EFICIENCIA' },
-  { label: '💡 Paneles 60x60', query: 'panel led', nicho: 'ILUMINACION_EFICIENCIA' },
-  { label: '🪑 Sillas Operativas', query: 'silla', nicho: 'MOBILIARIO_EQUIPAMIENTO' },
-  { label: '🪑 Armarios & Mostradores', query: 'armario', nicho: 'MOBILIARIO_EQUIPAMIENTO' },
-  { label: '🏗️ Obra & Yeso Drywall', query: 'yeso', nicho: 'OBRA_CIVIL_CONSTRUCCION' },
-  { label: '⚡ Tableros & Cables', query: 'tablero electrico', nicho: 'ELECTROMECANICA_SUMINISTROS' },
-  { label: '🏥 Camillas & Clínico', query: 'camilla', nicho: 'EQUIPAMIENTO_HOSPITALARIO' },
-  { label: '💻 Racks & Fibra Óptica', query: 'rack', nicho: 'TECNOLOGIA_REDES' },
-  { label: '🧹 Servicio de Limpieza', query: 'servicio de limpieza', nicho: 'SERVICIOS_LIMPIEZA_MANTENIMIENTO' },
-];
 
 export const CANONICAL_VERTICALS: BiddingVerticalItem[] = [
   { id: 'ILUMINACION_EFICIENCIA', nombre: 'Iluminación & Eficiencia Energética', icon: '💡', color_badge: 'amber', descripcion: 'Luminarias LED, alumbrado vial, proyectores, drivers DALI', activo: true, keywords_count: 30 },
@@ -83,654 +68,603 @@ export const CANONICAL_VERTICALS: BiddingVerticalItem[] = [
   { id: 'SERVICIOS_LIMPIEZA_MANTENIMIENTO', nombre: 'Servicios de Limpieza & Mantenimiento', icon: '🧹', color_badge: 'emerald', descripcion: 'Servicio integral de limpieza, higiene, áreas verdes', activo: true, keywords_count: 10 },
 ];
 
-const cleanMarkdown = (raw?: string) => {
-  if (!raw) return '';
-  return raw
-    .replace(/^```markdown\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
+const renderSafeValue = (val: any, fallback: string = 'No especificado'): React.ReactNode => {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+    return String(val);
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return fallback;
+    return (
+      <ul className="list-disc list-inside space-y-1 text-slate-300">
+        {val.map((item, idx) => (
+          <li key={idx} className="leading-relaxed">
+            {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (typeof val === 'object') {
+    return (
+      <div className="space-y-1.5">
+        {Object.entries(val).map(([k, v]) => (
+          <div key={k} className="flex flex-col sm:flex-row sm:gap-2 text-xs">
+            <span className="font-semibold text-slate-400 capitalize">
+              {k.replace(/([A-Z])/g, ' $1')}:
+            </span>
+            <span className="text-slate-200">
+              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return String(val);
 };
 
 export const TendersView: React.FC<TendersViewProps> = ({
   engineMode = 'auto',
   currentRole = 'controller_admin',
 }) => {
-  // Formulario del Proyecto
-  const [proyectoNombre, setProyectoNombre] = useState<string>('Licitación B2B - Suministro & Eficiencia');
-  const [clienteLicitacion, setClienteLicitacion] = useState<string>('Conaprole SA - Planta Industrial');
-  const [nicho, setNicho] = useState<string>('ILUMINACION_EFICIENCIA');
-  const [plazoEntregaDias, setPlazoEntregaDias] = useState<number>(30);
-  const [moneda, setMoneda] = useState<'USD' | 'UYU'>('USD');
-  const [margenPct, setMargenPct] = useState<number>(35);
-  const [observaciones, setObservaciones] = useState<string>('Requiere certificación UNIT / IEC y entrega en depósito Montevideo.');
-  const [pliegoUrl, setPliegoUrl] = useState<string>('');
-  const [pliegoPdfRef, setPliegoPdfRef] = useState<string>('');
-  const [fechaLimiteLicitacion, setFechaLimiteLicitacion] = useState<string>('');
+  // Pestaña activa
+  const [activeTab, setActiveTab] = useState<'radar' | 'benchmarks' | 'competitors' | 'buyers' | 'calendar' | 'cotizador'>('radar');
 
-  const handleFechaLimiteChange = (newDateStr: string) => {
-    setFechaLimiteLicitacion(newDateStr);
-    if (newDateStr) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const target = new Date(newDateStr + 'T00:00:00');
-      const diffTime = target.getTime() - today.getTime();
-      const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-      setPlazoEntregaDias(diffDays);
-    }
-  };
+  // Notificaciones de usuario
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Partidas
-  const [items, setItems] = useState<TenderItemSecure[]>([
-    { sku: 'LUM-6060', cantidad_solicitada: 80 },
-    { sku: 'UFO-150W', cantidad_solicitada: 45 },
-  ]);
-
-  // Catálogo disponible para autocompletar
-  const [catalog, setCatalog] = useState<InventoryAlertItem[]>([]);
+  // Tasa BROU
   const [tasaBrou, setTasaBrou] = useState<number>(40.40);
 
-  // Estados de Evaluación y Persistencia
-  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [evaluationResult, setEvaluationResult] = useState<TenderEvaluateResponse | null>(null);
-  const [savedTenders, setSavedTenders] = useState<TenderSummaryItem[]>([]);
-  const [showHistory, setShowHistory] = useState<boolean>(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [activeDialecticTab, setActiveDialecticTab] = useState<'both' | 'david' | 'aristoteles' | 'email'>('both');
-  const [evaluatingStep, setEvaluatingStep] = useState<'idle' | 'david' | 'aristoteles'>('idle');
-  const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
-
-  // Estados para Feed de Licitaciones Públicas B2B Multi-Rubro (ARCE)
-  const [isFeedModalOpen, setIsFeedModalOpen] = useState<boolean>(false);
-  const [feedItems, setFeedItems] = useState<TenderFeedItem[]>([]);
-  const [isLoadingFeed, setIsLoadingFeed] = useState<boolean>(false);
-  const [isSyncingFeed, setIsSyncingFeed] = useState<boolean>(false);
-  const [importingFeedId, setImportingFeedId] = useState<string | null>(null);
-  const [feedNichoFilter, setFeedNichoFilter] = useState<string>('TODAS');
-  const [feedSearchQuery, setFeedSearchQuery] = useState<string>('');
-  const [feedMeta, setFeedMeta] = useState<{
-    total: number;
-    fuente_estado?: string;
-    incluye_demo?: boolean;
-    analizadas?: number;
-    descartadas?: number;
-    mensaje?: string | null;
-    actualizado_al?: string;
-  }>({ total: 0 });
-
-  // Gestión de Verticales Comerciales y Modelos Ollama
+  // Verticales y Ollama
   const [verticals, setVerticals] = useState<BiddingVerticalItem[]>(CANONICAL_VERTICALS);
+  const [selectedVertical, setSelectedVertical] = useState<string>('ILUMINACION_EFICIENCIA');
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('qwen2.5:7b');
-  const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([
-    'qwen2.5:7b',
-    'llama3:latest',
-    'mistral:latest',
-    'deepseek-r1:7b',
-  ]);
 
-  // Modal de Gestión de Rubros y Palabras Clave
+  // Modal de Palabras Clave y Expansión IA
   const [isKeywordsModalOpen, setIsKeywordsModalOpen] = useState<boolean>(false);
-  const [selectedVerticalForMgmt, setSelectedVerticalForMgmt] = useState<string>('ILUMINACION_EFICIENCIA');
   const [currentKeywords, setCurrentKeywords] = useState<BiddingKeywordItem[]>([]);
   const [isLoadingKeywords, setIsLoadingKeywords] = useState<boolean>(false);
   const [newKeywordText, setNewKeywordText] = useState<string>('');
   const [newKeywordTipo, setNewKeywordTipo] = useState<'INCLUSION' | 'EXCLUSION'>('INCLUSION');
-
-  // Asistente IA Ollama para Expansión de Keywords & Temporizador 7 minutos
   const [aiExpandQuery, setAiExpandQuery] = useState<string>('');
   const [isExpandingAI, setIsExpandingAI] = useState<boolean>(false);
-  const [aiExpandElapsedSeconds, setAiExpandElapsedSeconds] = useState<number>(0);
-  const [showFallbackPrompt, setShowFallbackPrompt] = useState<boolean>(false);
   const [aiExpandResult, setAiExpandResult] = useState<BiddingAIExpandKeywordsResponse | null>(null);
 
-  // Carga inicial de Verticales y Modelos Ollama
+  // =========================================================================
+  // TAB 1: RADAR DE CONVOCATORIAS EN VIVO
+  // =========================================================================
+  const [openCalls, setOpenCalls] = useState<ProcurementCallItem[]>([]);
+  const [isLoadingCalls, setIsLoadingCalls] = useState<boolean>(false);
+  const [callsPage, setCallsPage] = useState<number>(1);
+  const [callsTotal, setCallsTotal] = useState<number>(0);
+  const [callsSearchQuery, setCallsSearchQuery] = useState<string>('');
+  const [callsBuyerFilter, setCallsBuyerFilter] = useState<string>('');
+  const [isLoadingMoreCalls, setIsLoadingMoreCalls] = useState<boolean>(false);
+
+  // Modal de Resumen IA de Pliego
+  const [selectedSummaryCallId, setSelectedSummaryCallId] = useState<string | null>(null);
+  const [summaryData, setSummaryData] = useState<ProcurementCallSummaryData | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
+
+  // Modal de Benchmarks de Pliego
+  const [selectedBenchmarkCallId, setSelectedBenchmarkCallId] = useState<string | null>(null);
+  const [selectedBenchmarkCallTitle, setSelectedBenchmarkCallTitle] = useState<string>('');
+  const [selectedBenchmarkBuyer, setSelectedBenchmarkBuyer] = useState<string>('');
+  const [benchmarksData, setBenchmarksData] = useState<ProcurementBenchmarkItem[]>([]);
+  const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState<boolean>(false);
+
+  // Drawer Lateral de Dictamen Técnico
+  const [technicalOpinionModalOpen, setTechnicalOpinionModalOpen] = useState<boolean>(false);
+  const [technicalOpinionCall, setTechnicalOpinionCall] = useState<ProcurementCallItem | null>(null);
+  const [technicalOpinionData, setTechnicalOpinionData] = useState<any | null>(null);
+  const [isLoadingOpinion, setIsLoadingOpinion] = useState<boolean>(false);
+
+  // =========================================================================
+  // TAB 2: INTELIGENCIA DE PRECIOS & BENCHMARKS SICE
+  // =========================================================================
+  const [productSearchQuery, setProductSearchQuery] = useState<string>('');
+  const [productsList, setProductsList] = useState<ProcurementProductItem[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
+  const [selectedProductCode, setSelectedProductCode] = useState<string | null>(null);
+  const [selectedProductDetail, setSelectedProductDetail] = useState<any | null>(null);
+  const [isLoadingProductDetail, setIsLoadingProductDetail] = useState<boolean>(false);
+
+  // Calculadora de Markup Competitivo
+  const [calcSku, setCalcSku] = useState<string>('LUM-6060');
+  const [calcCosto, setCalcCosto] = useState<number>(14.50);
+  const [calcSiceCode, setCalcSiceCode] = useState<string>('');
+  const [calcMedianaSice, setCalcMedianaSice] = useState<number>(28.00);
+  const [calcMoneda, setCalcMoneda] = useState<'USD' | 'UYU'>('USD');
+  const [calcCantidad, setCalcCantidad] = useState<number>(80);
+  const [calcDescuentoPct, setCalcDescuentoPct] = useState<number>(6.0);
+  const [markupResult, setMarkupResult] = useState<ProcurementCompetitiveMarkupResponse | null>(null);
+  const [isCalculatingMarkup, setIsCalculatingMarkup] = useState<boolean>(false);
+
+  // =========================================================================
+  // TAB 3: ANÁLISIS DE COMPETIDORES (PROVEEDORES)
+  // =========================================================================
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState<string>('');
+  const [suppliersList, setSuppliersList] = useState<ProcurementSupplierItem[]>([]);
+  const [topSuppliersList, setTopSuppliersList] = useState<ProcurementSupplierItem[]>([]);
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState<boolean>(false);
+  const [selectedSupplierDetail, setSelectedSupplierDetail] = useState<any | null>(null);
+  const [isLoadingSupplierDetail, setIsLoadingSupplierDetail] = useState<boolean>(false);
+
+  // =========================================================================
+  // TAB 4: RADIOGRAFÍA DE COMPRADORES & INTENDENCIAS
+  // =========================================================================
+  const [buyersList, setBuyersList] = useState<ProcurementBuyerItem[]>([]);
+  const [buyersSearchQuery, setBuyersSearchQuery] = useState<string>('');
+  const [intendenciasData, setIntendenciasData] = useState<any | null>(null);
+  const [isLoadingIntendencias, setIsLoadingIntendencias] = useState<boolean>(false);
+
+  // =========================================================================
+  // TAB 5: CALENDARIO DE VENCIMIENTOS & CONTROL LOGÍSTICO
+  // =========================================================================
+  const [calendarItems, setCalendarItems] = useState<ProcurementCalendarItem[]>([]);
+  const [calendarMeta, setCalendarMeta] = useState<{ deposito_central: number; transito: number }>({ deposito_central: 0, transito: 0 });
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState<boolean>(false);
+  const [calendarFilter, setCalendarFilter] = useState<'TODOS' | 'VERDE' | 'AMARILLO' | 'ROJO' | 'GUARDADOS'>('TODOS');
+  const [calendarSearch, setCalendarSearch] = useState<string>('');
+
+  // =========================================================================
+  // TAB 6: COTIZADOR B2B Y DEBATE DIALÉCTICO
+  // =========================================================================
+  const [proyectoNombre, setProyectoNombre] = useState<string>('Licitación B2B - Suministro & Eficiencia');
+  const [clienteLicitacion, setClienteLicitacion] = useState<string>('Conaprole SA - Planta Industrial');
+  const [nicho] = useState<string>('ILUMINACION_EFICIENCIA');
+  const [plazoEntregaDias, setPlazoEntregaDias] = useState<number>(30);
+  const [moneda] = useState<'USD' | 'UYU'>('USD');
+  const [margenPct, setMargenPct] = useState<number>(35);
+  const [observaciones] = useState<string>('Requiere certificación UNIT / IEC y entrega en depósito Montevideo.');
+  const [items, setItems] = useState<TenderItemSecure[]>([
+    { sku: 'LUM-6060', cantidad_solicitada: 80 },
+    { sku: 'UFO-150W', cantidad_solicitada: 45 },
+  ]);
+  const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
+  const [evaluationResult, setEvaluationResult] = useState<TenderEvaluateResponse | null>(null);
+  const [savedTenders, setSavedTenders] = useState<TenderSummaryItem[]>([]);
+  const [activeDialecticTab, setActiveDialecticTab] = useState<'both' | 'david' | 'aristoteles'>('both');
+
+  // Carga inicial
   useEffect(() => {
-    const initBiddingData = async () => {
+    const initData = async () => {
       try {
-        const [vertsData, modelsData] = await Promise.all([
+        const [brouData, savedList, vertsData, modelsData] = await Promise.all([
+          apiService.getBROUExchangeRate().catch(() => ({ rate_used: 40.40 })),
+          apiService.getProcurementSavedTracking().catch(() => []),
           apiService.getBiddingVerticals().catch(() => null),
           apiService.getOllamaModels().catch(() => null),
         ]);
-        if (vertsData && vertsData.length > 0) {
-          setVerticals(vertsData);
-        }
-        if (modelsData && modelsData.models && modelsData.models.length > 0) {
-          setAvailableOllamaModels(modelsData.models.map((m: any) => m.name));
-          if (modelsData.active_model) {
-            setSelectedOllamaModel(modelsData.active_model);
-          }
+        setTasaBrou(brouData.rate_used || 40.40);
+        setSavedTenders(savedList);
+        if (vertsData && vertsData.length > 0) setVerticals(vertsData);
+        if (modelsData && Array.isArray(modelsData.models) && modelsData.models.length > 0) {
+          if (modelsData.active_model) setSelectedOllamaModel(modelsData.active_model);
         }
       } catch (err) {
-        console.warn('Error inicializando metadatos de licitaciones:', err);
+        console.warn('Error en inicialización del Hub de Licitaciones:', err);
       }
     };
-    initBiddingData();
+    initData();
   }, []);
 
-  // Temporizador para operaciones de Ollama (con alerta y opción de fallback a los 7 minutos = 420s)
-  useEffect(() => {
-    let timer: any = null;
-    if (isExpandingAI) {
-      setAiExpandElapsedSeconds(0);
-      setShowFallbackPrompt(false);
-      timer = setInterval(() => {
-        setAiExpandElapsedSeconds((prev) => {
-          const next = prev + 1;
-          if (next === 420) {
-            setShowFallbackPrompt(true);
-          }
-          return next;
-        });
-      }, 1000);
-    } else {
-      setAiExpandElapsedSeconds(0);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isExpandingAI]);
+  // Cargar Radar al inicio
+  const fetchRadarCalls = useCallback(async (pageToLoad = 1, append = false) => {
+    if (append) setIsLoadingMoreCalls(true);
+    else setIsLoadingCalls(true);
 
-  // Carga de Keywords para la vertical seleccionada
-  const fetchKeywordsForVertical = useCallback(async (vId: string) => {
+    try {
+      const resp = await apiService.getProcurementOpenCalls({
+        page: pageToLoad,
+        limit: 20,
+        q: callsSearchQuery.trim() || undefined,
+        buyer: callsBuyerFilter.trim() || undefined,
+        sort: 'closingSoon',
+      });
+
+      if (resp.success && resp.data) {
+        const newCalls = resp.data.calls || [];
+        if (append) {
+          setOpenCalls((prev) => [...prev, ...newCalls]);
+        } else {
+          setOpenCalls(newCalls);
+        }
+        setCallsTotal(resp.data.pagination?.total || 0);
+        setCallsPage(pageToLoad);
+      }
+    } catch (err) {
+      console.error('Error cargando convocatorias de compras estatales:', err);
+      setNotification({ type: 'error', message: 'No se pudieron recuperar las licitaciones en vivo.' });
+    } finally {
+      setIsLoadingCalls(false);
+      setIsLoadingMoreCalls(false);
+    }
+  }, [callsSearchQuery, callsBuyerFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'radar' && openCalls.length === 0) {
+      fetchRadarCalls(1, false);
+    }
+  }, [activeTab, fetchRadarCalls, openCalls.length]);
+
+  // Manejo de Cargar Más Licitaciones
+  const handleLoadMoreCalls = () => {
+    fetchRadarCalls(callsPage + 1, true);
+  };
+
+  // Ver Resumen IA de Pliego
+  const handleViewCallSummary = async (call: ProcurementCallItem) => {
+    const id = String(call.compraId);
+    setSelectedSummaryCallId(id);
+    setIsLoadingSummary(true);
+    setSummaryData(null);
+    try {
+      const res = await apiService.getProcurementCallSummary(id);
+      if (res.success && res.data) {
+        setSummaryData(res.data.summary || null);
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo obtener el resumen IA del pliego.' });
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
+
+  // Ver Benchmarks de Pliego
+  const handleViewCallBenchmarks = async (call: ProcurementCallItem) => {
+    const id = String(call.compraId);
+    setSelectedBenchmarkCallId(id);
+    setSelectedBenchmarkCallTitle(call.title || `Licitación #${id}`);
+    setSelectedBenchmarkBuyer(call.buyer?.name || 'Organismo Público');
+    setIsLoadingBenchmarks(true);
+    setBenchmarksData([]);
+    try {
+      const res: any = await apiService.getProcurementCallBenchmarks(id);
+      
+      // Desempaquetado defensivo multinivel
+      let items: ProcurementBenchmarkItem[] = [];
+      const raw = res?.data || res;
+      if (Array.isArray(raw)) {
+        items = raw;
+      } else if (Array.isArray(raw?.items)) {
+        items = raw.items;
+      } else if (Array.isArray(raw?.benchmarks)) {
+        items = raw.benchmarks;
+      } else if (Array.isArray(res?.items)) {
+        items = res.items;
+      } else if (Array.isArray(res?.benchmarks)) {
+        items = res.benchmarks;
+      } else if (Array.isArray(res?.data?.data?.items)) {
+        items = res.data.data.items;
+      } else if (Array.isArray(res?.data?.data?.benchmarks)) {
+        items = res.data.data.benchmarks;
+      }
+
+      setBenchmarksData(items);
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudieron obtener los precios de referencia del pliego.' });
+    } finally {
+      setIsLoadingBenchmarks(false);
+    }
+  };
+
+  // Solicitar Dictamen Técnico de Ingeniería (Ollama Local)
+  const handleRequestTechnicalOpinion = async (call: ProcurementCallItem) => {
+    const id = String(call.compraId);
+    setTechnicalOpinionCall(call);
+    setIsLoadingOpinion(true);
+    setTechnicalOpinionModalOpen(true);
+    setTechnicalOpinionData(null);
+    try {
+      // Tomamos el resumen si está precargado para este llamado
+      const summaryContext = (selectedSummaryCallId === id && summaryData) ? summaryData : undefined;
+      // Tomamos los benchmarks si están precargados para este llamado
+      const benchmarksContext = (selectedBenchmarkCallId === id && benchmarksData.length > 0) ? benchmarksData : undefined;
+
+      const res = await apiService.auditExpertTender(id, {
+        vertical_id: selectedVertical,
+        model: selectedOllamaModel,
+        titulo: call.title,
+        organismo: call.buyer?.name,
+        plazo_entrega_dias: 30,
+        summary: summaryContext,
+        benchmarks: benchmarksContext,
+      });
+      setTechnicalOpinionData(res);
+      setNotification({
+        type: 'success',
+        message: `Dictamen emitido por ${res.perito_nombre} (${res.fuente_ia}).`,
+      });
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al generar el dictamen técnico con Ollama.' });
+    } finally {
+      setIsLoadingOpinion(false);
+    }
+  };
+
+  // Guardar en Seguimiento
+  const handleSaveTracking = async (call: ProcurementCallItem) => {
+    try {
+      const res = await apiService.saveProcurementTracking(call.compraId, {
+        compra_id: String(call.compraId),
+        proyecto_nombre: call.title,
+        cliente_licitacion: call.buyer?.name || 'Organismo Estatal',
+        nicho: selectedVertical,
+        fecha_apertura: call.tenderPeriod?.endDate ? call.tenderPeriod.endDate.split('T')[0] : undefined,
+        plazo_entrega_dias: 30,
+        moneda: 'USD',
+      });
+      setNotification({ type: 'success', message: res.message });
+      const updatedList = await apiService.getProcurementSavedTracking();
+      setSavedTenders(updatedList);
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo guardar la convocatoria en seguimiento.' });
+    }
+  };
+
+  // Cargar en el Cotizador con 1 Clic
+  const handleLoadInCotizador = (call: { compraId: any; title: string; buyer?: { name?: string } }) => {
+    setProyectoNombre(call.title);
+    setClienteLicitacion(call.buyer?.name || 'Organismo Estatal');
+    setActiveTab('cotizador');
+    setNotification({
+      type: 'success',
+      message: `Convocatoria #${call.compraId} cargada en el Cotizador B2B.`,
+    });
+  };
+
+  // Modal de Palabras Clave
+  const handleOpenKeywordsModal = async () => {
+    setIsKeywordsModalOpen(true);
     setIsLoadingKeywords(true);
     try {
-      const kws = await apiService.getBiddingKeywords(vId);
+      const kws = await apiService.getBiddingKeywords(selectedVertical);
       setCurrentKeywords(kws || []);
     } catch (err) {
-      console.error('Error cargando keywords:', err);
+      console.warn('Error cargando keywords:', err);
     } finally {
       setIsLoadingKeywords(false);
     }
-  }, []);
-
-  const handleOpenKeywordsModal = async (vId?: string) => {
-    const targetId = vId || selectedVerticalForMgmt || (feedNichoFilter !== 'TODAS' ? feedNichoFilter : 'ILUMINACION_EFICIENCIA');
-    setSelectedVerticalForMgmt(targetId);
-    setIsKeywordsModalOpen(true);
-    await fetchKeywordsForVertical(targetId);
   };
 
-  const handleAddKeywords = async () => {
+  const handleAddKeyword = async () => {
     if (!newKeywordText.trim()) return;
-    const splitKws = newKeywordText
-      .split(/[,;\n]+/)
-      .map((k) => k.trim())
-      .filter(Boolean);
-    if (splitKws.length === 0) return;
-
     try {
-      await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, {
-        keywords: splitKws,
+      await apiService.addBiddingKeywordsBulk(selectedVertical, {
+        keywords: [newKeywordText.trim()],
         tipo: newKeywordTipo,
       });
       setNewKeywordText('');
-      await fetchKeywordsForVertical(selectedVerticalForMgmt);
-      const updatedVerts = await apiService.getBiddingVerticals();
-      if (updatedVerts && updatedVerts.length > 0) {
-        setVerticals(updatedVerts);
-      }
-      setNotification({
-        type: 'success',
-        message: `Se agregaron ${splitKws.length} palabras clave de ${newKeywordTipo === 'INCLUSION' ? 'inclusión' : 'exclusión'}.`,
-      });
-    } catch (err: any) {
-      console.error('Error agregando keywords:', err);
-      setNotification({ type: 'error', message: 'No se pudieron guardar las palabras clave.' });
-    }
-  };
-
-  const handleDeleteKeyword = async (keywordId: number) => {
-    try {
-      await apiService.deleteBiddingKeyword(keywordId);
-      setCurrentKeywords((prev) => prev.filter((k) => k.id !== keywordId));
-      const updatedVerts = await apiService.getBiddingVerticals();
-      if (updatedVerts && updatedVerts.length > 0) {
-        setVerticals(updatedVerts);
-      }
+      const updated = await apiService.getBiddingKeywords(selectedVertical);
+      setCurrentKeywords(updated || []);
+      setNotification({ type: 'success', message: 'Palabra clave agregada exitosamente.' });
     } catch (err) {
-      console.error('Error eliminando keyword:', err);
+      setNotification({ type: 'error', message: 'No se pudo guardar la palabra clave.' });
     }
   };
 
-  const handleExpandKeywordsAI = async (forcedFallback = false, customQuery?: string, customVerticalId?: string) => {
+  const handleDeleteKeyword = async (id: number) => {
+    try {
+      await apiService.deleteBiddingKeyword(id);
+      setCurrentKeywords((prev) => prev.filter((k) => k.id !== id));
+    } catch (err) {
+      console.warn('Error eliminando keyword:', err);
+    }
+  };
+
+  const handleExpandKeywordsAI = async () => {
     setIsExpandingAI(true);
     try {
-      const vId = customVerticalId || selectedVerticalForMgmt;
-      const q = customQuery !== undefined ? customQuery : aiExpandQuery;
-      const activeV = verticals.find((v) => v.id === vId);
       const res = await apiService.expandBiddingKeywordsAI({
-        vertical_id: vId,
-        rubro_nombre: activeV ? activeV.nombre : vId,
-        query: q.trim() || undefined,
-        model: forcedFallback ? 'FALLBACK_HEURISTICO' : selectedOllamaModel,
-        include_exclusions: true,
+        vertical_id: selectedVertical,
+        rubro_nombre: selectedVertical,
+        query: aiExpandQuery.trim() || undefined,
+        model: selectedOllamaModel,
       });
       setAiExpandResult(res);
-      setShowFallbackPrompt(false);
-    } catch (err: any) {
-      console.error('Error en expansión con IA:', err);
-      setNotification({
-        type: 'error',
-        message: 'Fallo la inferencia local de Ollama. Utilice el Fallback Heurístico Seguro.',
-      });
+      setNotification({ type: 'success', message: 'Sugerencias de keywords generadas por Ollama.' });
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al expandir palabras clave con IA.' });
     } finally {
       setIsExpandingAI(false);
     }
   };
 
-  // Tarea 2.2 / Bugfix: Aplicar sugerencia de Ollama directamente a la búsqueda del radar y/o guardarla en la BD
-  const handleApplySuggestionToSearch = async (
-    term: string,
-    targetVerticalId?: string,
-    options?: {
-      saveToDb?: boolean;
-      tipo?: 'INCLUSION' | 'EXCLUSION';
-      closeModal?: boolean;
-    }
-  ) => {
-    const cleanTerm = term.trim();
-    if (!cleanTerm) return;
-
-    const vId = targetVerticalId || selectedVerticalForMgmt || (feedNichoFilter !== 'TODAS' ? feedNichoFilter : 'ILUMINACION_EFICIENCIA');
-
-    if (options?.saveToDb) {
-      try {
-        await apiService.addBiddingKeywordsBulk(vId, {
-          keywords: [cleanTerm],
-          tipo: options.tipo || 'INCLUSION',
-        });
-        await fetchKeywordsForVertical(vId);
-        const updatedVerts = await apiService.getBiddingVerticals();
-        if (updatedVerts && updatedVerts.length > 0) {
-          setVerticals(updatedVerts);
-        }
-        setNotification({
-          type: 'success',
-          message: `Palabra "${cleanTerm}" guardada en ${vId} e integrada al radar de búsqueda.`,
-        });
-      } catch (err) {
-        console.warn('Error guardando keyword en BD:', err);
+  // =========================================================================
+  // CARGAS PARA TAB 2: BENCHMARKS SICE
+  // =========================================================================
+  const handleSearchProducts = async () => {
+    setIsLoadingProducts(true);
+    try {
+      const res = await apiService.getProcurementProducts({
+        q: productSearchQuery.trim() || undefined,
+        limit: 20,
+      });
+      if (res.success && res.data) {
+        setProductsList(res.data.products || []);
       }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al buscar productos en SICE.' });
+    } finally {
+      setIsLoadingProducts(false);
     }
-
-    setFeedSearchQuery(cleanTerm);
-    if (vId && vId !== 'TODAS') {
-      setFeedNichoFilter(vId);
-      setSelectedVerticalForMgmt(vId);
-    }
-
-    if (options?.closeModal) {
-      setIsKeywordsModalOpen(false);
-    }
-
-    setIsFeedModalOpen(true);
-    await fetchFeed(vId === 'TODAS' ? undefined : vId, cleanTerm);
   };
 
-  // Guardar en bloque todas las sugerencias de la IA y lanzar la búsqueda en el radar
-  const handleAddAllSuggestionsAndSearch = async () => {
-    if (!aiExpandResult) return;
-    const vId = selectedVerticalForMgmt;
-    const inclusions = [
-      ...(aiExpandResult.sinonimos_sugeridos || []),
-      ...(aiExpandResult.keywords_inclusion_sugeridas || []),
-    ].filter(Boolean);
-    const exclusions = (aiExpandResult.keywords_exclusion_sugeridas || []).filter(Boolean);
-
+  const handleSelectProduct = async (code: string) => {
+    setSelectedProductCode(code);
+    setIsLoadingProductDetail(true);
     try {
-      if (inclusions.length > 0) {
-        await apiService.addBiddingKeywordsBulk(vId, {
-          keywords: inclusions,
-          tipo: 'INCLUSION',
-        });
+      const res = await apiService.getProcurementProductDetail(code);
+      if (res.success && res.data) {
+        setSelectedProductDetail(res.data);
+        setCalcSiceCode(code);
+        const pUnits = res.data.priceUnits || [];
+        if (pUnits.length > 0) {
+          const med = pUnits[0].p50 || pUnits[0].median || 0;
+          if (med > 0) setCalcMedianaSice(Number(med));
+        }
       }
-      if (exclusions.length > 0) {
-        await apiService.addBiddingKeywordsBulk(vId, {
-          keywords: exclusions,
-          tipo: 'EXCLUSION',
-        });
-      }
-      await fetchKeywordsForVertical(vId);
-      const updatedVerts = await apiService.getBiddingVerticals();
-      if (updatedVerts && updatedVerts.length > 0) {
-        setVerticals(updatedVerts);
-      }
+    } catch (err) {
+      setNotification({ type: 'error', message: `No se pudo obtener detalle para el código SICE ${code}.` });
+    } finally {
+      setIsLoadingProductDetail(false);
+    }
+  };
 
-      const searchTerm = aiExpandQuery.trim() || inclusions[0] || '';
-      setFeedSearchQuery(searchTerm);
-      setFeedNichoFilter(vId);
-      setIsKeywordsModalOpen(false);
-      setIsFeedModalOpen(true);
-      await fetchFeed(vId, searchTerm);
-
+  const handleExecuteMarkupCalculator = async () => {
+    setIsCalculatingMarkup(true);
+    try {
+      const res = await apiService.calculateCompetitiveMarkup({
+        sku: calcSku.trim() || undefined,
+        costo_nacionalizado: Number(calcCosto),
+        product_code: calcSiceCode.trim() || undefined,
+        precio_mediana_sice: Number(calcMedianaSice),
+        moneda: calcMoneda,
+        cantidad_solicitada: Number(calcCantidad),
+        tasa_cambio_brou: Number(tasaBrou),
+        descuento_estrategico_pct: Number(calcDescuentoPct),
+      });
+      setMarkupResult(res);
       setNotification({
         type: 'success',
-        message: `Se agregaron ${inclusions.length + exclusions.length} términos al rubro ${vId} y se lanzó la búsqueda en el radar.`,
+        message: `Markup calculado: Precio ganador sugerido ${calcMoneda} ${res.precio_ganador_sugerido}.`,
       });
     } catch (err) {
-      console.error('Error guardando todas las sugerencias:', err);
-      setNotification({
-        type: 'error',
-        message: 'No se pudieron guardar todas las sugerencias en bloque.',
-      });
-    }
-  };
-
-  const [feedOffset, setFeedOffset] = useState<number>(0);
-  const [isFetchingMoreFeed, setIsFetchingMoreFeed] = useState<boolean>(false);
-
-  // Manejo de Carga y Filtrado del Feed de Licitaciones
-  const fetchFeed = useCallback(async (nicho?: string, q?: string) => {
-    setIsLoadingFeed(true);
-    setFeedOffset(0);
-    try {
-      const resp = await apiService.getTendersLiveFeed({
-        nicho: nicho === 'TODAS' ? undefined : nicho,
-        q: q ? q.trim() : undefined,
-      });
-      setFeedItems(resp.items || []);
-      setFeedMeta({
-        total: resp.total,
-        fuente_estado: resp.fuente_estado,
-        incluye_demo: resp.incluye_demo,
-        analizadas: resp.analizadas,
-        descartadas: resp.descartadas,
-        mensaje: resp.mensaje,
-        actualizado_al: resp.actualizado_al,
-      });
-    } catch (err: any) {
-      console.error('Error al cargar feed de licitaciones:', err);
-      setNotification({
-        type: 'error',
-        message: 'No se pudo conectar con el servicio de feed oficial de compras públicas.',
-      });
+      setNotification({ type: 'error', message: 'Error en la calculadora de markup competitivo.' });
     } finally {
-      setIsLoadingFeed(false);
+      setIsCalculatingMarkup(false);
     }
-  }, []);
-
-  const handleOpenLiveFeed = async () => {
-    setIsFeedModalOpen(true);
-    await fetchFeed(feedNichoFilter, feedSearchQuery);
   };
 
-  const handleSyncFeedNow = async () => {
-    setIsSyncingFeed(true);
+  // =========================================================================
+  // CARGAS PARA TAB 3: PROVEEDORES
+  // =========================================================================
+  const fetchSuppliersData = useCallback(async () => {
+    setIsLoadingSuppliers(true);
     try {
-      const targetVertical = feedNichoFilter !== 'TODAS' ? feedNichoFilter : selectedVerticalForMgmt;
-      const resp = await apiService.syncTendersFeed({
-        model: selectedOllamaModel,
-        vertical_id: targetVertical,
-        limit: 20,
-        offset: 0,
-        append_mode: false,
-      });
-      setFeedItems(resp.items || []);
-      setFeedOffset(20);
-      setFeedMeta({
-        total: resp.total,
-        fuente_estado: resp.fuente_estado,
-        incluye_demo: resp.incluye_demo,
-        analizadas: resp.analizadas,
-        descartadas: resp.descartadas,
-        mensaje: resp.mensaje,
-        actualizado_al: resp.actualizado_al,
-      });
-      setNotification({
-        type: 'success',
-        message: `Sincronización con Compras Estatales completada (${selectedOllamaModel}): ${resp.total} llamados relevantes analizados.`,
-      });
-    } catch (err: any) {
-      console.error('Error al sincronizar feed:', err);
-      setNotification({
-        type: 'error',
-        message: 'Fallo al sincronizar contra el portal oficial de Compras Estatales.',
-      });
-    } finally {
-      setIsSyncingFeed(false);
-    }
-  };
-
-  const handleFetchMoreFeed = async () => {
-    setIsFetchingMoreFeed(true);
-    try {
-      const nextOffset = feedOffset + 20;
-      const targetVertical = feedNichoFilter !== 'TODAS' ? feedNichoFilter : selectedVerticalForMgmt;
-      const resp = await apiService.syncTendersFeed({
-        model: selectedOllamaModel,
-        vertical_id: targetVertical,
-        limit: 20,
-        offset: nextOffset,
-        append_mode: true,
-      });
-
-      const newItems = resp.items || [];
-      setFeedItems((prev) => {
-        const existingIds = new Set(prev.map((i) => i.id));
-        const added = newItems.filter((i) => !existingIds.has(i.id));
-        return [...prev, ...added];
-      });
-      setFeedOffset(nextOffset);
-      setFeedMeta((prev) => ({
-        ...prev,
-        analizadas: (prev.analizadas || 0) + (resp.analizadas || 0),
-        descartadas: (prev.descartadas || 0) + (resp.descartadas || 0),
-        mensaje: resp.mensaje || prev.mensaje,
-      }));
-      setNotification({
-        type: 'success',
-        message: `Se consultaron 20 licitaciones adicionales de ARCE.`,
-      });
-    } catch (err: any) {
-      console.error('Error cargando 20 licitaciones más:', err);
-      setNotification({
-        type: 'error',
-        message: 'No se pudieron recuperar más licitaciones del portal.',
-      });
-    } finally {
-      setIsFetchingMoreFeed(false);
-    }
-  };
-
-  // Tarea 2.2: Sincronización Automática con el Formulario en 1 Clic
-  const handleImportToForm = (item: TenderFeedItem) => {
-    // 1. Campos de identificación de obra y cliente
-    setProyectoNombre(item.titulo);
-    setClienteLicitacion(item.organismo);
-
-    // 2. URLs y pliegos técnicos oficiales
-    setPliegoUrl(item.pliego_url || '');
-    setPliegoPdfRef(item.pdf_nombre_archivo || item.pdf_download_url || '');
-
-    // 3. Plazo de entrega calculado
-    const diasCalc = item.plazo_entrega_dias || item.dias_para_apertura || item.plazo_dias_estimado || 30;
-    setPlazoEntregaDias(diasCalc);
-
-    if (item.fecha_apertura) {
-      const datePart = item.fecha_apertura.split('T')[0];
-      setFechaLimiteLicitacion(datePart);
-    }
-
-    // 4. Rubro comercial B2B
-    if (item.nicho) {
-      setNicho(item.nicho);
-      setSelectedVerticalForMgmt(item.nicho);
-    }
-
-    // 5. Partidas sugeridas
-    const candidateSkus = (item.skus_detectados && item.skus_detectados.length > 0)
-      ? item.skus_detectados
-      : (item.skus_sugeridos_catalogo || []);
-
-    if (candidateSkus.length > 0) {
-      setItems(
-        candidateSkus.map((sku) => ({
-          sku,
-          cantidad_solicitada: item.cantidades_sugeridas?.[sku] || (sku === 'LUM-6060' ? 80 : 45),
-        }))
-      );
-    }
-
-    // 6. Cierre del modal y aviso al usuario
-    setIsFeedModalOpen(false);
-    setNotification({
-      type: 'success',
-      message: `Licitación '${item.numero_llamado || item.id}' cargada en el cotizador. Verifique las partidas y presione 'Evaluar Factibilidad'.`,
-    });
-  };
-
-  // Importación con Evaluación Instantánea IA (David & Aristóteles)
-  const handleImportFeedItem = async (feedItem: TenderFeedItem) => {
-    setImportingFeedId(feedItem.id);
-    try {
-      const resp = await apiService.importTenderFeedItem({
-        feed_item_id: feedItem.id,
-        proyecto_nombre: feedItem.titulo,
-      });
-
-      setNotification({
-        type: 'success',
-        message: `Licitación ${feedItem.id} importada y evaluada con IA exitosamente (ID: ${resp.tender_id.slice(0, 8)}).`,
-      });
-
-      // Precargar los datos en el cotizador activo
-      setProyectoNombre(feedItem.titulo);
-      setClienteLicitacion(feedItem.organismo);
-      setPliegoUrl(feedItem.pliego_url || '');
-      setPliegoPdfRef(feedItem.pdf_nombre_archivo || feedItem.pdf_download_url || '');
-      setPlazoEntregaDias(feedItem.plazo_entrega_dias || 30);
-      if (feedItem.fecha_apertura) {
-        setFechaLimiteLicitacion(feedItem.fecha_apertura.split('T')[0]);
-      }
-
-      if (feedItem.skus_detectados && feedItem.skus_detectados.length > 0) {
-        setItems(
-          feedItem.skus_detectados.map((sku) => ({
-            sku,
-            cantidad_solicitada: feedItem.cantidades_sugeridas?.[sku] || 50,
-          }))
-        );
-      }
-
-      if (resp.evaluation) {
-        setEvaluationResult(resp.evaluation);
-        if (resp.evaluation.tasa_cambio_brou) {
-          setTasaBrou(resp.evaluation.tasa_cambio_brou);
-        }
-      }
-
-      // Actualizar listado de licitaciones guardadas
-      const updatedList = await apiService.getTenders();
-      setSavedTenders(updatedList);
-
-      setIsFeedModalOpen(false);
-    } catch (err: any) {
-      console.error('Error importing feed item:', err);
-      setNotification({
-        type: 'error',
-        message: err.response?.data?.detail || 'Error al importar y evaluar el pliego de licitación.',
-      });
-    } finally {
-      setImportingFeedId(null);
-    }
-  };
-
-  // Cargar catálogo de inventario y tasa BROU inicial
-  const loadInitialData = useCallback(async () => {
-    try {
-      const [invData, brouData, tendersList] = await Promise.all([
-        apiService.getInventoryAlerts().catch(() => []),
-        apiService.getBROUExchangeRate().catch(() => ({ rate_used: 40.40 })),
-        apiService.getTenders().catch(() => []),
+      const [searchRes, topRes] = await Promise.all([
+        apiService.getProcurementSuppliers({ search: supplierSearchQuery.trim() || undefined, limit: 15 }),
+        apiService.getProcurementTopSuppliers(10),
       ]);
-      setCatalog(invData);
-      setTasaBrou(brouData.rate_used || 40.40);
-      setSavedTenders(tendersList);
+      if (searchRes.success && searchRes.data) {
+        setSuppliersList(searchRes.data.suppliers || []);
+      }
+      if (topRes.success && Array.isArray(topRes.data)) {
+        setTopSuppliersList(topRes.data || []);
+      }
     } catch (err) {
-      console.error('Error loading initial tender data', err);
+      console.warn('Error cargando proveedores:', err);
+    } finally {
+      setIsLoadingSuppliers(false);
+    }
+  }, [supplierSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'competitors' && suppliersList.length === 0) {
+      fetchSuppliersData();
+    }
+  }, [activeTab, fetchSuppliersData, suppliersList.length]);
+
+  const handleSelectSupplier = async (supplierId: string) => {
+    setIsLoadingSupplierDetail(true);
+    setSelectedSupplierDetail(null);
+    try {
+      const res = await apiService.getProcurementSupplierDetail(supplierId);
+      if (res.success && res.data) {
+        setSelectedSupplierDetail(res.data);
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo obtener la ficha completa del proveedor.' });
+    } finally {
+      setIsLoadingSupplierDetail(false);
+    }
+  };
+
+  // =========================================================================
+  // CARGAS PARA TAB 4: COMPRADORES & INTENDENCIAS
+  // =========================================================================
+  const fetchBuyersData = useCallback(async () => {
+    setIsLoadingIntendencias(true);
+    try {
+      const [bRes, intRes] = await Promise.all([
+        apiService.getProcurementBuyers({ search: buyersSearchQuery.trim() || undefined, limit: 20 }),
+        apiService.getProcurementIntendencias(),
+      ]);
+      if (bRes.success && bRes.data) {
+        setBuyersList(bRes.data.buyers || []);
+      }
+      if (intRes.success && intRes.data) {
+        setIntendenciasData(intRes.data);
+      }
+    } catch (err) {
+      console.warn('Error cargando compradores e intendencias:', err);
+    } finally {
+      setIsLoadingIntendencias(false);
+    }
+  }, [buyersSearchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'buyers' && buyersList.length === 0) {
+      fetchBuyersData();
+    }
+  }, [activeTab, fetchBuyersData, buyersList.length]);
+
+  // =========================================================================
+  // CARGAS PARA TAB 5: CALENDARIO & SEMÁFORO LOGÍSTICO
+  // =========================================================================
+  const fetchCalendarData = useCallback(async () => {
+    setIsLoadingCalendar(true);
+    try {
+      const res = await apiService.getProcurementCalendar();
+      if (res.success && res.data) {
+        setCalendarItems(res.data.items || []);
+        setCalendarMeta({
+          deposito_central: res.data.deposito_central_mvd_unidades || 0,
+          transito: res.data.transito_maritimo_unidades || 0,
+        });
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al consultar el calendario logístico de licitaciones.' });
+    } finally {
+      setIsLoadingCalendar(false);
     }
   }, []);
 
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
-
-  // Manejo de partidas
-  const handleAddItem = () => {
-    setItems((prev) => [...prev, { sku: 'LUM-6060', cantidad_solicitada: 50 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleUpdateItem = (index: number, field: keyof TenderItemSecure, value: any) => {
-    setItems((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
-  };
-
-  // Presets Rápidos B2B
-  const applyPreset = (presetName: string) => {
-    if (presetName === 'serlux_conaprole') {
-      setProyectoNombre('Ampliación Planta Conaprole Complejo Rincón');
-      setClienteLicitacion('Conaprole SA');
-      setNicho('ILUMINACION_EFICIENCIA');
-      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
-      setPlazoEntregaDias(15);
-      setMoneda('USD');
-      setMargenPct(35);
-      setItems([
-        { sku: 'LUM-6060', cantidad_solicitada: 300 }, // Disparará Quiebre (stock 80)
-        { sku: 'UFO-150W', cantidad_solicitada: 30 },  // Viable stock (stock 45)
-      ]);
-    } else if (presetName === 'intendencia_vial') {
-      setProyectoNombre('Alumbrado Corredor Accesos & Avenidas');
-      setClienteLicitacion('Intendencia de Montevideo');
-      setNicho('ILUMINACION_EFICIENCIA');
-      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
-      setPlazoEntregaDias(90);
-      setMoneda('UYU');
-      setMargenPct(32);
-      setItems([
-        { sku: 'PRY-100W', cantidad_solicitada: 120 },
-        { sku: 'DRV-DALI', cantidad_solicitada: 50 },
-      ]);
-    } else if (presetName === 'oficinas_wtc') {
-      setProyectoNombre('Modernización Lumínica Torres WTC');
-      setClienteLicitacion('World Trade Center Montevideo');
-      setNicho('ILUMINACION_EFICIENCIA');
-      setSelectedVerticalForMgmt('ILUMINACION_EFICIENCIA');
-      setPlazoEntregaDias(45);
-      setMoneda('USD');
-      setMargenPct(40);
-      setItems([
-        { sku: 'LUM-6060', cantidad_solicitada: 60 },
-        { sku: 'DRV-DALI', cantidad_solicitada: 15 },
-      ]);
+    if (activeTab === 'calendar' && calendarItems.length === 0) {
+      fetchCalendarData();
     }
-  };
+  }, [activeTab, fetchCalendarData, calendarItems.length]);
 
-  // Ejecutar Evaluación Determinística & Dialéctica
-  const handleEvaluate = async () => {
+  // Filtrado de items del calendario
+  const filteredCalendarItems = calendarItems.filter((it) => {
+    if (calendarFilter === 'GUARDADOS' && !it.saved) return false;
+    if (calendarFilter === 'VERDE' && it.semaforo_logistico !== 'VERDE') return false;
+    if (calendarFilter === 'AMARILLO' && it.semaforo_logistico !== 'AMARILLO') return false;
+    if (calendarFilter === 'ROJO' && it.semaforo_logistico !== 'ROJO') return false;
+    if (calendarSearch.trim()) {
+      const q = calendarSearch.toLowerCase();
+      return (
+        it.title.toLowerCase().includes(q) ||
+        it.buyer.toLowerCase().includes(q) ||
+        it.compraId.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  // =========================================================================
+  // EVALUACIÓN TRADICIONAL DEL COTIZADOR
+  // =========================================================================
+  const handleEvaluateTender = async () => {
     if (!proyectoNombre.trim() || !clienteLicitacion.trim()) {
       setNotification({ type: 'error', message: 'Nombre de obra y cliente son obligatorios.' });
       return;
     }
-    if (items.length === 0) {
-      setNotification({ type: 'error', message: 'Debe ingresar al menos una luminaria en la cotización.' });
-      return;
-    }
-
     setIsEvaluating(true);
-    setEvaluatingStep('david');
-    const stepTimer = setTimeout(() => {
-      setEvaluatingStep('aristoteles');
-    }, 10000);
-    setNotification(null);
     try {
       const payload: TenderEvaluateRequest = {
         proyecto_nombre: proyectoNombre.trim(),
@@ -741,2327 +675,1813 @@ export const TendersView: React.FC<TendersViewProps> = ({
         margen_comercial_pct: Number(margenPct) / 100.0,
         observaciones: observaciones.trim() || undefined,
         engine_mode: engineMode,
-        pliego_url: pliegoUrl.trim() || undefined,
-        pliego_pdf_ref: pliegoPdfRef.trim() || undefined,
-        fecha_limite_licitacion: fechaLimiteLicitacion || undefined,
         items: items.map((it) => ({
           sku: it.sku.trim().toUpperCase(),
           cantidad_solicitada: Number(it.cantidad_solicitada),
-          precio_objetivo_unitario: it.precio_objetivo_unitario ? Number(it.precio_objetivo_unitario) : undefined,
         })),
       };
-
       const res = await apiService.evaluateTender(payload);
       setEvaluationResult(res);
-      setTasaBrou(res.tasa_cambio_brou);
       setNotification({
         type: 'success',
         message: res.alerta_critica
-          ? 'Evaluación completada con Alerta de Quiebre Logístico. Revise dictamen de David.'
+          ? 'Evaluación completada con Alerta Logística de Quiebre.'
           : 'Evaluación aprobada con viabilidad logística completa.',
       });
     } catch (err: any) {
-      console.error('Error evaluating tender:', err);
-      setNotification({
-        type: 'error',
-        message: err.response?.data?.detail || 'Error al evaluar la viabilidad de la licitación.',
-      });
+      setNotification({ type: 'error', message: 'Error al evaluar la viabilidad de la licitación.' });
     } finally {
-      clearTimeout(stepTimer);
       setIsEvaluating(false);
-      setEvaluatingStep('idle');
-    }
-  };
-
-  // Guardar Licitación en Base de Datos
-  const handleSaveTender = async () => {
-    if (currentRole === 'analista_operaciones') {
-      setNotification({
-        type: 'error',
-        message: 'Acceso Restringido: El rol Operaciones tiene perfil de auditoría técnica y no puede formalizar licitaciones comerciales.',
-      });
-      return;
-    }
-    if (!evaluationResult) {
-      await handleEvaluate();
-    }
-    setIsSaving(true);
-    try {
-      const payload: TenderEvaluateRequest = {
-        proyecto_nombre: proyectoNombre.trim(),
-        cliente_licitacion: clienteLicitacion.trim(),
-        nicho,
-        plazo_entrega_dias: Number(plazoEntregaDias),
-        moneda,
-        margen_comercial_pct: Number(margenPct) / 100.0,
-        observaciones: observaciones.trim() || undefined,
-        pliego_url: pliegoUrl.trim() || undefined,
-        pliego_pdf_ref: pliegoPdfRef.trim() || undefined,
-        fecha_limite_licitacion: fechaLimiteLicitacion || undefined,
-        items: items.map((it) => ({
-          sku: it.sku.trim().toUpperCase(),
-          cantidad_solicitada: Number(it.cantidad_solicitada),
-        })),
-      };
-
-      const saved = await apiService.createTender(payload);
-      setNotification({
-        type: 'success',
-        message: `Licitación guardada exitosamente (ID: ${saved.id.slice(0, 8)}).`,
-      });
-      const updatedList = await apiService.getTenders();
-      setSavedTenders(updatedList);
-    } catch (err: any) {
-      console.error('Error saving tender:', err);
-      setNotification({
-        type: 'error',
-        message: 'No se pudo guardar la licitación en la base de datos.',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Copiar propuesta de email
-  const handleCopyEmail = () => {
-    if (evaluationResult?.dictamen_aristoteles?.estrategia_completa) {
-      navigator.clipboard.writeText(evaluationResult.dictamen_aristoteles.estrategia_completa);
-      setCopiedEmail(true);
-      setTimeout(() => setCopiedEmail(false), 2500);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Notificación Toast */}
-      {notification && (
-        <div
-          className={`p-4 rounded-xl flex items-center space-x-3 text-xs font-semibold ${
-            notification.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] border border-emerald-200 dark:border-emerald-800'
-              : 'bg-rose-50 dark:bg-rose-950/40 text-[#e74c3c] border border-rose-200 dark:border-rose-800'
-          }`}
-        >
-          {notification.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-          <span>{notification.message}</span>
-        </div>
-      )}
-
-      {/* Header Banner con Contexto de Fusión */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl border border-indigo-900/50 shadow-md">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 uppercase tracking-wider">
-              Luminar B2B Engine
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 font-mono">
-              BROU: {tasaBrou.toFixed(2)} UYU
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/20 uppercase font-mono">
-              IA: {engineMode}
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-700/50 uppercase font-mono">
-              Rol: {currentRole}
-            </span>
+      {/* =================================================================== */}
+      {/* HEADER PRINCIPAL: HUB DE LICITACIONES E INTELIGENCIA ESTATAL B2B */}
+      {/* =================================================================== */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl">
+                <Landmark className="w-6 h-6" />
+              </span>
+              <div>
+                <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                  Hub de Licitaciones e Inteligencia Estatal B2B
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    API Uruguay Conectada (600 req/min)
+                  </span>
+                </h1>
+                <p className="text-sm text-slate-400 mt-0.5">
+                  Radar en vivo de convocatorias públicas, benchmarks SICE, análisis de competidores, radiografía de intendencias y semáforo logístico Montevideo.
+                </p>
+              </div>
+            </div>
           </div>
-          <h2 className="text-lg font-bold tracking-tight text-white flex items-center space-x-2">
-            <span>Cotizador de Licitaciones & Homologación Lumínica</span>
-          </h2>
-          <p className="text-xs text-indigo-200/80 max-w-2xl">
-            Cálculo determinístico de viabilidad logística con stock en Montevideo vs. importación,
-            cruce cambiario oficial y dictamen dialéctico: <strong>Ing. David Jiménez Vera (Rigor UNIT)</strong> vs. <strong>Aristóteles (Estrategia B2B)</strong>.
-          </p>
+
+          <div className="flex items-center gap-3">
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-slate-300">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Ollama: <strong>{selectedOllamaModel}</strong></span>
+            </div>
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs text-slate-300">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <span>Dólar BROU: <strong>${tasaBrou.toFixed(2)}</strong></span>
+            </div>
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-400">
+              Rol: <strong className="text-white capitalize">{currentRole.replace('_', ' ')}</strong>
+            </div>
+          </div>
         </div>
 
-        {/* Presets Rápidos & Historial & Feed Oficial */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleOpenLiveFeed}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-cyan-950/40 cursor-pointer transition-all border border-cyan-400/30"
-            title="Sintonizar llamados de compras públicas uruguayas en vivo (ARCE, UTE, IMM, OSE)"
+        {/* Notificación Global */}
+        {notification && (
+          <div
+            className={`mt-4 p-3.5 rounded-xl border flex items-center justify-between ${
+              notification.type === 'success'
+                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
+                : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+            }`}
           >
-            <Globe size={14} className="text-cyan-200" />
-            <span>🌐 Licitaciones Públicas en Tiempo Real</span>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              {notification.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              <span>{notification.message}</span>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* =================================================================== */}
+        {/* NAVEGACIÓN POR PESTAÑAS (TABS) */}
+        {/* =================================================================== */}
+        <div className="flex flex-wrap items-center gap-2 mt-6 border-t border-slate-800/80 pt-4">
+          <button
+            onClick={() => setActiveTab('radar')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'radar'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Radio className="w-4 h-4" />
+            <span>Tab 1: 📡 Radar en Vivo</span>
           </button>
 
-          <div className="text-[11px] text-indigo-200 font-semibold mx-1">Casos de Prueba B2B:</div>
           <button
-            onClick={() => applyPreset('serlux_conaprole')}
-            className="px-2.5 py-1.5 rounded-xl bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-xs font-medium cursor-pointer transition-colors"
-            title="Caso con quiebre de stock en paneles 60x60"
+            onClick={() => setActiveTab('benchmarks')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'benchmarks'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            🏭 Conaprole (Quiebre)
+            <BarChart3 className="w-4 h-4" />
+            <span>Tab 2: 📊 Inteligencia de Precios SICE</span>
           </button>
+
           <button
-            onClick={() => applyPreset('intendencia_vial')}
-            className="px-2.5 py-1.5 rounded-xl bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-xs font-medium cursor-pointer transition-colors"
-            title="Alumbrado vial en UYU"
+            onClick={() => setActiveTab('competitors')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'competitors'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            🏛️ Intendencia (Vial)
+            <Users className="w-4 h-4" />
+            <span>Tab 3: 🕵️ Competidores (Proveedores)</span>
           </button>
+
           <button
-            onClick={() => applyPreset('oficinas_wtc')}
-            className="px-2.5 py-1.5 rounded-xl bg-indigo-900/60 hover:bg-indigo-800 border border-indigo-700/60 text-xs font-medium cursor-pointer transition-colors"
-            title="Oficinas corporativas WTC"
+            onClick={() => setActiveTab('buyers')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'buyers'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            🏢 WTC (Oficinas)
+            <Landmark className="w-4 h-4" />
+            <span>Tab 4: 🏛️ Compradores & Intendencias</span>
           </button>
+
           <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer border border-white/20 transition-colors"
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'calendar'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            {showHistory ? 'Ocultar Historial' : `Historial (${savedTenders.length})`}
+            <Calendar className="w-4 h-4" />
+            <span>Tab 5: 📅 Vencimientos & Control Logístico</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cotizador')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ml-auto ${
+              activeTab === 'cotizador'
+                ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/30'
+                : 'bg-slate-800/60 text-amber-400 hover:text-amber-300 hover:bg-slate-800'
+            }`}
+          >
+            <Calculator className="w-4 h-4" />
+            <span>💼 Cotizador & Dictamen B2B</span>
           </button>
         </div>
       </div>
 
-      {/* Historial Colapsable */}
-      {showHistory && (
-        <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-            Licitaciones y Proyectos Evaluados ({savedTenders.length})
-          </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase text-[10px]">
-                <tr>
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Proyecto / Obra</th>
-                  <th className="px-3 py-2">Cliente</th>
-                  <th className="px-3 py-2">Plazo</th>
-                  <th className="px-3 py-2">Moneda</th>
-                  <th className="px-3 py-2">Monto Ofertado</th>
-                  <th className="px-3 py-2">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {savedTenders.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-4 text-center text-slate-400">
-                      No hay licitaciones guardadas aún.
-                    </td>
-                  </tr>
-                ) : (
-                  savedTenders.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-3 py-2 font-mono text-[11px]">{t.id.slice(0, 8)}</td>
-                      <td className="px-3 py-2 font-bold text-slate-800 dark:text-slate-100">{t.proyecto_nombre}</td>
-                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{t.cliente_licitacion}</td>
-                      <td className="px-3 py-2">{t.plazo_entrega_dias} días</td>
-                      <td className="px-3 py-2 font-mono">{t.moneda}</td>
-                      <td className="px-3 py-2 font-mono font-semibold">{formatCurrency(t.total_ofertado)}</td>
-                      <td className="px-3 py-2">
-                        <span className="px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-[#00a2e8] text-[10px] font-bold">
-                          {t.estado}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Grid de Configuración del Pliego & Partidas */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Columna Izquierda: Parámetros del Pliego (5 cols) */}
-        <div className="lg:col-span-5 space-y-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center space-x-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <Building2 size={16} className="text-[#00a2e8]" />
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-100">
-              Datos de la Licitación / Obra
-            </h3>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Nombre de la Obra / Licitación
-              </label>
-              <input
-                type="text"
-                required
-                value={proyectoNombre}
-                onChange={(e) => setProyectoNombre(e.target.value)}
-                placeholder="ej. Ampliación Planta Conaprole"
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Entidad / Cliente Comitente
-              </label>
-              <input
-                type="text"
-                required
-                value={clienteLicitacion}
-                onChange={(e) => setClienteLicitacion(e.target.value)}
-                placeholder="ej. Conaprole SA, Intendencia de Canelones..."
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                URL del Pliego / Bases de Licitación
-              </label>
-              <input
-                type="url"
-                value={pliegoUrl}
-                onChange={(e) => setPliegoUrl(e.target.value)}
-                placeholder="https://comprasestatales.gub.uy/pliegos/..."
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 1: RADAR DE CONVOCATORIAS EN VIVO */}
+      {/* =================================================================== */}
+      {activeTab === 'radar' && (
+        <div className="space-y-6">
+          {/* Barra de Filtros y Búsqueda del Radar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+              {/* Selector de Vertical */}
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Archivo / Ref. Pliego PDF
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Vertical / Nicho
+                  </label>
+                  <button
+                    onClick={handleOpenKeywordsModal}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium"
+                    title="Configurar palabras clave con IA de Ollama"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Keywords IA</span>
+                  </button>
+                </div>
+                <select
+                  value={selectedVertical}
+                  onChange={(e) => setSelectedVertical(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  {verticals.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.icon} {v.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Búsqueda por palabra clave */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                  Palabra Clave / Objeto
+                </label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={callsSearchQuery}
+                    onChange={(e) => setCallsSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchRadarCalls(1, false)}
+                    placeholder="Ej. luminaria, cable, silla, yeso..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+                  />
+                </div>
+              </div>
+
+              {/* Filtro por Organismo */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                  Organismo Comprador
                 </label>
                 <input
                   type="text"
-                  value={pliegoPdfRef}
-                  onChange={(e) => setPliegoPdfRef(e.target.value)}
-                  placeholder="ej. PLIEGO-CONAPROLE-2026.pdf"
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-mono text-[11px]"
+                  value={callsBuyerFilter}
+                  onChange={(e) => setCallsBuyerFilter(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchRadarCalls(1, false)}
+                  placeholder="Ej. UTE, OSE, Intendencia..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-500"
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Fecha Límite (Auto-Plazo)
-                </label>
-                <input
-                  type="date"
-                  value={fechaLimiteLicitacion}
-                  onChange={(e) => handleFechaLimiteChange(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-mono"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block font-semibold text-slate-700 dark:text-slate-300">
-                  Rubro Comercial B2B
-                </label>
+              {/* Botón Buscar */}
+              <div className="flex items-end gap-2 pt-2 md:pt-6">
                 <button
-                  type="button"
-                  onClick={() => handleOpenKeywordsModal(nicho)}
-                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center space-x-1"
-                  title="Configurar palabras clave y sinónimos para este rubro"
+                  onClick={() => fetchRadarCalls(1, false)}
+                  disabled={isLoadingCalls}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
                 >
-                  <Settings size={11} />
-                  <span>Configurar Keywords</span>
+                  {isLoadingCalls ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  <span>Explorar Radar</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCallsSearchQuery('');
+                    setCallsBuyerFilter('');
+                    fetchRadarCalls(1, false);
+                  }}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300"
+                  title="Restablecer filtros"
+                >
+                  <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
-              <select
-                value={nicho}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNicho(val);
-                  setSelectedVerticalForMgmt(val);
-                  setFeedNichoFilter(val);
-                }}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-semibold text-xs"
-              >
-                {verticals.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.icon} {v.nombre}
-                  </option>
-                ))}
-              </select>
-              {(() => {
-                const activeV = verticals.find((v) => v.id === nicho);
-                if (!activeV) return null;
-                return (
-                  <p className="text-[11px] text-slate-400 mt-1 italic">
-                    {activeV.descripcion || 'Especialidad B2B configurada para filtrado y análisis de pliegos.'}
-                  </p>
-                );
-              })()}
-            </div>
-
-            <div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Plazo de Entrega (Días)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={plazoEntregaDias}
-                  onChange={(e) => setPlazoEntregaDias(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Moneda de Oferta
-                </label>
-                <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setMoneda('USD')}
-                    className={`flex-1 py-2 font-bold transition-colors cursor-pointer ${
-                      moneda === 'USD'
-                        ? 'bg-[#00a2e8] text-white'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    USD ($)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMoneda('UYU')}
-                    className={`flex-1 py-2 font-bold transition-colors cursor-pointer ${
-                      moneda === 'UYU'
-                        ? 'bg-[#00a2e8] text-white'
-                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    UYU ($)
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Margen Comercial Deseado
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="5"
-                    max="80"
-                    value={margenPct}
-                    onChange={(e) => setMargenPct(Number(e.target.value))}
-                    className="w-full p-2.5 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none font-mono"
-                  />
-                  <span className="absolute right-3 top-2.5 text-slate-400 font-bold">%</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Requerimientos Técnicos del Pliego / Observaciones
-              </label>
-              <textarea
-                rows={2}
-                value={observaciones}
-                onChange={(e) => setObservaciones(e.target.value)}
-                placeholder="Observaciones de fotometría, UGR, marca de driver..."
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#00a2e8] focus:outline-none"
-              />
             </div>
           </div>
-        </div>
 
-        {/* Columna Derecha: Partidas de Luminarias (7 cols) */}
-        <div className="lg:col-span-7 space-y-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center space-x-2">
-                <Layers size={16} className="text-[#00a2e8]" />
-                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                  Luminarias Solicitadas ({items.length} partidas)
-                </h3>
+          {/* Listado de Tarjetas de Convocatorias */}
+          {isLoadingCalls ? (
+            <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mb-3" />
+              <p className="text-sm">Consultando convocatorias públicas en vivo...</p>
+            </div>
+          ) : openCalls.length === 0 ? (
+            <div className="py-16 text-center bg-slate-900 border border-slate-800 rounded-2xl">
+              <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-2" />
+              <h3 className="text-base font-semibold text-white">No se hallaron convocatorias abiertas</h3>
+              <p className="text-xs text-slate-400 mt-1">Pruebe ampliando el criterio de búsqueda o seleccionando otro rubro.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                <span>Mostrando <strong>{openCalls.length}</strong> de <strong>{callsTotal}</strong> convocatorias vigentes</span>
+                <span>Fuente: Portal Oficial de Compras Estatales (ARCE / SICE)</span>
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {openCalls.map((call) => {
+                  const compraId = String(call.compraId);
+                  const isSaved = savedTenders.some((s) => s.id === compraId);
+                  const endDateStr = call.tenderPeriod?.endDate ? call.tenderPeriod.endDate.split('T')[0] : 'Sin fecha';
+
+                  return (
+                    <div
+                      key={compraId}
+                      className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition-all"
+                    >
+                      <div>
+                        {/* Cabecera de la tarjeta */}
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-indigo-400 border border-slate-700">
+                            ID: {compraId}
+                          </span>
+                          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {call.status || 'VIGENTE'}
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-bold text-white line-clamp-2 mb-2 hover:text-indigo-400 transition-colors">
+                          {call.title}
+                        </h3>
+
+                        <div className="space-y-1.5 text-xs text-slate-400 mb-4">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                            <span className="truncate">{call.buyer?.name || 'Organismo Estatal'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                            <span>Cierre de ofertas: <strong>{endDateStr}</strong></span>
+                          </div>
+                          {call.procurementMethodDetails && (
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                              <span className="text-slate-300">{call.procurementMethodDetails}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botones de Acción */}
+                      <div className="border-t border-slate-800/80 pt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => handleViewCallSummary(call)}
+                          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Ver Resumen IA</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleViewCallBenchmarks(call)}
+                          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Benchmarks</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleRequestTechnicalOpinion(call)}
+                          className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Dictamen Técnico</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleSaveTracking(call)}
+                          className={`p-1.5 rounded-xl border transition-all ${
+                            isSaved
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                              : 'bg-slate-800 text-slate-400 hover:text-white border-slate-700'
+                          }`}
+                          title={isSaved ? 'En seguimiento' : 'Guardar en seguimiento'}
+                        >
+                          <Save className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handleLoadInCotizador(call)}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl"
+                          title="Cargar en cotizador B2B"
+                        >
+                          <ArrowRight className="w-4 h-4 text-amber-400" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Botón Paginación Acumulativa */}
+              {openCalls.length < callsTotal && (
+                <div className="pt-4 flex justify-center">
+                  <button
+                    onClick={handleLoadMoreCalls}
+                    disabled={isLoadingMoreCalls}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-6 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg transition-all"
+                  >
+                    {isLoadingMoreCalls ? <Loader2 className="w-4 h-4 animate-spin text-indigo-400" /> : <Plus className="w-4 h-4" />}
+                    <span>➕ Cargar 20 licitaciones más</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 2: BENCHMARKS SICE & CALCULADORA DE MARKUP */}
+      {/* =================================================================== */}
+      {activeTab === 'benchmarks' && (
+        <div className="space-y-6">
+          {/* Calculadora de Markup Competitivo */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+                <Calculator className="w-5 h-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-white">Calculadora de Markup Competitivo</h2>
+                <p className="text-xs text-slate-400">
+                  Cruce de Costo Nacionalizado en Montevideo contra la Mediana Histórica de SICE (medianValue).
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">SKU Calcu</label>
+                <input
+                  type="text"
+                  value={calcSku}
+                  onChange={(e) => setCalcSku(e.target.value)}
+                  placeholder="LUM-6060"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Costo Montevideo ({calcMoneda})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={calcCosto}
+                  onChange={(e) => setCalcCosto(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Cód. SICE / CUBS</label>
+                <input
+                  type="text"
+                  value={calcSiceCode}
+                  onChange={(e) => setCalcSiceCode(e.target.value)}
+                  placeholder="Ej. 7843"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Mediana Estatal ({calcMoneda})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={calcMedianaSice}
+                  onChange={(e) => setCalcMedianaSice(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Moneda & Cantidad</label>
+                <div className="flex gap-1.5">
+                  <select
+                    value={calcMoneda}
+                    onChange={(e) => setCalcMoneda(e.target.value as 'USD' | 'UYU')}
+                    className="w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="UYU">UYU</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={calcCantidad}
+                    onChange={(e) => setCalcCantidad(parseInt(e.target.value) || 1)}
+                    className="w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Estrategia Descuento %</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={calcDescuentoPct}
+                    onChange={(e) => setCalcDescuentoPct(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                  />
+                  <button
+                    onClick={handleExecuteMarkupCalculator}
+                    disabled={isCalculatingMarkup}
+                    className="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 rounded-xl text-sm flex items-center justify-center shadow-lg shadow-amber-600/20"
+                    title="Calcular precio óptimo y markup"
+                  >
+                    {isCalculatingMarkup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Resultado de la Calculadora de Markup */}
+            {markupResult && (
+              <div className="mt-4 bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                  <div>
+                    <span className="text-xs text-slate-400 block">Precio Ganador Sugerido</span>
+                    <span className="text-xl font-bold text-emerald-400">
+                      {markupResult.moneda} {markupResult.precio_ganador_sugerido}
+                    </span>
+                    <span className="text-xs text-slate-500 block mt-0.5">
+                      Rango: {markupResult.moneda} {markupResult.rango_competitivo_min} - {markupResult.rango_competitivo_max}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-xs text-slate-400 block">Markup sobre Costo</span>
+                    <span className="text-xl font-bold text-indigo-400">+{markupResult.markup_pct}%</span>
+                    <span className="text-xs text-slate-500 block mt-0.5">Margen Bruto: {markupResult.margen_bruto_pct}%</span>
+                  </div>
+
+                  <div>
+                    <span className="text-xs text-slate-400 block">Contribución Total ({markupResult.moneda})</span>
+                    <span className="text-xl font-bold text-amber-400">
+                      ${formatCurrency(Number(markupResult.contribucion_total))}
+                    </span>
+                    <span className="text-xs text-slate-500 block mt-0.5">
+                      Unitario: ${markupResult.contribucion_unitaria}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-xs text-slate-400 block">Probabilidad de Adjudicación</span>
+                    <span
+                      className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold mt-1 ${
+                        markupResult.probabilidad_ganar === 'ALTA'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : markupResult.probabilidad_ganar === 'MEDIA'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      }`}
+                    >
+                      {markupResult.probabilidad_ganar}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-300 bg-slate-900/90 border border-slate-800 rounded-lg p-3">
+                  💡 <strong>Diagnóstico de Pricing:</strong> {markupResult.diagnostico_estrategico}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Buscador de Códigos SICE/CUBS */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-base font-bold text-white mb-3">Catálogo y Precios Históricos SICE</h3>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={productSearchQuery}
+                onChange={(e) => setProductSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchProducts()}
+                placeholder="Buscar por código SICE o término (ej. panel, columna, silla, yeso)..."
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500"
+              />
               <button
-                type="button"
-                onClick={handleAddItem}
-                className="inline-flex items-center space-x-1 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                onClick={handleSearchProducts}
+                disabled={isLoadingProducts}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl text-sm font-semibold flex items-center gap-2"
               >
-                <Plus size={13} />
-                <span>Agregar Luminaria</span>
+                {isLoadingProducts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <span>Buscar</span>
               </button>
             </div>
 
-            {/* Listado dinámico de ítems */}
-            <div className="space-y-3 pt-3 overflow-y-auto max-h-[360px]">
-              {items.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div className="flex-1 space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Modelo / SKU</label>
-                    <select
-                      value={item.sku}
-                      onChange={(e) => handleUpdateItem(idx, 'sku', e.target.value)}
-                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-xs font-semibold"
-                    >
-                      <optgroup label="Perfil Serlux / Iluminación Técnica">
-                        <option value="LUM-6060">LUM-6060: Panel LED 60x60 40W 4000K UGR&lt;19 (Stock: 80u)</option>
-                        <option value="UFO-150W">UFO-150W: Campana Industrial 150W IP65 (Stock: 45u)</option>
-                        <option value="DRV-DALI">DRV-DALI: Driver Regulable DALI-2 50W (Stock: 15u)</option>
-                        <option value="PRY-100W">PRY-100W: Proyector Exterior 100W (Stock: 420u)</option>
-                      </optgroup>
-                      <optgroup label="Otros SKUs Registrados">
-                        {catalog
-                          .filter((c) => !['LUM-6060', 'UFO-150W', 'DRV-DALI', 'PRY-100W'].includes(c.sku))
-                          .map((c) => (
-                            <option key={c.sku} value={c.sku}>
-                              {c.sku}: {c.nombre} (Stock: {c.stock_actual}u)
-                            </option>
-                          ))}
-                      </optgroup>
-                    </select>
+            {/* Ficha de Detalle de Producto Seleccionado */}
+            {selectedProductDetail && (
+              <div className="mb-6 p-4 bg-slate-950/70 border border-indigo-500/30 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-base font-bold text-white">
+                      {selectedProductDetail.code} - {selectedProductDetail.description}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {selectedProductDetail.famiName} &gt; {selectedProductDetail.clasName}
+                    </p>
                   </div>
+                  <button onClick={() => setSelectedProductDetail(null)} className="text-slate-400 hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-                  <div className="w-28 space-y-1">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">Cantidad (u)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.cantidad_solicitada}
-                      onChange={(e) => handleUpdateItem(idx, 'cantidad_solicitada', Number(e.target.value))}
-                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-center font-mono font-bold text-xs"
-                    />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-3">
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Total Comprado (UYU)</span>
+                    <strong className="text-emerald-400 text-sm">
+                      ${formatCurrency(selectedProductDetail.totalUYU || 0)}
+                    </strong>
                   </div>
-
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(idx)}
-                      className="p-2 self-end sm:self-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer transition-colors"
-                      title="Eliminar partida"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Líneas Adjudicadas</span>
+                    <strong className="text-white text-sm">{selectedProductDetail.lineCount || 0}</strong>
+                  </div>
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Organismos Compradores</span>
+                    <strong className="text-white text-sm">{selectedProductDetail.buyerCount || 0}</strong>
+                  </div>
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-slate-400 block">Proveedores Adjudicatarios</span>
+                    <strong className="text-white text-sm">{selectedProductDetail.supplierCount || 0}</strong>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Botonera de Acción */}
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-end gap-3">
-            <button
-              onClick={handleSaveTender}
-              disabled={isSaving || !evaluationResult}
-              className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
-            >
-              <Save size={15} />
-              <span>{isSaving ? 'Guardando...' : 'Guardar en BD'}</span>
-            </button>
-
-            <button
-              onClick={handleEvaluate}
-              disabled={isEvaluating}
-              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#00a2e8] hover:bg-[#0092d0] text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
-            >
-              <Sparkles size={16} className={isEvaluating ? 'animate-spin' : ''} />
-              <span>{isEvaluating ? 'Calculando con David & Aristóteles...' : '⚡ Evaluar Factibilidad & Dialéctica'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Estado de Carga: Indicador de Pensamiento Dialéctico Multi-Agente */}
-      {isEvaluating && (
-        <div className="p-5 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-amber-950 text-white border border-indigo-500/40 shadow-xl space-y-3 animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center">
-                <Sparkles className="animate-spin text-amber-400" size={20} />
+                {/* Baselines de Precios de SICE */}
+                {selectedProductDetail.priceUnits && selectedProductDetail.priceUnits.length > 0 && (
+                  <div>
+                    <span className="text-xs font-semibold text-slate-300 block mb-1.5 uppercase tracking-wider">
+                      Dispersión de Precios Históricos (Percentiles)
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      {selectedProductDetail.priceUnits.map((pu: any, idx: number) => (
+                        <div key={idx} className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs">
+                          <span className="font-bold text-indigo-400 block uppercase">
+                            {pu.currency} / {pu.unitName || 'UNIDAD'}
+                          </span>
+                          <div className="flex justify-between mt-1 text-[11px]">
+                            <span>Mediana (p50): <strong className="text-emerald-400">${pu.p50 || pu.median}</strong></span>
+                            <span>p25: ${pu.p25}</span>
+                            <span>p75: ${pu.p75}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                    Ollama qwen2.5:7b Local
-                  </span>
-                  <span className="text-[11px] text-indigo-200">Inferencia encadenada en curso</span>
-                </div>
-                <h4 className="text-sm font-bold text-white">
-                  {evaluatingStep === 'david'
-                    ? '🏛️ Ing. David analizando pliego, fotometría y curvas .IES...'
-                    : '⚖️ Aristóteles estructurando propuesta comercial y retórica B2B...'}
-                </h4>
-              </div>
-            </div>
+            )}
 
-            <div className="flex items-center space-x-2 text-xs font-mono">
-              <div className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border transition-all ${
-                evaluatingStep === 'david'
-                  ? 'bg-indigo-600 text-white border-indigo-400 font-bold shadow-md'
-                  : 'bg-slate-800/80 text-slate-400 border-slate-700'
-              }`}>
-                <span>1. Auditoría David</span>
-                {evaluatingStep === 'david' && <span className="animate-pulse">●</span>}
+            {/* Tabla de Productos SICE */}
+            {productsList.length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-800/80 text-slate-400 uppercase tracking-wider font-semibold">
+                    <tr>
+                      <th className="p-3">Código</th>
+                      <th className="p-3">Descripción</th>
+                      <th className="p-3">Familia / Rubro</th>
+                      <th className="p-3">Total Comprado (UYU)</th>
+                      <th className="p-3">Contratos</th>
+                      <th className="p-3 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-slate-300">
+                    {productsList.map((p) => (
+                      <tr key={p.code} className="hover:bg-slate-800/50 transition-colors">
+                        <td className="p-3 font-mono font-bold text-indigo-400">{p.code}</td>
+                        <td className="p-3 font-medium text-white">{p.description}</td>
+                        <td className="p-3 text-slate-400">{p.famiName || p.rubroPath || '-'}</td>
+                        <td className="p-3 font-semibold text-emerald-400">
+                          {p.totalUYU ? `$${formatCurrency(p.totalUYU)}` : '-'}
+                        </td>
+                        <td className="p-3">{p.contractCount || 0}</td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleSelectProduct(p.code)}
+                            className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                              selectedProductCode === p.code
+                                ? 'bg-indigo-600 text-white border-indigo-500'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                            }`}
+                          >
+                            {isLoadingProductDetail && selectedProductCode === p.code ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin inline" />
+                            ) : (
+                              'Ver Baselines'
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <span className="text-slate-500 font-bold">→</span>
-              <div className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border transition-all ${
-                evaluatingStep === 'aristoteles'
-                  ? 'bg-amber-600 text-white border-amber-400 font-bold shadow-md'
-                  : 'bg-slate-800/80 text-slate-400 border-slate-700'
-              }`}>
-                <span>2. Réplica Aristóteles</span>
-                {evaluatingStep === 'aristoteles' && <span className="animate-pulse">●</span>}
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full bg-slate-800/60 rounded-full h-1.5 overflow-hidden">
-            <div
-              className={`h-full bg-gradient-to-r from-indigo-500 to-amber-400 transition-all duration-1000 ${
-                evaluatingStep === 'david' ? 'w-1/2' : 'w-full'
-              }`}
-            />
+            )}
           </div>
         </div>
       )}
 
-      {/* Resultados de la Evaluación */}
-      {evaluationResult && (
-        <div className="space-y-6 animate-in fade-in">
-          {/* Métricas Resumen */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <MetricCard
-              title={`Total Ofertado (${evaluationResult.moneda})`}
-              value={formatCurrency(evaluationResult.total_ofertado)}
-              icon={DollarSign}
-              badge={{
-                text: `${evaluationResult.margen_total_pct.toFixed(1)}% Margen`,
-                variant: 'success',
-              }}
-              subtitle={`Costo base: ${formatCurrency(evaluationResult.total_costo)}`}
-            />
-
-            <MetricCard
-              title="Viabilidad Logística"
-              value={evaluationResult.alerta_critica ? 'QUIEBRE CRÍTICO' : 'VIABLE EN PLAZA'}
-              icon={evaluationResult.alerta_critica ? AlertTriangle : ShieldCheck}
-              badge={{
-                text: evaluationResult.alerta_critica ? 'Riesgo Alto' : 'Óptimo',
-                variant: evaluationResult.alerta_critica ? 'danger' : 'success',
-              }}
-              subtitle={`Plazo oficial: ${evaluationResult.plazo_entrega_dias} días`}
-            />
-
-            <MetricCard
-              title="Ahorro Energético (ROI)"
-              value={`${evaluationResult.dictamen_david.roi_energetico.ahorro_energetico_pct}%`}
-              icon={Zap}
-              badge={{
-                text: `${evaluationResult.dictamen_david.roi_energetico.meses_retorno_roi}m Payback`,
-                variant: 'info',
-              }}
-              subtitle={`USD ${Math.round(evaluationResult.dictamen_david.roi_energetico.ahorro_dolares_anual).toLocaleString()} ahorro/año`}
-            />
-
-            <MetricCard
-              title="Estándar UNIT"
-              value={`${evaluationResult.dictamen_david.lux_objetivo} Lux`}
-              icon={TrendingUp}
-              badge={{
-                text: `UGR < ${evaluationResult.dictamen_david.ugr_maximo}`,
-                variant: 'info',
-              }}
-              subtitle={evaluationResult.dictamen_david.norma_aplicable.split('/')[0]}
-            />
-          </div>
-
-          {/* Tabla de Desglose de Partidas con Badges Logísticos */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Desglose Logístico & Económico por Partida
-              </h4>
-              <span className="text-xs text-slate-500 font-mono">
-                Tasa BROU: {evaluationResult.tasa_cambio_brou.toFixed(2)} UYU
-              </span>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase text-[10px]">
-                  <tr>
-                    <th className="px-4 py-3">Luminaria / SKU</th>
-                    <th className="px-4 py-3">Cant.</th>
-                    <th className="px-4 py-3">Stock MVD</th>
-                    <th className="px-4 py-3">Lead Time</th>
-                    <th className="px-4 py-3">Viabilidad Logística</th>
-                    <th className="px-4 py-3">Costo Unit.</th>
-                    <th className="px-4 py-3">Precio Sugerido</th>
-                    <th className="px-4 py-3">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {evaluationResult.items.map((it: TenderItemEvaluationResult) => {
-                    const isCritico = it.viabilidad_logistica === 'QUIEBRE_LOGISTICO_CRITICO';
-                    const isInmediato = it.viabilidad_logistica === 'VIABLE_STOCK_INMEDIATO';
-                    return (
-                      <tr key={it.sku} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">{it.sku}</div>
-                          <div className="text-[11px] text-slate-500 line-clamp-1">{it.descripcion}</div>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold">{it.cantidad_solicitada}</td>
-                        <td className="px-4 py-3 font-mono">{it.stock_deposito} u.</td>
-                        <td className="px-4 py-3 font-mono">{Math.round(it.lead_time_dias)} días</td>
-                        <td className="px-4 py-3">
-                          {isInmediato ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] border border-emerald-200 dark:border-emerald-800">
-                              <CheckCircle2 size={12} />
-                              <span>Stock Inmediato</span>
-                            </span>
-                          ) : isCritico ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-[#e74c3c] border border-rose-200 dark:border-rose-800">
-                              <AlertTriangle size={12} />
-                              <span>Quiebre: Faltan {it.unidades_faltantes}u ({it.dias_retraso_estimado}d retraso)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-[#f39c12] border border-amber-200 dark:border-amber-800">
-                              <Clock size={12} />
-                              <span>Tránsito / Importación</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-mono">
-                          {formatCurrency(it.costo_unitario_moneda)}
-                        </td>
-                        <td className="px-4 py-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
-                          {formatCurrency(it.precio_sugerido_unitario)}
-                        </td>
-                        <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">
-                          {formatCurrency(it.subtotal_precio)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Consola de Dictamen Dialéctico Generativo (David vs. Aristóteles) */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            {/* Header de la Consola */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] uppercase font-bold text-[#00a2e8] tracking-wider">
-                    Módulo Dialéctico B2B • Inferencia Local
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
-                    {evaluationResult.dictamen_david.modelo_utilizado || 'qwen2.5:7b'}
-                  </span>
-                  {evaluationResult.dictamen_aristoteles.latency_ms && (
-                    <span className="text-[10px] font-mono text-slate-500">
-                      ({(evaluationResult.dictamen_aristoteles.latency_ms / 1000).toFixed(1)}s)
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-2">
-                  <span>Debate de Ingeniería & Estrategia Retórica Comercial</span>
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 3: COMPETIDORES (PROVEEDORES) */}
+      {/* =================================================================== */}
+      {activeTab === 'competitors' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Buscador y Ranking de Proveedores */}
+            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-400" />
+                  Directorio de Empresas Adjudicatarias
                 </h3>
               </div>
 
-              {/* Selector de Paneles */}
-              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={supplierSearchQuery}
+                  onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchSuppliersData()}
+                  placeholder="Buscar por nombre o RUT (ej. UTE, ABB, Conaprole)..."
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500"
+                />
                 <button
-                  onClick={() => setActiveDialecticTab('both')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-                    activeDialecticTab === 'both'
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
+                  onClick={fetchSuppliersData}
+                  disabled={isLoadingSuppliers}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl text-sm font-semibold flex items-center gap-2"
                 >
-                  ⚔️ Debate Completo (2 Col)
+                  {isLoadingSuppliers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  <span>Buscar</span>
                 </button>
-                <button
-                  onClick={() => setActiveDialecticTab('david')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-                    activeDialecticTab === 'david'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
+              </div>
+
+              {/* Lista de Proveedores */}
+              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                {suppliersList.map((s) => {
+                  const sId = s.supplierId || s.id || '';
+                  return (
+                    <div
+                      key={sId}
+                      onClick={() => handleSelectSupplier(sId)}
+                      className="p-3.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer flex items-center justify-between transition-all"
+                    >
+                      <div>
+                        <h4 className="text-sm font-bold text-white">{s.name}</h4>
+                        <span className="text-xs text-slate-400 font-mono">ID: {sId}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-semibold text-emerald-400 block">
+                          ${formatCurrency(s.totalValue || s.totalAmount || 0)}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {s.totalContracts || s.transactionCount || 0} contratos
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Ficha del Competidor Seleccionado & Ranking Top */}
+            <div className="space-y-6">
+              {/* Ficha */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  Ficha del Competidor
+                </h3>
+
+                {isLoadingSupplierDetail ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                    <p className="text-xs">Cargando contratos y antecedentes RUPE...</p>
+                  </div>
+                ) : selectedSupplierDetail ? (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                      <h4 className="text-sm font-bold text-white">{selectedSupplierDetail.supplier?.name}</h4>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">
+                        RUT: {selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '-'}
+                      </p>
+                      <p className="text-xs text-emerald-400 font-semibold mt-1">
+                        Total Contratos: {selectedSupplierDetail.supplier?.totalContracts || 0}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                        Contratos Recientes Adjudicados
+                      </h5>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {(selectedSupplierDetail.recentContracts || []).map((c: any, idx: number) => (
+                          <div key={idx} className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-xs">
+                            <p className="font-semibold text-slate-200 line-clamp-1">{c.title || 'Contrato Estatal'}</p>
+                            <div className="flex justify-between text-slate-400 mt-1 text-[11px]">
+                              <span>{c.buyerName || 'Organismo'}</span>
+                              <span className="text-emerald-400 font-bold">
+                                {c.currency || 'UYU'} ${formatCurrency(c.amount || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-slate-500 text-xs">
+                    Seleccione una empresa de la lista para auditar sus contratos adjudicados y antecedentes.
+                  </div>
+                )}
+              </div>
+
+              {/* Ranking Top Proveedores */}
+              {topSuppliersList.length > 0 && (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                    Top Proveedores del Estado
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    {topSuppliersList.slice(0, 5).map((ts, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
+                        <span className="text-white truncate max-w-[180px] font-medium">{ts.name}</span>
+                        <span className="text-emerald-400 font-bold">
+                          ${formatCurrency(ts.totalAmount || ts.totalValue || 0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 4: RADIOGRAFÍA DE COMPRADORES & INTENDENCIAS */}
+      {/* =================================================================== */}
+      {activeTab === 'buyers' && (
+        <div className="space-y-6">
+          {/* Métricas y Comunas */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-indigo-400" />
+              Radiografía de las 19 Intendencias Departamentales
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Distribución de compra por comuna y modalidades de adjudicación (Compra Directa vs Licitación Abreviada vs Licitación Pública).
+            </p>
+
+            <div className="flex gap-2 mb-6">
+              <input
+                type="text"
+                value={buyersSearchQuery}
+                onChange={(e) => setBuyersSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchBuyersData()}
+                placeholder="Buscar organismo comprador o intendencia (ej. UTE, OSE, Intendencia de Canelones)..."
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500"
+              />
+              <button
+                onClick={fetchBuyersData}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl text-sm font-semibold flex items-center gap-2"
+              >
+                <Search className="w-4 h-4" />
+                <span>Buscar</span>
+              </button>
+            </div>
+
+            {isLoadingIntendencias ? (
+              <div className="py-12 text-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                <p className="text-xs">Cargando estadísticas departamentales...</p>
+              </div>
+            ) : intendenciasData?.departments ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {intendenciasData.departments.map((dept: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-slate-800/60 border border-slate-700/60 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-bold text-white">{dept.name}</h4>
+                      <span className="text-xs font-semibold text-emerald-400">
+                        ${formatCurrency(dept.totalSpendingUYU || dept.totalSpend || 0)} UYU
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-400 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Contratos:</span>
+                        <strong className="text-white">{dept.totalContracts || 0}</strong>
+                      </div>
+                      {dept.methodsBreakdown && (
+                        <div className="mt-2 pt-2 border-t border-slate-700/60">
+                          <span className="text-[11px] text-slate-400 block mb-1">Modalidades de Compra:</span>
+                          <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden flex">
+                            <div
+                              style={{ width: `${dept.methodsBreakdown.publica || 30}%` }}
+                              className="bg-indigo-500 h-full"
+                              title="Licitación Pública"
+                            />
+                            <div
+                              style={{ width: `${dept.methodsBreakdown.abreviada || 40}%` }}
+                              className="bg-amber-500 h-full"
+                              title="Licitación Abreviada"
+                            />
+                            <div
+                              style={{ width: `${dept.methodsBreakdown.directa || 30}%` }}
+                              className="bg-emerald-500 h-full"
+                              title="Compra Directa"
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                            <span>Pública</span>
+                            <span>Abreviada</span>
+                            <span>Directa</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Sin datos departamentales disponibles.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 5: CALENDARIO DE VENCIMIENTOS & CONTROL LOGÍSTICO */}
+      {/* =================================================================== */}
+      {activeTab === 'calendar' && (
+        <div className="space-y-6">
+          {/* Cabecera del Semáforo Logístico */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-emerald-400" />
+                  Semáforo Logístico de Entregas (Depósitos Uruguay)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Cruce automático de plazos de pliego con existencias físicas en Montevideo y tránsito marítimo.
+                </p>
+              </div>
+
+              {/* Métricas de Stock */}
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-400 block">Depósito Central MVD:</span>
+                  <strong className="text-emerald-400 text-sm">{calendarMeta.deposito_central} u.</strong>
+                </div>
+                <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-slate-400 block">Tránsito Marítimo:</span>
+                  <strong className="text-amber-400 text-sm">{calendarMeta.transito} u.</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Filtros del Semáforo */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setCalendarFilter('TODOS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  calendarFilter === 'TODOS' ? 'bg-slate-700 text-white' : 'bg-slate-800/60 text-slate-400'
+                }`}
+              >
+                Todos ({calendarItems.length})
+              </button>
+              <button
+                onClick={() => setCalendarFilter('VERDE')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  calendarFilter === 'VERDE' ? 'bg-emerald-600 text-white' : 'bg-slate-800/60 text-emerald-400'
+                }`}
+              >
+                🟢 Entrega Inmediata MVD
+              </button>
+              <button
+                onClick={() => setCalendarFilter('AMARILLO')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  calendarFilter === 'AMARILLO' ? 'bg-amber-600 text-white' : 'bg-slate-800/60 text-amber-400'
+                }`}
+              >
+                🟡 En Tránsito Marítimo
+              </button>
+              <button
+                onClick={() => setCalendarFilter('ROJO')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  calendarFilter === 'ROJO' ? 'bg-rose-600 text-white' : 'bg-slate-800/60 text-rose-400'
+                }`}
+              >
+                🔴 Fabricación Requerida
+              </button>
+              <button
+                onClick={() => setCalendarFilter('GUARDADOS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  calendarFilter === 'GUARDADOS' ? 'bg-indigo-600 text-white' : 'bg-slate-800/60 text-indigo-400'
+                }`}
+              >
+                ⭐ Solo Guardados
+              </button>
+
+              <div className="relative ml-auto min-w-[220px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-slate-400" />
+                <input
+                  type="text"
+                  value={calendarSearch}
+                  onChange={(e) => setCalendarSearch(e.target.value)}
+                  placeholder="Filtrar por objeto o comprador..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-3 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Listado de Vencimientos */}
+          <div className="space-y-3">
+            {isLoadingCalendar ? (
+              <div className="py-12 text-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                <p className="text-xs">Consultando calendario y semáforo logístico...</p>
+              </div>
+            ) : (
+              filteredCalendarItems.map((item) => (
+                <div
+                  key={item.compraId}
+                  className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
                 >
-                  🏛️ David (Técnico UNIT)
-                </button>
-                <button
-                  onClick={() => setActiveDialecticTab('aristoteles')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-                    activeDialecticTab === 'aristoteles'
-                      ? 'bg-white dark:bg-slate-900 text-amber-500 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  ⚖️ Aristóteles (Comercial)
-                </button>
-                <button
-                  onClick={() => setActiveDialecticTab('email')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
-                    activeDialecticTab === 'email'
-                      ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  ✉️ Propuesta Formal (Email)
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                          item.semaforo_logistico === 'VERDE'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : item.semaforo_logistico === 'AMARILLO'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}
+                      >
+                        {item.semaforo_logistico === 'VERDE'
+                          ? '🟢 Stock Disponible MVD'
+                          : item.semaforo_logistico === 'AMARILLO'
+                          ? '🟡 En Tránsito Marítimo'
+                          : '🔴 Requiere Fabricación'}
+                      </span>
+                      <span className="text-xs font-mono text-slate-400">ID: {item.compraId}</span>
+                      {item.saved && (
+                        <span className="text-[11px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+                          En Seguimiento
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-sm font-bold text-white line-clamp-1">{item.title}</h4>
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                      <span>{item.buyer}</span>
+                      <span>•</span>
+                      <span>Vence: <strong>{item.endDate ? item.endDate.split('T')[0] : 'Inmediato'}</strong> ({item.dias_restantes} días)</span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1">{item.diagnostico_logistico}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleLoadInCotizador({ compraId: item.compraId, title: item.title, buyer: { name: item.buyer } })}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20"
+                    >
+                      <span>Cotizar</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* CONTENIDO DE TAB 6: COTIZADOR & DICTAMEN B2B (DAVID VS ARISTÓTELES) */}
+      {/* =================================================================== */}
+      {activeTab === 'cotizador' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-amber-400" />
+              Cotizador & Análisis Dialéctico de Factibilidad
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Nombre de Obra / Proyecto</label>
+                <input
+                  type="text"
+                  value={proyectoNombre}
+                  onChange={(e) => setProyectoNombre(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Cliente / Organismo</label>
+                <input
+                  type="text"
+                  value={clienteLicitacion}
+                  onChange={(e) => setClienteLicitacion(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Plazo de Entrega (Días)</label>
+                <input
+                  type="number"
+                  value={plazoEntregaDias}
+                  onChange={(e) => setPlazoEntregaDias(parseInt(e.target.value) || 30)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Margen Objetivo %</label>
+                <input
+                  type="number"
+                  value={margenPct}
+                  onChange={(e) => setMargenPct(parseFloat(e.target.value) || 35)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+            </div>
+
+            {/* Partidas */}
+            <div className="space-y-2 mb-4">
+              <label className="block text-xs font-semibold text-slate-400">Partidas a Cotizar</label>
+              {items.map((it, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={it.sku}
+                    onChange={(e) => {
+                      const copy = [...items];
+                      copy[idx].sku = e.target.value;
+                      setItems(copy);
+                    }}
+                    placeholder="SKU"
+                    className="w-1/3 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white"
+                  />
+                  <input
+                    type="number"
+                    value={it.cantidad_solicitada}
+                    onChange={(e) => {
+                      const copy = [...items];
+                      copy[idx].cantidad_solicitada = parseInt(e.target.value) || 1;
+                      setItems(copy);
+                    }}
+                    className="w-1/4 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white"
+                  />
+                  <button
+                    onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                    className="p-2 text-slate-500 hover:text-rose-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setItems([...items, { sku: 'LUM-6060', cantidad_solicitada: 50 }])}
+                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Agregar Partida
+              </button>
+            </div>
+
+            <button
+              onClick={handleEvaluateTender}
+              disabled={isEvaluating}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+            >
+              {isEvaluating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span>Evaluar Factibilidad & Debate Dialéctico</span>
+            </button>
+
+            {/* Resultado de Evaluación Dialéctica */}
+            {evaluationResult && (
+              <div className="mt-6 border-t border-slate-800 pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={() => setActiveDialecticTab('both')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      activeDialecticTab === 'both' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    Debate Completo
+                  </button>
+                  <button
+                    onClick={() => setActiveDialecticTab('david')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      activeDialecticTab === 'david' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    Ing. David (Técnico)
+                  </button>
+                  <button
+                    onClick={() => setActiveDialecticTab('aristoteles')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      activeDialecticTab === 'aristoteles' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    Aristóteles (Comercial)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(activeDialecticTab === 'both' || activeDialecticTab === 'david') && (
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs prose prose-invert max-w-none">
+                      <ReactMarkdown>
+                        {typeof evaluationResult.dictamen_david === 'string'
+                          ? evaluationResult.dictamen_david
+                          : evaluationResult.dictamen_david?.dictamen_completo || ''}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                  {(activeDialecticTab === 'both' || activeDialecticTab === 'aristoteles') && (
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs prose prose-invert max-w-none">
+                      <ReactMarkdown>
+                        {typeof evaluationResult.dictamen_aristoteles === 'string'
+                          ? evaluationResult.dictamen_aristoteles
+                          : evaluationResult.dictamen_aristoteles?.estrategia_completa || evaluationResult.dictamen_aristoteles?.propuesta_formal || ''}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: RESUMEN IA DE PLIEGO */}
+      {/* =================================================================== */}
+      {selectedSummaryCallId && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                Resumen IA de Pliego Oficial (#{selectedSummaryCallId})
+              </h3>
+              <div className="flex items-center gap-2">
+                {summaryData?.model && (
+                  <span className="text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-0.5 rounded-full font-mono">
+                    {summaryData.model}
+                  </span>
+                )}
+                <button onClick={() => setSelectedSummaryCallId(null)} className="text-slate-400 hover:text-white">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Contenido de Paneles */}
-            <div className="p-6">
-              {/* VISTA 1: Ambos Agentes en Grilla de 2 Columnas */}
-              {activeDialecticTab === 'both' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Tarjeta Azul Marino / Acero (Ing. David Jiménez Vera) */}
-                  <div className="bg-slate-950 text-slate-100 rounded-3xl border border-slate-800 p-5 space-y-4 shadow-md flex flex-col justify-between">
-                    <div className="space-y-4">
-                      {/* Header David */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 text-indigo-300 flex items-center justify-center font-bold text-sm">
-                            DJ
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {isLoadingSummary ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+                  <p>Extrayendo resumen analítico del pliego con IA...</p>
+                </div>
+              ) : summaryData ? (
+                <div className="space-y-4">
+                  {/* Objeto */}
+                  <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                    <span className="text-indigo-400 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                      Objeto de la Contratación
+                    </span>
+                    <p className="text-slate-200 leading-relaxed font-medium text-xs">
+                      {renderSafeValue(summaryData.objeto, 'No especificado')}
+                    </p>
+                  </div>
+
+                  {/* Plazos y Cronograma */}
+                  <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                    <span className="text-amber-400 font-semibold block mb-2 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> Plazos y Cronograma Oficial
+                    </span>
+                    {summaryData.plazos && typeof summaryData.plazos === 'object' && !Array.isArray(summaryData.plazos) ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {summaryData.plazos.recepcionOfertas && (
+                          <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block font-semibold">Recepción de Ofertas</span>
+                            <span className="text-xs text-white font-mono">{summaryData.plazos.recepcionOfertas}</span>
                           </div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                                🏛️ Dictamen Electrotécnico & Normativo UNIT
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-sm text-white">
-                              {evaluationResult.dictamen_david.agente}
-                            </h4>
-                            <p className="text-[11px] text-slate-400">
-                              {evaluationResult.dictamen_david.cargo}
-                            </p>
+                        )}
+                        {summaryData.plazos.aperturaOfertas && (
+                          <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block font-semibold">Apertura de Ofertas</span>
+                            <span className="text-xs text-white font-mono">{summaryData.plazos.aperturaOfertas}</span>
                           </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 font-semibold">
-                            UGR &lt; {evaluationResult.dictamen_david.ugr_maximo}
-                          </span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 font-semibold">
-                            {evaluationResult.dictamen_david.lux_objetivo} Lux
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Semáforo de Plazo & Homologación */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-900/80 rounded-2xl border border-slate-800 text-[11px]">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-slate-400">Compatibilidad:</span>
-                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px]">
-                            <CheckCircle2 size={12} />
-                            <span>UNIT 180 Aprobada</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-slate-400">Plazo vs Marítimo (60d):</span>
-                          {evaluationResult.dictamen_david.semaforo_plazo === 'VERDE' ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px]">
-                              <span>🟢 Seguro (&gt;60d)</span>
-                            </span>
-                          ) : evaluationResult.dictamen_david.semaforo_plazo === 'AMARILLO' ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full font-bold bg-amber-950 text-amber-300 border border-amber-800 text-[10px]">
-                              <span>🟡 Moderado (30-60d)</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full font-bold bg-rose-950 text-rose-300 border border-rose-800 text-[10px]">
-                              <span>🔴 Crítico (&lt;30d)</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Sustitución Local Sugerida en caso de Quiebre */}
-                      {evaluationResult.dictamen_david.sustitucion_local_sugerida && (
-                        <div className={`p-3 rounded-2xl border text-[11px] leading-relaxed ${
-                          evaluationResult.alerta_critica
-                            ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
-                            : 'bg-indigo-950/30 border-indigo-800/50 text-indigo-200'
-                        }`}>
-                          <div className="font-bold flex items-center space-x-1.5 mb-1">
-                            <Layers size={13} className={evaluationResult.alerta_critica ? 'text-rose-400' : 'text-indigo-400'} />
-                            <span>Plan de Sustitución & Homologación Local:</span>
+                        )}
+                        {summaryData.plazos.consultas && (
+                          <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-400 block font-semibold">Período de Consultas</span>
+                            <span className="text-xs text-white font-mono">{summaryData.plazos.consultas}</span>
                           </div>
-                          <p>{evaluationResult.dictamen_david.sustitucion_local_sugerida}</p>
-                        </div>
-                      )}
-
-                      {/* Cuerpo Markdown David */}
-                      <div className="text-xs text-slate-300 leading-relaxed max-h-[500px] overflow-y-auto pr-2 space-y-2">
-                        <ReactMarkdown>
-                          {cleanMarkdown(evaluationResult.dictamen_david.dictamen_completo)}
-                        </ReactMarkdown>
+                        )}
                       </div>
-                    </div>
-
-                    {evaluationResult.alerta_critica && (
-                      <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-[11px] flex items-center space-x-2">
-                        <AlertTriangle size={14} className="shrink-0 text-rose-400" />
-                        <span>Alerta de quiebre activo: Requiere homologación por partidas con stock en plaza Montevideo.</span>
+                    ) : (
+                      <div className="text-slate-200">{renderSafeValue(summaryData.plazos, 'Según pliego')}</div>
+                    )}
+                    {summaryData.plazoEjecucion && (
+                      <div className="mt-2 text-[11px] text-slate-300">
+                        <strong className="text-slate-400">Plazo de ejecución:</strong> {summaryData.plazoEjecucion}
                       </div>
                     )}
                   </div>
 
-                  {/* Tarjeta Ámbar / Dorada (Aristóteles) */}
-                  <div className="bg-[#181308] dark:bg-[#140f06] text-amber-50 rounded-3xl border border-amber-900/40 p-5 space-y-4 shadow-md flex flex-col justify-between">
-                    <div className="space-y-4">
-                      {/* Header Aristóteles */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-900/40">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex items-center justify-center font-bold text-sm">
-                            <Scale size={18} />
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#f39c12]">
-                                ⚖️ Estrategia Retórica B2B & Propuesta
+                  {/* Condiciones Comerciales y Garantías */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-3 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                      <span className="text-emerald-400 font-semibold block mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5" /> Cotización & Presupuesto
+                      </span>
+                      <div className="text-slate-300 space-y-1">
+                        {summaryData.formaCotizacion && (
+                          <p><strong className="text-slate-400">Forma:</strong> {summaryData.formaCotizacion}</p>
+                        )}
+                        {summaryData.montoReferencia && (
+                          <p><strong className="text-slate-400">Monto ref:</strong> {summaryData.montoReferencia}</p>
+                        )}
+                        {!summaryData.formaCotizacion && !summaryData.montoReferencia && (
+                          <p className="text-slate-400">Conforme a términos del pliego.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                      <span className="text-blue-400 font-semibold block mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Garantías Exigidas
+                      </span>
+                      <div className="text-slate-300">
+                        {renderSafeValue(summaryData.garantias, 'No requeridas según pliego')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requisitos Clave */}
+                  {summaryData.requisitosClave && (
+                    <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                      <span className="text-indigo-400 font-semibold block mb-1.5 uppercase tracking-wider text-[10px]">
+                        Requisitos Clave & Normativa
+                      </span>
+                      {renderSafeValue(summaryData.requisitosClave)}
+                    </div>
+                  )}
+
+                  {/* Criterios de Evaluación */}
+                  {summaryData.criteriosEvaluacion && (
+                    <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                      <span className="text-emerald-400 font-semibold block mb-1.5 uppercase tracking-wider text-[10px]">
+                        Criterios de Evaluación & Adjudicación
+                      </span>
+                      {renderSafeValue(summaryData.criteriosEvaluacion)}
+                    </div>
+                  )}
+
+                  {/* Documentación Requerida */}
+                  {summaryData.documentacionRequerida && (
+                    <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                      <span className="text-amber-400 font-semibold block mb-1.5 uppercase tracking-wider text-[10px]">
+                        Documentación a Presentar
+                      </span>
+                      {renderSafeValue(summaryData.documentacionRequerida)}
+                    </div>
+                  )}
+
+                  {/* Observaciones */}
+                  {summaryData.observaciones && (
+                    <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                      <span className="text-amber-400 font-semibold block mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Observaciones & Puntos Críticos
+                      </span>
+                      {renderSafeValue(summaryData.observaciones)}
+                    </div>
+                  )}
+
+                  {/* Documentos de Pliego Original */}
+                  {summaryData.sourceDocs && summaryData.sourceDocs.length > 0 && (
+                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                      <span className="text-slate-400 font-semibold block mb-2 uppercase tracking-wider text-[10px]">
+                        Pliegos Originales Adjuntos (Compras Estatales)
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {summaryData.sourceDocs.map((url, uidx) => {
+                          const fileName = url.split('/').pop() || `Pliego ${uidx + 1}`;
+                          return (
+                            <a
+                              key={uidx}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 rounded-lg border border-slate-700 text-xs transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>{fileName}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Disclaimer */}
+                  {summaryData.disclaimer && (
+                    <p className="text-[10px] text-slate-500 italic text-center pt-2">
+                      ℹ️ {summaryData.disclaimer}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-8">Resumen en procesamiento o no disponible para este pliego.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: BENCHMARKS DE PRECIOS & HISTORIAL ESTATAL SICE */}
+      {/* =================================================================== */}
+      {selectedBenchmarkCallId && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                  Precios de Referencia SICE & Benchmarks Estatales (#{selectedBenchmarkCallId})
+                </h3>
+                {selectedBenchmarkCallTitle && (
+                  <p className="text-xs text-slate-400 truncate max-w-xl mt-0.5">
+                    {selectedBenchmarkCallTitle} • <span className="text-slate-300 font-medium">{selectedBenchmarkBuyer}</span>
+                  </p>
+                )}
+              </div>
+              <button onClick={() => setSelectedBenchmarkCallId(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {/* Advertencia Metodológica SICE */}
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <p className="text-indigo-200/90 leading-relaxed text-[11px]">
+                  <strong>Metodología de Precios del Estado:</strong> Los baselines reflejan la <strong>mediana histórica (p50)</strong> y el rango intercuartil (p25 a p75) de adquisiciones estatales en compras públicas (SICE/ARCE). El uso de la mediana mitiga distorsiones por cantidades anómalas registradas en pliegos.
+                </p>
+              </div>
+
+              {isLoadingBenchmarks ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-400" />
+                  <p>Consultando baselines y percentiles en compras públicas...</p>
+                </div>
+              ) : benchmarksData.length > 0 ? (
+                <div className="space-y-4">
+                  {benchmarksData.map((bm, idx) => {
+                    const siceCode = bm.siceCode || bm.classificationId;
+                    const itemName = bm.description || bm.label || `Ítem #${idx + 1}`;
+                    const hasBaselines = bm.priceBaselines && bm.priceBaselines.length > 0;
+                    const contractCount = bm.contractCount || bm.sampleCount || bm.product?.contractCount || 0;
+                    const topSuppliers = bm.topSuppliers || bm.product?.topSuppliers || [];
+                    const topBuyers = bm.topBuyers || bm.product?.topBuyers || [];
+
+                    return (
+                      <div key={idx} className="p-4 bg-slate-800/70 border border-slate-700/70 rounded-xl space-y-3">
+                        {/* Header de Ítem */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/50 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            {siceCode ? (
+                              <span className="font-mono text-[10px] bg-slate-900 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md font-semibold">
+                                SICE: {siceCode}
                               </span>
-                            </div>
-                            <h4 className="font-bold text-sm text-amber-100">
-                              Aristóteles
-                            </h4>
-                            <p className="text-[11px] text-amber-300/70">
-                              Director Estratégico de Cierre Comercial B2B
-                            </p>
+                            ) : (
+                              <span className="text-[10px] bg-slate-900 text-slate-400 px-2 py-0.5 rounded-md font-mono">
+                                S/C
+                              </span>
+                            )}
+                            <h4 className="font-bold text-white text-sm">{itemName}</h4>
                           </div>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {contractCount} adjudicaciones históricas analizadas
+                          </span>
                         </div>
 
-                        {/* Botón Destacado: Copiar Propuesta Formal */}
-                        <button
-                          onClick={handleCopyEmail}
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer shadow-md transition-colors self-start sm:self-auto"
-                        >
-                          {copiedEmail ? <Check size={14} /> : <Copy size={14} />}
-                          <span>{copiedEmail ? '¡Copiado!' : '📋 Copiar Propuesta Formal'}</span>
-                        </button>
-                      </div>
+                        {/* Baselines de Precios o Badge de Sin Antecedentes */}
+                        {!hasBaselines ? (
+                          <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-lg flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="text-slate-300 text-[11px]">
+                              Sin antecedentes directos de precios en SICE para este código. Se sugiere cotización basada en costo más margen objetivo.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                            {bm.priceBaselines!.map((pb, pidx) => (
+                              <div key={pidx} className="p-3 bg-slate-900/90 border border-slate-700/60 rounded-xl">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[10px] font-bold text-indigo-300 uppercase font-mono tracking-wider">
+                                    {pb.currency} / {pb.unitName}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    N={pb.n} contratos
+                                  </span>
+                                </div>
+                                <div className="mb-2">
+                                  <span className="text-[10px] text-slate-400 block">Mediana Estatal (p50):</span>
+                                  <span className="text-lg font-black text-emerald-400 block font-mono">
+                                    ${Number(pb.p50 || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 flex justify-between border-t border-slate-800 pt-1.5 font-mono">
+                                  <span>p25: ${Number(pb.p25 || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span>p75: ${Number(pb.p75 || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <span>p95: ${Number(pb.p95 || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                      {/* Lema Estratégico */}
-                      <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-800/40 text-xs text-amber-200 italic">
-                        "{evaluationResult.dictamen_aristoteles.frase_fuerza}"
-                      </div>
+                        {/* Historial de Proveedores Ganadores */}
+                        {topSuppliers.length > 0 && (
+                          <div className="pt-2 border-t border-slate-700/40">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5 flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-indigo-400" /> Principales Proveedores Adjudicados Anteriormente:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {topSuppliers.map((s: any, sidx: number) => (
+                                <div key={sidx} className="p-1.5 px-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] flex items-center gap-2">
+                                  <span className="font-semibold text-slate-200">{s.name}</span>
+                                  {s.spendUYU && (
+                                    <span className="text-emerald-400 font-mono">
+                                      ${(s.spendUYU / 1000).toFixed(0)}k UYU
+                                    </span>
+                                  )}
+                                  {s.lines && <span className="text-slate-500 font-mono">({s.lines} adjs)</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                      {/* Cuerpo Markdown Aristóteles */}
-                      <div className="text-xs text-amber-100/90 leading-relaxed max-h-[440px] overflow-y-auto pr-2 space-y-2">
-                        <ReactMarkdown>
-                          {cleanMarkdown(evaluationResult.dictamen_aristoteles.estrategia_completa)}
-                        </ReactMarkdown>
+                        {/* Organismos Compradores */}
+                        {topBuyers.length > 0 && (
+                          <div className="pt-2 border-t border-slate-700/40">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5 flex items-center gap-1">
+                              <Landmark className="w-3 h-3 text-amber-400" /> Organismos que Más Compran este Ítem:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {topBuyers.map((b: any, bidx: number) => (
+                                <span key={bidx} className="p-1 px-2 bg-slate-900 border border-slate-800 rounded text-[10px] text-slate-300">
+                                  {b.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
-
-              {/* VISTA 2: David Full Width */}
-              {activeDialecticTab === 'david' && (
-                <div className="bg-slate-950 text-slate-100 rounded-3xl border border-slate-800 p-6 space-y-4 shadow-md">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 text-indigo-300 flex items-center justify-center font-bold text-base">
-                        DJ
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                          🏛️ Dictamen Electrotécnico & Normativo UNIT
-                        </span>
-                        <h4 className="font-bold text-base text-white">
-                          {evaluationResult.dictamen_david.agente}
-                        </h4>
-                        <p className="text-xs text-slate-400">
-                          {evaluationResult.dictamen_david.cargo}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-mono px-3 py-1 rounded-xl bg-indigo-950 text-indigo-300 border border-indigo-800 font-semibold">
-                      {evaluationResult.dictamen_david.norma_aplicable}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-200 leading-relaxed max-h-[600px] overflow-y-auto pr-2 space-y-3">
-                    <ReactMarkdown>
-                      {cleanMarkdown(evaluationResult.dictamen_david.dictamen_completo)}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              )}
-
-              {/* VISTA 3: Aristóteles Full Width */}
-              {activeDialecticTab === 'aristoteles' && (
-                <div className="bg-[#181308] dark:bg-[#140f06] text-amber-50 rounded-3xl border border-amber-900/40 p-6 space-y-4 shadow-md">
-                  <div className="flex items-center justify-between pb-3 border-b border-amber-900/40">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex items-center justify-center font-bold text-base">
-                        <Scale size={22} />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#f39c12]">
-                          ⚖️ Estrategia Retórica B2B & Negociación
-                        </span>
-                        <h4 className="font-bold text-base text-amber-100">
-                          Aristóteles
-                        </h4>
-                        <p className="text-xs text-amber-300/70">
-                          Director Estratégico de Cierre Comercial B2B
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleCopyEmail}
-                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer shadow-md transition-colors"
-                    >
-                      {copiedEmail ? <Check size={14} /> : <Copy size={14} />}
-                      <span>{copiedEmail ? '¡Copiado!' : '📋 Copiar Propuesta Formal'}</span>
-                    </button>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-800/40 text-sm font-semibold text-amber-200 italic">
-                    "{evaluationResult.dictamen_aristoteles.frase_fuerza}"
-                  </div>
-
-                  <div className="text-xs text-amber-100/90 leading-relaxed max-h-[600px] overflow-y-auto pr-2 space-y-3">
-                    <ReactMarkdown>
-                      {cleanMarkdown(evaluationResult.dictamen_aristoteles.estrategia_completa)}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              )}
-
-              {/* VISTA 4: Propuesta Formal para Email */}
-              {activeDialecticTab === 'email' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40">
-                    <div className="flex items-center space-x-2 text-xs text-slate-600 dark:text-slate-300">
-                      <Mail size={16} className="text-[#00a2e8]" />
-                      <span>Propuesta ejecutiva lista para copiar y enviar a <strong>{evaluationResult.cliente_licitacion}</strong></span>
-                    </div>
-                    <button
-                      onClick={handleCopyEmail}
-                      className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer shadow-md transition-colors"
-                    >
-                      {copiedEmail ? <Check size={14} /> : <Copy size={14} />}
-                      <span>{copiedEmail ? '¡Copiado al portapapeles!' : '📋 Copiar Propuesta Formal'}</span>
-                    </button>
-                  </div>
-
-                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 font-sans text-xs leading-relaxed max-h-[600px] overflow-y-auto text-slate-800 dark:text-slate-200 space-y-3">
-                    <ReactMarkdown>
-                      {cleanMarkdown(evaluationResult.dictamen_aristoteles.estrategia_completa)}
-                    </ReactMarkdown>
-                  </div>
+              ) : (
+                <div className="py-8 text-center text-slate-400 space-y-2">
+                  <BarChart3 className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p>Sin baselines ni antecedentes de precios registrados en SICE para este pliego.</p>
+                  <p className="text-[11px] text-slate-500">Se recomienda basar la oferta en la calculadora de markup competitivo.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
-      {/* MODAL / DRAWER: Feed de Licitaciones Públicas B2B (ARCE / UTE / IMM / OSE - SERLUX) */}
-      {isFeedModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-start justify-between gap-4">
-              <div className="space-y-1.5 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-400 text-slate-950 uppercase tracking-wider flex items-center space-x-1">
-                    <Globe size={11} />
-                    <span>Radar ARCE · Compras Estatales Uruguay</span>
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-cyan-200 border border-white/20 font-mono">
-                    Calcu B2B Multi-Rubro
-                  </span>
-                  {feedMeta.fuente_estado === 'LIVE' ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      🟢 En Vivo (RSS OCDS)
-                    </span>
-                  ) : feedMeta.incluye_demo ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Sin llamados activos en el RSS para las keywords; mostrando ejemplos de demostración">
-                      🟡 Banco Multi-Rubro Verificado
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-300 border border-slate-500/40">
-                      ⚪ Offline / En Espera
-                    </span>
-                  )}
+
+      {/* =================================================================== */}
+      {/* DRAWER LATERAL: DICTAMEN TÉCNICO DE INGENIERÍA (OLLAMA LOCAL) */}
+      {/* =================================================================== */}
+      {technicalOpinionModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-slate-900 border-l border-slate-800 w-full max-w-2xl h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+            {/* Header del Drawer */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Sparkles className="w-5 h-5" />
                 </div>
-                <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                  <span>Licitaciones Públicas B2B en Tiempo Real (Uruguay)</span>
-                </h3>
-                <p className="text-xs text-indigo-200/80 max-w-3xl">
-                  Filtrado determinístico y semántico asistido por <strong>Agente Ollama Local</strong> sobre convocatorias de comprasestatales.gub.uy. Pliegos verificados, enlaces oficiales y precarga automática en el cotizador.
-                </p>
-              </div>
-
-              {/* Selector de Modelo Ollama y Botón de Gestión */}
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="hidden sm:flex items-center space-x-1.5 bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/20 text-xs">
-                  <Bot size={14} className="text-cyan-300" />
-                  <span className="text-[10px] text-slate-300 font-medium">Modelo Ollama:</span>
-                  <select
-                    value={selectedOllamaModel}
-                    onChange={(e) => setSelectedOllamaModel(e.target.value)}
-                    className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
-                    title="Seleccione el modelo local de Ollama para clasificación y sugerencias"
-                  >
-                    {availableOllamaModels.map((m) => (
-                      <option key={m} value={m} className="bg-slate-900 text-white">
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={() => handleOpenKeywordsModal(feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer"
-                  title="Configurar los 7 rubros y gestionar palabras clave de inclusión/exclusión"
-                >
-                  <Settings size={13} />
-                  <span>Configurar Rubros & Keywords</span>
-                </button>
-                <button
-                  onClick={() => setIsFeedModalOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-                  title="Cerrar ventana"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Barra de Filtros, Nichos y Sincronización */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              {/* Selector Rápido Dropdown + Tabs Dinámicas por Vertical Comercial */}
-              <div className="flex flex-wrap items-center gap-2 overflow-x-auto no-scrollbar max-w-full md:max-w-[65%]">
-                {/* Selector Dropdown de Rubro */}
-                <div className="shrink-0 flex items-center space-x-1.5 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs shadow-xs">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Rubro:</span>
-                  <select
-                    value={feedNichoFilter}
-                    onChange={(e) => {
-                      const vId = e.target.value;
-                      setFeedNichoFilter(vId);
-                      if (vId !== 'TODAS') {
-                        setSelectedVerticalForMgmt(vId);
-                      }
-                      fetchFeed(vId, feedSearchQuery);
-                    }}
-                    className="bg-transparent text-slate-800 dark:text-slate-100 font-bold text-xs focus:outline-none cursor-pointer"
-                  >
-                    <option value="TODAS">🌐 Todos los Rubros ({feedMeta.total})</option>
-                    {verticals.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.icon} {v.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Tabs Horizontales */}
-                <button
-                  onClick={() => {
-                    setFeedNichoFilter('TODAS');
-                    fetchFeed('TODAS', feedSearchQuery);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    feedNichoFilter === 'TODAS'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  Todas ({feedMeta.total})
-                </button>
-                {verticals.map((v) => {
-                  const isSelected = feedNichoFilter === v.id;
-                  return (
-                    <button
-                      key={v.id}
-                      onClick={() => {
-                        setFeedNichoFilter(v.id);
-                        setSelectedVerticalForMgmt(v.id);
-                        fetchFeed(v.id, feedSearchQuery);
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shrink-0 border ${
-                        isSelected
-                          ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm'
-                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <span>{v.icon}</span>
-                      <span>{v.nombre.split('&')[0].trim()}</span>
-                      {v.keywords_count !== undefined && (
-                        <span className="text-[10px] opacity-75 font-mono">({v.keywords_count})</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Búsqueda y Botón de Sincronización Manual */}
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="relative flex-1 md:w-56">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={feedSearchQuery}
-                    onChange={(e) => setFeedSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        fetchFeed(feedNichoFilter, feedSearchQuery);
-                      }
-                    }}
-                    placeholder="Buscar por organismo, término..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <button
-                  onClick={() => fetchFeed(feedNichoFilter, feedSearchQuery)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-                  title="Aplicar búsqueda"
-                >
-                  Filtrar
-                </button>
-                <button
-                  onClick={handleSyncFeedNow}
-                  disabled={isSyncingFeed}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm cursor-pointer disabled:opacity-50 transition-all shrink-0"
-                  title="Consultar los últimos releases de ARCE en vivo"
-                >
-                  <RefreshCw size={13} className={isSyncingFeed ? 'animate-spin' : ''} />
-                  <span>{isSyncingFeed ? 'Sincronizando...' : '🔄 Sincronizar ARCE'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Chips de Búsqueda Rápida 1-Clic Multi-Rubro */}
-            <div className="px-6 py-2 bg-slate-50/90 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0">
-                Atajos de pliegos uruguayos:
-              </span>
-              <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
-                {QUICK_CHIPS.map((chip) => {
-                  const isActive = feedSearchQuery.toLowerCase() === chip.query.toLowerCase();
-                  return (
-                    <button
-                      key={chip.label}
-                      onClick={() => {
-                        setFeedSearchQuery(chip.query);
-                        setFeedNichoFilter(chip.nicho);
-                        fetchFeed(chip.nicho, chip.query);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all border shrink-0 ${
-                        isActive
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                      }`}
-                      title={`Filtrar por ${chip.query}`}
-                    >
-                      {chip.label}
-                    </button>
-                  );
-                })}
-                {feedSearchQuery && (
-                  <button
-                    onClick={() => {
-                      setFeedSearchQuery('');
-                      fetchFeed(feedNichoFilter, '');
-                    }}
-                    className="px-2 py-1 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 cursor-pointer transition-colors shrink-0"
-                    title="Limpiar búsqueda"
-                  >
-                    ✕ Limpiar
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Sub-barra de Telemetría */}
-            {(feedMeta.analizadas !== undefined || feedMeta.mensaje) && (
-              <div className="px-6 py-2 bg-slate-100/80 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  {feedMeta.analizadas !== undefined && (
-                    <span>
-                      Auditoría de Ingesta: <strong>{feedMeta.analizadas}</strong> analizadas · <strong>{feedMeta.descartadas || 0}</strong> descartadas por rubro ajeno.
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Dictamen Técnico de Ingeniería
+                  </h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[11px] text-indigo-400 font-medium">
+                      Ollama Local: {selectedOllamaModel}
                     </span>
-                  )}
-                  {feedMeta.mensaje && (
-                    <span className="ml-2 text-slate-600 dark:text-slate-300">
-                      ({feedMeta.mensaje})
+                    <span className="text-slate-600">•</span>
+                    <span className="text-[11px] text-slate-400">
+                      Rubro: {selectedVertical}
                     </span>
-                  )}
+                  </div>
                 </div>
-                {feedMeta.actualizado_al && (
-                  <span className="font-mono text-[10px]">
-                    Actualizado: {new Date(feedMeta.actualizado_al).toLocaleTimeString('es-UY')}
+              </div>
+              <button
+                onClick={() => setTechnicalOpinionModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Contexto de la Licitación */}
+            {technicalOpinionCall && (
+              <div className="px-5 py-3 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between text-xs">
+                <div className="truncate max-w-md">
+                  <span className="font-semibold text-slate-200 truncate block">
+                    {technicalOpinionCall.title}
+                  </span>
+                  <span className="text-slate-400 text-[11px]">
+                    {technicalOpinionCall.buyer?.name || 'Organismo Público'} • #{technicalOpinionCall.compraId}
+                  </span>
+                </div>
+                {technicalOpinionData && (
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 border ${
+                    technicalOpinionData.viable
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {technicalOpinionData.viable ? '✅ Aprobado' : '⚠️ Condicionado'}
                   </span>
                 )}
               </div>
             )}
 
-            {/* Modal Body: Lista de Llamados */}
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              {isLoadingFeed ? (
-                <div className="py-20 flex flex-col items-center justify-center space-y-3 text-slate-500">
-                  <Loader2 className="animate-spin text-cyan-500" size={36} />
-                  <p className="text-sm font-semibold">Consultando llamados y clasificando pertinencia con Agente Ollama ({selectedOllamaModel})...</p>
-                  <p className="text-xs text-slate-400">Verificando pliegos oficiales en Compras Estatales y aplicando matriz de palabras clave.</p>
+            {/* Contenido Scrollable */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+              {isLoadingOpinion ? (
+                <div className="py-24 text-center text-slate-400 space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-400" />
+                  <p className="font-semibold text-sm text-slate-200">
+                    Consultando al Agente Experto de Ingeniería...
+                  </p>
+                  <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                    Analizando pliego, normativa técnica ({selectedVertical}), inventario físico en Montevideo y baselines SICE con modelo <strong>{selectedOllamaModel}</strong>.
+                  </p>
                 </div>
-              ) : feedItems.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-4 max-w-xl mx-auto">
-                  <FileText size={42} className="mx-auto text-slate-300 dark:text-slate-600" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                      No se encontraron llamados para {feedSearchQuery ? `"${feedSearchQuery}"` : 'el filtro seleccionado'}.
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      En compras públicas uruguayas los pliegos suelen redactarse con terminología formal o sinónimos alternativos.
-                    </p>
+              ) : technicalOpinionData ? (
+                <div className="space-y-4">
+                  {/* Tarjeta del Perito */}
+                  <div className="p-3.5 bg-slate-800/80 border border-slate-700 rounded-xl flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-white text-sm">{technicalOpinionData.perito_nombre}</h4>
+                      <p className="text-slate-400 text-xs">{technicalOpinionData.perito_rol}</p>
+                    </div>
+                    <span className="text-[11px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full font-mono">
+                      {technicalOpinionData.fuente_ia}
+                    </span>
                   </div>
 
-                  {/* Sugerencias de Sinónimos de la IA Local y Botón de Consulta Dinámica */}
-                  <div className="p-4 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-left space-y-3.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center space-x-2 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
-                        <Sparkles size={14} className="text-indigo-500 animate-pulse" />
-                        <span>Sugerencias de Búsqueda de la IA ({selectedOllamaModel}):</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleExpandKeywordsAI(false, feedSearchQuery || undefined, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
-                          disabled={isExpandingAI}
-                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-xs cursor-pointer flex items-center space-x-1.5 transition-all"
-                          title="Consultar al modelo local de Ollama para expandir sinónimos de este rubro"
-                        >
-                          {isExpandingAI ? (
-                            <>
-                              <Loader2 size={12} className="animate-spin" />
-                              <span>Analizando ({aiExpandElapsedSeconds}s)...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Bot size={12} />
-                              <span>🧠 Pedir Sugerencias a Ollama</span>
-                            </>
-                          )}
-                        </button>
-                        {isExpandingAI && (
-                          <button
-                            onClick={() => handleExpandKeywordsAI(true, feedSearchQuery || undefined, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
-                            className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer shadow-xs transition-colors"
-                            title="Activar fallback heurístico seguro inmediato"
-                          >
-                            ⚡ Fallback Inmediato
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setAiExpandQuery(feedSearchQuery);
-                            handleOpenKeywordsModal(feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined);
-                          }}
-                          className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center space-x-1"
-                        >
-                          <span>Gestionar Rubro</span>
-                          <ArrowRight size={11} />
-                        </button>
-                      </div>
+                  {/* Alerta si está condicionado */}
+                  {technicalOpinionData.alerta_riesgo && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2 text-amber-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                      <span className="text-xs">{technicalOpinionData.alerta_riesgo}</span>
                     </div>
+                  )}
 
-                    {/* Si la IA generó sugerencias, mostrarlas con prioridad y acciones de 1-clic */}
-                    {aiExpandResult && (aiExpandResult.sinonimos_sugeridos?.length > 0 || aiExpandResult.keywords_inclusion_sugeridas?.length > 0) && (
-                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 space-y-2">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                          <span className="flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
-                            <Sparkles size={12} />
-                            <span>Propuestas del Agente Local ({aiExpandResult.model_used}):</span>
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Haga clic en el término para buscar, o en '+' para guardar y buscar
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            ...(aiExpandResult.sinonimos_sugeridos || []),
-                            ...(aiExpandResult.keywords_inclusion_sugeridas || []),
-                          ].map((term) => (
-                            <div
-                              key={term}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(term, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined)}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
-                                title={`Buscar pliegos con "${term}" inmediatamente`}
-                              >
-                                <span>🔍 {term}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(term, feedNichoFilter !== 'TODAS' ? feedNichoFilter : undefined, { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${term}" en el rubro e iniciar búsqueda`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Sugerencias Canónicas por Rubro con Botones de 1 Clic */}
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                        Atajos recomendados para pliegos de este rubro:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {(feedNichoFilter === 'ILUMINACION_EFICIENCIA' || feedSearchQuery.toLowerCase().includes('luz') || feedSearchQuery.toLowerCase().includes('foco')) && (
-                          ['luminaria', 'proyector', 'panel led', 'campana high bay', 'driver dali', 'alumbrado publico'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'ILUMINACION_EFICIENCIA')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'ILUMINACION_EFICIENCIA', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Iluminación y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'MOBILIARIO_EQUIPAMIENTO' || feedSearchQuery.toLowerCase().includes('mueble') || feedSearchQuery.toLowerCase().includes('silla')) && (
-                          ['silla giratoria', 'armario metalico', 'escritorio operativo', 'mostrador', 'puesto de trabajo'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'MOBILIARIO_EQUIPAMIENTO')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'MOBILIARIO_EQUIPAMIENTO', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Mobiliario y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'OBRA_CIVIL_CONSTRUCCION' || feedSearchQuery.toLowerCase().includes('obra') || feedSearchQuery.toLowerCase().includes('construccion')) && (
-                          ['tabiqueria yeso', 'drywall', 'cielorraso', 'impermeabilizacion', 'albanileria'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'OBRA_CIVIL_CONSTRUCCION')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'OBRA_CIVIL_CONSTRUCCION', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Obra Civil y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'ELECTROMECANICA_SUMINISTROS' || feedSearchQuery.toLowerCase().includes('electr')) && (
-                          ['tablero electrico', 'termomagnetica', 'disyuntor', 'cable subterraneo', 'generador'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'ELECTROMECANICA_SUMINISTROS')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'ELECTROMECANICA_SUMINISTROS', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Electromecánica y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'EQUIPAMIENTO_HOSPITALARIO' || feedSearchQuery.toLowerCase().includes('salud') || feedSearchQuery.toLowerCase().includes('hospital')) && (
-                          ['camilla de transporte', 'mobiliario clinico', 'acero inoxidable', 'autoclave', 'negatoscopio'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'EQUIPAMIENTO_HOSPITALARIO')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'EQUIPAMIENTO_HOSPITALARIO', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Hospitalario y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'TECNOLOGIA_REDES' || feedSearchQuery.toLowerCase().includes('red') || feedSearchQuery.toLowerCase().includes('comput')) && (
-                          ['rack 42u', 'switch administrable', 'fibra optica', 'patch cord cat6a', 'ups online'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'TECNOLOGIA_REDES')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'TECNOLOGIA_REDES', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Tecnología y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {(feedNichoFilter === 'SERVICIOS_LIMPIEZA_MANTENIMIENTO' || feedSearchQuery.toLowerCase().includes('limpi') || feedSearchQuery.toLowerCase().includes('servicio')) && (
-                          ['servicio de limpieza', 'limpieza integral', 'higiene y desinfeccion', 'mantenimiento edilicio', 'areas verdes'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'SERVICIOS_LIMPIEZA_MANTENIMIENTO')}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}"`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, 'SERVICIOS_LIMPIEZA_MANTENIMIENTO', { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" en Servicios y buscar`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                        {feedNichoFilter === 'TODAS' && (
-                          ['columnas alumbrado', 'sillas operativas', 'obra civil yeso', 'tableros electricos', 'servicio de limpieza', 'racks servidores'].map((syn) => (
-                            <div
-                              key={syn}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, undefined)}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors"
-                                title={`Buscar "${syn}" en todos los rubros`}
-                              >
-                                🔍 {syn}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(syn, undefined, { saveToDb: true, tipo: 'INCLUSION' })}
-                                className="px-1.5 py-1 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${syn}" e iniciar búsqueda`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      onClick={() => {
-                        setFeedSearchQuery('');
-                        fetchFeed(feedNichoFilter, '');
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-                    >
-                      Limpiar Filtros y Ver Todas
-                    </button>
+                  {/* Markdown del Dictamen */}
+                  <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl prose prose-invert max-w-none text-slate-200 leading-relaxed">
+                    <ReactMarkdown>{technicalOpinionData.dictamen_markdown}</ReactMarkdown>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {feedItems.map((item) => {
-                    const isImporting = importingFeedId === item.id;
-                    const orgName = item.organismo || '';
-                    const isMob = item.nicho === 'MOBILIARIO_CORPORATIVO';
-
-                    const orgBadgeColor =
-                      orgName.includes('UTE')
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                        : orgName.includes('IMM') || orgName.includes('Montevideo')
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800'
-                        : orgName.includes('BROU')
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                        : orgName.includes('OSE')
-                        ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800'
-                        : orgName.includes('ANTEL')
-                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800'
-                        : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700';
-
-                    const nichoBadgeColor = isMob
-                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-800'
-                      : 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border-amber-300 dark:border-amber-800';
-
-                    const candidateSkus = (item.skus_detectados && item.skus_detectados.length > 0)
-                      ? item.skus_detectados
-                      : (item.skus_sugeridos_catalogo || []);
-
-                    const hasCatalogSkus = candidateSkus.length > 0;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-indigo-500/50 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4"
-                      >
-                        <div className="space-y-2 flex-1">
-                          {/* Encabezado con Badges */}
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${orgBadgeColor}`}>
-                              {orgName.includes('Montevideo') ? '🏛️ IMM' : orgName.includes('UTE') ? '⚡ UTE' : orgName.includes('BROU') ? '🏦 BROU' : orgName.includes('OSE') ? '💧 OSE' : orgName.includes('ANTEL') ? '📡 ANTEL' : '🏢 ' + orgName}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${nichoBadgeColor} flex items-center space-x-1`}>
-                              {isMob ? <Armchair size={11} /> : <Lightbulb size={11} />}
-                              <span>{isMob ? 'Mobiliario Corporativo' : 'Iluminación Técnica'}</span>
-                            </span>
-                            {item.es_demo && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
-                                Demostración
-                              </span>
-                            )}
-                            <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">
-                              {item.numero_llamado || item.id}
-                            </span>
-                            {item.fecha_apertura && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center space-x-1">
-                                <Clock size={11} />
-                                <span>Apertura: {new Date(item.fecha_apertura).toLocaleDateString('es-UY')} ({item.dias_para_apertura ?? item.plazo_entrega_dias ?? 15}d)</span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Título Oficial */}
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug">
-                            {item.titulo}
-                          </h4>
-
-                          {/* Resumen de Necesidad */}
-                          {item.resumen_necesidad && (
-                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
-                              {item.resumen_necesidad}
-                            </p>
-                          )}
-
-                          {/* Cita / Snippet de Coincidencia en Pliego */}
-                          {item.snippet_coincidencia && (
-                            <blockquote className="p-2.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border-l-4 border-amber-500 text-xs italic text-slate-700 dark:text-slate-300">
-                              "{item.snippet_coincidencia}"
-                            </blockquote>
-                          )}
-
-                          {/* Tags de Palabras Clave Detectadas */}
-                          {item.keywords_detectadas && item.keywords_detectadas.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                              <span className="text-[10px] font-semibold text-slate-400">Coincidencias clave:</span>
-                              {item.keywords_detectadas.map((kw) => (
-                                <span
-                                  key={kw}
-                                  className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-800/60 flex items-center space-x-1"
-                                >
-                                  <Tag size={9} />
-                                  <span>{kw}</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Métricas y SKUs Detectados */}
-                          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-300 pt-1">
-                            {item.monto_estimado_usd !== null && item.monto_estimado_usd !== undefined && item.monto_estimado_usd > 0 && (
-                              <div>
-                                <span className="text-slate-400 font-medium">Presupuesto Estimado: </span>
-                                <strong className="font-mono text-emerald-600 dark:text-emerald-400">
-                                  {formatCurrency(item.monto_estimado_usd)}
-                                </strong>
-                              </div>
-                            )}
-
-                            {hasCatalogSkus && (
-                              <div className="flex items-center space-x-1.5">
-                                <span className="text-slate-400 font-medium">Mapeo Catálogo B2B: </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {candidateSkus.map((sku) => {
-                                    const qty = item.cantidades_sugeridas?.[sku];
-                                    return (
-                                      <span
-                                        key={sku}
-                                        className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono font-bold border border-indigo-200 dark:border-indigo-800"
-                                      >
-                                        {sku} {qty ? `(${qty}u)` : ''}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {item.clasificacion_fuente && (
-                              <span className="text-[10px] text-slate-400 italic">
-                                Clasificado por: {item.clasificacion_fuente === 'LLM' ? `Agente Ollama (${selectedOllamaModel})` : 'Motor Multi-Rubro Calcu'}
-                                {item.confianza ? ` (${Math.round(item.confianza * 100)}%)` : ''}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Botonera de Acciones */}
-                        <div className="flex flex-wrap md:flex-col items-stretch gap-2 shrink-0 md:min-w-[210px]">
-                          {/* Enlaces Oficiales Verificados */}
-                          <div className="flex items-center gap-1.5 w-full">
-                            <a
-                              href={item.pliego_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 flex items-center justify-center space-x-1 transition-colors cursor-pointer text-center"
-                              title="Ver ficha oficial del llamado en comprasestatales.gub.uy"
-                            >
-                              <ExternalLink size={12} />
-                              <span className="truncate">Pliego ARCE</span>
-                            </a>
-                            {item.pdf_download_url ? (
-                              <a
-                                href={item.pdf_download_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 flex items-center justify-center space-x-1 transition-colors cursor-pointer text-center"
-                                title="Descargar pliego de bases técnicas"
-                              >
-                                <Download size={12} />
-                                <span className="truncate">PDF Bases</span>
-                              </a>
-                            ) : null}
-                          </div>
-
-                          {/* Tarea 2.2: Importar al Cotizador en 1 clic */}
-                          <button
-                            onClick={() => handleImportToForm(item)}
-                            className="w-full px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center justify-center space-x-1.5 cursor-pointer transition-all hover:scale-[1.01]"
-                            title="Rellenar formulario de cotización al instante con este pliego"
-                          >
-                            <Zap size={13} className="text-amber-300" />
-                            <span>⚡ Importar al Cotizador</span>
-                          </button>
-
-                          {/* Acción Alternativa: Evaluación Directa con IA (si tiene partidas) */}
-                          {hasCatalogSkus && (
-                            <button
-                              onClick={() => handleImportFeedItem(item)}
-                              disabled={isImporting}
-                              className={`w-full px-3 py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center space-x-1.5 cursor-pointer border transition-all ${
-                                isImporting
-                                  ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed border-transparent'
-                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-                              }`}
-                              title="Evaluar factibilidad logística y generar dictámenes de David y Aristóteles"
-                            >
-                              {isImporting ? (
-                                <>
-                                  <Loader2 size={12} className="animate-spin" />
-                                  <span>Evaluando...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles size={12} />
-                                  <span>Evaluar con IA Directo</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Botón Acumulativo de Paginación ARCE: Buscar 20 Más */}
-              {feedItems.length > 0 && (
-                <div className="pt-4 pb-2 flex flex-col items-center justify-center">
-                  <button
-                    onClick={handleFetchMoreFeed}
-                    disabled={isFetchingMoreFeed}
-                    className="px-6 py-2.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold flex items-center space-x-2 shadow-xs cursor-pointer transition-all disabled:opacity-50 hover:scale-[1.01]"
-                    title="Consultar los siguientes 20 llamados oficiales sin borrar los actuales"
-                  >
-                    {isFetchingMoreFeed ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin text-indigo-600 dark:text-indigo-400" />
-                        <span>Consultando siguientes 20 licitaciones en ARCE...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw size={13} className="text-indigo-600 dark:text-indigo-400" />
-                        <span>➕ Cargar 20 licitaciones más (sin borrar las actuales)</span>
-                      </>
-                    )}
-                  </button>
-                  <span className="text-[10px] text-slate-400 pt-1">
-                    Inspección paginada de comprasestatales.gub.uy con modelo {selectedOllamaModel}
-                  </span>
-                </div>
+                <p className="text-slate-400 text-center py-12">No se pudo emitir el dictamen.</p>
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
-              <span className="text-xs text-slate-500 font-mono">
-                {feedItems.length} licitaciones mostradas · Filtro: {feedNichoFilter === 'TODAS' ? 'Todos los rubros' : feedNichoFilter}
-              </span>
+            {/* Footer de Acciones */}
+            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between">
               <button
-                onClick={() => setIsFeedModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+                onClick={() => {
+                  if (technicalOpinionData?.dictamen_markdown) {
+                    navigator.clipboard.writeText(technicalOpinionData.dictamen_markdown);
+                    setNotification({ type: 'success', message: 'Dictamen copiado al portapapeles.' });
+                  }
+                }}
+                disabled={!technicalOpinionData}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl font-medium text-xs flex items-center gap-2 border border-slate-700 transition-colors"
               >
-                Cerrar Explorador
+                <Copy className="w-4 h-4" /> Copiar Dictamen
+              </button>
+              <button
+                onClick={() => setTechnicalOpinionModalOpen(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold text-xs transition-colors"
+              >
+                Cerrar
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: GESTIÓN DE RUBROS COMERCIALES Y MATRIZ DE PALABRAS CLAVE */}
+      {/* =================================================================== */}
+      {/* MODAL: GESTIÓN DE PALABRAS CLAVE & EXPANSIÓN OLLAMA */}
+      {/* =================================================================== */}
       {isKeywordsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    <Settings size={16} />
-                  </span>
-                  <h3 className="text-base font-bold text-white">
-                    Gestión de Rubros y Matriz de Palabras Clave (B2B Multi-Rubro)
-                  </h3>
-                </div>
-                <p className="text-xs text-indigo-200/80">
-                  Configure los rubros comerciales, palabras clave de inclusión y señales de exclusión para escanear pliegos de compras públicas en Uruguay (ARCE).
-                </p>
-              </div>
-              <button
-                onClick={() => setIsKeywordsModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X size={18} />
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-400" />
+                Gestión de Palabras Clave & Expansión con Ollama ({selectedVertical})
+              </h3>
+              <button onClick={() => setIsKeywordsModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Selector de Vertical */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex items-center gap-2 overflow-x-auto no-scrollbar">
-              <span className="text-[11px] font-bold text-slate-500 shrink-0">Rubro activo:</span>
-              {verticals.map((v) => {
-                const isSelected = selectedVerticalForMgmt === v.id;
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => {
-                      setSelectedVerticalForMgmt(v.id);
-                      fetchKeywordsForVertical(v.id);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer shrink-0 transition-all border flex items-center space-x-1.5 ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <span>{v.icon}</span>
-                    <span>{v.nombre.split('&')[0].trim()}</span>
-                    {v.keywords_count !== undefined && (
-                      <span className="text-[10px] opacity-75 font-mono">({v.keywords_count})</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
-              {/* Sección 1: Formulario para Agregar Keywords */}
-              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
-                    <Plus size={14} className="text-indigo-500" />
-                    <span>Agregar Nuevas Palabras Clave</span>
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    Soporta múltiples términos separados por comas o saltos de línea
-                  </span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2.5">
-                  <select
-                    value={newKeywordTipo}
-                    onChange={(e: any) => setNewKeywordTipo(e.target.value)}
-                    className="p-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-                  >
-                    <option value="INCLUSION">🟢 INCLUSIÓN (Puntaje positivo)</option>
-                    <option value="EXCLUSION">🔴 EXCLUSIÓN (Descarte / Penalización)</option>
-                  </select>
-
-                  <input
-                    type="text"
-                    value={newKeywordText}
-                    onChange={(e) => setNewKeywordText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleAddKeywords();
-                    }}
-                    placeholder="Ej: faroles, balasto, downlight (o separados por coma)..."
-                    className="flex-1 p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-
-                  <button
-                    onClick={handleAddKeywords}
-                    disabled={!newKeywordText.trim()}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-all cursor-pointer shadow-sm shrink-0"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </div>
-
-              {/* Sección 2: Asistente IA Local Ollama para Sugerir Sinónimos y Palabras Clave */}
-              <div className="p-5 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 dark:from-indigo-950/20 dark:via-slate-900 dark:to-purple-950/20 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                      <Sparkles size={16} />
-                    </span>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      Asistente IA Local (Ollama: {selectedOllamaModel})
-                    </h4>
-                  </div>
-                  <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
-                    Sin timeout forzado · Control Heurístico Seguro
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Escriba un concepto o necesidad comercial para que el modelo analice y sugiera sinónimos técnicos habituales en compras estatales uruguayas y palabras de descarte.
+            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* Asistente IA Ollama para Expansión */}
+              <div className="p-4 bg-slate-950/60 border border-indigo-500/30 rounded-xl">
+                <span className="text-xs font-bold text-white block mb-1">
+                  🤖 Asistente de Expansión Semántica (Ollama Local: {selectedOllamaModel})
+                </span>
+                <p className="text-slate-400 mb-3">
+                  Ingrese un concepto para que el modelo local sugiera sinónimos técnicos y términos de inclusión/exclusión para el radar.
                 </p>
-
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={aiExpandQuery}
                     onChange={(e) => setAiExpandQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleExpandKeywordsAI(false);
-                    }}
-                    placeholder="Ej: Proyectores para alumbrado vial de rotondas..."
-                    className="flex-1 p-2 text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Ej. driver dali, panel led, columna vial..."
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white"
                   />
                   <button
-                    onClick={() => handleExpandKeywordsAI(false)}
+                    onClick={handleExpandKeywordsAI}
                     disabled={isExpandingAI}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white transition-all cursor-pointer shadow-sm flex items-center space-x-1.5 shrink-0"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 rounded-xl flex items-center gap-1.5"
                   >
-                    {isExpandingAI ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        <span>Consultando ({aiExpandElapsedSeconds}s)...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Bot size={13} />
-                        <span>Sugerir con IA</span>
-                      </>
-                    )}
+                    {isExpandingAI ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>Expandir con IA</span>
                   </button>
-                  {isExpandingAI && (
-                    <button
-                      onClick={() => handleExpandKeywordsAI(true)}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all cursor-pointer shrink-0"
-                      title="Activar de inmediato el fallback heurístico determinístico sin esperar más a Ollama"
-                    >
-                      ⚡ Fallback Inmediato
-                    </button>
-                  )}
                 </div>
 
-                {/* Resultado de la IA */}
                 {aiExpandResult && (
-                  <div className="p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/60 bg-white dark:bg-slate-800/80 space-y-4 animate-in fade-in duration-200">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-bold text-slate-800 dark:text-slate-200">
-                          Sugerencias Generadas ({aiExpandResult.model_used})
+                  <div className="mt-3 p-3 bg-slate-900 border border-slate-800 rounded-lg space-y-2">
+                    <span className="font-semibold text-slate-300 block">Sugerencias encontradas:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(aiExpandResult.sinonimos_sugeridos || []).map((term, i) => (
+                        <span key={i} className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full text-[11px]">
+                          {term}
                         </span>
-                        {aiExpandResult.es_fallback_heuristico ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                            ⚡ Fallback Heurístico
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                            🧠 Inferencia Local Ollama
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Botón Maestro: Agregar Todo y Buscar */}
-                      <button
-                        onClick={handleAddAllSuggestionsAndSearch}
-                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center space-x-1.5"
-                        title="Guardar todas las inclusiones y sinónimos en este rubro e iniciar búsqueda en el radar"
-                      >
-                        <Zap size={13} className="text-amber-300" />
-                        <span>⚡ Agregar Todas y Buscar en Radar</span>
-                      </button>
+                      ))}
                     </div>
-
-                    <p className="text-xs text-slate-600 dark:text-slate-300 italic">
-                      "{aiExpandResult.explicacion}"
-                    </p>
-
-                    {/* Sinónimos */}
-                    {aiExpandResult.sinonimos_sugeridos?.length > 0 && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
-                            Sinónimos identificados ({aiExpandResult.sinonimos_sugeridos.length}):
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Haga clic en el término para buscar, o en '+ Buscar' para guardar y buscar
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {aiExpandResult.sinonimos_sugeridos.map((s) => (
-                            <div
-                              key={s}
-                              className="inline-flex items-center rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(s, selectedVerticalForMgmt, { closeModal: true })}
-                                className="px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
-                                title={`Buscar inmediatamente "${s}" en el Radar`}
-                              >
-                                <Search size={11} className="text-indigo-500" />
-                                <span>{s}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(s, selectedVerticalForMgmt, { saveToDb: true, tipo: 'INCLUSION', closeModal: true })}
-                                className="px-2 py-1 text-[11px] font-bold bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-500 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Guardar "${s}" en el rubro e iniciar búsqueda en el Radar`}
-                              >
-                                + Buscar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, { keywords: [s], tipo: 'INCLUSION' });
-                                  fetchKeywordsForVertical(selectedVerticalForMgmt);
-                                  const updatedVerts = await apiService.getBiddingVerticals();
-                                  if (updatedVerts && updatedVerts.length > 0) setVerticals(updatedVerts);
-                                  setNotification({ type: 'success', message: `"${s}" guardada en ${selectedVerticalForMgmt}.` });
-                                }}
-                                className="px-1.5 py-1 text-xs text-slate-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 border-l border-indigo-200 dark:border-indigo-800 cursor-pointer transition-colors"
-                                title={`Solo guardar en la base de datos`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Inclusiones Sugeridas */}
-                    {aiExpandResult.keywords_inclusion_sugeridas?.length > 0 && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                            Inclusiones recomendadas ({aiExpandResult.keywords_inclusion_sugeridas.length}):
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Términos que aumentan el puntaje de coincidencia del llamado
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {aiExpandResult.keywords_inclusion_sugeridas.map((kw) => (
-                            <div
-                              key={kw}
-                              className="inline-flex items-center rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/40 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { closeModal: true })}
-                                className="px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
-                                title={`Buscar inmediatamente "${kw}" en el Radar`}
-                              >
-                                <Search size={11} className="text-emerald-500" />
-                                <span>{kw}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { saveToDb: true, tipo: 'INCLUSION', closeModal: true })}
-                                className="px-2 py-1 text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-500 border-l border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors"
-                                title={`Guardar "${kw}" en el rubro e iniciar búsqueda en el Radar`}
-                              >
-                                + Buscar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await apiService.addBiddingKeywordsBulk(selectedVerticalForMgmt, { keywords: [kw], tipo: 'INCLUSION' });
-                                  fetchKeywordsForVertical(selectedVerticalForMgmt);
-                                  const updatedVerts = await apiService.getBiddingVerticals();
-                                  if (updatedVerts && updatedVerts.length > 0) setVerticals(updatedVerts);
-                                  setNotification({ type: 'success', message: `"${kw}" guardada en ${selectedVerticalForMgmt}.` });
-                                }}
-                                className="px-1.5 py-1 text-xs text-slate-400 hover:text-emerald-600 hover:bg-white dark:hover:bg-slate-700 border-l border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors"
-                                title={`Solo guardar en la base de datos`}
-                              >
-                                +
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Exclusiones Sugeridas */}
-                    {aiExpandResult.keywords_exclusion_sugeridas?.length > 0 && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
-                            Exclusiones para descartar falsos positivos ({aiExpandResult.keywords_exclusion_sugeridas.length}):
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Filtran llamados no deseados (ej. insumos ajenos o servicios incompatibles)
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {aiExpandResult.keywords_exclusion_sugeridas.map((kw) => (
-                            <div
-                              key={kw}
-                              className="inline-flex items-center rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/40 shadow-xs overflow-hidden"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { closeModal: true })}
-                                className="px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 flex items-center space-x-1 cursor-pointer transition-colors"
-                                title={`Verificar pliegos con "${kw}" antes de excluir`}
-                              >
-                                <Search size={11} className="text-rose-500" />
-                                <span>{kw}</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySuggestionToSearch(kw, selectedVerticalForMgmt, { saveToDb: true, tipo: 'EXCLUSION', closeModal: false })}
-                                className="px-2 py-1 text-[11px] font-bold bg-rose-100 dark:bg-rose-900/80 text-rose-700 dark:text-rose-200 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-500 border-l border-rose-200 dark:border-rose-800 cursor-pointer transition-colors"
-                                title={`Guardar "${kw}" como filtro de exclusión`}
-                              >
-                                - Excluir
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
 
-              {/* Sección 3: Listado de Palabras Clave Configuradas */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                    Palabras Clave Configuradas ({currentKeywords.length})
-                  </h4>
-                  {isLoadingKeywords && <Loader2 size={14} className="animate-spin text-indigo-500" />}
-                </div>
-
-                {/* Palabras de Inclusión */}
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Inclusión ({currentKeywords.filter((k) => k.tipo === 'INCLUSION').length}):</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {currentKeywords
-                      .filter((k) => k.tipo === 'INCLUSION')
-                      .map((k) => (
-                        <span
-                          key={k.id}
-                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-2 shadow-xs"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleApplySuggestionToSearch(k.keyword, selectedVerticalForMgmt, { closeModal: true })}
-                            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 transition-colors cursor-pointer"
-                            title={`Filtrar el Radar de licitaciones por "${k.keyword}"`}
-                          >
-                            <Search size={11} />
-                          </button>
-                          <span>{k.keyword}</span>
-                          <button
-                            onClick={() => handleDeleteKeyword(k.id)}
-                            className="text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
-                            title="Eliminar palabra clave"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
-                  </div>
-                </div>
-
-                {/* Palabras de Exclusión */}
-                <div className="space-y-2 pt-2">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-rose-700 dark:text-rose-400">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span>Exclusión / Filtro Negativo ({currentKeywords.filter((k) => k.tipo === 'EXCLUSION').length}):</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {currentKeywords
-                      .filter((k) => k.tipo === 'EXCLUSION')
-                      .map((k) => (
-                        <span
-                          key={k.id}
-                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-2 shadow-xs"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleApplySuggestionToSearch(k.keyword, selectedVerticalForMgmt, { closeModal: true })}
-                            className="text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 transition-colors cursor-pointer"
-                            title={`Ver qué pliegos contienen "${k.keyword}"`}
-                          >
-                            <Search size={11} />
-                          </button>
-                          <span>{k.keyword}</span>
-                          <button
-                            onClick={() => handleDeleteKeyword(k.id)}
-                            className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 transition-colors cursor-pointer"
-                            title="Eliminar palabra de exclusión"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
-                  </div>
+              {/* Agregar Keyword Manual */}
+              <div className="space-y-2">
+                <span className="font-bold text-white block">Agregar Palabra Clave Manual</span>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newKeywordText}
+                    onChange={(e) => setNewKeywordText(e.target.value)}
+                    placeholder="Palabra o frase clave..."
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white"
+                  />
+                  <select
+                    value={newKeywordTipo}
+                    onChange={(e) => setNewKeywordTipo(e.target.value as any)}
+                    className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-white"
+                  >
+                    <option value="INCLUSION">Inclusión (+)</option>
+                    <option value="EXCLUSION">Exclusión (-)</option>
+                  </select>
+                  <button
+                    onClick={handleAddKeyword}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 rounded-xl flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar</span>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
-              <span className="text-xs text-slate-500 font-mono">
-                {currentKeywords.length} palabras clave activas para {selectedVerticalForMgmt}
-              </span>
-              <button
-                onClick={() => setIsKeywordsModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-              >
-                Listo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL ALERTA: 7 MINUTOS DE ESPERA EN OLLAMA (INTERVENCIÓN DEL USUARIO) */}
-      {showFallbackPrompt && (
-        <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border-2 border-amber-500 rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center space-x-3 text-amber-500">
-              <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
-                <Clock size={24} />
-              </div>
+              {/* Listado de Keywords Actuales */}
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Tiempo de Inferencia Superó los 7 Minutos
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Transcurridos: <strong>{Math.floor(aiExpandElapsedSeconds / 60)} min {aiExpandElapsedSeconds % 60} seg</strong> con {selectedOllamaModel}.
-                </p>
+                <span className="font-bold text-white block mb-2">
+                  Palabras Clave Registradas ({currentKeywords.length})
+                </span>
+                {isLoadingKeywords ? (
+                  <div className="py-6 text-center text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1 text-indigo-400" />
+                    <span>Cargando palabras clave...</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-slate-950/40 rounded-xl border border-slate-800">
+                    {currentKeywords.map((k) => (
+                      <span
+                        key={k.id}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs ${
+                          k.tipo === 'INCLUSION'
+                            ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
+                        }`}
+                      >
+                        <span>{k.keyword}</span>
+                        <button
+                          onClick={() => handleDeleteKeyword(k.id)}
+                          className="hover:text-white ml-1"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              El modelo local de Ollama continúa procesando sin límite forzado de timeout. Conforme a su preferencia, puede conmutar en este instante al <strong>Fallback Heurístico Seguro</strong> (instantáneo y calibrado) o <strong>continuar esperando</strong> hasta que el modelo finalice.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-              <button
-                onClick={() => handleExpandKeywordsAI(true)}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md cursor-pointer transition-all flex items-center justify-center space-x-2"
-              >
-                <span>⚡ Activar Fallback Heurístico Inmediato</span>
-              </button>
-              <button
-                onClick={() => setShowFallbackPrompt(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-              >
-                ⏳ Seguir Esperando a Ollama
-              </button>
             </div>
           </div>
         </div>
@@ -3069,3 +2489,5 @@ export const TendersView: React.FC<TendersViewProps> = ({
     </div>
   );
 };
+
+export default TendersView;

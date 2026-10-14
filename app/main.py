@@ -11,6 +11,7 @@ from app.api.v1.settings import router as settings_router
 from app.api.v1.cockpit import router as cockpit_router
 from app.api.v1.initiatives import router as initiatives_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.procurement import router as procurement_router, b2b_tenders_router
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -121,6 +122,8 @@ app.include_router(settings_router)
 app.include_router(cockpit_router)
 app.include_router(initiatives_router)
 app.include_router(auth_router)
+app.include_router(procurement_router)
+app.include_router(b2b_tenders_router)
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

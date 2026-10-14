@@ -42,6 +42,14 @@ class Settings(BaseModel):
     # 4. Base de Datos Relacional
     database_url: str = Field(default_factory=lambda: (os.getenv("DATABASE_URL") or "sqlite:///calcu.db").strip())
 
+    # 5. Uruguay Procurement API (Con la Tuya / SICE / ARCE)
+    conlatuya_api_key: str = Field(
+        default_factory=lambda: os.getenv("CONLATUYA_API_KEY", "gk_live_J4ZgEkep_i87ICjgb1xrsvZZfUlEC1R7qlfdU5ZHi")
+    )
+    conlatuya_base_url: str = Field(
+        default_factory=lambda: os.getenv("CONLATUYA_BASE_URL", "https://conlatuya.checkleaked.cc/api").rstrip("/")
+    )
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -63,6 +71,8 @@ DATABASE_URL: str = settings.database_url.strip()
 JWT_SECRET_KEY: str = settings.jwt_secret_key
 JWT_ALGORITHM: str = settings.jwt_algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES: int = settings.access_token_expire_minutes
+CONLATUYA_API_KEY: str = settings.conlatuya_api_key
+CONLATUYA_BASE_URL: str = settings.conlatuya_base_url
 
 MELI_CLIENT_ID: str = settings.meli_client_id
 MELI_CLIENT_SECRET: str = settings.meli_client_secret

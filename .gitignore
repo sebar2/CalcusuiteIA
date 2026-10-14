@@ -24,6 +24,8 @@ ENV/
 *.sqlite
 *.sqlite3
 calcu.db
+*.bak
+*.db.bak
 
 # Frontend
 frontend/node_modules/
