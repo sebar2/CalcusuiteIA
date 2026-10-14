@@ -40,6 +40,32 @@ class LogisticsClient(Base):
     inventory = relationship("LogisticsClientInventory", back_populates="client", cascade="all, delete-orphan")
     orders = relationship("LogisticsDispatchOrder", back_populates="client")
     pricing = relationship("LogisticsServicePricing", back_populates="client", uselist=False, cascade="all, delete-orphan")
+    branches = relationship("LogisticsClientBranch", back_populates="client", cascade="all, delete-orphan")
+
+
+class LogisticsClientBranch(Base):
+    """
+    Sucursales y puntos de entrega asociados a una empresa cliente 3PL.
+    Permite registrar múltiples direcciones por cliente para despachos y ruteo.
+    """
+    __tablename__ = "logistics_client_branches"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_id = Column(Integer, ForeignKey("logistics_clients.id"), nullable=False, index=True)
+    nombre_sucursal = Column(String(150), nullable=False)
+    direccion = Column(String(255), nullable=False)
+    contacto_receptor = Column(String(150), nullable=True)
+    telefono_receptor = Column(String(50), nullable=True)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
+    distancia_km_base = Column(Numeric(14, 4), default=Decimal("0.0000"))
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relaciones
+    client = relationship("LogisticsClient", back_populates="branches")
+    orders = relationship("LogisticsDispatchOrder", back_populates="branch")
+
 
 
 class LogisticsDriver(Base):
@@ -56,6 +82,7 @@ class LogisticsDriver(Base):
     tipo_relacion = Column(String(50), default="FLETERO_TERCERIZADO")    # FLETERO_TERCERIZADO, CADETE, OPERARIO_DEPOSITO
     tarifa_base_viaje = Column(Numeric(14, 4), default=Decimal("0.0"))
     tarifa_km = Column(Numeric(14, 4), default=Decimal("0.0"))
+    disponibilidad_semanal = Column(Text, nullable=True)  # JSON: disponibilidad semanal Lun-Dom y turnos
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -120,13 +147,19 @@ class LogisticsDispatchOrder(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     numero_orden = Column(String(50), unique=True, nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("logistics_clients.id"), nullable=False)
+    branch_id = Column(Integer, ForeignKey("logistics_client_branches.id"), nullable=True)
     vehicle_id = Column(Integer, ForeignKey("logistics_vehicles.id"), nullable=True)
     driver_id = Column(Integer, ForeignKey("logistics_drivers.id"), nullable=True)
     etapa_kanban = Column(String(50), default="INGRESO")  # INGRESO, ETIQUETADO_VAS, LISTO_DESPACHO, EN_DISTRIBUCION, ENTREGADO
     remito_numero = Column(String(100), nullable=True)
     destino_direccion = Column(String(255), nullable=False)
     destino_coordenadas = Column(String(100), nullable=True)  # "lat,lng"
+    responsable_armado = Column(String(150), nullable=True)   # Responsable del picking y embalaje
+    contacto_receptor_nombre = Column(String(150), nullable=True)
+    contacto_receptor_telefono = Column(String(50), nullable=True)
     ventana_horaria = Column(String(100), nullable=True)      # Ej: "08:00 - 12:00"
+    kilometros_recorrido = Column(Numeric(14, 4), default=Decimal("0.0000"))
+    tipo_despacho = Column(String(50), default="ESTANDAR")    # ESTANDAR, URGENTE, RETIRO_SUCURSAL
     total_bultos = Column(Integer, default=0)
     total_kg = Column(Numeric(14, 4), default=Decimal("0.0000"))
     total_m3 = Column(Numeric(14, 4), default=Decimal("0.0000"))
@@ -134,6 +167,9 @@ class LogisticsDispatchOrder(Base):
     costo_chofer_acordado = Column(Numeric(14, 4), default=Decimal("0.0000"))
     gastos_variables_ruta = Column(Numeric(14, 4), default=Decimal("0.0000"))
     margen_neto_estimado = Column(Numeric(14, 4), default=Decimal("0.0000"))
+    firma_digital_receptor = Column(Text, nullable=True)      # Data URL Base64 de la firma táctil
+    firma_fecha_hora = Column(DateTime, nullable=True)
+    firma_aclaracion = Column(String(150), nullable=True)
     estado_pago = Column(String(50), default="PENDIENTE")    # PENDIENTE, FACTURADO, COBRADO
     observaciones = Column(Text, nullable=True)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
@@ -142,6 +178,7 @@ class LogisticsDispatchOrder(Base):
 
     # Relaciones
     client = relationship("LogisticsClient", back_populates="orders")
+    branch = relationship("LogisticsClientBranch", back_populates="orders")
     vehicle = relationship("LogisticsVehicle", back_populates="orders")
     driver = relationship("LogisticsDriver", back_populates="orders")
     items = relationship("LogisticsDispatchItem", back_populates="order", cascade="all, delete-orphan")
@@ -202,3 +239,22 @@ class LogisticsTelemetryPing(Base):
 
     # Relaciones
     order = relationship("LogisticsDispatchOrder", back_populates="telemetry_pings")
+
+
+class LogisticsCostItem(Base):
+    """
+    Costos fijos y variables del centro de operaciones logísticas 3PL.
+    Permite el control de gastos de depósito y cálculo del punto de equilibrio (Break-Even) y EBITDA.
+    """
+    __tablename__ = "logistics_cost_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tipo = Column(String(20), nullable=False, default="FIJO")  # 'FIJO', 'VARIABLE'
+    categoria = Column(String(50), nullable=False)             # 'ALQUILER', 'ELECTRICIDAD_UTE', 'AGUA', 'COMUNICACIONES', 'PAPELERIA', 'EMBALAJE', 'MANTENIMIENTO', 'SUELDOS_OPERATIVOS', 'OTROS'
+    nombre = Column(String(150), nullable=False)
+    monto_mensual = Column(Numeric(14, 4), nullable=False, default=Decimal("0.0000"))
+    moneda = Column(String(10), default="UYU")                 # 'UYU', 'USD'
+    descripcion = Column(Text, nullable=True)
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

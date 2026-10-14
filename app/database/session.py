@@ -129,6 +129,19 @@ def sync_table_columns(conn):
     add_col_if_missing("ordenes_compra", "fecha_disponible", "DATE")
     add_col_if_missing("ordenes_compra", "monto_total", "NUMERIC(14, 4)", "0.0")
 
+    # 7.1. 3PL Logística & Distribución (Campos nuevos de picking, disponibilidad y sucursales)
+    add_col_if_missing("logistics_drivers", "disponibilidad_semanal", "TEXT")
+    add_col_if_missing("logistics_dispatch_orders", "branch_id", "INTEGER")
+    add_col_if_missing("logistics_dispatch_orders", "responsable_armado", "VARCHAR(150)")
+    add_col_if_missing("logistics_dispatch_orders", "contacto_receptor_nombre", "VARCHAR(150)")
+    add_col_if_missing("logistics_dispatch_orders", "contacto_receptor_telefono", "VARCHAR(50)")
+    add_col_if_missing("logistics_dispatch_orders", "kilometros_recorrido", "NUMERIC(14, 4)", "0.0")
+    add_col_if_missing("logistics_dispatch_orders", "tipo_despacho", "VARCHAR(50)", "'ESTANDAR'")
+    add_col_if_missing("logistics_dispatch_orders", "firma_digital_receptor", "TEXT")
+    add_col_if_missing("logistics_dispatch_orders", "firma_fecha_hora", "TIMESTAMP")
+    add_col_if_missing("logistics_dispatch_orders", "firma_aclaracion", "VARCHAR(150)")
+
+
     # 8. Semilla de Proveedores Uruguay y Servicios Implícitos si la tabla existe
     if "suppliers" in existing_tables:
         try:

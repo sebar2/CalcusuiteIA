@@ -9,9 +9,11 @@ import {
   MapPin,
   AlertCircle,
   X,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
-import type { LogisticsClientItem, LogisticsPricing } from '../../services/logisticsApi';
+import type { LogisticsClientItem, LogisticsPricing, LogisticsBranchItem } from '../../services/logisticsApi';
 
 export const LogisticsClientsView: React.FC = () => {
   const [clients, setClients] = useState<LogisticsClientItem[]>([]);
@@ -23,6 +25,19 @@ export const LogisticsClientsView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState<boolean>(false);
   const [pricingClient, setPricingClient] = useState<LogisticsClientItem | null>(null);
+
+  // Branch Modal State
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState<boolean>(false);
+  const [branchClient, setBranchClient] = useState<LogisticsClientItem | null>(null);
+  const [branchesList, setBranchesList] = useState<LogisticsBranchItem[]>([]);
+  const [editingBranchId, setEditingBranchId] = useState<number | null>(null);
+  const [branchForm, setBranchForm] = useState({
+    nombre_sucursal: '',
+    direccion: '',
+    contacto_receptor: '',
+    telefono_receptor: '',
+    distancia_km_base: 10.0,
+  });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -147,6 +162,86 @@ export const LogisticsClientsView: React.FC = () => {
       alert(`Error al actualizar tarifas: ${err.response?.data?.detail || err.message}`);
     }
   };
+
+  const handleOpenBranches = async (client: LogisticsClientItem) => {
+    setBranchClient(client);
+    setEditingBranchId(null);
+    setBranchForm({
+      nombre_sucursal: '',
+      direccion: '',
+      contacto_receptor: client.contacto_logistica || '',
+      telefono_receptor: client.telefono || '',
+      distancia_km_base: 10.0,
+    });
+    try {
+      const data = await logisticsApi.getClientBranches(client.id);
+      setBranchesList(data);
+    } catch {
+      setBranchesList(client.branches || []);
+    }
+    setIsBranchModalOpen(true);
+  };
+
+  const handleSaveBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!branchClient) return;
+    try {
+      if (editingBranchId) {
+        await logisticsApi.updateBranch(editingBranchId, {
+          nombre_sucursal: branchForm.nombre_sucursal,
+          direccion: branchForm.direccion,
+          contacto_receptor: branchForm.contacto_receptor,
+          telefono_receptor: branchForm.telefono_receptor,
+          distancia_km_base: Number(branchForm.distancia_km_base),
+        });
+      } else {
+        await logisticsApi.createClientBranch(branchClient.id, {
+          nombre_sucursal: branchForm.nombre_sucursal,
+          direccion: branchForm.direccion,
+          contacto_receptor: branchForm.contacto_receptor,
+          telefono_receptor: branchForm.telefono_receptor,
+          distancia_km_base: Number(branchForm.distancia_km_base),
+        });
+      }
+      const data = await logisticsApi.getClientBranches(branchClient.id);
+      setBranchesList(data);
+      setEditingBranchId(null);
+      setBranchForm({
+        nombre_sucursal: '',
+        direccion: '',
+        contacto_receptor: branchClient.contacto_logistica || '',
+        telefono_receptor: branchClient.telefono || '',
+        distancia_km_base: 10.0,
+      });
+      loadClients();
+    } catch (err: any) {
+      alert(`Error al guardar sucursal: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  const handleEditBranch = (b: LogisticsBranchItem) => {
+    setEditingBranchId(b.id);
+    setBranchForm({
+      nombre_sucursal: b.nombre_sucursal,
+      direccion: b.direccion,
+      contacto_receptor: b.contacto_receptor || '',
+      telefono_receptor: b.telefono_receptor || '',
+      distancia_km_base: b.distancia_km_base || 10.0,
+    });
+  };
+
+  const handleDeleteBranch = async (branchId: number) => {
+    if (!branchClient || !confirm('¿Desea desactivar esta sucursal?')) return;
+    try {
+      await logisticsApi.deleteBranch(branchId);
+      const data = await logisticsApi.getClientBranches(branchClient.id);
+      setBranchesList(data);
+      loadClients();
+    } catch (err: any) {
+      alert(`Error al eliminar sucursal: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
 
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
@@ -384,6 +479,12 @@ export const LogisticsClientsView: React.FC = () => {
                 </span>
 
                 <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleOpenBranches(client)}
+                    className="px-2.5 py-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 rounded-lg hover:bg-purple-100 transition-colors cursor-pointer"
+                  >
+                    Sucursales ({client.branches?.length || 0})
+                  </button>
                   <button
                     onClick={() => handleOpenPricing(client)}
                     className="px-2.5 py-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 rounded-lg hover:bg-sky-100 transition-colors cursor-pointer"
@@ -722,6 +823,202 @@ export const LogisticsClientsView: React.FC = () => {
                   className="px-5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl cursor-pointer"
                 >
                   Guardar Tarifas
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Gestión de Sucursales / Direcciones */}
+      {isBranchModalOpen && branchClient && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+                  <MapPin className="text-purple-500" size={20} />
+                  <span>Sucursales & Direcciones de Entrega</span>
+                </h2>
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                  {branchClient.nombre_comercial} (RUT: {branchClient.rut})
+                </p>
+              </div>
+              <button
+                onClick={() => setIsBranchModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Listado de Sucursales */}
+            <div className="mt-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                Sucursales Registradas ({branchesList.length})
+              </h3>
+              {branchesList.length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-center text-xs text-slate-500 border border-slate-100 dark:border-slate-800">
+                  No hay sucursales adicionales registradas. Se utiliza la dirección central por defecto.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {branchesList.map((branch) => (
+                    <div
+                      key={branch.id}
+                      className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {branch.nombre_sucursal}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 font-medium">
+                            {branch.distancia_km_base} km base
+                          </span>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-400 flex items-center space-x-1">
+                          <MapPin size={12} className="shrink-0 text-slate-400" />
+                          <span className="truncate">{branch.direccion}</span>
+                        </p>
+                        {(branch.contacto_receptor || branch.telefono_receptor) && (
+                          <p className="text-[11px] text-slate-500">
+                            Receptor: {branch.contacto_receptor || '-'} | Tel: {branch.telefono_receptor || '-'}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center space-x-1 shrink-0 ml-2">
+                        <button
+                          onClick={() => handleEditBranch(branch)}
+                          className="p-1.5 text-slate-400 hover:text-sky-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          title="Editar Sucursal"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBranch(branch.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          title="Desactivar Sucursal"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Formulario Agregar / Editar Sucursal */}
+            <form onSubmit={handleSaveBranch} className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+                <span>{editingBranchId ? 'Editar Sucursal' : 'Agregar Nueva Sucursal / Destino'}</span>
+                {editingBranchId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingBranchId(null);
+                      setBranchForm({
+                        nombre_sucursal: '',
+                        direccion: '',
+                        contacto_receptor: branchClient.contacto_logistica || '',
+                        telefono_receptor: branchClient.telefono || '',
+                        distancia_km_base: 10.0,
+                      });
+                    }}
+                    className="text-[10px] text-sky-600 hover:underline cursor-pointer"
+                  >
+                    (Cancelar edición)
+                  </button>
+                )}
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    Nombre Sucursal / Local
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Sucursal Pocitos / Centro"
+                    value={branchForm.nombre_sucursal}
+                    onChange={(e) => setBranchForm({ ...branchForm, nombre_sucursal: e.target.value })}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    Distancia Estimada desde Depósito (km)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    required
+                    value={branchForm.distancia_km_base}
+                    onChange={(e) =>
+                      setBranchForm({ ...branchForm, distancia_km_base: parseFloat(e.target.value) || 0 })
+                    }
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                  Dirección Completa de Descarga
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Av. Brasil 2540 esq. Brito del Pino"
+                  value={branchForm.direccion}
+                  onChange={(e) => setBranchForm({ ...branchForm, direccion: e.target.value })}
+                  className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    Encargado de Recepción
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Encargado Depósito / Andrés Pérez"
+                    value={branchForm.contacto_receptor}
+                    onChange={(e) => setBranchForm({ ...branchForm, contacto_receptor: e.target.value })}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                    Teléfono de Contacto
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 099 123 456"
+                    value={branchForm.telefono_receptor}
+                    onChange={(e) => setBranchForm({ ...branchForm, telefono_receptor: e.target.value })}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsBranchModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl cursor-pointer shadow-sm"
+                >
+                  {editingBranchId ? 'Actualizar Sucursal' : 'Guardar Sucursal'}
                 </button>
               </div>
             </form>

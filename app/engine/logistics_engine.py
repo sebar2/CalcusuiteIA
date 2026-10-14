@@ -56,6 +56,23 @@ class RouteProfitabilityResult(BaseModel):
     diagnostico: str
 
 
+class EbitdaAnalysisResult(BaseModel):
+    ingresos_servicios_totales: float
+    costos_directos_choferes: float
+    costos_variables_operativos: float
+    margen_contribucion: float
+    margen_contribucion_pct: float
+    costos_fijos_totales: float
+    ebitda_neto: float
+    ebitda_pct: float
+    punto_equilibrio_ingresos: float
+    cobertura_costos_fijos_pct: float
+    total_viajes: int
+    total_km_recorridos: float
+    semaforo: str  # 'VERDE', 'AMARILLO', 'ROJO'
+    diagnostico: str
+
+
 class LogisticsEngine:
     """
     Motor analítico y de optimización para la unidad de negocio 3PL:
@@ -265,3 +282,62 @@ class LogisticsEngine:
             semaforo=semaforo,
             diagnostico=diagnostico,
         )
+
+    @classmethod
+    def calculate_ebitda_and_breakeven(
+        cls,
+        ingresos_totales: Any,
+        costos_choferes: Any,
+        costos_variables_extras: Any,
+        costos_fijos_totales: Any,
+        total_viajes: int = 0,
+        total_km: Any = Decimal("0.0"),
+    ) -> EbitdaAnalysisResult:
+        ing = cls.to_decimal(ingresos_totales)
+        c_chof = cls.to_decimal(costos_choferes)
+        c_var = cls.to_decimal(costos_variables_extras)
+        c_fijos = cls.to_decimal(costos_fijos_totales)
+        km = cls.to_decimal(total_km)
+
+        margen_contrib = ing - (c_chof + c_var)
+        mc_pct = (margen_contrib / ing * Decimal("100.0")) if ing > Decimal("0") else Decimal("0.0")
+
+        ebitda = margen_contrib - c_fijos
+        ebitda_pct = (ebitda / ing * Decimal("100.0")) if ing > Decimal("0") else Decimal("0.0")
+
+        # Punto de equilibrio = Costos Fijos / Margen de Contribución Ratio
+        ratio_mc = (margen_contrib / ing) if ing > Decimal("0") else Decimal("0.0")
+        if ratio_mc > Decimal("0"):
+            breakeven = c_fijos / ratio_mc
+        else:
+            breakeven = Decimal("0.0")
+
+        cobertura = (margen_contrib / c_fijos * Decimal("100.0")) if c_fijos > Decimal("0") else Decimal("100.0")
+
+        if ebitda > Decimal("0") and ebitda_pct >= Decimal("15.0"):
+            semaforo = "VERDE"
+            diagnostico = f"EBITDA positivo ({float(ebitda_pct):.1f}%). La operación supera el punto de equilibrio holgadamente."
+        elif ebitda >= Decimal("0"):
+            semaforo = "AMARILLO"
+            diagnostico = f"EBITDA neutro o ajustado ({float(ebitda_pct):.1f}%). Absorbe costos fijos pero requiere mayor volumen de fletes/bultos."
+        else:
+            semaforo = "ROJO"
+            diagnostico = f"EBITDA deficitario ({float(ebitda_pct):.1f}%). El margen de contribución no alcanza a absorber la estructura fija de depósito."
+
+        return EbitdaAnalysisResult(
+            ingresos_servicios_totales=round(float(ing), 2),
+            costos_directos_choferes=round(float(c_chof), 2),
+            costos_variables_operativos=round(float(c_var), 2),
+            margen_contribucion=round(float(margen_contrib), 2),
+            margen_contribucion_pct=round(float(mc_pct), 1),
+            costos_fijos_totales=round(float(c_fijos), 2),
+            ebitda_neto=round(float(ebitda), 2),
+            ebitda_pct=round(float(ebitda_pct), 1),
+            punto_equilibrio_ingresos=round(float(breakeven), 2),
+            cobertura_costos_fijos_pct=round(float(cobertura), 1),
+            total_viajes=total_viajes,
+            total_km_recorridos=round(float(km), 1),
+            semaforo=semaforo,
+            diagnostico=diagnostico,
+        )
+

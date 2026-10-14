@@ -1,5 +1,18 @@
 import { apiClient } from './api';
 
+export interface LogisticsBranchItem {
+  id: number;
+  client_id: number;
+  nombre_sucursal: string;
+  direccion: string;
+  contacto_receptor?: string;
+  telefono_receptor?: string;
+  lat?: number | null;
+  lng?: number | null;
+  distancia_km_base: number;
+  activo: boolean;
+}
+
 export interface LogisticsPricing {
   tarifa_almacenaje_pallet_dia: number;
   tarifa_handling_bulto: number;
@@ -24,6 +37,7 @@ export interface LogisticsClientItem {
   total_skus: number;
   ordenes_activas: number;
   pricing?: LogisticsPricing;
+  branches?: LogisticsBranchItem[];
 }
 
 export interface LogisticsDriverItem {
@@ -35,6 +49,7 @@ export interface LogisticsDriverItem {
   tipo_relacion: 'FLETERO_TERCERIZADO' | 'CADETE' | 'OPERARIO_DEPOSITO' | string;
   tarifa_base_viaje: number;
   tarifa_km: number;
+  disponibilidad_semanal?: string | Record<string, any> | null;
   activo: boolean;
   viajes_hechos: number;
   viajes_activos: number;
@@ -97,11 +112,19 @@ export interface LogisticsOrderItem {
   numero_orden: string;
   client_id: number;
   client_nombre: string;
+  branch_id?: number | null;
+  branch_nombre?: string | null;
+  responsable_armado?: string | null;
+  contacto_receptor_nombre?: string | null;
+  contacto_receptor_telefono?: string | null;
   etapa_kanban: 'INGRESO' | 'ETIQUETADO_VAS' | 'LISTO_DESPACHO' | 'EN_DISTRIBUCION' | 'ENTREGADO';
   destino_direccion: string;
   destino_coordenadas?: string;
   ventana_horaria?: string;
   remito_numero?: string;
+  codigo_qr?: string;
+  kilometros_recorrido?: number;
+  tipo_despacho?: string;
   total_bultos: number;
   total_kg: number;
   total_m3: number;
@@ -109,6 +132,10 @@ export interface LogisticsOrderItem {
   costo_chofer_acordado: number;
   gastos_variables_ruta: number;
   margen_neto_estimado: number;
+  firma_digital_receptor?: string | null;
+  firma_fecha_hora?: string | null;
+  firma_aclaracion?: string | null;
+  fecha_entrega_real?: string | null;
   estado_pago: string;
   observaciones?: string;
   fecha_creacion?: string;
@@ -139,19 +166,85 @@ export interface LiveFleetMarker {
   order_id: number;
   numero_orden: string;
   client_nombre: string;
+  branch_nombre?: string | null;
   driver_nombre: string;
   driver_telefono: string;
   vehicle_matricula: string;
   vehicle_tipo: string;
+  contacto_receptor_nombre?: string | null;
+  contacto_receptor_telefono?: string | null;
   destino_direccion: string;
+  destino_coordenadas?: string | null;
+  google_maps_url?: string;
   ventana_horaria: string;
   total_bultos: number;
+  total_kg?: number;
+  kilometros_recorrido?: number;
+  tipo_despacho?: string;
   lat: number;
   lng: number;
   velocidad_kmh: number;
   bateria_pct: number;
   eta_minutos: number;
   last_update: string;
+}
+
+export interface DriverDeliverySheetResponse {
+  order_id: number;
+  numero_orden: string;
+  remito_numero?: string;
+  codigo_qr?: string;
+  client_nombre: string;
+  branch_nombre?: string | null;
+  contacto_receptor_nombre?: string | null;
+  contacto_receptor_telefono?: string | null;
+  destino_direccion: string;
+  direccion_completa?: string;
+  destino_coordenadas?: string | null;
+  google_maps_url: string;
+  ventana_horaria?: string;
+  total_bultos: number;
+  total_kg: number;
+  total_m3: number;
+  kilometros_recorrido: number;
+  etapa_kanban: string;
+  responsable_armado?: string;
+  observaciones?: string;
+  items: { sku: string; descripcion: string; bultos: number; kg: number; m3: number }[];
+  firma_digital_receptor?: string | null;
+  firma_fecha_hora?: string | null;
+  firma_aclaracion?: string | null;
+}
+
+export interface LogisticsCostItem {
+  id: number;
+  tipo: 'FIJO' | 'VARIABLE';
+  categoria: string;
+  nombre: string;
+  monto_mensual: number;
+  moneda: string;
+  descripcion?: string;
+  activo: boolean;
+  created_at?: string;
+}
+
+export interface EbitdaAnalysisResponse {
+  ingresos_servicios_totales: number;
+  costos_directos_choferes: number;
+  costos_variables_operativos: number;
+  margen_contribucion: number;
+  margen_contribucion_pct: number;
+  costos_fijos_totales: number;
+  ebitda_neto: number;
+  ebitda_pct: number;
+  punto_equilibrio_ingresos: number;
+  cobertura_costos_fijos_pct: number;
+  total_viajes: number;
+  total_km_recorridos: number;
+  semaforo: 'VERDE' | 'AMARILLO' | 'ROJO';
+  diagnostico: string;
+  costos_fijos_desglose: { nombre: string; categoria: string; monto: number }[];
+  costos_variables_desglose: { nombre: string; categoria: string; monto: number }[];
 }
 
 export interface SettlementLineItem {
@@ -217,6 +310,26 @@ export const logisticsApi = {
     return res.data;
   },
 
+  async getClientBranches(clientId: number): Promise<LogisticsBranchItem[]> {
+    const res = await apiClient.get<LogisticsBranchItem[]>(`/api/v1/logistics/clients/${clientId}/branches`);
+    return res.data;
+  },
+
+  async createClientBranch(clientId: number, data: Partial<LogisticsBranchItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.post(`/api/v1/logistics/clients/${clientId}/branches`, data);
+    return res.data;
+  },
+
+  async updateBranch(branchId: number, data: Partial<LogisticsBranchItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.put(`/api/v1/logistics/branches/${branchId}`, data);
+    return res.data;
+  },
+
+  async deleteBranch(branchId: number): Promise<{ message: string }> {
+    const res = await apiClient.delete(`/api/v1/logistics/branches/${branchId}`);
+    return res.data;
+  },
+
   // FLOTA & CHOFERES
   async getDrivers(): Promise<LogisticsDriverItem[]> {
     const res = await apiClient.get<LogisticsDriverItem[]>('/api/v1/logistics/fleet/drivers');
@@ -225,6 +338,11 @@ export const logisticsApi = {
 
   async createDriver(data: Partial<LogisticsDriverItem>): Promise<{ message: string; id: number }> {
     const res = await apiClient.post('/api/v1/logistics/fleet/drivers', data);
+    return res.data;
+  },
+
+  async updateDriver(driverId: number, data: Partial<LogisticsDriverItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.put(`/api/v1/logistics/fleet/drivers/${driverId}`, data);
     return res.data;
   },
 
@@ -238,7 +356,12 @@ export const logisticsApi = {
     return res.data;
   },
 
-  // INVENTARIO
+  async updateVehicle(vehicleId: number, data: Partial<LogisticsVehicleItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.put(`/api/v1/logistics/fleet/vehicles/${vehicleId}`, data);
+    return res.data;
+  },
+
+  // INVENTARIO & PICKING
   async getInventory(params?: { client_id?: number; search?: string; rack?: string }): Promise<LogisticsInventoryItem[]> {
     const res = await apiClient.get<LogisticsInventoryItem[]>('/api/v1/logistics/inventory', { params });
     return res.data;
@@ -246,6 +369,25 @@ export const logisticsApi = {
 
   async createInventoryItem(data: any): Promise<{ message: string; id: number; codigo_qr_lote: string }> {
     const res = await apiClient.post('/api/v1/logistics/inventory', data);
+    return res.data;
+  },
+
+  async createPickingOrder(payload: {
+    client_id: number;
+    branch_id?: number | null;
+    responsable_armado: string;
+    contacto_receptor_nombre: string;
+    contacto_receptor_telefono: string;
+    destino_direccion?: string;
+    destino_coordenadas?: string;
+    ventana_horaria?: string;
+    fecha_entrega_estimada?: string;
+    kilometros_recorrido?: number;
+    tipo_despacho?: string;
+    observaciones?: string;
+    items: { inventory_id: number; cantidad?: number; bultos_solicitados?: number; unidades_solicitadas?: number; es_unidades?: boolean }[];
+  }): Promise<any> {
+    const res = await apiClient.post('/api/v1/logistics/inventory/picking-order', payload);
     return res.data;
   },
 
@@ -293,6 +435,22 @@ export const logisticsApi = {
     return res.data;
   },
 
+  async signDelivery(orderId: number, payload: { firma_digital?: string; firma_digital_base64?: string; aclaracion?: string; documento?: string; lat?: number; lng?: number }): Promise<any> {
+    const res = await apiClient.post(`/api/v1/logistics/orders/${orderId}/sign-delivery`, {
+      firma_digital: payload.firma_digital || payload.firma_digital_base64,
+      aclaracion: payload.aclaracion,
+      documento: payload.documento,
+      lat: payload.lat,
+      lng: payload.lng,
+    });
+    return res.data;
+  },
+
+  async getDriverSheet(orderId: number): Promise<DriverDeliverySheetResponse> {
+    const res = await apiClient.get<DriverDeliverySheetResponse>(`/api/v1/logistics/orders/${orderId}/driver-sheet`);
+    return res.data;
+  },
+
   // TRACKING GPS
   async getLiveTracking(): Promise<LiveFleetMarker[]> {
     const res = await apiClient.get<LiveFleetMarker[]>('/api/v1/logistics/tracking/live');
@@ -304,7 +462,7 @@ export const logisticsApi = {
     return res.data;
   },
 
-  // LIQUIDACION & RENTABILIDAD
+  // LIQUIDACION & COSTOS / EBITDA
   async calculateQuote(payload: {
     client_id: number;
     dias_almacenaje: number;
@@ -320,6 +478,31 @@ export const logisticsApi = {
 
   async getFinanceSummary(): Promise<FinanceSummaryResponse> {
     const res = await apiClient.get<FinanceSummaryResponse>('/api/v1/logistics/finance/summary');
+    return res.data;
+  },
+
+  async getCostItems(tipo?: string): Promise<LogisticsCostItem[]> {
+    const res = await apiClient.get<LogisticsCostItem[]>('/api/v1/logistics/finance/costs', { params: tipo ? { tipo } : {} });
+    return res.data;
+  },
+
+  async createCostItem(data: Partial<LogisticsCostItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.post('/api/v1/logistics/finance/costs', data);
+    return res.data;
+  },
+
+  async updateCostItem(costId: number, data: Partial<LogisticsCostItem>): Promise<{ message: string; id: number }> {
+    const res = await apiClient.put(`/api/v1/logistics/finance/costs/${costId}`, data);
+    return res.data;
+  },
+
+  async deleteCostItem(costId: number): Promise<{ message: string }> {
+    const res = await apiClient.delete(`/api/v1/logistics/finance/costs/${costId}`);
+    return res.data;
+  },
+
+  async getEbitdaAnalysis(): Promise<EbitdaAnalysisResponse> {
+    const res = await apiClient.get<EbitdaAnalysisResponse>('/api/v1/logistics/finance/ebitda');
     return res.data;
   },
 };

@@ -1,5 +1,7 @@
 import io
+import math
 import uuid
+import urllib.parse
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Optional, Any
@@ -13,6 +15,7 @@ from sqlalchemy import func, desc
 from app.database.session import get_db
 from app.models.logistics_entities import (
     LogisticsClient,
+    LogisticsClientBranch,
     LogisticsDriver,
     LogisticsVehicle,
     LogisticsClientInventory,
@@ -20,12 +23,14 @@ from app.models.logistics_entities import (
     LogisticsDispatchItem,
     LogisticsServicePricing,
     LogisticsTelemetryPing,
+    LogisticsCostItem,
 )
 from app.engine.logistics_engine import (
     LogisticsEngine,
     CapacityCheckResult,
     ServiceSettlementResult,
     RouteProfitabilityResult,
+    EbitdaAnalysisResult,
 )
 
 # ReportLab para generación de rótulos con Barcode 128 y QR
@@ -151,6 +156,100 @@ class QuoteCalculationRequest(BaseModel):
     iva_pct: float = 22.0
 
 
+class LogisticsBranchCreate(BaseModel):
+    nombre_sucursal: str
+    direccion: str
+    contacto_receptor: Optional[str] = None
+    telefono_receptor: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    distancia_km_base: float = 0.0
+    activo: bool = True
+
+
+class LogisticsBranchUpdate(BaseModel):
+    nombre_sucursal: Optional[str] = None
+    direccion: Optional[str] = None
+    contacto_receptor: Optional[str] = None
+    telefono_receptor: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    distancia_km_base: Optional[float] = None
+    activo: Optional[bool] = None
+
+
+class LogisticsDriverUpdate(BaseModel):
+    nombre: Optional[str] = None
+    documento: Optional[str] = None
+    telefono: Optional[str] = None
+    tipo_licencia: Optional[str] = None
+    tipo_relacion: Optional[str] = None
+    tarifa_base_viaje: Optional[float] = None
+    tarifa_km: Optional[float] = None
+    disponibilidad_semanal: Optional[str] = None  # JSON string con Lunes a Domingo y turnos
+    activo: Optional[bool] = None
+
+
+class LogisticsVehicleUpdate(BaseModel):
+    matricula: Optional[str] = None
+    tipo_vehiculo: Optional[str] = None
+    capacidad_kg: Optional[float] = None
+    volumen_m3: Optional[float] = None
+    capacidad_pallets: Optional[int] = None
+    driver_id: Optional[int] = None
+    activo: Optional[bool] = None
+
+
+class PickingItemRequest(BaseModel):
+    inventory_id: int
+    cantidad: int
+    es_unidades: bool = False  # False: bultos/cajas, True: unidades sueltas
+
+
+class PickingOrderCreate(BaseModel):
+    client_id: int
+    branch_id: Optional[int] = None
+    responsable_armado: str
+    contacto_receptor_nombre: str
+    contacto_receptor_telefono: str
+    destino_direccion: Optional[str] = None
+    destino_coordenadas: Optional[str] = None
+    ventana_horaria: Optional[str] = "09:00 - 13:00"
+    fecha_entrega_estimada: Optional[str] = None
+    kilometros_recorrido: Optional[float] = 10.0
+    tipo_despacho: str = "ESTANDAR"
+    observaciones: Optional[str] = None
+    items: List[PickingItemRequest]
+
+
+class SignDeliveryRequest(BaseModel):
+    firma_digital: str  # Data URL Base64 de la firma táctil
+    aclaracion: Optional[str] = None
+    documento: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class CostItemCreate(BaseModel):
+    tipo: str = "FIJO"  # FIJO, VARIABLE
+    categoria: str = "ALQUILER"
+    nombre: str
+    monto_mensual: float
+    moneda: str = "UYU"
+    descripcion: Optional[str] = None
+    activo: bool = True
+
+
+class CostItemUpdate(BaseModel):
+    tipo: Optional[str] = None
+    categoria: Optional[str] = None
+    nombre: Optional[str] = None
+    monto_mensual: Optional[float] = None
+    moneda: Optional[str] = None
+    descripcion: Optional[str] = None
+    activo: Optional[bool] = None
+
+
 # ==========================================
 # RUTAS: CLIENTES 3PL
 # ==========================================
@@ -200,6 +299,20 @@ def list_clients(db: Session = Depends(get_db)):
             "total_skus": int(total_skus),
             "ordenes_activas": int(active_orders),
             "pricing": pricing_data,
+            "branches": [
+                {
+                    "id": b.id,
+                    "nombre_sucursal": b.nombre_sucursal,
+                    "direccion": b.direccion,
+                    "contacto_receptor": b.contacto_receptor,
+                    "telefono_receptor": b.telefono_receptor,
+                    "lat": b.lat,
+                    "lng": b.lng,
+                    "distancia_km_base": float(b.distancia_km_base),
+                    "activo": b.activo,
+                }
+                for b in c.branches if b.activo
+            ],
         })
     return results
 
@@ -272,6 +385,99 @@ def update_client_pricing(client_id: int, payload: LogisticsPricingSchema, db: S
 
 
 # ==========================================
+# RUTAS: SUCURSALES / DIRECCIONES 3PL
+# ==========================================
+
+@router.get("/clients/{client_id}/branches")
+def list_client_branches(client_id: int, db: Session = Depends(get_db)):
+    """Lista las sucursales y puntos de entrega activos de un cliente 3PL."""
+    branches = db.query(LogisticsClientBranch).filter(
+        LogisticsClientBranch.client_id == client_id,
+        LogisticsClientBranch.activo == True
+    ).order_by(LogisticsClientBranch.id).all()
+    return [
+        {
+            "id": b.id,
+            "client_id": b.client_id,
+            "nombre_sucursal": b.nombre_sucursal,
+            "direccion": b.direccion,
+            "contacto_receptor": b.contacto_receptor,
+            "telefono_receptor": b.telefono_receptor,
+            "lat": b.lat,
+            "lng": b.lng,
+            "distancia_km_base": float(b.distancia_km_base),
+            "activo": b.activo,
+        }
+        for b in branches
+    ]
+
+
+@router.post("/clients/{client_id}/branches")
+def create_client_branch(client_id: int, payload: LogisticsBranchCreate, db: Session = Depends(get_db)):
+    """Crea una sucursal o punto de entrega para un cliente 3PL."""
+    client = db.query(LogisticsClient).filter(LogisticsClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente 3PL no encontrado")
+    
+    branch = LogisticsClientBranch(
+        client_id=client_id,
+        nombre_sucursal=payload.nombre_sucursal.strip(),
+        direccion=payload.direccion.strip(),
+        contacto_receptor=payload.contacto_receptor.strip() if payload.contacto_receptor else None,
+        telefono_receptor=payload.telefono_receptor.strip() if payload.telefono_receptor else None,
+        lat=payload.lat,
+        lng=payload.lng,
+        distancia_km_base=Decimal(str(payload.distancia_km_base or 0.0)),
+        activo=payload.activo,
+    )
+    db.add(branch)
+    db.commit()
+    db.refresh(branch)
+    return {"message": "Sucursal registrada con éxito", "id": branch.id}
+
+
+@router.put("/branches/{branch_id}")
+def update_branch(branch_id: int, payload: LogisticsBranchUpdate, db: Session = Depends(get_db)):
+    """Edita los datos de una sucursal de entrega."""
+    branch = db.query(LogisticsClientBranch).filter(LogisticsClientBranch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+    
+    if payload.nombre_sucursal is not None:
+        branch.nombre_sucursal = payload.nombre_sucursal.strip()
+    if payload.direccion is not None:
+        branch.direccion = payload.direccion.strip()
+    if payload.contacto_receptor is not None:
+        branch.contacto_receptor = payload.contacto_receptor.strip()
+    if payload.telefono_receptor is not None:
+        branch.telefono_receptor = payload.telefono_receptor.strip()
+    if payload.lat is not None:
+        branch.lat = payload.lat
+    if payload.lng is not None:
+        branch.lng = payload.lng
+    if payload.distancia_km_base is not None:
+        branch.distancia_km_base = Decimal(str(payload.distancia_km_base))
+    if payload.activo is not None:
+        branch.activo = payload.activo
+    
+    db.commit()
+    db.refresh(branch)
+    return {"message": "Sucursal actualizada con éxito", "id": branch.id}
+
+
+@router.delete("/branches/{branch_id}")
+def delete_branch(branch_id: int, db: Session = Depends(get_db)):
+    """Desactiva una sucursal."""
+    branch = db.query(LogisticsClientBranch).filter(LogisticsClientBranch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Sucursal no encontrada")
+    branch.activo = False
+    db.commit()
+    return {"message": "Sucursal desactivada con éxito"}
+
+
+
+# ==========================================
 # RUTAS: FLOTA & CHOFERES TERCERIZADOS
 # ==========================================
 
@@ -300,6 +506,7 @@ def list_drivers(db: Session = Depends(get_db)):
             "tipo_relacion": d.tipo_relacion,
             "tarifa_base_viaje": float(d.tarifa_base_viaje),
             "tarifa_km": float(d.tarifa_km),
+            "disponibilidad_semanal": d.disponibilidad_semanal,
             "activo": d.activo,
             "viajes_hechos": int(viajes_hechos),
             "viajes_activos": int(viajes_activos),
@@ -336,6 +543,37 @@ def create_driver(payload: LogisticsDriverCreate, db: Session = Depends(get_db))
     db.commit()
     db.refresh(driver)
     return {"message": "Chofer guardado con éxito", "id": driver.id}
+
+
+@router.put("/fleet/drivers/{driver_id}")
+def update_driver(driver_id: int, payload: LogisticsDriverUpdate, db: Session = Depends(get_db)):
+    """Edita los datos de un chofer/operario incluyendo su matriz de disponibilidad semanal."""
+    driver = db.query(LogisticsDriver).filter(LogisticsDriver.id == driver_id).first()
+    if not driver:
+        raise HTTPException(status_code=404, detail="Chofer no encontrado")
+
+    if payload.nombre is not None:
+        driver.nombre = payload.nombre.strip()
+    if payload.documento is not None:
+        driver.documento = payload.documento.strip()
+    if payload.telefono is not None:
+        driver.telefono = payload.telefono.strip()
+    if payload.tipo_licencia is not None:
+        driver.tipo_licencia = payload.tipo_licencia.strip()
+    if payload.tipo_relacion is not None:
+        driver.tipo_relacion = payload.tipo_relacion.strip()
+    if payload.tarifa_base_viaje is not None:
+        driver.tarifa_base_viaje = Decimal(str(payload.tarifa_base_viaje))
+    if payload.tarifa_km is not None:
+        driver.tarifa_km = Decimal(str(payload.tarifa_km))
+    if payload.disponibilidad_semanal is not None:
+        driver.disponibilidad_semanal = payload.disponibilidad_semanal
+    if payload.activo is not None:
+        driver.activo = payload.activo
+
+    db.commit()
+    db.refresh(driver)
+    return {"message": "Chofer actualizado con éxito", "id": driver.id}
 
 
 @router.get("/fleet/vehicles")
@@ -393,6 +631,34 @@ def create_vehicle(payload: LogisticsVehicleCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(vehicle)
     return {"message": "Vehículo guardado con éxito", "id": vehicle.id}
+
+
+@router.put("/fleet/vehicles/{vehicle_id}")
+def update_vehicle(vehicle_id: int, payload: LogisticsVehicleUpdate, db: Session = Depends(get_db)):
+    """Edita las especificaciones y asignación de un vehículo."""
+    vehicle = db.query(LogisticsVehicle).filter(LogisticsVehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    if payload.matricula is not None:
+        vehicle.matricula = payload.matricula.strip().upper()
+    if payload.tipo_vehiculo is not None:
+        vehicle.tipo_vehiculo = payload.tipo_vehiculo.strip()
+    if payload.capacidad_kg is not None:
+        vehicle.capacidad_kg = Decimal(str(payload.capacidad_kg))
+    if payload.volumen_m3 is not None:
+        vehicle.volumen_m3 = Decimal(str(payload.volumen_m3))
+    if payload.capacidad_pallets is not None:
+        vehicle.capacidad_pallets = payload.capacidad_pallets
+    if payload.driver_id is not None:
+        vehicle.driver_id = payload.driver_id if payload.driver_id > 0 else None
+    if payload.activo is not None:
+        vehicle.activo = payload.activo
+
+    db.commit()
+    db.refresh(vehicle)
+    return {"message": "Vehículo actualizado con éxito", "id": vehicle.id}
+
 
 
 # ==========================================
@@ -686,8 +952,166 @@ def generate_inventory_labels(
 
 
 # ==========================================
-# RUTAS: KANBAN OPERATIVO & DESPACHOS
+# RUTAS: KANBAN OPERATIVO, PICKING & DESPACHOS
 # ==========================================
+
+@router.post("/inventory/picking-order")
+def create_picking_order(payload: PickingOrderCreate, db: Session = Depends(get_db)):
+    """
+    Arma un pedido de preparación (Picking Parcial) descontando atómicamente el stock en custodia del cliente.
+    Crea la orden de servicio directamente en etapa 'ETIQUETADO_VAS' (Acondicionamiento / Etiquetado)
+    para que pase luego a asignación de chofer y vehículo en 'LISTO_DESPACHO'.
+    """
+    client = db.query(LogisticsClient).filter(LogisticsClient.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente 3PL no encontrado")
+
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Debe especificar al menos un producto para armar el pedido")
+
+    direccion = payload.destino_direccion
+    coords = payload.destino_coordenadas
+    contacto_nombre = payload.contacto_receptor_nombre
+    contacto_tel = payload.contacto_receptor_telefono
+    km = float(payload.kilometros_recorrido or 0.0)
+
+    if payload.branch_id:
+        branch = db.query(LogisticsClientBranch).filter(
+            LogisticsClientBranch.id == payload.branch_id,
+            LogisticsClientBranch.client_id == payload.client_id
+        ).first()
+        if branch:
+            if not direccion:
+                direccion = f"{branch.nombre_sucursal} - {branch.direccion}"
+            if not contacto_nombre and branch.contacto_receptor:
+                contacto_nombre = branch.contacto_receptor
+            if not contacto_tel and branch.telefono_receptor:
+                contacto_tel = branch.telefono_receptor
+            if branch.lat and branch.lng and not coords:
+                coords = f"{branch.lat},{branch.lng}"
+            if float(branch.distancia_km_base) > 0 and km == 0.0:
+                km = float(branch.distancia_km_base)
+
+    if not direccion:
+        direccion = client.direccion_central or "Depósito Cliente"
+
+    # Procesar y descontar stock
+    items_to_create = []
+    tot_bultos = 0
+    tot_kg = Decimal("0.0")
+    tot_m3 = Decimal("0.0")
+
+    for p_item in payload.items:
+        inv = db.query(LogisticsClientInventory).filter(
+            LogisticsClientInventory.id == p_item.inventory_id,
+            LogisticsClientInventory.client_id == payload.client_id
+        ).first()
+
+        if not inv:
+            raise HTTPException(status_code=404, detail=f"Ítem de inventario ID {p_item.inventory_id} no pertenece al cliente")
+
+        if p_item.cantidad <= 0:
+            raise HTTPException(status_code=400, detail=f"Cantidad debe ser mayor a 0 para {inv.sku_cliente}")
+
+        if p_item.es_unidades:
+            unid_pack = inv.unidades_por_bulto or 1
+            bultos_deducir = math.ceil(p_item.cantidad / unid_pack)
+            if inv.cantidad_bultos < bultos_deducir:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitadas: {p_item.cantidad} unidades ({bultos_deducir} bultos equivalentes). Stock disponible: {inv.cantidad_bultos} bultos."
+                )
+            inv.cantidad_bultos -= bultos_deducir
+            bultos_linea = bultos_deducir
+            kg_linea = Decimal(str(inv.peso_unitario_kg)) * Decimal(str(bultos_deducir))
+            m3_linea = Decimal(str(inv.volumen_unitario_m3)) * Decimal(str(bultos_deducir))
+        else:
+            if inv.cantidad_bultos < p_item.cantidad:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Stock insuficiente para {inv.sku_cliente}. Solicitados: {p_item.cantidad} bultos. Stock disponible: {inv.cantidad_bultos} bultos."
+                )
+            inv.cantidad_bultos -= p_item.cantidad
+            bultos_linea = p_item.cantidad
+            kg_linea = Decimal(str(inv.peso_unitario_kg)) * Decimal(str(p_item.cantidad))
+            m3_linea = Decimal(str(inv.volumen_unitario_m3)) * Decimal(str(p_item.cantidad))
+
+        tot_bultos += bultos_linea
+        tot_kg += kg_linea
+        tot_m3 += m3_linea
+
+        items_to_create.append({
+            "inventory_id": inv.id,
+            "sku_cliente": inv.sku_cliente,
+            "descripcion": inv.descripcion,
+            "bultos": bultos_linea,
+            "kg": kg_linea,
+            "m3": m3_linea,
+        })
+
+    # Calcular tarifa con base y kilometraje
+    pricing = client.pricing
+    t_flete_base = pricing.tarifa_flete_base if pricing else Decimal("45.00")
+    t_flete_km = pricing.tarifa_flete_km_adicional if pricing else Decimal("1.20")
+    km_dec = Decimal(str(km))
+    km_excedente = max(Decimal("0.0"), km_dec - Decimal("15.0"))
+    tarifa_flete = t_flete_base + (km_excedente * t_flete_km)
+
+    numero_orden = f"3PL-PICK-{datetime.utcnow().strftime('%y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+
+    order = LogisticsDispatchOrder(
+        numero_orden=numero_orden,
+        client_id=client.id,
+        branch_id=payload.branch_id,
+        etapa_kanban="ETIQUETADO_VAS",  # Sincronizado en Etapa 2: Acondicionamiento / Etiquetado
+        destino_direccion=direccion,
+        destino_coordenadas=coords or "-34.9011,-56.1645",
+        responsable_armado=payload.responsable_armado.strip(),
+        contacto_receptor_nombre=contacto_nombre.strip() if contacto_nombre else None,
+        contacto_receptor_telefono=contacto_tel.strip() if contacto_tel else None,
+        ventana_horaria=payload.ventana_horaria,
+        kilometros_recorrido=km_dec,
+        tipo_despacho=payload.tipo_despacho,
+        remito_numero=f"REM-PICK-{uuid.uuid4().hex[:6].upper()}",
+        total_bultos=tot_bultos,
+        total_kg=tot_kg,
+        total_m3=tot_m3,
+        tarifa_flete_cliente=tarifa_flete,
+        costo_chofer_acordado=Decimal("0.0"),
+        gastos_variables_ruta=Decimal("0.0"),
+        margen_neto_estimado=tarifa_flete,
+        observaciones=payload.observaciones,
+    )
+    db.add(order)
+    db.flush()
+
+    for item_data in items_to_create:
+        d_item = LogisticsDispatchItem(
+            order_id=order.id,
+            inventory_id=item_data["inventory_id"],
+            sku_cliente=item_data["sku_cliente"],
+            descripcion=item_data["descripcion"],
+            bultos_despacho=item_data["bultos"],
+            kg_subtotal=item_data["kg"],
+            m3_subtotal=item_data["m3"],
+        )
+        db.add(d_item)
+
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "message": f"Orden de picking {order.numero_orden} armada con éxito y enviada a 'Acondicionamiento / Etiquetado'",
+        "id": order.id,
+        "numero_orden": order.numero_orden,
+        "etapa_kanban": order.etapa_kanban,
+        "total_bultos": order.total_bultos,
+        "total_kg": float(order.total_kg),
+        "total_m3": float(order.total_m3),
+        "kilometros_recorrido": float(order.kilometros_recorrido),
+        "tarifa_flete_cliente": float(order.tarifa_flete_cliente),
+    }
+
 
 @router.get("/orders")
 def list_orders(
@@ -733,11 +1157,18 @@ def list_orders(
             "numero_orden": o.numero_orden,
             "client_id": o.client_id,
             "client_nombre": o.client.nombre_comercial,
+            "branch_id": o.branch_id,
+            "branch_nombre": o.branch.nombre_sucursal if o.branch else None,
+            "responsable_armado": o.responsable_armado,
+            "contacto_receptor_nombre": o.contacto_receptor_nombre,
+            "contacto_receptor_telefono": o.contacto_receptor_telefono,
             "etapa_kanban": o.etapa_kanban,
             "destino_direccion": o.destino_direccion,
             "destino_coordenadas": o.destino_coordenadas,
             "ventana_horaria": o.ventana_horaria,
             "remito_numero": o.remito_numero,
+            "kilometros_recorrido": float(o.kilometros_recorrido or 0.0),
+            "tipo_despacho": o.tipo_despacho or "ESTANDAR",
             "total_bultos": o.total_bultos,
             "total_kg": float(o.total_kg),
             "total_m3": float(o.total_m3),
@@ -745,6 +1176,10 @@ def list_orders(
             "costo_chofer_acordado": float(o.costo_chofer_acordado),
             "gastos_variables_ruta": float(o.gastos_variables_ruta),
             "margen_neto_estimado": float(o.margen_neto_estimado),
+            "firma_digital_receptor": o.firma_digital_receptor,
+            "firma_fecha_hora": o.firma_fecha_hora.isoformat() if o.firma_fecha_hora else None,
+            "firma_aclaracion": o.firma_aclaracion,
+            "fecha_entrega_real": o.fecha_entrega_real.isoformat() if o.fecha_entrega_real else None,
             "estado_pago": o.estado_pago,
             "observaciones": o.observaciones,
             "fecha_creacion": o.fecha_creacion.isoformat() if o.fecha_creacion else None,
@@ -765,6 +1200,7 @@ def list_orders(
             "capacity_status": capacity_status,
         })
     return out
+
 
 
 @router.post("/orders")
@@ -914,7 +1350,7 @@ def assign_order_fleet(order_id: int, payload: OrderAssignRequest, db: Session =
 
 @router.post("/tracking/{order_id}/ping")
 def receive_telemetry_ping(order_id: int, payload: TelemetryPingCreate, db: Session = Depends(get_db)):
-    """Recepción de coordenadas GPS del chofer móvil para actualización en vivo."""
+    """Recepción de coordenadas GPS reales del chofer móvil para actualización en vivo."""
     order = db.query(LogisticsDispatchOrder).filter(LogisticsDispatchOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
@@ -928,7 +1364,7 @@ def receive_telemetry_ping(order_id: int, payload: TelemetryPingCreate, db: Sess
     )
     db.add(ping)
     db.commit()
-    return {"message": "Coordenadas recibidas", "timestamp": ping.timestamp.isoformat()}
+    return {"message": "Coordenadas GPS recibidas en tiempo real", "timestamp": ping.timestamp.isoformat()}
 
 
 @router.get("/tracking/live")
@@ -946,31 +1382,136 @@ def get_live_tracking(db: Session = Depends(get_db)):
             LogisticsTelemetryPing.order_id == o.id
         ).order_by(desc(LogisticsTelemetryPing.timestamp)).first()
 
-        # Coordenadas por defecto (Montevideo Metropolitano) si no hay ping
         lat = last_ping.lat if last_ping else -34.8833
         lng = last_ping.lng if last_ping else -56.1667
         speed = last_ping.velocidad_kmh if last_ping else 38.5
+
+        # Google Maps navigation link gratuito
+        if o.destino_coordenadas and "," in o.destino_coordenadas:
+            gmaps_nav = f"https://www.google.com/maps/dir/?api=1&destination={o.destino_coordenadas}"
+        else:
+            gmaps_nav = f"https://www.google.com/maps/dir/?api=1&destination={urllib.parse.quote(o.destino_direccion)}"
 
         fleet_markers.append({
             "order_id": o.id,
             "numero_orden": o.numero_orden,
             "client_nombre": o.client.nombre_comercial,
+            "branch_nombre": o.branch.nombre_sucursal if o.branch else None,
             "driver_nombre": o.driver.nombre if o.driver else "Conductor",
             "driver_telefono": o.driver.telefono if o.driver else "",
             "vehicle_matricula": o.vehicle.matricula if o.vehicle else "S/M",
             "vehicle_tipo": o.vehicle.tipo_vehiculo if o.vehicle else "Furgón",
+            "contacto_receptor_nombre": o.contacto_receptor_nombre or o.client.contacto_logistica,
+            "contacto_receptor_telefono": o.contacto_receptor_telefono or o.client.telefono,
             "destino_direccion": o.destino_direccion,
+            "destino_coordenadas": o.destino_coordenadas,
+            "google_maps_url": gmaps_nav,
             "ventana_horaria": o.ventana_horaria,
             "total_bultos": o.total_bultos,
+            "total_kg": float(o.total_kg),
+            "kilometros_recorrido": float(o.kilometros_recorrido or 0.0),
+            "tipo_despacho": o.tipo_despacho or "ESTANDAR",
             "lat": lat,
             "lng": lng,
             "velocidad_kmh": speed,
             "bateria_pct": last_ping.bateria_pct if last_ping else 88,
-            "eta_minutos": 25,  # Estimación en tiempo real
+            "eta_minutos": 25,
             "last_update": last_ping.timestamp.isoformat() if last_ping else datetime.utcnow().isoformat(),
         })
 
     return fleet_markers
+
+
+@router.post("/orders/{order_id}/sign-delivery")
+def sign_order_delivery(order_id: int, payload: SignDeliveryRequest, db: Session = Depends(get_db)):
+    """
+    Registra la firma digital táctil del receptor en la entrega móvil y finaliza la orden en Kanban.
+    Actualiza la fecha y hora de entrega real.
+    """
+    order = db.query(LogisticsDispatchOrder).filter(LogisticsDispatchOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    order.firma_digital_receptor = payload.firma_digital
+    order.firma_fecha_hora = datetime.utcnow()
+    order.firma_aclaracion = payload.aclaracion or payload.documento or order.contacto_receptor_nombre or "Receptor Conforme"
+    order.etapa_kanban = "ENTREGADO"
+    order.fecha_entrega_real = datetime.utcnow()
+
+    # Si se enviaron coordenadas del momento de la firma, guardamos un ping de telemetría final
+    if payload.lat is not None and payload.lng is not None:
+        ping = LogisticsTelemetryPing(
+            order_id=order.id,
+            lat=payload.lat,
+            lng=payload.lng,
+            velocidad_kmh=0.0,
+            bateria_pct=100,
+        )
+        db.add(ping)
+
+    db.commit()
+    db.refresh(order)
+    return {
+        "message": f"Entrega de orden {order.numero_orden} confirmada con firma digital",
+        "id": order.id,
+        "etapa_kanban": order.etapa_kanban,
+        "firma_fecha_hora": order.firma_fecha_hora.isoformat(),
+        "firma_aclaracion": order.firma_aclaracion,
+    }
+
+
+@router.get("/orders/{order_id}/driver-sheet")
+def get_driver_delivery_sheet(order_id: int, db: Session = Depends(get_db)):
+    """
+    Ficha de reparto móvil optimizada para la pantalla del conductor / cadete en su celular:
+    Cliente, sucursal, contacto con llamada directa, dirección con enlace a Google Maps y panel de firma.
+    """
+    order = db.query(LogisticsDispatchOrder).filter(LogisticsDispatchOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    # Deep-link gratuito a Google Maps Navigation
+    if order.destino_coordenadas and "," in order.destino_coordenadas:
+        gmaps_url = f"https://www.google.com/maps/dir/?api=1&destination={order.destino_coordenadas}"
+    else:
+        dest_enc = urllib.parse.quote(order.destino_direccion)
+        gmaps_url = f"https://www.google.com/maps/dir/?api=1&destination={dest_enc}"
+
+    items_list = [
+        {
+            "sku": it.sku_cliente,
+            "descripcion": it.descripcion,
+            "bultos": it.bultos_despacho,
+            "kg": float(it.kg_subtotal),
+            "m3": float(it.m3_subtotal),
+        }
+        for it in order.items
+    ]
+
+    return {
+        "order_id": order.id,
+        "numero_orden": order.numero_orden,
+        "remito_numero": order.remito_numero,
+        "client_nombre": order.client.nombre_comercial,
+        "branch_nombre": order.branch.nombre_sucursal if order.branch else None,
+        "contacto_receptor_nombre": order.contacto_receptor_nombre or order.client.contacto_logistica,
+        "contacto_receptor_telefono": order.contacto_receptor_telefono or order.client.telefono,
+        "destino_direccion": order.destino_direccion,
+        "destino_coordenadas": order.destino_coordenadas,
+        "google_maps_url": gmaps_url,
+        "ventana_horaria": order.ventana_horaria,
+        "total_bultos": order.total_bultos,
+        "total_kg": float(order.total_kg),
+        "total_m3": float(order.total_m3),
+        "kilometros_recorrido": float(order.kilometros_recorrido or 0.0),
+        "etapa_kanban": order.etapa_kanban,
+        "responsable_armado": order.responsable_armado,
+        "observaciones": order.observaciones,
+        "items": items_list,
+        "firma_digital_receptor": order.firma_digital_receptor,
+        "firma_fecha_hora": order.firma_fecha_hora.isoformat() if order.firma_fecha_hora else None,
+        "firma_aclaracion": order.firma_aclaracion,
+    }
 
 
 # ==========================================
@@ -1024,7 +1565,6 @@ def get_finance_summary(db: Session = Depends(get_db)):
     margen_bruto_total = facturacion_total - (costo_choferes_total + gastos_ruta_total)
     margen_pct = (margen_bruto_total / facturacion_total * 100.0) if facturacion_total > 0 else 0.0
 
-    # Desglose de rentabilidad por orden individual
     rutas_rentabilidad = []
     for o in orders[:15]:
         p = LogisticsEngine.calculate_route_profitability(
@@ -1048,12 +1588,179 @@ def get_finance_summary(db: Session = Depends(get_db)):
 
 
 # ==========================================
+# RUTAS: GESTIÓN DE COSTOS & ANÁLISIS EBITDA 3PL
+# ==========================================
+
+@router.get("/finance/costs")
+def list_cost_items(tipo: Optional[str] = None, db: Session = Depends(get_db)):
+    """Lista los costos fijos y variables del depósito y logística 3PL."""
+    query = db.query(LogisticsCostItem).filter(LogisticsCostItem.activo == True)
+    if tipo:
+        query = query.filter(LogisticsCostItem.tipo == tipo.upper())
+    costs = query.order_by(LogisticsCostItem.tipo, LogisticsCostItem.id).all()
+    return [
+        {
+            "id": c.id,
+            "tipo": c.tipo,
+            "categoria": c.categoria,
+            "nombre": c.nombre,
+            "monto_mensual": float(c.monto_mensual),
+            "moneda": c.moneda,
+            "descripcion": c.descripcion,
+            "activo": c.activo,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in costs
+    ]
+
+
+@router.post("/finance/costs")
+def create_cost_item(payload: CostItemCreate, db: Session = Depends(get_db)):
+    """Registra un nuevo costo fijo o variable del depósito."""
+    cost = LogisticsCostItem(
+        tipo=payload.tipo.upper(),
+        categoria=payload.categoria.upper(),
+        nombre=payload.nombre.strip(),
+        monto_mensual=Decimal(str(payload.monto_mensual)),
+        moneda=payload.moneda.upper(),
+        descripcion=payload.descripcion.strip() if payload.descripcion else None,
+        activo=payload.activo,
+    )
+    db.add(cost)
+    db.commit()
+    db.refresh(cost)
+    return {"message": "Costo logístico registrado con éxito", "id": cost.id}
+
+
+@router.put("/finance/costs/{cost_id}")
+def update_cost_item(cost_id: int, payload: CostItemUpdate, db: Session = Depends(get_db)):
+    """Edita un costo fijo o variable existente."""
+    cost = db.query(LogisticsCostItem).filter(LogisticsCostItem.id == cost_id).first()
+    if not cost:
+        raise HTTPException(status_code=404, detail="Costo no encontrado")
+
+    if payload.tipo is not None:
+        cost.tipo = payload.tipo.upper()
+    if payload.categoria is not None:
+        cost.categoria = payload.categoria.upper()
+    if payload.nombre is not None:
+        cost.nombre = payload.nombre.strip()
+    if payload.monto_mensual is not None:
+        cost.monto_mensual = Decimal(str(payload.monto_mensual))
+    if payload.moneda is not None:
+        cost.moneda = payload.moneda.upper()
+    if payload.descripcion is not None:
+        cost.descripcion = payload.descripcion.strip()
+    if payload.activo is not None:
+        cost.activo = payload.activo
+
+    db.commit()
+    db.refresh(cost)
+    return {"message": "Costo actualizado con éxito", "id": cost.id}
+
+
+@router.delete("/finance/costs/{cost_id}")
+def delete_cost_item(cost_id: int, db: Session = Depends(get_db)):
+    """Desactiva un costo logístico."""
+    cost = db.query(LogisticsCostItem).filter(LogisticsCostItem.id == cost_id).first()
+    if not cost:
+        raise HTTPException(status_code=404, detail="Costo no encontrado")
+    cost.activo = False
+    db.commit()
+    return {"message": "Costo desactivado con éxito"}
+
+
+@router.get("/finance/ebitda")
+def get_ebitda_analysis(db: Session = Depends(get_db)):
+    """
+    Cálculo de EBITDA Neto, Punto de Equilibrio (Break-Even) y acumulador de viajes y kilómetros.
+    """
+    # 1. Costos fijos y variables del depósito
+    fixed_costs = db.query(func.sum(LogisticsCostItem.monto_mensual)).filter(
+        LogisticsCostItem.tipo == "FIJO",
+        LogisticsCostItem.activo == True
+    ).scalar() or Decimal("0.0")
+
+    var_costs_table = db.query(func.sum(LogisticsCostItem.monto_mensual)).filter(
+        LogisticsCostItem.tipo == "VARIABLE",
+        LogisticsCostItem.activo == True
+    ).scalar() or Decimal("0.0")
+
+    # 2. Órdenes y acumulación de viajes y kilómetros
+    orders = db.query(LogisticsDispatchOrder).all()
+    completed_orders = [o for o in orders if o.etapa_kanban == "ENTREGADO"]
+
+    total_viajes = len(completed_orders)
+    total_km = sum(float(o.kilometros_recorrido or 0.0) for o in completed_orders)
+
+    ingresos_flete = sum(o.tarifa_flete_cliente for o in orders)
+    costos_choferes = sum(o.costo_chofer_acordado for o in orders)
+    gastos_ruta = sum(o.gastos_variables_ruta for o in orders)
+
+    # Costos variables totales = insumos/toner/film del depósito + peajes de ruta
+    costos_variables_totales = var_costs_table + gastos_ruta
+
+    analysis = LogisticsEngine.calculate_ebitda_and_breakeven(
+        ingresos_totales=ingresos_flete,
+        costos_choferes=costos_choferes,
+        costos_variables_extras=costos_variables_totales,
+        costos_fijos_totales=fixed_costs,
+        total_viajes=total_viajes,
+        total_km=Decimal(str(total_km)),
+    )
+
+    res = analysis.model_dump()
+    res["costos_fijos_desglose"] = [
+        {"nombre": c.nombre, "categoria": c.categoria, "monto": float(c.monto_mensual)}
+        for c in db.query(LogisticsCostItem).filter(LogisticsCostItem.tipo == "FIJO", LogisticsCostItem.activo == True).all()
+    ]
+    res["costos_variables_desglose"] = [
+        {"nombre": c.nombre, "categoria": c.categoria, "monto": float(c.monto_mensual)}
+        for c in db.query(LogisticsCostItem).filter(LogisticsCostItem.tipo == "VARIABLE", LogisticsCostItem.activo == True).all()
+    ]
+    return res
+
+
+
+# ==========================================
 # INICIALIZADOR DE DATOS SEMILLA (3PL DEMO)
 # ==========================================
 
 def seed_logistics_demo(db: Session):
-    """Siembra clientes 3PL, flota, inventario y órdenes en el Kanban si las tablas están vacías."""
+    """Siembra clientes 3PL, sucursales, flota con disponibilidad, costos y órdenes si están vacías."""
+    # 0. Si ya existen clientes, sembrar sucursales y costos si estuvieran vacíos
     if db.query(LogisticsClient).count() > 0:
+        # Sembrar costos si está vacía
+        if db.query(LogisticsCostItem).count() == 0:
+            fixed_costs = [
+                LogisticsCostItem(tipo="FIJO", categoria="ALQUILER", nombre="Alquiler Depósito Central Nave A (1200 m²)", monto_mensual=Decimal("145000.00"), moneda="UYU", descripcion="Contrato arrendamiento galpón logístico principal con 4 docks de carga."),
+                LogisticsCostItem(tipo="FIJO", categoria="ELECTRICIDAD_UTE", nombre="Energía Eléctrica UTE (Tarifa Doble Horario)", monto_mensual=Decimal("38500.00"), moneda="UYU", descripcion="Iluminación LED nave de estiba y fuerza motriz."),
+                LogisticsCostItem(tipo="FIJO", categoria="SUELDOS_OPERATIVOS", nombre="Sueldos Fijos Encargado de Depósito & Capataces", monto_mensual=Decimal("110000.00"), moneda="UYU", descripcion="Salario fijo 2 supervisores de turno y seguridad."),
+                LogisticsCostItem(tipo="FIJO", categoria="COMUNICACIONES", nombre="Fibra Óptica Dedicada + WiFi Depósito + SIMs GPS", monto_mensual=Decimal("8900.00"), moneda="UYU", descripcion="Conectividad de antenas de escáneres y telemetría móvil."),
+            ]
+            var_costs = [
+                LogisticsCostItem(tipo="VARIABLE", categoria="EMBALAJE", nombre="Film Stretch Triple Capa & Esquineros", monto_mensual=Decimal("12800.00"), moneda="UYU", descripcion="Consumo mensual para paletizado y consolidación."),
+                LogisticsCostItem(tipo="VARIABLE", categoria="PAPELERIA", nombre="Etiquetas Térmicas Autoadhesivas & Tóner", monto_mensual=Decimal("6500.00"), moneda="UYU", descripcion="Rollo de etiquetas para rotulado de bultos y remitos impresos."),
+                LogisticsCostItem(tipo="VARIABLE", categoria="OTROS", nombre="Precintos de Seguridad Numéricos", monto_mensual=Decimal("4200.00"), moneda="UYU", descripcion="Precintado de furgones y camiones en despacho."),
+            ]
+            db.add_all(fixed_costs + var_costs)
+            db.commit()
+
+        # Sembrar sucursales si está vacía
+        if db.query(LogisticsClientBranch).count() == 0:
+            c_first = db.query(LogisticsClient).first()
+            if c_first:
+                b1 = LogisticsClientBranch(client_id=c_first.id, nombre_sucursal="Sucursal 01 - Centro", direccion="18 de Julio 1420, Montevideo", contacto_receptor="Mariano García", telefono_receptor="+598 99 222 333", lat=-34.9056, lng=-56.1892, distancia_km_base=Decimal("12.5"))
+                b2 = LogisticsClientBranch(client_id=c_first.id, nombre_sucursal="Sucursal 02 - Carrasco", direccion="Av. Giannattasio km 16, Canelones", contacto_receptor="Lucía Ramos", telefono_receptor="+598 98 111 222", lat=-34.8622, lng=-56.0210, distancia_km_base=Decimal("24.0"))
+                db.add_all([b1, b2])
+                db.commit()
+
+        # Sembrar disponibilidad semanal para choferes existentes si no la tienen
+        default_avail = '{"lunes":{"activo":true,"desde":"07:00","hasta":"18:00","turnos":"Jornada Completa"},"martes":{"activo":true,"desde":"07:00","hasta":"18:00","turnos":"Jornada Completa"},"miercoles":{"activo":true,"desde":"07:00","hasta":"18:00","turnos":"Jornada Completa"},"jueves":{"activo":true,"desde":"07:00","hasta":"18:00","turnos":"Jornada Completa"},"viernes":{"activo":true,"desde":"07:00","hasta":"18:00","turnos":"Jornada Completa"},"sabado":{"activo":true,"desde":"08:00","hasta":"13:00","turnos":"Medio Día"},"domingo":{"activo":false,"desde":"","hasta":"","turnos":"Franco"}}'
+        for drv in db.query(LogisticsDriver).all():
+            if not drv.disponibilidad_semanal:
+                drv.disponibilidad_semanal = default_avail
+        db.commit()
         return
 
     # 1. Clientes 3PL

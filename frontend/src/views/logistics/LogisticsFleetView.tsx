@@ -5,9 +5,47 @@ import {
   Plus,
   Search,
   X,
+  Edit2,
+  Calendar,
+  Check,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
 import type { LogisticsDriverItem, LogisticsVehicleItem } from '../../services/logisticsApi';
+
+interface DaySchedule {
+  activo: boolean;
+  turno: string;
+}
+
+const DIAS_SEMANA = [
+  { key: 'lunes', label: 'Lunes' },
+  { key: 'martes', label: 'Martes' },
+  { key: 'miercoles', label: 'Miércoles' },
+  { key: 'jueves', label: 'Jueves' },
+  { key: 'viernes', label: 'Viernes' },
+  { key: 'sabado', label: 'Sábado' },
+  { key: 'domingo', label: 'Domingo' },
+];
+
+const DEFAULT_SCHEDULE: Record<string, DaySchedule> = {
+  lunes: { activo: true, turno: '08:00 - 18:00' },
+  martes: { activo: true, turno: '08:00 - 18:00' },
+  miercoles: { activo: true, turno: '08:00 - 18:00' },
+  jueves: { activo: true, turno: '08:00 - 18:00' },
+  viernes: { activo: true, turno: '08:00 - 18:00' },
+  sabado: { activo: true, turno: '08:00 - 13:00' },
+  domingo: { activo: false, turno: 'Descanso' },
+};
+
+const parseSchedule = (raw: any): Record<string, any> => {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw as Record<string, any>;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
 
 export const LogisticsFleetView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers'>('vehicles');
@@ -18,7 +56,10 @@ export const LogisticsFleetView: React.FC = () => {
 
   // Modals
   const [isDriverModalOpen, setIsDriverModalOpen] = useState<boolean>(false);
+  const [editingDriverId, setEditingDriverId] = useState<number | null>(null);
+
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState<boolean>(false);
+  const [editingVehicleId, setEditingVehicleId] = useState<number | null>(null);
 
   // Driver Form
   const [driverForm, setDriverForm] = useState({
@@ -29,7 +70,10 @@ export const LogisticsFleetView: React.FC = () => {
     tipo_relacion: 'FLETERO_TERCERIZADO',
     tarifa_base_viaje: 35.0,
     tarifa_km: 0.85,
+    activo: true,
   });
+
+  const [weeklyAvailability, setWeeklyAvailability] = useState<Record<string, DaySchedule>>(DEFAULT_SCHEDULE);
 
   // Vehicle Form
   const [vehicleForm, setVehicleForm] = useState({
@@ -39,6 +83,7 @@ export const LogisticsFleetView: React.FC = () => {
     volumen_m3: 14.5,
     capacidad_pallets: 4,
     driver_id: '' as string | number,
+    activo: true,
   });
 
   const loadData = async () => {
@@ -61,40 +106,161 @@ export const LogisticsFleetView: React.FC = () => {
     loadData();
   }, []);
 
+  // Handlers Driver
+  const handleOpenCreateDriver = () => {
+    setEditingDriverId(null);
+    setDriverForm({
+      nombre: '',
+      documento: '',
+      telefono: '',
+      tipo_licencia: 'CAT_B',
+      tipo_relacion: 'FLETERO_TERCERIZADO',
+      tarifa_base_viaje: 35.0,
+      tarifa_km: 0.85,
+      activo: true,
+    });
+    setWeeklyAvailability(DEFAULT_SCHEDULE);
+    setIsDriverModalOpen(true);
+  };
+
+  const handleOpenEditDriver = (d: LogisticsDriverItem) => {
+    setEditingDriverId(d.id);
+    setDriverForm({
+      nombre: d.nombre,
+      documento: d.documento,
+      telefono: d.telefono,
+      tipo_licencia: d.tipo_licencia,
+      tipo_relacion: d.tipo_relacion,
+      tarifa_base_viaje: d.tarifa_base_viaje,
+      tarifa_km: d.tarifa_km,
+      activo: d.activo,
+    });
+
+    const parsedDisp = parseSchedule(d.disponibilidad_semanal);
+    const merged: Record<string, DaySchedule> = { ...DEFAULT_SCHEDULE };
+    for (const dia of DIAS_SEMANA) {
+      if (parsedDisp[dia.key]) {
+        merged[dia.key] = {
+          activo: !!parsedDisp[dia.key].activo,
+          turno: parsedDisp[dia.key].turno || '08:00 - 18:00',
+        };
+      }
+    }
+    setWeeklyAvailability(merged);
+    setIsDriverModalOpen(true);
+  };
+
+  const handleToggleDay = (key: string) => {
+    setWeeklyAvailability((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        activo: !prev[key]?.activo,
+      },
+    }));
+  };
+
+  const handleDayShiftChange = (key: string, turno: string) => {
+    setWeeklyAvailability((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        turno,
+      },
+    }));
+  };
+
   const handleSaveDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await logisticsApi.createDriver({
-        nombre: driverForm.nombre,
-        documento: driverForm.documento,
-        telefono: driverForm.telefono,
-        tipo_licencia: driverForm.tipo_licencia,
-        tipo_relacion: driverForm.tipo_relacion,
-        tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
-        tarifa_km: Number(driverForm.tarifa_km),
-      });
+      const scheduleJson = JSON.stringify(weeklyAvailability);
+      if (editingDriverId) {
+        await logisticsApi.updateDriver(editingDriverId, {
+          nombre: driverForm.nombre,
+          documento: driverForm.documento,
+          telefono: driverForm.telefono,
+          tipo_licencia: driverForm.tipo_licencia,
+          tipo_relacion: driverForm.tipo_relacion,
+          tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
+          tarifa_km: Number(driverForm.tarifa_km),
+          disponibilidad_semanal: scheduleJson,
+          activo: driverForm.activo,
+        });
+      } else {
+        await logisticsApi.createDriver({
+          nombre: driverForm.nombre,
+          documento: driverForm.documento,
+          telefono: driverForm.telefono,
+          tipo_licencia: driverForm.tipo_licencia,
+          tipo_relacion: driverForm.tipo_relacion,
+          tarifa_base_viaje: Number(driverForm.tarifa_base_viaje),
+          tarifa_km: Number(driverForm.tarifa_km),
+          disponibilidad_semanal: scheduleJson,
+        });
+      }
       setIsDriverModalOpen(false);
       loadData();
     } catch (err: any) {
-      alert(`Error al registrar conductor: ${err.response?.data?.detail || err.message}`);
+      alert(`Error al guardar conductor: ${err.response?.data?.detail || err.message}`);
     }
+  };
+
+  // Handlers Vehicle
+  const handleOpenCreateVehicle = () => {
+    setEditingVehicleId(null);
+    setVehicleForm({
+      matricula: '',
+      tipo_vehiculo: 'FURGON',
+      capacidad_kg: 1800.0,
+      volumen_m3: 14.5,
+      capacidad_pallets: 4,
+      driver_id: '',
+      activo: true,
+    });
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleOpenEditVehicle = (v: LogisticsVehicleItem) => {
+    setEditingVehicleId(v.id);
+    setVehicleForm({
+      matricula: v.matricula,
+      tipo_vehiculo: v.tipo_vehiculo,
+      capacidad_kg: v.capacidad_kg,
+      volumen_m3: v.volumen_m3,
+      capacidad_pallets: v.capacidad_pallets,
+      driver_id: v.driver_id || '',
+      activo: v.activo,
+    });
+    setIsVehicleModalOpen(true);
   };
 
   const handleSaveVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await logisticsApi.createVehicle({
-        matricula: vehicleForm.matricula,
-        tipo_vehiculo: vehicleForm.tipo_vehiculo,
-        capacidad_kg: Number(vehicleForm.capacidad_kg),
-        volumen_m3: Number(vehicleForm.volumen_m3),
-        capacidad_pallets: Number(vehicleForm.capacidad_pallets),
-        driver_id: vehicleForm.driver_id ? Number(vehicleForm.driver_id) : undefined,
-      });
+      if (editingVehicleId) {
+        await logisticsApi.updateVehicle(editingVehicleId, {
+          matricula: vehicleForm.matricula,
+          tipo_vehiculo: vehicleForm.tipo_vehiculo,
+          capacidad_kg: Number(vehicleForm.capacidad_kg),
+          volumen_m3: Number(vehicleForm.volumen_m3),
+          capacidad_pallets: Number(vehicleForm.capacidad_pallets),
+          driver_id: vehicleForm.driver_id ? Number(vehicleForm.driver_id) : undefined,
+          activo: vehicleForm.activo,
+        });
+      } else {
+        await logisticsApi.createVehicle({
+          matricula: vehicleForm.matricula,
+          tipo_vehiculo: vehicleForm.tipo_vehiculo,
+          capacidad_kg: Number(vehicleForm.capacidad_kg),
+          volumen_m3: Number(vehicleForm.volumen_m3),
+          capacidad_pallets: Number(vehicleForm.capacidad_pallets),
+          driver_id: vehicleForm.driver_id ? Number(vehicleForm.driver_id) : undefined,
+        });
+      }
       setIsVehicleModalOpen(false);
       loadData();
     } catch (err: any) {
-      alert(`Error al registrar vehículo: ${err.response?.data?.detail || err.message}`);
+      alert(`Error al guardar vehículo: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -130,7 +296,7 @@ export const LogisticsFleetView: React.FC = () => {
                 Flota & Personal Tercerizado
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Capacidades volumétricas ($m^3$), tara ($kg$) y gestión de fleteros/cadetes
+                Capacidades volumétricas (m³), tara (kg), disponibilidad semanal y tarifas de choferes/cadetes
               </p>
             </div>
           </div>
@@ -138,14 +304,14 @@ export const LogisticsFleetView: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setIsDriverModalOpen(true)}
+            onClick={handleOpenCreateDriver}
             className="inline-flex items-center space-x-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
           >
             <Users size={15} />
             <span>+ Conductor / Operario</span>
           </button>
           <button
-            onClick={() => setIsVehicleModalOpen(true)}
+            onClick={handleOpenCreateVehicle}
             className="inline-flex items-center space-x-2 px-4 py-2 bg-[#00a2e8] hover:bg-[#008ecb] text-white rounded-xl text-xs font-semibold shadow-sm transition-colors cursor-pointer"
           >
             <Plus size={16} />
@@ -252,11 +418,12 @@ export const LogisticsFleetView: React.FC = () => {
                 <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase text-slate-500">
                   <th className="py-3 px-4">Matrícula</th>
                   <th className="py-3 px-4">Tipo de Vehículo</th>
-                  <th className="py-3 px-4">Capacidad Carga (kg)</th>
+                  <th className="py-3 px-4">Capacidad Carga</th>
                   <th className="py-3 px-4">Cubicaje (m³)</th>
                   <th className="py-3 px-4">Pallets</th>
                   <th className="py-3 px-4">Conductor Asignado</th>
                   <th className="py-3 px-4 text-center">Estado</th>
+                  <th className="py-3 px-4 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -282,7 +449,7 @@ export const LogisticsFleetView: React.FC = () => {
                     <td className="py-3 px-4">
                       <div className="flex flex-col">
                         <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {v.driver_nombre}
+                          {v.driver_nombre || 'Sin conductor'}
                         </span>
                         {v.driver_telefono && (
                           <span className="text-[10px] text-slate-400">{v.driver_telefono}</span>
@@ -300,6 +467,15 @@ export const LogisticsFleetView: React.FC = () => {
                         </span>
                       )}
                     </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => handleOpenEditVehicle(v)}
+                        className="p-1.5 text-slate-400 hover:text-sky-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                        title="Editar Vehículo"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -313,64 +489,94 @@ export const LogisticsFleetView: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-bold uppercase text-slate-500">
                   <th className="py-3 px-4">Conductor / Operario</th>
-                  <th className="py-3 px-4">Documento (C.I.)</th>
-                  <th className="py-3 px-4">Teléfono</th>
-                  <th className="py-3 px-4">Libreta / Licencia</th>
-                  <th className="py-3 px-4">Relación Laboral</th>
-                  <th className="py-3 px-4">Tarifa Base ($)</th>
-                  <th className="py-3 px-4">Tarifa / km ($)</th>
-                  <th className="py-3 px-4 text-center">Viajes Hechos</th>
+                  <th className="py-3 px-4">Documento / Tel</th>
+                  <th className="py-3 px-4">Libreta / Vínculo</th>
+                  <th className="py-3 px-4">Disponibilidad Semanal</th>
+                  <th className="py-3 px-4">Tarifas (Base / km)</th>
+                  <th className="py-3 px-4 text-center">Viajes</th>
+                  <th className="py-3 px-4 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {filteredDrivers.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100">
-                      {d.nombre}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">
-                      {d.documento}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                      {d.telefono}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono font-bold text-slate-700 dark:text-slate-300">
-                        {d.tipo_licencia}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                        {d.tipo_relacion.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">
-                      ${d.tarifa_base_viaje.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100">
-                      ${d.tarifa_km.toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
-                        {d.viajes_hechos} entregas
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {filteredDrivers.map((d) => {
+                  const disp = parseSchedule(d.disponibilidad_semanal);
+                  const activeDays = DIAS_SEMANA.filter((dia) => disp[dia.key]?.activo);
+
+                  return (
+                    <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-slate-100">
+                        <div className="flex items-center space-x-2">
+                          <span>{d.nombre}</span>
+                          {!d.activo && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 font-bold">
+                              Inactivo
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-mono text-slate-700 dark:text-slate-300">{d.documento}</p>
+                        <p className="text-[10px] text-slate-400">{d.telefono}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono font-bold text-slate-700 dark:text-slate-300 mr-1.5">
+                          {d.tipo_licencia}
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {d.tipo_relacion.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        {activeDays.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {activeDays.map((dia) => (
+                              <span
+                                key={dia.key}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/50"
+                                title={disp[dia.key]?.turno || 'Disponible'}
+                              >
+                                {dia.label.slice(0, 3)}: {disp[dia.key]?.turno || 'Sí'}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Sin horario definido</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
+                        ${d.tarifa_base_viaje.toFixed(2)} base / ${d.tarifa_km.toFixed(2)} km
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
+                          {d.viajes_hechos} entregas
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleOpenEditDriver(d)}
+                          className="p-1.5 text-slate-400 hover:text-sky-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          title="Editar Chofer & Disponibilidad"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Modal Alta Conductor */}
+      {/* Modal Conductor / Disponibilidad */}
       {isDriverModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
                 <Users className="text-sky-500" size={18} />
-                <span>Registrar Personal / Conductor</span>
+                <span>{editingDriverId ? 'Editar Conductor / Operario' : 'Registrar Personal / Conductor'}</span>
               </h2>
               <button
                 onClick={() => setIsDriverModalOpen(false)}
@@ -380,9 +586,9 @@ export const LogisticsFleetView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveDriver} className="mt-4 space-y-3">
+            <form onSubmit={handleSaveDriver} className="mt-4 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-600">Nombre Completo</label>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Nombre Completo</label>
                 <input
                   type="text"
                   required
@@ -395,7 +601,7 @@ export const LogisticsFleetView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">C.I. / Documento</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">C.I. / Documento</label>
                   <input
                     type="text"
                     required
@@ -406,11 +612,11 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Teléfono Móvil</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Teléfono Móvil (WhatsApp)</label>
                   <input
                     type="text"
                     required
-                    placeholder="+598 99 ..."
+                    placeholder="+598 99 123 456"
                     value={driverForm.telefono}
                     onChange={(e) => setDriverForm({ ...driverForm, telefono: e.target.value })}
                     className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
@@ -420,7 +626,7 @@ export const LogisticsFleetView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Libreta Licencia</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Libreta / Licencia</label>
                   <select
                     value={driverForm.tipo_licencia}
                     onChange={(e) => setDriverForm({ ...driverForm, tipo_licencia: e.target.value })}
@@ -432,7 +638,7 @@ export const LogisticsFleetView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Vínculo</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Vínculo Laboral</label>
                   <select
                     value={driverForm.tipo_relacion}
                     onChange={(e) => setDriverForm({ ...driverForm, tipo_relacion: e.target.value })}
@@ -447,7 +653,7 @@ export const LogisticsFleetView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Tarifa Base ($ / Viaje)</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa Base ($ / Viaje)</label>
                   <input
                     type="number"
                     step="0.5"
@@ -457,7 +663,7 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Tarifa ($ / km)</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tarifa ($ / km)</label>
                   <input
                     type="number"
                     step="0.05"
@@ -467,6 +673,75 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {/* Matriz de Disponibilidad Semanal */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
+                    <Calendar size={14} className="text-sky-500" />
+                    <span>Disponibilidad Semanal (Lunes a Domingo)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">Tildar días habilitados y turno</span>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  {DIAS_SEMANA.map((dia) => {
+                    const sched = weeklyAvailability[dia.key] || { activo: false, turno: '' };
+                    return (
+                      <div
+                        key={dia.key}
+                        className={`flex items-center justify-between p-2 rounded-lg text-xs transition-colors border ${
+                          sched.activo
+                            ? 'bg-white dark:bg-slate-900 border-sky-200 dark:border-sky-800/60 shadow-2xs'
+                            : 'bg-slate-100/50 dark:bg-slate-800/30 border-transparent opacity-60'
+                        }`}
+                      >
+                        <label className="flex items-center space-x-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sched.activo}
+                            onChange={() => handleToggleDay(dia.key)}
+                            className="rounded text-sky-600 focus:ring-sky-500"
+                          />
+                          <span className={`font-semibold ${sched.activo ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+                            {dia.label}
+                          </span>
+                        </label>
+
+                        {sched.activo ? (
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={sched.turno}
+                              placeholder="Ej: 08:00 - 18:00 o Turno Tarde"
+                              onChange={(e) => handleDayShiftChange(dia.key, e.target.value)}
+                              className="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 w-44"
+                            />
+                            <Check size={14} className="text-emerald-500" />
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">No disponible</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {editingDriverId && (
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="driver_activo"
+                    checked={driverForm.activo}
+                    onChange={(e) => setDriverForm({ ...driverForm, activo: e.target.checked })}
+                    className="rounded text-sky-600"
+                  />
+                  <label htmlFor="driver_activo" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Conductor Activo en Operaciones
+                  </label>
+                </div>
+              )}
 
               <div className="flex justify-end space-x-2 pt-3">
                 <button
@@ -478,9 +753,9 @@ export const LogisticsFleetView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-[#00a2e8] hover:bg-[#008ecb] rounded-xl cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold text-white bg-[#00a2e8] hover:bg-[#008ecb] rounded-xl cursor-pointer shadow-sm"
                 >
-                  Guardar Conductor
+                  {editingDriverId ? 'Actualizar Conductor' : 'Guardar Conductor'}
                 </button>
               </div>
             </form>
@@ -488,14 +763,14 @@ export const LogisticsFleetView: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Alta Vehículo */}
+      {/* Modal Vehículo */}
       {isVehicleModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
                 <Truck className="text-amber-500" size={18} />
-                <span>Registrar Unidad Vehicular</span>
+                <span>{editingVehicleId ? 'Editar Unidad Vehicular' : 'Registrar Unidad Vehicular'}</span>
               </h2>
               <button
                 onClick={() => setIsVehicleModalOpen(false)}
@@ -508,7 +783,7 @@ export const LogisticsFleetView: React.FC = () => {
             <form onSubmit={handleSaveVehicle} className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Matrícula</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Matrícula</label>
                   <input
                     type="text"
                     required
@@ -519,7 +794,7 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Tipo de Vehículo</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Tipo de Vehículo</label>
                   <select
                     value={vehicleForm.tipo_vehiculo}
                     onChange={(e) => setVehicleForm({ ...vehicleForm, tipo_vehiculo: e.target.value })}
@@ -535,7 +810,7 @@ export const LogisticsFleetView: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Capacidad (kg)</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Capacidad (kg)</label>
                   <input
                     type="number"
                     step="50"
@@ -546,7 +821,7 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Volumen (m³)</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Volumen (m³)</label>
                   <input
                     type="number"
                     step="0.5"
@@ -557,7 +832,7 @@ export const LogisticsFleetView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-600">Pallets</label>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Pallets</label>
                   <input
                     type="number"
                     step="1"
@@ -570,7 +845,7 @@ export const LogisticsFleetView: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-600">Conductor Habitual</label>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Conductor Habitual</label>
                 <select
                   value={vehicleForm.driver_id}
                   onChange={(e) => setVehicleForm({ ...vehicleForm, driver_id: e.target.value })}
@@ -585,6 +860,21 @@ export const LogisticsFleetView: React.FC = () => {
                 </select>
               </div>
 
+              {editingVehicleId && (
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="vehicle_activo"
+                    checked={vehicleForm.activo}
+                    onChange={(e) => setVehicleForm({ ...vehicleForm, activo: e.target.checked })}
+                    className="rounded text-amber-600"
+                  />
+                  <label htmlFor="vehicle_activo" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Vehículo Activo / Operativo
+                  </label>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-2 pt-3">
                 <button
                   type="button"
@@ -595,9 +885,9 @@ export const LogisticsFleetView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl cursor-pointer shadow-sm"
                 >
-                  Guardar Vehículo
+                  {editingVehicleId ? 'Actualizar Vehículo' : 'Guardar Vehículo'}
                 </button>
               </div>
             </form>

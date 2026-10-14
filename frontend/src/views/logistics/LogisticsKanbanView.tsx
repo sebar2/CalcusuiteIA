@@ -10,6 +10,9 @@ import {
   MapPin,
   Building2,
   X,
+  QrCode,
+  FileSignature,
+  Eye,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
 import type {
@@ -42,6 +45,9 @@ export const LogisticsKanbanView: React.FC = () => {
   const [assignDriverId, setAssignDriverId] = useState<string>('');
   const [assignDriverCost, setAssignDriverCost] = useState<number>(38.0);
   const [assignValidationPreview, setAssignValidationPreview] = useState<any>(null);
+
+  // Signature Modal
+  const [selectedSignatureOrder, setSelectedSignatureOrder] = useState<LogisticsOrderItem | null>(null);
 
   // Quick Order Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
@@ -273,21 +279,61 @@ export const LogisticsKanbanView: React.FC = () => {
                         <div>
                           {/* Top: Order number & Client */}
                           <div className="flex items-start justify-between">
-                            <span className="font-mono text-xs font-bold text-[#00a2e8] dark:text-sky-400">
-                              {order.numero_orden}
-                            </span>
+                            <div>
+                              <span className="font-mono text-xs font-bold text-[#00a2e8] dark:text-sky-400 block">
+                                {order.numero_orden}
+                              </span>
+                              {order.tipo_despacho === 'PICKING_PARCIAL' && (
+                                <span className="inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300">
+                                  📦 Picking Parcial
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] font-semibold text-slate-500 uppercase px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">
                               {order.client_nombre}
                             </span>
                           </div>
 
-                          {/* Destination */}
-                          <div className="mt-2 flex items-start space-x-1.5 text-xs text-slate-600 dark:text-slate-400">
-                            <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
-                            <span className="line-clamp-2 leading-tight font-medium">
-                              {order.destino_direccion}
-                            </span>
+                          {/* Destination & Branch */}
+                          <div className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                            {order.branch_nombre && (
+                              <div className="flex items-center space-x-1 font-bold text-purple-700 dark:text-purple-400 text-[11px]">
+                                <Building2 size={12} className="shrink-0" />
+                                <span>{order.branch_nombre}</span>
+                              </div>
+                            )}
+                            <div className="flex items-start space-x-1.5">
+                              <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
+                              <span className="line-clamp-2 leading-tight font-medium">
+                                {order.destino_direccion}
+                              </span>
+                            </div>
+                            {order.kilometros_recorrido ? (
+                              <div className="text-[10px] text-slate-400 pl-4 font-medium">
+                                Distancia estimada: <b>{order.kilometros_recorrido} km</b>
+                              </div>
+                            ) : null}
                           </div>
+
+                          {/* Supervisor & Recipient Contact */}
+                          {(order.responsable_armado || order.contacto_receptor_nombre) && (
+                            <div className="mt-2 p-1.5 bg-slate-50/80 dark:bg-slate-800/30 rounded-lg text-[10px] space-y-0.5 border border-slate-100 dark:border-slate-800">
+                              {order.responsable_armado && (
+                                <p className="text-slate-600 dark:text-slate-400">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">Armado:</span> {order.responsable_armado}
+                                </p>
+                              )}
+                              {order.contacto_receptor_nombre && (
+                                <p className="text-slate-600 dark:text-slate-400 flex items-center space-x-1">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">Receptor:</span>
+                                  <span>{order.contacto_receptor_nombre}</span>
+                                  {order.contacto_receptor_telefono && (
+                                    <span className="text-slate-400">({order.contacto_receptor_telefono})</span>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          )}
 
                           {/* Metrics: bultos, kg, m3 */}
                           <div className="grid grid-cols-3 gap-1 mt-2.5 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-lg text-center text-[10px]">
@@ -304,6 +350,32 @@ export const LogisticsKanbanView: React.FC = () => {
                               <span className="font-bold text-slate-800 dark:text-slate-200">{order.total_m3.toFixed(2)} m³</span>
                             </div>
                           </div>
+
+                          {/* QR Code Remito Badge */}
+                          {order.codigo_qr && (
+                            <div className="mt-1.5 flex items-center space-x-1 text-[10px] font-mono text-slate-500">
+                              <QrCode size={11} className="text-slate-400" />
+                              <span className="truncate">{order.codigo_qr}</span>
+                            </div>
+                          )}
+
+                          {/* Digital Signature Confirmation Badge */}
+                          {order.firma_digital_receptor && (
+                            <div className="mt-2 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-[10px] font-semibold flex items-center justify-between border border-emerald-200/50 dark:border-emerald-800/50">
+                              <span className="flex items-center space-x-1">
+                                <FileSignature size={12} className="text-emerald-600" />
+                                <span>Firma: {order.firma_aclaracion || 'Receptor'}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSignatureOrder(order)}
+                                className="text-sky-600 dark:text-sky-400 hover:underline flex items-center space-x-0.5 cursor-pointer font-bold"
+                              >
+                                <Eye size={11} />
+                                <span>Ver</span>
+                              </button>
+                            </div>
+                          )}
 
                           {/* Overweight / Overvolume Alert Badge */}
                           {order.capacity_status && (
@@ -663,6 +735,106 @@ export const LogisticsKanbanView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Visualizar Firma Digital de Entrega */}
+      {selectedSignatureOrder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 rounded-lg">
+                  <FileSignature size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Comprobante de Conformidad
+                  </h2>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                    {selectedSignatureOrder.numero_orden}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSignatureOrder(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1.5 border border-slate-200 dark:border-slate-700">
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Cliente:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {selectedSignatureOrder.client_nombre}
+                  </span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Destino:</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300 text-right truncate max-w-[200px]">
+                    {selectedSignatureOrder.destino_direccion}
+                  </span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Bultos Entregados:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {selectedSignatureOrder.total_bultos} bultos ({selectedSignatureOrder.total_kg} kg)
+                  </span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Conductor:</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    {selectedSignatureOrder.driver?.nombre || 'Fletero'} ({selectedSignatureOrder.vehicle?.matricula || '-'})
+                  </span>
+                </p>
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Aclaración / Receptor:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {selectedSignatureOrder.firma_aclaracion || 'Receptor'}
+                  </span>
+                </p>
+                {selectedSignatureOrder.firma_fecha_hora && (
+                  <p className="flex justify-between">
+                    <span className="text-slate-400">Fecha y Hora:</span>
+                    <span className="font-mono text-slate-600 dark:text-slate-400">
+                      {new Date(selectedSignatureOrder.firma_fecha_hora).toLocaleString()}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Firma en Pantalla Táctil */}
+              <div>
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase block mb-1">
+                  Firma Digital Capturada
+                </span>
+                <div className="border border-slate-300 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-950 flex items-center justify-center min-h-[140px]">
+                  {selectedSignatureOrder.firma_digital_receptor ? (
+                    <img
+                      src={selectedSignatureOrder.firma_digital_receptor}
+                      alt="Firma del receptor"
+                      className="max-h-32 object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-400 italic">Sin firma digital registrada</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSignatureOrder(null)}
+                  className="px-5 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl cursor-pointer"
+                >
+                  Cerrar Comprobante
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

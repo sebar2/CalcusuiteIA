@@ -11,9 +11,10 @@ import {
   CheckCircle2,
   X,
   FileSpreadsheet,
+  ClipboardList,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
-import type { LogisticsInventoryItem, LogisticsClientItem } from '../../services/logisticsApi';
+import type { LogisticsInventoryItem, LogisticsClientItem, LogisticsBranchItem } from '../../services/logisticsApi';
 
 export const LogisticsInventoryView: React.FC = () => {
   const [inventory, setInventory] = useState<LogisticsInventoryItem[]>([]);
@@ -28,6 +29,20 @@ export const LogisticsInventoryView: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isGeneratingLabels, setIsGeneratingLabels] = useState<boolean>(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
+
+  // Picking / Armar Pedido State
+  const [isPickingModalOpen, setIsPickingModalOpen] = useState<boolean>(false);
+  const [pickingClientId, setPickingClientId] = useState<string>('');
+  const [pickingBranches, setPickingBranches] = useState<LogisticsBranchItem[]>([]);
+  const [pickingBranchId, setPickingBranchId] = useState<string>('');
+  const [pickingSupervisor, setPickingSupervisor] = useState<string>('');
+  const [pickingDate, setPickingDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [pickingWindow, setPickingWindow] = useState<string>('08:00 - 13:00');
+  const [pickingCustomAddress, setPickingCustomAddress] = useState<string>('');
+  const [pickingContactName, setPickingContactName] = useState<string>('');
+  const [pickingContactPhone, setPickingContactPhone] = useState<string>('');
+  const [pickingItemQuantities, setPickingItemQuantities] = useState<Record<number, number>>({});
+  const [isSubmittingPicking, setIsSubmittingPicking] = useState<boolean>(false);
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,6 +156,131 @@ export const LogisticsInventoryView: React.FC = () => {
     }
   };
 
+  // Picking Handlers
+  const handleOpenPickingModal = async () => {
+    const defaultClient = selectedClientId !== 'ALL' ? selectedClientId : (clients[0]?.id ? String(clients[0].id) : '');
+    setPickingClientId(defaultClient);
+    setPickingSupervisor('Supervisor Depósito');
+    setPickingDate(new Date().toISOString().slice(0, 10));
+    setPickingWindow('08:00 - 14:00');
+    setPickingItemQuantities({});
+    if (defaultClient) {
+      try {
+        const branches = await logisticsApi.getClientBranches(Number(defaultClient));
+        setPickingBranches(branches);
+        if (branches.length > 0) {
+          setPickingBranchId(String(branches[0].id));
+          setPickingCustomAddress(branches[0].direccion);
+          setPickingContactName(branches[0].contacto_receptor || '');
+          setPickingContactPhone(branches[0].telefono_receptor || '');
+        } else {
+          setPickingBranchId('');
+          const c = clients.find((x) => String(x.id) === defaultClient);
+          setPickingCustomAddress(c?.direccion_central || '');
+          setPickingContactName(c?.contacto_logistica || '');
+          setPickingContactPhone(c?.telefono || '');
+        }
+      } catch {
+        setPickingBranches([]);
+      }
+    }
+    setIsPickingModalOpen(true);
+  };
+
+  const handlePickingClientChange = async (clientId: string) => {
+    setPickingClientId(clientId);
+    setPickingItemQuantities({});
+    try {
+      const branches = await logisticsApi.getClientBranches(Number(clientId));
+      setPickingBranches(branches);
+      if (branches.length > 0) {
+        setPickingBranchId(String(branches[0].id));
+        setPickingCustomAddress(branches[0].direccion);
+        setPickingContactName(branches[0].contacto_receptor || '');
+        setPickingContactPhone(branches[0].telefono_receptor || '');
+      } else {
+        setPickingBranchId('');
+        const c = clients.find((x) => String(x.id) === clientId);
+        setPickingCustomAddress(c?.direccion_central || '');
+        setPickingContactName(c?.contacto_logistica || '');
+        setPickingContactPhone(c?.telefono || '');
+      }
+    } catch {
+      setPickingBranches([]);
+    }
+  };
+
+  const handlePickingBranchChange = (branchId: string) => {
+    setPickingBranchId(branchId);
+    if (branchId === 'custom') {
+      setPickingCustomAddress('');
+      setPickingContactName('');
+      setPickingContactPhone('');
+    } else {
+      const b = pickingBranches.find((x) => String(x.id) === branchId);
+      if (b) {
+        setPickingCustomAddress(b.direccion);
+        setPickingContactName(b.contacto_receptor || '');
+        setPickingContactPhone(b.telefono_receptor || '');
+      }
+    }
+  };
+
+  const handlePickingQtyChange = (inventoryId: number, qty: number, maxQty: number) => {
+    const val = Math.max(0, Math.min(qty, maxQty));
+    setPickingItemQuantities((prev) => ({
+      ...prev,
+      [inventoryId]: val,
+    }));
+  };
+
+  const handleSubmitPickingOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pickingClientId) {
+      alert('Seleccione un cliente');
+      return;
+    }
+    if (!pickingCustomAddress) {
+      alert('Debe especificar la dirección de entrega');
+      return;
+    }
+
+    const itemsToSend = Object.entries(pickingItemQuantities)
+      .filter(([_, qty]) => qty > 0)
+      .map(([id, qty]) => ({
+        inventory_id: Number(id),
+        bultos_solicitados: qty,
+      }));
+
+    if (itemsToSend.length === 0) {
+      alert('Debe seleccionar al menos 1 bulto/pack de algún producto');
+      return;
+    }
+
+    try {
+      setIsSubmittingPicking(true);
+      const res = await logisticsApi.createPickingOrder({
+        client_id: Number(pickingClientId),
+        branch_id: pickingBranchId && pickingBranchId !== 'custom' ? Number(pickingBranchId) : undefined,
+        destino_direccion: pickingCustomAddress,
+        contacto_receptor_nombre: pickingContactName,
+        contacto_receptor_telefono: pickingContactPhone,
+        responsable_armado: pickingSupervisor,
+        fecha_entrega_estimada: pickingDate,
+        ventana_horaria: pickingWindow,
+        items: itemsToSend,
+      });
+
+      alert(`✅ ¡Orden ${res.numero_orden} creada con éxito!\n• Descontados ${res.total_bultos} bultos del stock en depósito.\n• Sincronizada con Kanban: "Acondicionamiento / Etiquetado".\n• QR de Despacho: ${res.codigo_qr}`);
+      setIsPickingModalOpen(false);
+      loadData();
+    } catch (err: any) {
+      alert(`Error al generar orden de picking: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSubmittingPicking(false);
+    }
+  };
+
   const totalBultos = inventory.reduce((acc, i) => acc + i.cantidad_bultos, 0);
   const totalKg = inventory.reduce((acc, i) => acc + i.peso_total_kg, 0);
   const totalM3 = inventory.reduce((acc, i) => acc + i.volumen_total_m3, 0);
@@ -159,13 +299,20 @@ export const LogisticsInventoryView: React.FC = () => {
                 Depósito & Stock 3PL (Multi-Cliente)
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Custodia de mercadería de terceros, ubicaciones de rack, cubicaje y codificación QR/Code128
+                Custodia de mercadería de terceros, picking parcial con descuento de stock y codificación QR
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={handleOpenPickingModal}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+          >
+            <ClipboardList size={15} />
+            <span>+ Armar Pedido (Picking)</span>
+          </button>
           <button
             onClick={() => handleDownloadLabels()}
             disabled={isGeneratingLabels || inventory.length === 0}
@@ -634,6 +781,299 @@ export const LogisticsInventoryView: React.FC = () => {
                   className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl cursor-pointer shadow-xs"
                 >
                   Procesar Ingesta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Armar Pedido (Picking Parcial) */}
+      {isPickingModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full p-6 border border-slate-200 dark:border-slate-800 shadow-xl overflow-y-auto max-h-[92vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-purple-100 dark:bg-purple-950/80 text-purple-600 rounded-lg">
+                  <ClipboardList size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Armar Pedido de Despacho (Picking Parcial)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Descuenta stock en custodia y genera orden en Kanban Acondicionamiento
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPickingModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPickingOrder} className="mt-4 space-y-4">
+              {/* Selector Cliente y Sucursal */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Empresa Cliente Propietaria *
+                  </label>
+                  <select
+                    required
+                    value={pickingClientId}
+                    onChange={(e) => handlePickingClientChange(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                  >
+                    <option value="">-- Seleccionar Cliente --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre_comercial} ({c.tipo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Destino / Sucursal de Entrega
+                  </label>
+                  <select
+                    value={pickingBranchId}
+                    onChange={(e) => handlePickingBranchChange(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="">Dirección Central / Depósito Principal</option>
+                    {pickingBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.nombre_sucursal} ({b.distancia_km_base} km) - {b.direccion}
+                      </option>
+                    ))}
+                    <option value="custom">Dirección Personalizada / Otra</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dirección y Contacto Receptor */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Dirección de Entrega *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Calle, número, esquina, ciudad"
+                    value={pickingCustomAddress}
+                    onChange={(e) => setPickingCustomAddress(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Responsable de Armado *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nombre del operario de picking"
+                    value={pickingSupervisor}
+                    onChange={(e) => setPickingSupervisor(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Contacto Receptor en Destino
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Persona que recibe y firma"
+                    value={pickingContactName}
+                    onChange={(e) => setPickingContactName(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Teléfono Receptor
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="099 123 456"
+                    value={pickingContactPhone}
+                    onChange={(e) => setPickingContactPhone(e.target.value)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Fecha y Ventana Horaria
+                  </label>
+                  <div className="flex space-x-1.5 mt-1">
+                    <input
+                      type="date"
+                      value={pickingDate}
+                      onChange={(e) => setPickingDate(e.target.value)}
+                      className="w-1/2 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                    />
+                    <input
+                      type="text"
+                      placeholder="09:00 - 13:00"
+                      value={pickingWindow}
+                      onChange={(e) => setPickingWindow(e.target.value)}
+                      className="w-1/2 px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Selección de Mercadería / Bultos a Descontar */}
+              <div className="pt-2">
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Seleccionar Mercadería del Cliente ({pickingClientId ? inventory.filter((i) => String(i.client_id) === pickingClientId).length : 0} SKUs)</span>
+                  <span className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold lowercase">
+                    Ingrese la cantidad de bultos a despachar
+                  </span>
+                </h3>
+
+                {inventory.filter((i) => String(i.client_id) === pickingClientId).length === 0 ? (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-center text-xs text-slate-500 border border-slate-200 dark:border-slate-700">
+                    No hay mercadería registrada en depósito para este cliente.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                          <th className="py-2 px-3">SKU / Descripción</th>
+                          <th className="py-2 px-3">Rack</th>
+                          <th className="py-2 px-3 text-center">Stock Custodia</th>
+                          <th className="py-2 px-3 text-center w-36">Bultos a Despachar</th>
+                          <th className="py-2 px-3 text-right">Stock Final</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {inventory
+                          .filter((i) => String(i.client_id) === pickingClientId)
+                          .map((item) => {
+                            const requested = pickingItemQuantities[item.id] || 0;
+                            const remaining = item.cantidad_bultos - requested;
+                            return (
+                              <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                                <td className="py-2 px-3">
+                                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100 mr-1.5">
+                                    {item.sku_cliente}
+                                  </span>
+                                  <span className="text-slate-600 dark:text-slate-400">{item.descripcion}</span>
+                                </td>
+                                <td className="py-2 px-3 font-mono text-slate-500">{item.ubicacion_rack}</td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 dark:text-slate-200">
+                                  {item.cantidad_bultos} bultos ({item.cantidad_bultos * item.unidades_por_bulto} un)
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <div className="flex items-center justify-center space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePickingQtyChange(item.id, requested - 1, item.cantidad_bultos)}
+                                      className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 font-bold cursor-pointer"
+                                    >
+                                      -
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={item.cantidad_bultos}
+                                      value={requested}
+                                      onChange={(e) =>
+                                        handlePickingQtyChange(
+                                          item.id,
+                                          parseInt(e.target.value, 10) || 0,
+                                          item.cantidad_bultos
+                                        )
+                                      }
+                                      className="w-16 px-1.5 py-0.5 text-center font-bold rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePickingQtyChange(item.id, requested + 1, item.cantidad_bultos)}
+                                      className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 font-bold cursor-pointer"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-3 text-right font-medium">
+                                  <span className={remaining === 0 ? 'text-amber-600 font-bold' : 'text-slate-600 dark:text-slate-400'}>
+                                    {remaining} bultos
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Live Preview Resumen de Despacho */}
+              <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-800/60 flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-purple-900 dark:text-purple-300 block">
+                    Resumen de Pedido Seleccionado:
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Bultos a despachar:{' '}
+                    <b>
+                      {Object.values(pickingItemQuantities).reduce((a, b) => a + b, 0)} bultos
+                    </b>{' '}
+                    | Estimado:{' '}
+                    <b>
+                      {Object.entries(pickingItemQuantities)
+                        .reduce((acc, [id, qty]) => {
+                          const it = inventory.find((x) => x.id === Number(id));
+                          return acc + (it ? it.peso_unitario_kg * qty : 0);
+                        }, 0)
+                        .toFixed(1)}{' '}
+                      kg
+                    </b>{' '}
+                    /{' '}
+                    <b>
+                      {Object.entries(pickingItemQuantities)
+                        .reduce((acc, [id, qty]) => {
+                          const it = inventory.find((x) => x.id === Number(id));
+                          return acc + (it ? it.volumen_unitario_m3 * qty : 0);
+                        }, 0)
+                        .toFixed(2)}{' '}
+                      m³
+                    </b>
+                  </span>
+                </div>
+                <div className="text-right text-[11px] text-purple-700 dark:text-purple-300 font-medium">
+                  Se generará QR de remito con lugar para firma en la app del conductor
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPickingModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPicking || Object.values(pickingItemQuantities).every((q) => q === 0)}
+                  className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-xl cursor-pointer shadow-sm"
+                >
+                  {isSubmittingPicking ? 'Generando Orden...' : 'Confirmar Picking & Enviar a Kanban'}
                 </button>
               </div>
             </form>
