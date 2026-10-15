@@ -14,27 +14,42 @@ from app.core.config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 
-# Roles válidos del sistema según política financiera RBAC
+# Roles válidos del sistema según política financiera y logística RBAC
 ROLE_ANALISTA_COMERCIAL = "analista_comercial"
 ROLE_ANALISTA_OPERACIONES = "analista_operaciones"
 ROLE_CONTROLLER_ADMIN = "controller_admin"
+
+# Roles específicos de la Unidad de Negocio 3PL Logística & Distribución
+ROLE_3PL_ADMIN = "admin_3pl"
+ROLE_3PL_OPERARIO = "operario_3pl"
+ROLE_3PL_CONDUCTOR = "conductor_3pl"
 
 VALID_ROLES = {
     ROLE_ANALISTA_COMERCIAL,
     ROLE_ANALISTA_OPERACIONES,
     ROLE_CONTROLLER_ADMIN,
+    ROLE_3PL_ADMIN,
+    ROLE_3PL_OPERARIO,
+    ROLE_3PL_CONDUCTOR,
 }
 
 security_bearer = HTTPBearer(auto_error=False)
 
 
 class UserContext:
-    def __init__(self, user_id: str, role: str):
+    def __init__(self, user_id: str, role: str, driver_id: Optional[int] = None):
         self.user_id = user_id
         self.role = role
+        self.driver_id = driver_id
 
     def is_admin(self) -> bool:
-        return self.role == ROLE_CONTROLLER_ADMIN
+        return self.role in {ROLE_CONTROLLER_ADMIN, ROLE_3PL_ADMIN}
+
+    def is_3pl_operario(self) -> bool:
+        return self.role == ROLE_3PL_OPERARIO
+
+    def is_3pl_conductor(self) -> bool:
+        return self.role == ROLE_3PL_CONDUCTOR
 
 
 def create_access_token(
@@ -67,6 +82,7 @@ def decode_access_token(token: str) -> UserContext:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id: Optional[str] = payload.get("sub")
         role: Optional[str] = payload.get("role")
+        driver_id: Optional[int] = payload.get("driver_id")
         if not user_id or not role:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,7 +95,7 @@ def decode_access_token(token: str) -> UserContext:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Rol no autorizado '{clean_role}'. Roles válidos: {list(VALID_ROLES)}"
             )
-        return UserContext(user_id=str(user_id), role=clean_role)
+        return UserContext(user_id=str(user_id), role=clean_role, driver_id=driver_id)
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

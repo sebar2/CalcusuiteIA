@@ -261,3 +261,28 @@ class LogisticsCostItem(Base):
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class LogisticsHub(Base):
+    """
+    Configuración central del Centro de Distribución / Depósito Base 3PL.
+    Guarda nombre, dirección física, ciudad, coordenadas geográficas (lat, lng),
+    responsable, teléfono de contacto, superficie y costo de alquiler mensual.
+    """
+    __tablename__ = "logistics_hubs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nombre = Column(String(150), nullable=False, default="Centro de Distribución Base Calcu 3PL")
+    direccion = Column(String(255), nullable=False, default="Ruta 101 Km 24.200")
+    ciudad = Column(String(100), default="Canelones")
+    pais = Column(String(50), default="Uruguay")
+    lat = Column(Float, default=-34.8350)
+    lng = Column(Float, default=-56.0350)
+    superficie_m2 = Column(Numeric(14, 4), default=Decimal("1500.0000"))
+    capacidad_pallets_max = Column(Integer, default=600)
+    responsable_deposito = Column(String(150), default="Supervisor General 3PL")
+    telefono_contacto = Column(String(50), default="+598 99 123 456")
+    costo_alquiler_mensual = Column(Numeric(14, 4), default=Decimal("145000.0000"))
+    moneda_alquiler = Column(String(10), default="UYU")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+

@@ -11,6 +11,9 @@ from app.core.security import (
     ROLE_CONTROLLER_ADMIN,
     ROLE_ANALISTA_OPERACIONES,
     ROLE_ANALISTA_COMERCIAL,
+    ROLE_3PL_ADMIN,
+    ROLE_3PL_OPERARIO,
+    ROLE_3PL_CONDUCTOR,
     VALID_ROLES,
 )
 from app.core.config import ACCESS_TOKEN_EXPIRE_MINUTES
@@ -30,6 +33,7 @@ class TokenResponse(BaseModel):
     role: str
     user_id: str
     nombre: Optional[str] = None
+    driver_id: Optional[int] = None
 
 
 class UserProfileResponse(BaseModel):
@@ -71,6 +75,25 @@ DEMO_USERS: Dict[str, Dict[str, Any]] = {
         "role": ROLE_ANALISTA_COMERCIAL,
         "name": "Ejecutivo de Cuentas B2B"
     },
+    # Credenciales exclusivas Unidad de Negocio 3PL
+    "admin_3pl": {
+        "password": "admin3pl123",
+        "role": ROLE_3PL_ADMIN,
+        "name": "Administrador 3PL Distribución",
+        "driver_id": None
+    },
+    "operario_3pl": {
+        "password": "operario123",
+        "role": ROLE_3PL_OPERARIO,
+        "name": "Operario Depósito & Picking",
+        "driver_id": None
+    },
+    "conductor_3pl": {
+        "password": "chofer123",
+        "role": ROLE_3PL_CONDUCTOR,
+        "name": "Carlos Rodríguez (Chofer)",
+        "driver_id": 1
+    },
 }
 
 
@@ -82,7 +105,7 @@ DEMO_USERS: Dict[str, Dict[str, Any]] = {
 def login(payload: LoginRequest):
     """
     Autentica al usuario contra el directorio corporativo y expide un JWT
-    firmado digitalmente con tiempo de expiración y rol financiero.
+    firmado digitalmente con tiempo de expiración y rol financiero/logístico.
     """
     clean_user = payload.username.strip().lower()
     user_info = DEMO_USERS.get(clean_user)
@@ -95,10 +118,12 @@ def login(payload: LoginRequest):
         )
 
     role = user_info["role"]
+    driver_id = user_info.get("driver_id")
     token_data = {
         "sub": clean_user,
         "role": role,
-        "name": user_info["name"]
+        "name": user_info["name"],
+        "driver_id": driver_id
     }
     
     expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -110,7 +135,8 @@ def login(payload: LoginRequest):
         expires_in_minutes=ACCESS_TOKEN_EXPIRE_MINUTES,
         role=role,
         user_id=clean_user,
-        nombre=user_info["name"]
+        nombre=user_info["name"],
+        driver_id=driver_id
     )
 
 

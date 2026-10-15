@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   Truck,
   Navigation,
@@ -15,17 +17,33 @@ import {
   Eraser,
   Radio,
   Gauge,
+  Building2,
+  Layers,
+  Compass,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
-import type { LiveFleetMarker, DriverDeliverySheetResponse, LogisticsOrderItem } from '../../services/logisticsApi';
+import type {
+  LiveFleetMarker,
+  DriverDeliverySheetResponse,
+  LogisticsOrderItem,
+  LogisticsHubItem,
+} from '../../services/logisticsApi';
 
 export const LogisticsTrackingView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'dispatcher' | 'driver_app'>('dispatcher');
 
-  // Dispatcher State
+  // Dispatcher & Hub State
   const [fleet, setFleet] = useState<LiveFleetMarker[]>([]);
+  const [hub, setHub] = useState<LogisticsHubItem | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<LiveFleetMarker | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [mapTileType, setMapTileType] = useState<'streets' | 'satellite'>('streets');
+
+  // Leaflet Map Refs
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   // Driver App State
   const [activeOrders, setActiveOrders] = useState<LogisticsOrderItem[]>([]);
@@ -47,12 +65,18 @@ export const LogisticsTrackingView: React.FC = () => {
   const [isSubmittingSignature, setIsSubmittingSignature] = useState<boolean>(false);
   const [deliveryConfirmed, setDeliveryConfirmed] = useState<boolean>(false);
 
-  // Load Dispatcher tracking
+  // Load Dispatcher tracking & Hub Base
   const loadTracking = async () => {
     try {
       setLoading(true);
-      const data = await logisticsApi.getLiveTracking();
+      const [data, hubData] = await Promise.all([
+        logisticsApi.getLiveTracking(),
+        logisticsApi.getHub().catch(() => null),
+      ]);
       setFleet(data);
+      if (hubData) {
+        setHub(hubData);
+      }
       if (data.length > 0 && !selectedVehicle) {
         setSelectedVehicle(data[0]);
       }
@@ -265,19 +289,148 @@ export const LogisticsTrackingView: React.FC = () => {
     }
   };
 
-  // Coordenadas bounds para mapa centrado en Montevideo Metropolitano
-  const latMin = -34.94;
-  const latMax = -34.82;
-  const lngMin = -56.25;
-  const lngMax = -56.00;
+  // Leaflet Map Initialization and Dynamic Marker Updates
+  useEffect(() => {
+    if (viewMode !== 'dispatcher' || !mapContainerRef.current) return;
 
-  const projectToMap = (lat: number, lng: number) => {
-    const x = ((lng - lngMin) / (lngMax - lngMin)) * 100;
-    const y = ((latMax - lat) / (latMax - latMin)) * 100;
-    return {
-      x: Math.max(5, Math.min(95, x)),
-      y: Math.max(5, Math.min(95, y)),
-    };
+    const baseLat = hub?.lat ?? -34.8350;
+    const baseLng = hub?.lng ?? -56.0350;
+
+    if (!leafletMapRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        center: [baseLat, baseLng],
+        zoom: 12,
+        zoomControl: true,
+      });
+
+      const tileUrl =
+        mapTileType === 'streets'
+          ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+      const tiles = L.tileLayer(tileUrl, {
+        maxZoom: 19,
+        attribution: mapTileType === 'streets' ? '© OpenStreetMap contributors' : '© Esri Satellite',
+      }).addTo(map);
+
+      tileLayerRef.current = tiles;
+      markersLayerGroupRef.current = L.layerGroup().addTo(map);
+      leafletMapRef.current = map;
+    } else {
+      if (tileLayerRef.current) {
+        tileLayerRef.current.setUrl(
+          mapTileType === 'streets'
+            ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        );
+      }
+    }
+
+    if (leafletMapRef.current && markersLayerGroupRef.current) {
+      markersLayerGroupRef.current.clearLayers();
+
+      // 1. PIN CENTRAL: Centro de Distribución Base 3PL
+      if (hub) {
+        const hubIcon = L.divIcon({
+          className: 'custom-hub-icon',
+          html: `
+            <div style="background:#0284c7; color:white; border-radius:50%; width:38px; height:38px; display:flex; align-items:center; justify-content:center; border:3px solid white; box-shadow:0 4px 10px rgba(0,0,0,0.5); font-size:18px;">
+              🏢
+            </div>
+            <div style="background:#0f172a; color:#38bdf8; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:6px; margin-top:4px; white-space:nowrap; text-align:center; border:1px solid #38bdf8; box-shadow:0 2px 4px rgba(0,0,0,0.6);">
+              ${hub.nombre}
+            </div>
+          `,
+          iconSize: [38, 56],
+          iconAnchor: [19, 19],
+        });
+
+        const hubMarker = L.marker([hub.lat, hub.lng], { icon: hubIcon });
+        hubMarker.bindPopup(`
+          <div style="font-family:sans-serif; min-width:190px;">
+            <h4 style="margin:0 0 4px 0; font-size:13px; font-weight:bold; color:#0284c7;">🏢 ${hub.nombre}</h4>
+            <p style="margin:0 0 2px 0; font-size:11px; color:#475569;">📍 <b>Dirección:</b> ${hub.direccion}, ${hub.ciudad}</p>
+            <p style="margin:0 0 2px 0; font-size:11px; color:#475569;">📞 <b>Contacto:</b> ${hub.telefono_contacto || 'S/T'}</p>
+            <p style="margin:0 0 4px 0; font-size:11px; color:#475569;">👤 <b>Responsable:</b> ${hub.responsable_deposito || 'Supervisor'}</p>
+            <span style="background:#e0f2fe; color:#0369a1; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:4px; display:inline-block;">
+              Base Central de Despacho 3PL
+            </span>
+          </div>
+        `);
+        markersLayerGroupRef.current.addLayer(hubMarker);
+      }
+
+      // 2. PIN DE MÓVILES: Vehículos en movimiento
+      fleet.forEach((marker) => {
+        const isSelected = selectedVehicle?.order_id === marker.order_id;
+        const truckIcon = L.divIcon({
+          className: 'custom-truck-icon',
+          html: `
+            <div style="background:${isSelected ? '#00a2e8' : '#10b981'}; color:white; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; border:2.5px solid white; box-shadow:0 4px 10px rgba(0,0,0,0.4); font-size:16px;">
+              🚛
+            </div>
+            <div style="background:#0f172a; color:${isSelected ? '#38bdf8' : '#34d399'}; font-size:9px; font-weight:bold; padding:1px 6px; border-radius:4px; margin-top:2px; white-space:nowrap; text-align:center; border:1px solid ${isSelected ? '#38bdf8' : '#10b981'};">
+              ${marker.vehicle_matricula}
+            </div>
+          `,
+          iconSize: [34, 48],
+          iconAnchor: [17, 17],
+        });
+
+        const vMarker = L.marker([marker.lat, marker.lng], { icon: truckIcon });
+        vMarker.bindPopup(`
+          <div style="font-family:sans-serif; min-width:210px;">
+            <h4 style="margin:0 0 4px 0; font-size:13px; font-weight:bold; color:#10b981;">🚛 ${marker.vehicle_matricula} (${marker.vehicle_tipo})</h4>
+            <p style="margin:0 0 2px 0; font-size:11px;"><b>Chofer:</b> ${marker.driver_nombre} (📞 ${marker.driver_telefono || 'S/T'})</p>
+            <p style="margin:0 0 2px 0; font-size:11px;"><b>Cliente:</b> ${marker.client_nombre}</p>
+            <p style="margin:0 0 2px 0; font-size:11px;"><b>Destino:</b> ${marker.destino_direccion}</p>
+            <p style="margin:0 0 2px 0; font-size:11px;"><b>Carga:</b> ${marker.total_bultos} bultos (${marker.total_kg} kg)</p>
+            <p style="margin:0 0 4px 0; font-size:11px;"><b>Velocidad:</b> ${marker.velocidad_kmh} km/h • <b>Bat:</b> ${marker.bateria_pct}%</p>
+            <a href="${marker.google_maps_url}" target="_blank" rel="noreferrer" style="display:inline-block; font-size:11px; color:#0284c7; font-weight:bold; text-decoration:underline;">
+              Abrir en Google Maps ↗
+            </a>
+          </div>
+        `);
+
+        vMarker.on('click', () => setSelectedVehicle(marker));
+        markersLayerGroupRef.current?.addLayer(vMarker);
+
+        // Línea de ruta directa desde el HUB hacia la ubicación actual
+        if (hub) {
+          const routeLine = L.polyline(
+            [
+              [hub.lat, hub.lng],
+              [marker.lat, marker.lng],
+            ],
+            {
+              color: isSelected ? '#00a2e8' : '#10b981',
+              weight: isSelected ? 3.5 : 2,
+              dashArray: '6, 8',
+              opacity: 0.8,
+            }
+          );
+          markersLayerGroupRef.current?.addLayer(routeLine);
+        }
+      });
+
+      leafletMapRef.current.invalidateSize();
+    }
+  }, [viewMode, hub, fleet, mapTileType, selectedVehicle]);
+
+  const handleRecenterHub = () => {
+    if (leafletMapRef.current && hub) {
+      leafletMapRef.current.setView([hub.lat, hub.lng], 13);
+    }
+  };
+
+  const handleFitAllFleet = () => {
+    if (!leafletMapRef.current) return;
+    const points: [number, number][] = [];
+    if (hub) points.push([hub.lat, hub.lng]);
+    fleet.forEach((f) => points.push([f.lat, f.lng]));
+    if (points.length > 0) {
+      leafletMapRef.current.fitBounds(L.latLngBounds(points), { padding: [50, 50] });
+    }
   };
 
   return (
@@ -590,91 +743,85 @@ export const LogisticsTrackingView: React.FC = () => {
           {/* Map canvas */}
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-2">
                 <div className="flex items-center space-x-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Mapa de Flota en Movimiento (Montevideo & Canelones)
-                  </h3>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span>Tracking GPS Geográfico</span>
+                      {hub && (
+                        <span className="text-[11px] font-normal text-slate-500 dark:text-slate-400">
+                          (Base: {hub.nombre})
+                        </span>
+                      )}
+                    </h3>
+                    {hub && (
+                      <p className="text-[11px] text-slate-400 flex items-center space-x-1">
+                        <MapPin size={11} className="text-rose-500" />
+                        <span>{hub.direccion}, {hub.ciudad}</span>
+                        <span className="font-mono">({hub.lat.toFixed(4)}, {hub.lng.toFixed(4)})</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                {/* Map Control Buttons */}
+                <div className="flex items-center space-x-1.5">
                   <button
+                    type="button"
+                    onClick={handleRecenterHub}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-400 flex items-center space-x-1 cursor-pointer"
+                    title="Centrar mapa en el Centro de Distribución Base"
+                  >
+                    <Building2 size={13} />
+                    <span>Ver Hub</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFitAllFleet}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-400 flex items-center space-x-1 cursor-pointer"
+                    title="Enfocar toda la flota y rutas activas"
+                  >
+                    <Compass size={13} />
+                    <span>Ver Todo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMapTileType(mapTileType === 'streets' ? 'satellite' : 'streets')}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center space-x-1 cursor-pointer"
+                    title="Alternar entre vista de calles y satelital"
+                  >
+                    <Layers size={13} />
+                    <span>{mapTileType === 'streets' ? 'Satélite' : 'Calles'}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={loadTracking}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                    title="Actualizar pines GPS"
+                    title="Actualizar telemetría GPS"
                   >
                     <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
                   </button>
                 </div>
               </div>
 
-              {/* Map surface visual */}
-              <div className="relative mt-4 w-full h-[460px] bg-slate-900 rounded-xl overflow-hidden border border-slate-800 select-none shadow-inner">
-                {/* SVG Grid lines representing city avenues */}
-                <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" strokeWidth="0.5" />
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
-                </svg>
-
-                {/* Base Depot Icon */}
+              {/* Real Leaflet Map Container */}
+              <div className="relative mt-4 w-full h-[480px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner">
                 <div
-                  className="absolute transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-10"
-                  style={{ left: '50%', top: '55%' }}
-                >
-                  <div className="w-8 h-8 rounded-full bg-sky-500/20 border-2 border-sky-400 flex items-center justify-center mx-auto text-xs shadow-lg">
-                    🏢
-                  </div>
-                  <span className="text-[10px] font-bold text-sky-300 bg-slate-900/90 px-1.5 py-0.5 rounded shadow mt-1 inline-block">
-                    Centro Distribución Calcu 3PL
-                  </span>
-                </div>
-
-                {/* Live Vehicle Pins */}
-                {fleet.map((marker) => {
-                  const pos = projectToMap(marker.lat, marker.lng);
-                  const isSelected = selectedVehicle?.order_id === marker.order_id;
-
-                  return (
-                    <div
-                      key={marker.order_id}
-                      onClick={() => setSelectedVehicle(marker)}
-                      className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-700 z-20 group"
-                      style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                    >
-                      {/* Pulse circle */}
-                      <span className="absolute -inset-1 rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
-
-                      {/* Pin body */}
-                      <div
-                        className={`relative w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform ${
-                          isSelected
-                            ? 'bg-[#00a2e8] text-white scale-125 ring-4 ring-sky-300/60'
-                            : 'bg-emerald-600 text-white hover:scale-110'
-                        }`}
-                      >
-                        <Truck size={15} />
-                      </div>
-
-                      {/* Floating tooltip */}
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-9 hidden group-hover:block bg-slate-900 text-white text-[10px] rounded-lg px-2 py-1 whitespace-nowrap border border-slate-700 shadow-xl z-30">
-                        <p className="font-bold">{marker.vehicle_matricula} ({marker.driver_nombre})</p>
-                        <p className="text-slate-400">{marker.client_nombre} | ETA: {marker.eta_minutos}m</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                  ref={mapContainerRef}
+                  id="leaflet-tracking-map"
+                  className="w-full h-full z-10"
+                />
               </div>
             </div>
 
             <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
               <span className="flex items-center space-x-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Frecuencia de telemetría: 6s | Enlace a Google Maps activo</span>
+                <span>Telemetría en tiempo real | OpenStreetMap & Rutas 3PL activas</span>
               </span>
               <span>{fleet.length} móviles en distribución</span>
             </div>

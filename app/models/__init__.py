@@ -9,6 +9,8 @@ from app.models.logistics_entities import (
     LogisticsDispatchItem,
     LogisticsServicePricing,
     LogisticsTelemetryPing,
+    LogisticsCostItem,
+    LogisticsHub,
 )
 
 __all__ = [
@@ -25,5 +27,7 @@ __all__ = [
     "LogisticsDispatchItem",
     "LogisticsServicePricing",
     "LogisticsTelemetryPing",
+    "LogisticsCostItem",
+    "LogisticsHub",
 ]
 

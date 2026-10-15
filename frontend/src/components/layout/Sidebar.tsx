@@ -136,49 +136,49 @@ export const Sidebar = ({
           label: 'Clientes 3PL (Retail & PyMEs)',
           shortLabel: 'Clientes 3PL',
           icon: Building2,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial', 'admin_3pl', 'operario_3pl'],
         },
         {
           id: 'logistics-fleet',
           label: 'Flota & Personal Tercerizado',
           shortLabel: 'Flota & Choferes',
           icon: Truck,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl'],
         },
         {
           id: 'logistics-inventory',
           label: 'Depósito & Stock 3PL (WMS)',
           shortLabel: 'Depósito 3PL',
           icon: Boxes,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl'],
         },
         {
           id: 'logistics-kanban',
           label: 'Kanban Operativo 3PL',
           shortLabel: 'Kanban 3PL',
           icon: ClipboardList,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl'],
         },
         {
           id: 'logistics-tracking',
           label: 'Ruteo & Tracking GPS en Vivo',
           shortLabel: 'Tracking GPS',
           icon: MapPin,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl', 'conductor_3pl'],
         },
         {
           id: 'logistics-orders',
           label: 'Órdenes de Servicio Logístico',
           shortLabel: 'Órdenes 3PL',
           icon: Receipt,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial', 'admin_3pl', 'operario_3pl'],
         },
         {
           id: 'logistics-finance',
           label: 'Costos & Rentabilidad 3PL',
           shortLabel: 'Rentabilidad 3PL',
           icon: CircleDollarSign,
-          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial', 'admin_3pl'],
         },
       ],
     },
@@ -295,8 +295,16 @@ export const Sidebar = ({
     },
   ];
 
-  // Filtrar según el rol activo
-  const filteredSections = sections
+  const is3PLUrlMode = typeof window !== 'undefined' && window.location.search.includes('mode=3pl');
+  const is3PLRole = currentRole === 'admin_3pl' || currentRole === 'operario_3pl' || currentRole === 'conductor_3pl';
+  const is3PLOnly = is3PLUrlMode || is3PLRole;
+
+  // Filtrar según el rol activo y el modo 3PL
+  const candidateSections = is3PLOnly
+    ? sections.filter((sec) => sec.title === '3PL Logística & Distribución')
+    : sections;
+
+  const filteredSections = candidateSections
     .map((sec) => ({
       ...sec,
       items: sec.items.filter((item) => {
@@ -316,12 +324,18 @@ export const Sidebar = ({
       <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
         {!collapsed && (
           <div className="flex items-center space-x-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#00a2e8] to-[#2fc6f6] flex items-center justify-center text-white font-bold shadow-sm shrink-0">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold shadow-sm shrink-0 ${
+              is3PLOnly ? 'bg-gradient-to-tr from-sky-600 to-indigo-600' : 'bg-gradient-to-tr from-[#00a2e8] to-[#2fc6f6]'
+            }`}>
               <Layers size={18} />
             </div>
             <div className="flex flex-col">
-              <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100">CALCU</span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-wide uppercase">SupplyFinance Core</span>
+              <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100">
+                {is3PLOnly ? 'CALCU 3PL' : 'CALCU'}
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-wide uppercase">
+                {is3PLOnly ? 'Logística & WMS' : 'SupplyFinance Core'}
+              </span>
             </div>
           </div>
         )}

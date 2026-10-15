@@ -130,7 +130,40 @@ import type {
   ProcurementCalendarResponse,
 } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
+
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem(CUSTOM_API_STORAGE_KEY);
+    if (custom && custom.trim()) {
+      return custom.trim().replace(/\/+$/, '');
+    }
+    // Si corre en la app nativa APK (Capacitor), usar directamente la IP Tailscale del host sebahost
+    const isCapacitorNative = !!(window as any).Capacitor?.isNativePlatform?.();
+    if (isCapacitorNative) {
+      return 'http://100.119.40.92:8000';
+    }
+    if (window.location && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1') {
+        return `${window.location.protocol}//${host}:8000`;
+      }
+    }
+  }
+  return 'http://localhost:8000';
+};
+
+export const setCustomApiBaseUrl = (url: string) => {
+  if (typeof window !== 'undefined') {
+    if (!url || !url.trim()) {
+      localStorage.removeItem(CUSTOM_API_STORAGE_KEY);
+    } else {
+      localStorage.setItem(CUSTOM_API_STORAGE_KEY, url.trim().replace(/\/+$/, ''));
+    }
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const TOKEN_STORAGE_KEY = 'calcu_access_token';
 export const USER_STORAGE_KEY = 'calcu_user';
@@ -190,7 +223,7 @@ export const logout = () => {
 };
 
 export const login = async (username: string, password: string): Promise<StoredUser> => {
-  const res = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, { username, password });
+  const res = await axios.post(`${getApiBaseUrl()}/api/v1/auth/login`, { username, password });
   const data = res.data;
   localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
   localStorage.setItem(
@@ -216,7 +249,7 @@ export const login = async (username: string, password: string): Promise<StoredU
 };
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -224,6 +257,7 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   const stored = getStoredUser();
   if (stored?.token) {
     config.headers['Authorization'] = `Bearer ${stored.token}`;

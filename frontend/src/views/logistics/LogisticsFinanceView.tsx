@@ -8,8 +8,10 @@ import {
   Edit2,
   Trash2,
   X,
+  Lock,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
+import { getStoredUser } from '../../services/api';
 import type {
   FinanceSummaryResponse,
   LogisticsCostItem,
@@ -17,6 +19,8 @@ import type {
 } from '../../services/logisticsApi';
 
 export const LogisticsFinanceView: React.FC = () => {
+  const currentUser = getStoredUser();
+  const isOperario = currentUser?.role === 'operario_3pl';
   const [activeTab, setActiveTab] = useState<'ebitda' | 'costs'>('ebitda');
   const [finance, setFinance] = useState<FinanceSummaryResponse | null>(null);
   const [ebitda, setEbitda] = useState<EbitdaAnalysisResponse | null>(null);
@@ -132,6 +136,24 @@ export const LogisticsFinanceView: React.FC = () => {
     if (costTypeFilter === 'ALL') return true;
     return c.tipo === costTypeFilter;
   });
+
+  if (isOperario) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto my-12 text-center space-y-4">
+        <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
+          <Lock size={32} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+            Acceso Financiero Restringido
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
+            El perfil <b>Operario de Logística y Depósito</b> cuenta con permisos para gestión de stock, picking y kanban operativo. El balance financiero de rentabilidad, tarifas y costos fijos de alquiler está reservado exclusivamente para el <b>Administrador 3PL</b>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -452,7 +474,14 @@ export const LogisticsFinanceView: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-500">
-                        {item.categoria.replace('_', ' ')}
+                        <div className="flex items-center space-x-1.5">
+                          <span>{item.categoria.replace('_', ' ')}</span>
+                          {item.categoria === 'ALQUILER' && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                              HUB Base
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
                         ${item.monto_mensual.toLocaleString()} {item.moneda}

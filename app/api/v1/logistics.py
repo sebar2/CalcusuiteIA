@@ -2,6 +2,8 @@ import io
 import math
 import uuid
 import urllib.parse
+import urllib.request
+import json
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Optional, Any
@@ -13,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
 from app.database.session import get_db
+from app.core.security import get_current_user, UserContext
 from app.models.logistics_entities import (
     LogisticsClient,
     LogisticsClientBranch,
@@ -24,6 +27,7 @@ from app.models.logistics_entities import (
     LogisticsServicePricing,
     LogisticsTelemetryPing,
     LogisticsCostItem,
+    LogisticsHub,
 )
 from app.engine.logistics_engine import (
     LogisticsEngine,
@@ -257,6 +261,216 @@ class CostItemUpdate(BaseModel):
     moneda: Optional[str] = None
     descripcion: Optional[str] = None
     activo: Optional[bool] = None
+
+
+class LogisticsHubResponse(BaseModel):
+    id: int
+    nombre: str
+    direccion: str
+    ciudad: str
+    pais: str
+    lat: float
+    lng: float
+    superficie_m2: float
+    capacidad_pallets_max: int
+    responsable_deposito: str
+    telefono_contacto: str
+    costo_alquiler_mensual: float
+    moneda_alquiler: str
+    updated_at: Optional[datetime] = None
+
+
+class LogisticsHubUpdatePayload(BaseModel):
+    nombre: Optional[str] = None
+    direccion: Optional[str] = None
+    ciudad: Optional[str] = None
+    pais: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    superficie_m2: Optional[float] = None
+    capacidad_pallets_max: Optional[int] = None
+    responsable_deposito: Optional[str] = None
+    telefono_contacto: Optional[str] = None
+    costo_alquiler_mensual: Optional[float] = None
+    moneda_alquiler: Optional[str] = None
+
+
+class GeocodeRequest(BaseModel):
+    address: str
+
+
+class GeocodeResponse(BaseModel):
+    address: str
+    lat: float
+    lng: float
+    found: bool
+
+
+# ==========================================
+# RUTAS: CENTRO DE DISTRIBUCIÓN BASE (HUB 3PL)
+# ==========================================
+
+@router.get("/hub", response_model=LogisticsHubResponse)
+def get_logistics_hub(db: Session = Depends(get_db)):
+    """Obtiene la configuración central del Centro de Distribución Base 3PL."""
+    hub = db.query(LogisticsHub).first()
+    if not hub:
+        hub = LogisticsHub(
+            nombre="Centro de Distribución Base Calcu 3PL",
+            direccion="Ruta 101 Km 24.200",
+            ciudad="Canelones",
+            pais="Uruguay",
+            lat=-34.8350,
+            lng=-56.0350,
+            superficie_m2=Decimal("1500.00"),
+            capacidad_pallets_max=600,
+            responsable_deposito="Supervisor General 3PL",
+            telefono_contacto="+598 99 123 456",
+            costo_alquiler_mensual=Decimal("145000.00"),
+            moneda_alquiler="UYU"
+        )
+        db.add(hub)
+        db.commit()
+        db.refresh(hub)
+    return LogisticsHubResponse(
+        id=hub.id,
+        nombre=hub.nombre,
+        direccion=hub.direccion,
+        ciudad=hub.ciudad,
+        pais=hub.pais,
+        lat=hub.lat,
+        lng=hub.lng,
+        superficie_m2=float(hub.superficie_m2 or 0),
+        capacidad_pallets_max=hub.capacidad_pallets_max or 600,
+        responsable_deposito=hub.responsable_deposito or "",
+        telefono_contacto=hub.telefono_contacto or "",
+        costo_alquiler_mensual=float(hub.costo_alquiler_mensual or 0),
+        moneda_alquiler=hub.moneda_alquiler or "UYU",
+        updated_at=hub.updated_at
+    )
+
+
+@router.put("/hub", response_model=LogisticsHubResponse)
+def update_logistics_hub(payload: LogisticsHubUpdatePayload, db: Session = Depends(get_db)):
+    """Actualiza la dirección, coordenadas geográficas y parámetros del Hub Central 3PL."""
+    hub = db.query(LogisticsHub).first()
+    if not hub:
+        hub = LogisticsHub()
+        db.add(hub)
+
+    if payload.nombre is not None:
+        hub.nombre = payload.nombre
+    if payload.direccion is not None:
+        hub.direccion = payload.direccion
+    if payload.ciudad is not None:
+        hub.ciudad = payload.ciudad
+    if payload.pais is not None:
+        hub.pais = payload.pais
+    if payload.lat is not None:
+        hub.lat = payload.lat
+    if payload.lng is not None:
+        hub.lng = payload.lng
+    if payload.superficie_m2 is not None:
+        hub.superficie_m2 = Decimal(str(payload.superficie_m2))
+    if payload.capacidad_pallets_max is not None:
+        hub.capacidad_pallets_max = payload.capacidad_pallets_max
+    if payload.responsable_deposito is not None:
+        hub.responsable_deposito = payload.responsable_deposito
+    if payload.telefono_contacto is not None:
+        hub.telefono_contacto = payload.telefono_contacto
+    if payload.costo_alquiler_mensual is not None:
+        hub.costo_alquiler_mensual = Decimal(str(payload.costo_alquiler_mensual))
+        # Sincronización automática con la tabla de Costos Fijos de Alquiler
+        alquiler_cost = db.query(LogisticsCostItem).filter(
+            LogisticsCostItem.tipo == "FIJO",
+            LogisticsCostItem.categoria == "ALQUILER"
+        ).first()
+        if alquiler_cost:
+            alquiler_cost.monto_mensual = hub.costo_alquiler_mensual
+            alquiler_cost.nombre = f"Alquiler {hub.nombre}"
+            alquiler_cost.descripcion = f"Arrendamiento galpón en {hub.direccion}, {hub.ciudad}"
+        else:
+            db.add(LogisticsCostItem(
+                tipo="FIJO",
+                categoria="ALQUILER",
+                nombre=f"Alquiler {hub.nombre}",
+                monto_mensual=hub.costo_alquiler_mensual,
+                moneda=hub.moneda_alquiler or "UYU",
+                descripcion=f"Arrendamiento del Centro de Distribución en {hub.direccion}"
+            ))
+
+    if payload.moneda_alquiler is not None:
+        hub.moneda_alquiler = payload.moneda_alquiler
+
+    hub.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(hub)
+    return LogisticsHubResponse(
+        id=hub.id,
+        nombre=hub.nombre,
+        direccion=hub.direccion,
+        ciudad=hub.ciudad,
+        pais=hub.pais,
+        lat=hub.lat,
+        lng=hub.lng,
+        superficie_m2=float(hub.superficie_m2 or 0),
+        capacidad_pallets_max=hub.capacidad_pallets_max or 600,
+        responsable_deposito=hub.responsable_deposito or "",
+        telefono_contacto=hub.telefono_contacto or "",
+        costo_alquiler_mensual=float(hub.costo_alquiler_mensual or 0),
+        moneda_alquiler=hub.moneda_alquiler or "UYU",
+        updated_at=hub.updated_at
+    )
+
+
+@router.post("/hub/geocode", response_model=GeocodeResponse)
+def geocode_address(payload: GeocodeRequest):
+    """
+    Geocodifica una dirección física a coordenadas latitud y longitud.
+    Usa Nominatim (OpenStreetMap) con fallback inteligente a zonas metropolitanas de Montevideo y Canelones.
+    """
+    addr = payload.address.strip()
+    if not addr:
+        raise HTTPException(status_code=400, detail="Dirección no especificada")
+
+    # Intento 1: Nominatim OpenStreetMap
+    query_str = f"{addr}, Uruguay"
+    url = f"https://nominatim.openstreetmap.org/search?format=json&q={urllib.parse.quote(query_str)}&limit=1"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Calcu-3PL-Logistics/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=3.5) as response:
+            data = json.loads(response.read().decode())
+            if data and len(data) > 0:
+                return GeocodeResponse(
+                    address=addr,
+                    lat=float(data[0]["lat"]),
+                    lng=float(data[0]["lon"]),
+                    found=True
+                )
+    except Exception:
+        pass
+
+    # Fallback inteligente por zonas logísticas de Montevideo / Canelones
+    addr_lower = addr.lower()
+    if "ruta 101" in addr_lower or "aeropuerto" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.8350, lng=-56.0350, found=True)
+    elif "ruta 8" in addr_lower or "zonamerica" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.8150, lng=-56.0820, found=True)
+    elif "carrasco" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.8720, lng=-56.0600, found=True)
+    elif "puerto" in addr_lower or "ciudad vieja" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.9030, lng=-56.2110, found=True)
+    elif "colon" in addr_lower or "lecocq" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.8120, lng=-56.2250, found=True)
+    elif "canelones" in addr_lower or "pando" in addr_lower:
+        return GeocodeResponse(address=addr, lat=-34.7170, lng=-55.9550, found=True)
+
+    # Por defecto centro logístico metropolitano
+    return GeocodeResponse(address=addr, lat=-34.8580, lng=-56.1700, found=False)
 
 
 # ==========================================
@@ -935,56 +1149,66 @@ def generate_inventory_labels(
         # Contenido textual del producto y ubicación
         c.setFillColorRGB(0.1, 0.1, 0.1)
         c.setFont("Helvetica-Bold", 10.5)
-        c.drawString(x + 10, y + label_h - 42, f"SKU: {it.sku_cliente}")
+        c.drawString(x + 10, y + 178, f"SKU: {it.sku_cliente}")
 
         c.setFont("Helvetica", 8.5)
         desc_clean = it.descripcion[:40] + "..." if len(it.descripcion) > 40 else it.descripcion
-        c.drawString(x + 10, y + label_h - 56, desc_clean)
+        c.drawString(x + 10, y + 165, desc_clean)
 
-        c.drawString(x + 10, y + label_h - 70, f"Lote: {it.lote or 'S/L'} | Bultos: {it.cantidad_bultos} ({it.unidades_por_bulto} u/c)")
+        c.setFont("Helvetica", 8)
+        c.drawString(x + 10, y + 152, f"Lote: {it.lote or 'S/L'} | Bultos: {it.cantidad_bultos} ({it.unidades_por_bulto} u/c)")
 
         c.setFont("Helvetica-Bold", 9.5)
         c.setFillColorRGB(0.0, 0.45, 0.2)
-        c.drawString(x + 10, y + label_h - 84, f"RACK: {it.ubicacion_rack}")
+        c.drawString(x + 10, y + 138, f"RACK: {it.ubicacion_rack}")
+
+        # Divisor superior sutil
+        c.setStrokeColorRGB(0.85, 0.85, 0.85)
+        c.setLineWidth(0.8)
+        c.line(x + 15, y + 128, x + label_w - 15, y + 128)
 
         # Barcode Code128 (Escalado matemáticamente para nunca desbordar y centrado)
         barcode_val = it.codigo_qr_lote or f"SKU-{it.sku_cliente}"
         try:
             total_modules = (len(barcode_val) * 11) + 35
             max_bc_w = label_w - 36
-            bar_w = max(0.35, min(0.65, max_bc_w / total_modules))
+            bar_w = max(0.35, min(0.60, max_bc_w / total_modules))
             actual_bc_w = total_modules * bar_w
-            bc = code128.Code128(barcode_val, barHeight=18, barWidth=bar_w)
+            bc = code128.Code128(barcode_val, barHeight=20, barWidth=bar_w)
             bc_x = x + (label_w - actual_bc_w) / 2
-            bc.drawOn(c, bc_x, y + 92)
+            c.setFillColorRGB(0, 0, 0)
+            bc.drawOn(c, bc_x, y + 96)
 
             # Texto ID legible debajo del código de barras
-            c.setFont("Helvetica", 7)
-            c.setFillColorRGB(0.4, 0.4, 0.4)
-            c.drawCentredString(x + (label_w / 2), y + 83, f"ID: {barcode_val}")
+            c.setFont("Helvetica-Bold", 7)
+            c.setFillColorRGB(0.25, 0.25, 0.25)
+            c.drawCentredString(x + (label_w / 2), y + 84, f"ID: {barcode_val}")
         except Exception:
             c.setFont("Helvetica", 7.5)
-            c.drawString(x + 10, y + 92, f"[{barcode_val}]")
+            c.drawString(x + 10, y + 96, f"[{barcode_val}]")
 
-        # Línea divisoria sutil
+        # Divisor intermedio sutil
         c.setStrokeColorRGB(0.88, 0.88, 0.88)
-        c.line(x + 20, y + 78, x + label_w - 20, y + 78)
+        c.setLineWidth(0.6)
+        c.line(x + 25, y + 74, x + label_w - 25, y + 74)
 
-        # Código QR 2D - PERFECTAMENTE CENTRADO EN LA ZONA INFERIOR (SIN SUPERPOSICIÓN)
+        # Código QR 2D - PERFECTAMENTE ESCALADO Y CENTRADO EN LA ZONA INFERIOR
         try:
             qr_content = f"CALCU-3PL|CLIENT:{it.client_id}|SKU:{it.sku_cliente}|LOT:{it.lote}|RACK:{it.ubicacion_rack}|CODE:{it.codigo_qr_lote}"
             qr = QrCodeWidget(qr_content)
-            qr_size = 56
-            d = Drawing(qr_size, qr_size)
+            bounds = qr.getBounds()
+            qr_orig_w = bounds[2] - bounds[0]
+            target_qr_size = 48
+            scale = target_qr_size / qr_orig_w
+            d = Drawing(target_qr_size, target_qr_size, transform=[scale, 0, 0, scale, 0, 0])
             d.add(qr)
-            qr_x = x + (label_w - qr_size) / 2
-            qr_y = y + 14
-            d.drawOn(c, qr_x, qr_y)
+            qr_x = x + (label_w - target_qr_size) / 2
+            d.drawOn(c, qr_x, y + 18)
 
             # Leyenda inferior centrada
             c.setFont("Helvetica-Bold", 6.5)
-            c.setFillColorRGB(0.3, 0.3, 0.3)
-            c.drawCentredString(x + (label_w / 2), y + 5, "ESCANEAR PARA TRAZABILIDAD WMS 3PL")
+            c.setFillColorRGB(0.35, 0.35, 0.35)
+            c.drawCentredString(x + (label_w / 2), y + 7, "ESCANEAR PARA TRAZABILIDAD WMS 3PL")
         except Exception:
             pass
 
@@ -1170,10 +1394,18 @@ def create_picking_order(payload: PickingOrderCreate, db: Session = Depends(get_
 def list_orders(
     client_id: Optional[int] = None,
     etapa: Optional[str] = None,
+    driver_id: Optional[int] = None,
+    current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Lista las órdenes de servicio del Kanban 3PL con cubicaje y datos de asignación."""
     query = db.query(LogisticsDispatchOrder).join(LogisticsClient)
+
+    # Restricción de seguridad: el rol conductor solo ve sus despachos asignados
+    if current_user.role == "conductor_3pl" and current_user.driver_id:
+        query = query.filter(LogisticsDispatchOrder.driver_id == current_user.driver_id)
+    elif driver_id:
+        query = query.filter(LogisticsDispatchOrder.driver_id == driver_id)
 
     if client_id:
         query = query.filter(LogisticsDispatchOrder.client_id == client_id)
@@ -1755,10 +1987,19 @@ def calculate_service_quote(payload: QuoteCalculationRequest, db: Session = Depe
 
 
 @router.get("/finance/summary")
-def get_finance_summary(db: Session = Depends(get_db)):
+def get_finance_summary(
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Resumen financiero de rentabilidad 3PL: facturación por fletes, pagos a conductores y margen bruto acumulado.
     """
+    if current_user.role == "operario_3pl":
+        raise HTTPException(
+            status_code=403,
+            detail="Acceso restringido: El rol operario no cuenta con permisos para ver costos ni rentabilidad financiera."
+        )
+
     orders = db.query(LogisticsDispatchOrder).all()
 
     facturacion_total = sum(float(o.tarifa_flete_cliente) for o in orders)
@@ -1794,8 +2035,18 @@ def get_finance_summary(db: Session = Depends(get_db)):
 # ==========================================
 
 @router.get("/finance/costs")
-def list_cost_items(tipo: Optional[str] = None, db: Session = Depends(get_db)):
+def list_cost_items(
+    tipo: Optional[str] = None,
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Lista los costos fijos y variables del depósito y logística 3PL."""
+    if current_user.role == "operario_3pl":
+        raise HTTPException(
+            status_code=403,
+            detail="Acceso restringido: El rol operario no cuenta con permisos para ver costos ni rentabilidad financiera."
+        )
+
     query = db.query(LogisticsCostItem).filter(LogisticsCostItem.activo == True)
     if tipo:
         query = query.filter(LogisticsCostItem.tipo == tipo.upper())
@@ -1873,10 +2124,19 @@ def delete_cost_item(cost_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/finance/ebitda")
-def get_ebitda_analysis(db: Session = Depends(get_db)):
+def get_ebitda_analysis(
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Cálculo de EBITDA Neto, Punto de Equilibrio (Break-Even) y acumulador de viajes y kilómetros.
     """
+    if current_user.role == "operario_3pl":
+        raise HTTPException(
+            status_code=403,
+            detail="Acceso restringido: El rol operario no cuenta con permisos para ver costos ni rentabilidad financiera."
+        )
+
     # 1. Costos fijos y variables del depósito
     fixed_costs = db.query(func.sum(LogisticsCostItem.monto_mensual)).filter(
         LogisticsCostItem.tipo == "FIJO",

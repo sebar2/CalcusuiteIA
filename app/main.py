@@ -43,7 +43,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Middleware CORS con soporte expreso para Vite SPA (:5173), Streamlit y producción
+# Middleware CORS con soporte para Localhost, Tailscale VPN (100.x.y.z), Red LAN y Capacitor Mobile
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -53,7 +53,12 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:8501",
         "http://127.0.0.1:8501",
+        "http://localhost",
+        "https://localhost",
+        "capacitor://localhost",
+        "ionic://localhost",
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ts\.net)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

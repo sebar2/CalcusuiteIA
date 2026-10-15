@@ -264,14 +264,39 @@ export function AppContent() {
   // Conteo de quiebres para el badge del Sidebar
   const alertCount = inventory.filter((i) => i.is_alert).length;
 
+  useEffect(() => {
+    const is3PLParam = typeof window !== 'undefined' && window.location.search.includes('mode=3pl');
+    const is3PLUser = currentRole === 'admin_3pl' || currentRole === 'operario_3pl' || currentRole === 'conductor_3pl';
+    if (is3PLParam || is3PLUser) {
+      if (!activeTab.startsWith('logistics-')) {
+        if (currentRole === 'conductor_3pl') {
+          setActiveTab('logistics-tracking');
+        } else if (currentRole === 'operario_3pl') {
+          setActiveTab('logistics-inventory');
+        } else {
+          setActiveTab('logistics-kanban');
+        }
+      }
+    }
+  }, [currentRole, activeTab]);
+
   // Auth Gate: Si no hay sesión válida activa, renderizar exclusivamente LoginView
   if (!currentUser) {
+    const is3PLParam = typeof window !== 'undefined' && window.location.search.includes('mode=3pl');
     return (
       <LoginView
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           handleRoleChange(user.role);
-          if (user.role === 'operaciones' || user.role === 'analista_operaciones') {
+          if (user.role === 'conductor_3pl') {
+            setActiveTab('logistics-tracking');
+          } else if (user.role === 'operario_3pl') {
+            setActiveTab('logistics-inventory');
+          } else if (user.role === 'admin_3pl') {
+            setActiveTab('logistics-kanban');
+          } else if (is3PLParam) {
+            setActiveTab('logistics-kanban');
+          } else if (user.role === 'operaciones' || user.role === 'analista_operaciones') {
             setActiveTab('kanban');
           } else if (user.role === 'comercial' || user.role === 'analista_comercial') {
             setActiveTab('crm');

@@ -231,6 +231,45 @@ export interface LogisticsCostItem {
   created_at?: string;
 }
 
+export interface LogisticsHubItem {
+  id: number;
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  pais: string;
+  lat: number;
+  lng: number;
+  superficie_m2: number;
+  capacidad_pallets_max: number;
+  responsable_deposito: string;
+  telefono_contacto: string;
+  costo_alquiler_mensual: number;
+  moneda_alquiler: string;
+  updated_at?: string;
+}
+
+export interface LogisticsHubUpdatePayload {
+  nombre?: string;
+  direccion?: string;
+  ciudad?: string;
+  pais?: string;
+  lat?: number;
+  lng?: number;
+  superficie_m2?: number;
+  capacidad_pallets_max?: number;
+  responsable_deposito?: string;
+  telefono_contacto?: string;
+  costo_alquiler_mensual?: number;
+  moneda_alquiler?: string;
+}
+
+export interface GeocodeResponse {
+  address: string;
+  lat: number;
+  lng: number;
+  found: boolean;
+}
+
 export interface EbitdaAnalysisResponse {
   ingresos_servicios_totales: number;
   costos_directos_choferes: number;
@@ -519,6 +558,22 @@ export const logisticsApi = {
 
   async getEbitdaAnalysis(): Promise<EbitdaAnalysisResponse> {
     const res = await apiClient.get<EbitdaAnalysisResponse>('/api/v1/logistics/finance/ebitda');
+    return res.data;
+  },
+
+  // HUB / CENTRO DE DISTRIBUCION CENTRAL
+  async getHub(): Promise<LogisticsHubItem> {
+    const res = await apiClient.get<LogisticsHubItem>('/api/v1/logistics/hub');
+    return res.data;
+  },
+
+  async updateHub(payload: LogisticsHubUpdatePayload): Promise<LogisticsHubItem> {
+    const res = await apiClient.put<LogisticsHubItem>('/api/v1/logistics/hub', payload);
+    return res.data;
+  },
+
+  async geocodeAddress(address: string): Promise<GeocodeResponse> {
+    const res = await apiClient.post<GeocodeResponse>('/api/v1/logistics/hub/geocode', { address });
     return res.data;
   },
 };

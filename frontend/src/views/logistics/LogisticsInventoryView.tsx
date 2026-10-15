@@ -12,9 +12,18 @@ import {
   X,
   FileSpreadsheet,
   ClipboardList,
+  MapPin,
+  Navigation,
+  Sparkles,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
-import type { LogisticsInventoryItem, LogisticsClientItem, LogisticsBranchItem } from '../../services/logisticsApi';
+import type {
+  LogisticsInventoryItem,
+  LogisticsClientItem,
+  LogisticsBranchItem,
+  LogisticsHubItem,
+  LogisticsHubUpdatePayload,
+} from '../../services/logisticsApi';
 
 export const LogisticsInventoryView: React.FC = () => {
   const [inventory, setInventory] = useState<LogisticsInventoryItem[]>([]);
@@ -64,19 +73,30 @@ export const LogisticsInventoryView: React.FC = () => {
     fecha_vencimiento: '',
   });
 
+  // Hub / Centro de Distribución Base State
+  const [hub, setHub] = useState<LogisticsHubItem | null>(null);
+  const [isHubModalOpen, setIsHubModalOpen] = useState<boolean>(false);
+  const [hubForm, setHubForm] = useState<LogisticsHubUpdatePayload>({});
+  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
+  const [isSavingHub, setIsSavingHub] = useState<boolean>(false);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [invData, cliData] = await Promise.all([
+      const [invData, cliData, hubData] = await Promise.all([
         logisticsApi.getInventory({
           client_id: selectedClientId !== 'ALL' ? Number(selectedClientId) : undefined,
           search: search || undefined,
           rack: rackFilter || undefined,
         }),
         logisticsApi.getClients(),
+        logisticsApi.getHub().catch(() => null),
       ]);
       setInventory(invData);
       setClients(cliData);
+      if (hubData) {
+        setHub(hubData);
+      }
       if (cliData.length > 0 && !uploadClient) {
         setUploadClient(String(cliData[0].id));
       }
@@ -84,6 +104,63 @@ export const LogisticsInventoryView: React.FC = () => {
       console.error('Error al cargar inventario 3PL:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenHubModal = () => {
+    if (hub) {
+      setHubForm({
+        nombre: hub.nombre,
+        direccion: hub.direccion,
+        ciudad: hub.ciudad,
+        pais: hub.pais,
+        lat: hub.lat,
+        lng: hub.lng,
+        superficie_m2: hub.superficie_m2,
+        capacidad_pallets_max: hub.capacidad_pallets_max,
+        responsable_deposito: hub.responsable_deposito,
+        telefono_contacto: hub.telefono_contacto,
+        costo_alquiler_mensual: hub.costo_alquiler_mensual,
+        moneda_alquiler: hub.moneda_alquiler,
+      });
+    }
+    setIsHubModalOpen(true);
+  };
+
+  const handleGeocodeHubAddress = async () => {
+    if (!hubForm.direccion?.trim()) {
+      alert('Ingrese una dirección primero en el campo correspondiente');
+      return;
+    }
+    try {
+      setIsGeocoding(true);
+      const query = `${hubForm.direccion}, ${hubForm.ciudad || 'Canelones'}`;
+      const res = await logisticsApi.geocodeAddress(query);
+      setHubForm((prev) => ({
+        ...prev,
+        lat: res.lat,
+        lng: res.lng,
+      }));
+      alert(`📍 Coordenadas GPS obtenidas:\nLatitud: ${res.lat}\nLongitud: ${res.lng}\n${res.found ? 'Ubicación geocodificada con OpenStreetMap.' : 'Ubicación estimada por cuadrante metropolitano.'}`);
+    } catch (err: any) {
+      alert('No se pudo geocodificar la dirección automáticamente. Puede ingresar las coordenadas manualmente.');
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  const handleSaveHub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSavingHub(true);
+      const updated = await logisticsApi.updateHub(hubForm);
+      setHub(updated);
+      setIsHubModalOpen(false);
+      alert('✅ ¡Centro de Distribución Base actualizado con éxito!\nLa dirección, coordenadas para el mapa de Tracking y el costo de alquiler se han sincronizado.');
+    } catch (err: any) {
+      alert(`Error al guardar configuración del Hub: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSavingHub(false);
     }
   };
 
@@ -309,6 +386,15 @@ export const LogisticsInventoryView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={handleOpenHubModal}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+            title="Configurar dirección de depósito y base para Tracking GPS"
+          >
+            <Building2 size={15} className="text-sky-500" />
+            <span>Centro Distribución Base</span>
+          </button>
+
+          <button
             onClick={handleOpenPickingModal}
             className="inline-flex items-center space-x-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
           >
@@ -344,6 +430,49 @@ export const LogisticsInventoryView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Hub Central Base Banner */}
+      {hub && (
+        <div className="bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-transparent p-4 rounded-2xl border border-sky-500/20 dark:border-sky-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center space-x-3.5">
+            <div className="p-3 bg-sky-600 text-white rounded-xl shadow-xs">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold text-sky-950 dark:text-sky-200">
+                  {hub.nombre}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                  HUB Base Calcu 3PL
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span className="flex items-center space-x-1 text-slate-800 dark:text-slate-200 font-semibold">
+                  <MapPin size={13} className="text-rose-500" />
+                  <span>{hub.direccion}, {hub.ciudad}</span>
+                </span>
+                <span className="text-slate-400 font-mono text-[11px]">
+                  (GPS: {hub.lat.toFixed(4)}, {hub.lng.toFixed(4)})
+                </span>
+                <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                  • Alquiler: $ {hub.costo_alquiler_mensual.toLocaleString('es-UY')} {hub.moneda_alquiler}/mes
+                </span>
+                <span className="text-slate-400">
+                  • Sup: {hub.superficie_m2} m² ({hub.capacidad_pallets_max} pallets)
+                </span>
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleOpenHubModal}
+            className="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5 self-start md:self-auto"
+          >
+            <Navigation size={13} />
+            <span>Editar Dirección & Coordenadas</span>
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1076,6 +1205,239 @@ export const LogisticsInventoryView: React.FC = () => {
                   className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-xl cursor-pointer shadow-sm"
                 >
                   {isSubmittingPicking ? 'Generando Orden...' : 'Confirmar Picking & Enviar a Kanban'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/*                  MODAL: CONFIGURAR CENTRO DE DISTRIBUCIÓN BASE HUB        */}
+      {/* ========================================================================= */}
+      {isHubModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 max-w-xl w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 rounded-xl">
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Centro de Distribución Base (HUB 3PL)
+                  </h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Dirección física, coordenadas para el mapa de Tracking GPS y costos de arrendamiento
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsHubModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveHub} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Nombre del Centro / Nave Logística
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hubForm.nombre || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, nombre: e.target.value })}
+                    placeholder="Ej: Centro de Distribución Base Calcu 3PL"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      Dirección Física del Depósito
+                    </label>
+                    <button
+                      type="button"
+                      disabled={isGeocoding}
+                      onClick={handleGeocodeHubAddress}
+                      className="text-[11px] font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400 flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Sparkles size={12} />
+                      <span>{isGeocoding ? 'Buscando GPS...' : 'Obtener Coordenadas GPS'}</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={hubForm.direccion || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, direccion: e.target.value })}
+                    placeholder="Ej: Ruta 101 Km 24.200 o Camino Carrasco 5950"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Ciudad / Departamento
+                  </label>
+                  <input
+                    type="text"
+                    value={hubForm.ciudad || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, ciudad: e.target.value })}
+                    placeholder="Ej: Canelones"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    País
+                  </label>
+                  <input
+                    type="text"
+                    value={hubForm.pais || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, pais: e.target.value })}
+                    placeholder="Uruguay"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* Coordenadas para Mapa */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Latitud GPS (Para el Mapa)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    required
+                    value={hubForm.lat ?? -34.8350}
+                    onChange={(e) => setHubForm({ ...hubForm, lat: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-1.5 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Longitud GPS (Para el Mapa)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    required
+                    value={hubForm.lng ?? -56.0350}
+                    onChange={(e) => setHubForm({ ...hubForm, lng: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-1.5 text-xs font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* Capacidad */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Superficie Almacén (m²)
+                  </label>
+                  <input
+                    type="number"
+                    step="10"
+                    value={hubForm.superficie_m2 ?? 1500}
+                    onChange={(e) => setHubForm({ ...hubForm, superficie_m2: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Capacidad Pallets Máxima
+                  </label>
+                  <input
+                    type="number"
+                    value={hubForm.capacidad_pallets_max ?? 600}
+                    onChange={(e) => setHubForm({ ...hubForm, capacidad_pallets_max: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* Contacto & Responsable */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Supervisor / Responsable Depósito
+                  </label>
+                  <input
+                    type="text"
+                    value={hubForm.responsable_deposito || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, responsable_deposito: e.target.value })}
+                    placeholder="Ej: Marcelo García"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Teléfono Central de Operaciones
+                  </label>
+                  <input
+                    type="text"
+                    value={hubForm.telefono_contacto || ''}
+                    onChange={(e) => setHubForm({ ...hubForm, telefono_contacto: e.target.value })}
+                    placeholder="Ej: +598 99 123 456"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* Alquiler Sincronizado */}
+                <div className="sm:col-span-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">
+                      Costo Fijo de Alquiler Mensual (Sincronizado)
+                    </span>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                      Impacta directo en EBITDA y Costos Fijos
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        step="100"
+                        required
+                        value={hubForm.costo_alquiler_mensual ?? 145000}
+                        onChange={(e) => setHubForm({ ...hubForm, costo_alquiler_mensual: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <select
+                        value={hubForm.moneda_alquiler || 'UYU'}
+                        onChange={(e) => setHubForm({ ...hubForm, moneda_alquiler: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      >
+                        <option value="UYU">UYU ($)</option>
+                        <option value="USD">USD (U$S)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsHubModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingHub}
+                  className="px-5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 rounded-xl cursor-pointer shadow-sm flex items-center space-x-1.5"
+                >
+                  <Building2 size={14} />
+                  <span>{isSavingHub ? 'Guardando...' : 'Guardar y Sincronizar HUB'}</span>
                 </button>
               </div>
             </form>

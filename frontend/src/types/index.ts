@@ -352,7 +352,13 @@ export interface AuditLog {
   timestamp: string;
 }
 
-export type UserRole = 'analista_comercial' | 'analista_operaciones' | 'controller_admin';
+export type UserRole =
+  | 'analista_comercial'
+  | 'analista_operaciones'
+  | 'controller_admin'
+  | 'admin_3pl'
+  | 'operario_3pl'
+  | 'conductor_3pl';
 
 export interface SupplyOrderUpdate {
   sku_id?: string;
