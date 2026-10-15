@@ -115,7 +115,7 @@ export const MonitoringAuditView: React.FC = () => {
   const [editPassword, setEditPassword] = useState('');
   const [editSendEmail, setEditSendEmail] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [userToast, setUserToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [userToast, setUserToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const generateRandomPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
@@ -129,17 +129,24 @@ export const MonitoringAuditView: React.FC = () => {
   const handleSendCredentials = async (u: SystemUserItem) => {
     try {
       const res = await apiService.sendUserCredentials(u.id);
-      setUserToast({
-        type: 'success',
-        message: `Credenciales notificadas a ${u.email}. Clave: ${res.password}`
-      });
-      setTimeout(() => setUserToast(null), 6000);
+      if (res.notified) {
+        setUserToast({
+          type: 'success',
+          message: `Credenciales de acceso enviadas exitosamente al correo corporativo: ${u.email}.`
+        });
+      } else {
+        setUserToast({
+          type: 'warning',
+          message: `Credencial generada en el sistema, pero el correo no fue despachado: ${res.message}`
+        });
+      }
+      setTimeout(() => setUserToast(null), 8000);
     } catch (err: any) {
       setUserToast({
         type: 'error',
-        message: err?.response?.data?.detail || 'Error al enviar credenciales por correo'
+        message: err?.response?.data?.detail || 'Error de autorización o fallo al procesar solicitud.'
       });
-      setTimeout(() => setUserToast(null), 5000);
+      setTimeout(() => setUserToast(null), 6000);
     }
   };
 
@@ -276,7 +283,7 @@ export const MonitoringAuditView: React.FC = () => {
       setShowCreateUserModal(false);
       setUserToast({
         type: 'success',
-        message: `Usuario @${userForm.username} creado exitosamente. Clave: ${finalPassword}${userForm.send_email ? ' (notificado al correo)' : ''}`
+        message: `Usuario @${userForm.username} creado exitosamente.${userForm.send_email ? ' Intentando notificar credenciales al correo.' : ''}`
       });
       setTimeout(() => setUserToast(null), 6000);
       setUserForm({
@@ -314,7 +321,7 @@ export const MonitoringAuditView: React.FC = () => {
       });
       setUserToast({
         type: 'success',
-        message: `Permisos actualizados para @${editingUser.username}.${editPassword.trim() ? ' Nueva clave asignada.' : ''}`
+        message: `Permisos actualizados para @${editingUser.username}.${editPassword.trim() ? ' Contraseña modificada en el sistema.' : ''}`
       });
       setTimeout(() => setUserToast(null), 5000);
       setEditingUser(null);
@@ -390,13 +397,17 @@ export const MonitoringAuditView: React.FC = () => {
           <div className={`p-3.5 rounded-2xl flex items-center justify-between border shadow-sm transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
             userToast.type === 'success' 
               ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200' 
+              : userToast.type === 'warning'
+              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
               : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
           }`}>
             <div className="flex items-center space-x-2.5">
-              <CheckCircle2 size={18} className={userToast.type === 'success' ? 'text-emerald-600' : 'text-rose-600'} />
-              <span className="text-xs font-semibold">{userToast.message}</span>
+              {userToast.type === 'success' && <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />}
+              {userToast.type === 'warning' && <ShieldAlert size={18} className="text-amber-600 shrink-0" />}
+              {userToast.type === 'error' && <X size={18} className="text-rose-600 shrink-0" />}
+              <span className="text-xs font-semibold leading-relaxed">{userToast.message}</span>
             </div>
-            <button onClick={() => setUserToast(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+            <button onClick={() => setUserToast(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer ml-3">
               <X size={15} />
             </button>
           </div>

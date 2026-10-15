@@ -1556,7 +1556,7 @@ export const apiService = {
     return res.data;
   },
 
-  async sendUserCredentials(userId: number, password?: string): Promise<{ success: boolean; email: string; password: string; notified: boolean; message: string }> {
+  async sendUserCredentials(userId: number, password?: string): Promise<{ success: boolean; email: string; notified: boolean; message: string }> {
     const res = await apiClient.post(`/api/v1/monitoring/users/${userId}/send-credentials`, password ? { password } : {});
     return res.data;
   },

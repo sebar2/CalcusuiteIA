@@ -5,6 +5,14 @@ from pydantic import BaseModel
 
 from app.database.session import get_db
 from app.services.monitoring_service import MonitoringService, POSITION_PRESETS
+from app.core.security import (
+    require_roles,
+    get_current_user,
+    UserContext,
+    ROLE_CONTROLLER_ADMIN,
+    ROLE_ANALISTA_COMERCIAL,
+    ROLE_ANALISTA_OPERACIONES,
+)
 
 router = APIRouter(prefix="/monitoring", tags=["Monitoring & Security"])
 
@@ -43,9 +51,10 @@ def list_audit_logs(
     severidad: Optional[str] = Query(None, description="INFO, WARNING, CRITICAL"),
     search: Optional[str] = Query(None, description="Búsqueda por usuario, evento o ubicación"),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
 ):
-    """Obtiene el registro cronológico de actividad, ubicación y eventos de los usuarios."""
+    """Obtiene el registro cronológico de actividad, ubicación y eventos de los usuarios (Exclusivo Controller Admin)."""
     logs = MonitoringService.get_audit_logs(db, severidad=severidad, search=search, limit=limit)
     return [
         {
@@ -67,7 +76,11 @@ def list_audit_logs(
     ]
 
 @router.post("/audit-logs", response_model=Dict[str, Any])
-def record_audit_log(payload: AuditLogCreateSchema, db: Session = Depends(get_db)):
+def record_audit_log(
+    payload: AuditLogCreateSchema, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user)
+):
     """Registra manualmente un evento de actividad de usuario o auditoría de seguridad."""
     log = MonitoringService.log_activity(
         db,
@@ -84,8 +97,11 @@ def record_audit_log(payload: AuditLogCreateSchema, db: Session = Depends(get_db
     return {"success": True, "id": log.id, "timestamp": log.timestamp.isoformat()}
 
 @router.get("/users", response_model=List[Dict[str, Any]])
-def list_users(db: Session = Depends(get_db)):
-    """Lista todos los usuarios del sistema con sus roles y lista negra de módulos."""
+def list_users(
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
+):
+    """Lista todos los usuarios del sistema con sus roles y lista negra de módulos (Exclusivo Controller Admin)."""
     users = MonitoringService.get_users(db)
     return [
         {
@@ -104,15 +120,19 @@ def list_users(db: Session = Depends(get_db)):
     ]
 
 @router.get("/presets", response_model=Dict[str, Any])
-def get_position_presets():
+def get_position_presets(current_user: UserContext = Depends(get_current_user)):
     """Retorna los presets predeterminados de puestos y sus módulos restringidos sugeridos."""
     return POSITION_PRESETS
 
 @router.post("/users", response_model=Dict[str, Any])
-def create_system_user(payload: UserCreateSchema, db: Session = Depends(get_db)):
-    """Crea un nuevo usuario con permisos según su puesto o personalizados."""
+def create_system_user(
+    payload: UserCreateSchema, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
+):
+    """Crea un nuevo usuario con permisos según su puesto o personalizados (Exclusivo Controller Admin)."""
     try:
-        user = MonitoringService.create_user(db, payload.model_dump())
+        user = MonitoringService.create_user(db, payload.model_dump(), created_by=current_user.user_id)
         return {
             "success": True,
             "message": f"Usuario '{user.username}' creado exitosamente",
@@ -123,9 +143,14 @@ def create_system_user(payload: UserCreateSchema, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=f"Error al crear usuario: {str(e)}")
 
 @router.put("/users/{user_id}/permissions", response_model=Dict[str, Any])
-def update_user_permissions(user_id: int, payload: UserUpdatePermissionsSchema, db: Session = Depends(get_db)):
-    """Actualiza los módulos restringidos o el puesto de un usuario."""
-    user = MonitoringService.update_user_permissions(db, user_id, payload.model_dump(exclude_unset=True))
+def update_user_permissions(
+    user_id: int, 
+    payload: UserUpdatePermissionsSchema, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
+):
+    """Actualiza los módulos restringidos o el puesto de un usuario (Exclusivo Controller Admin)."""
+    user = MonitoringService.update_user_permissions(db, user_id, payload.model_dump(exclude_unset=True), updated_by=current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {
@@ -135,8 +160,12 @@ def update_user_permissions(user_id: int, payload: UserUpdatePermissionsSchema, 
     }
 
 @router.delete("/users/{user_id}", response_model=Dict[str, Any])
-def toggle_user_active(user_id: int, db: Session = Depends(get_db)):
-    """Desactiva o activa un usuario en el sistema."""
+def toggle_user_active(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
+):
+    """Desactiva o activa un usuario en el sistema (Exclusivo Controller Admin)."""
     from app.models.accounting_entities import SystemUser
     user = db.query(SystemUser).filter(SystemUser.id == user_id).first()
     if not user:
@@ -146,8 +175,16 @@ def toggle_user_active(user_id: int, db: Session = Depends(get_db)):
     return {"success": True, "activo": user.activo, "message": f"Usuario '{user.username}' {'activado' if user.activo else 'desactivado'}"}
 
 @router.post("/users/{user_id}/send-credentials", response_model=Dict[str, Any])
-def send_user_credentials(user_id: int, payload: Optional[Dict[str, Any]] = None, db: Session = Depends(get_db)):
-    """Genera o reenvía credenciales de acceso seguras por correo al usuario corporativo."""
+def send_user_credentials(
+    user_id: int, 
+    payload: Optional[Dict[str, Any]] = None, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN]))
+):
+    """
+    Genera o reenvía credenciales de acceso seguras por correo al usuario corporativo.
+    CIBERSEGURIDAD: Nunca expone la contraseña en la respuesta JSON para evitar fuga de credenciales.
+    """
     from app.models.accounting_entities import SystemUser
     from app.services.monitoring_service import send_credentials_notification, hash_password
     import secrets
@@ -156,11 +193,11 @@ def send_user_credentials(user_id: int, payload: Optional[Dict[str, Any]] = None
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    pwd = (payload and payload.get("password")) or f"Calcu-{secrets.token_hex(3).upper()}"
+    pwd = (payload and payload.get("password")) or f"Calcu-{secrets.token_hex(4).upper()}"
     user.password_hash = hash_password(pwd)
     db.commit()
 
-    sent = send_credentials_notification(
+    sent, sent_msg = send_credentials_notification(
         email=user.email,
         username=user.username,
         password=pwd,
@@ -171,9 +208,8 @@ def send_user_credentials(user_id: int, payload: Optional[Dict[str, Any]] = None
     return {
         "success": True,
         "email": user.email,
-        "password": pwd,
         "notified": sent,
-        "message": f"Credenciales enviadas a {user.email}"
+        "message": sent_msg
     }
 
 class AICopilotQuerySchema(BaseModel):
@@ -182,7 +218,8 @@ class AICopilotQuerySchema(BaseModel):
 @router.get("/reports/debtors", response_model=Dict[str, Any])
 def get_debtors_report(
     filter_days: Optional[int] = Query(None, description="1, 30, 45, 60 días de vencimiento"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user)
 ):
     """
     Reporte exhaustivo de deudores con monto total, facturas asociadas y filtros de antigüedad:
@@ -219,12 +256,19 @@ def get_debtors_report(
     }
 
 @router.get("/dashboard/metrics", response_model=Dict[str, Any])
-def get_dashboard_metrics(db: Session = Depends(get_db)):
+def get_dashboard_metrics(
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user)
+):
     """Consolida los 6 cuadrantes del Dashboard Ejecutivo de Monitoreo."""
     return MonitoringService.get_dashboard_metrics(db)
 
 @router.post("/dashboard/ai-copilot", response_model=Dict[str, Any])
-def ask_monitoring_copilot(payload: AICopilotQuerySchema, db: Session = Depends(get_db)):
+def ask_monitoring_copilot(
+    payload: AICopilotQuerySchema, 
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user)
+):
     """Consulta al Agente IA Gemini para análisis de métricas y extracción de reportes."""
     return MonitoringService.ask_monitoring_ai(db, payload.prompt)
 

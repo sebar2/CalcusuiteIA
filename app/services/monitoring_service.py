@@ -33,16 +33,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception:
         return False
 
-def send_credentials_notification(email: str, username: str, password: str, nombre: str, role: str) -> bool:
+def send_credentials_notification(email: str, username: str, password: str, nombre: str, role: str) -> tuple[bool, str]:
     """
-    Envía notificación de credenciales por email al usuario o simula el despacho seguro
-    registrándolo en los logs del sistema.
+    Envía notificación de credenciales por email al usuario utilizando el servidor SMTP configurado.
+    Por seguridad ISO 27001, nunca expone contraseñas en logs del sistema ni falsea confirmaciones.
     """
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", "seguridad@calcu.com.uy")
+    smtp_from = os.getenv("SMTP_FROM", os.getenv("SMTP_USER", "seguridad@calcu.com.uy"))
 
     subject = f"🔐 Credenciales de Acceso - Suite Calcu ERP ({username})"
     body = f"""Hola {nombre},
@@ -68,17 +68,17 @@ Seguridad de la Información & Auditoría ISO 27001 - Calcu Suite
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
-            logger.info("Credenciales enviadas por email a %s vía SMTP", email)
-            return True
+            logger.info("Credenciales enviadas por email a %s vía SMTP (%s:%s)", email, smtp_host, smtp_port)
+            return True, "Correo despachado exitosamente vía SMTP corporativo."
         except Exception as e:
-            logger.warning("Fallo al enviar email real vía SMTP a %s: %s", email, e)
-            return False
+            logger.warning("Fallo al enviar email vía SMTP a %s: %s", email, e)
+            return False, f"Fallo al enviar email vía SMTP ({smtp_host}): {str(e)}"
     else:
-        logger.info(
-            "SIMULACIÓN EMAIL CREDENCIALES: Notificación despachada para %s <%s>. Usuario: %s, Clave: %s, Rol: %s",
-            nombre, email, username, password, role
+        logger.warning(
+            "INTENTO DE ENVÍO DE CORREO FALLIDO: SMTP no configurado en .env para notificar a %s <%s>.",
+            nombre, email
         )
-        return True
+        return False, "Servidor de correo SMTP no configurado en variables de entorno (.env). Configure SMTP_HOST, SMTP_PORT, SMTP_USER y SMTP_PASSWORD."
 
 
 # Presets de puestos corporativos con módulos restringidos sugeridos
