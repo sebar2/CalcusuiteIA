@@ -711,5 +711,16 @@ class BiddingKeyword(Base):
 
     vertical_rel: Mapped["BiddingVertical"] = relationship(back_populates="keywords")
 
+# Re-export de entidades contables, facturación B2B y usuarios con RBAC
+from app.models.accounting_entities import (
+    Invoice,
+    InvoiceItem,
+    Expense,
+    JournalEntry,
+    JournalLine,
+    SystemUser,
+)
+
+
 
 

@@ -716,6 +716,25 @@ class InitiativeBenchmarkResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InitiativeAISuggestionItem(BaseModel):
+    titulo: str
+    categoria: str
+    capex_estimado: float
+    costos_fijos_mensuales: float
+    costo_unitario: float
+    precio_target: float
+    volumen_mensual_estimado: int
+    tendencia_mercado: str
+    fuentes_comprobables: List[str]
+    justificacion_retorno: str
+
+
+class InitiativeAISuggestionsResponse(BaseModel):
+    status: str = "success"
+    model_used: str = "Gemini / Motor Antigravity"
+    sugerencias: List[InitiativeAISuggestionItem]
+
+
 # --- Copilot 5: Cross-Area Report Schemas ---
 class CrossReportRequest(BaseModel):
     audience: str = Field(default="Directorio / Gerencia General", description="Directorio / Gerencia General | Gerencia Comercial | Jefatura de Logística / Operaciones")

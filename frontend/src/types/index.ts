@@ -2264,3 +2264,145 @@ export interface ProcurementCalendarResponse {
     timestamp?: string;
   };
 }
+
+// =====================================================================
+// DIMENSIÓN: FACTURACIÓN B2B (e-Facturas CFE DGI)
+// =====================================================================
+export interface InvoiceItem {
+  id?: number;
+  sku_id?: string;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number;
+  tasa_iva_pct: number;
+  subtotal: number;
+  monto_iva: number;
+  total: number;
+}
+
+export interface Invoice {
+  id: number;
+  numero_factura: string;
+  serie: string;
+  tipo_cfe: string;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  cliente_nombre: string;
+  cliente_rut: string;
+  cliente_direccion?: string;
+  moneda: string;
+  tipo_cambio: number;
+  subtotal: number;
+  monto_iva_basico: number;
+  monto_iva_minimo: number;
+  monto_iva_exento: number;
+  total: number;
+  estado: 'EMITIDA' | 'COBRADA' | 'ANULADA' | string;
+  forma_pago: string;
+  notas?: string;
+  items_count?: number;
+  items?: InvoiceItem[];
+}
+
+export interface InvoiceSummary {
+  periodo: string;
+  total_facturado: number;
+  iva_debito_fiscal: number;
+  cuentas_por_cobrar: number;
+  total_cobrado: number;
+  cantidad_facturas: number;
+  cantidad_anuladas: number;
+}
+
+// =====================================================================
+// DIMENSIÓN: GASTOS & LIBROS CONTABLES (Accounting Ledger)
+// =====================================================================
+export interface ExpenseItem {
+  id: number;
+  fecha: string;
+  proveedor_beneficiario: string;
+  rut_proveedor?: string;
+  concepto: string;
+  categoria_gasto: string;
+  centro_costo_id?: number;
+  centro_costo_nombre?: string;
+  subtotal_neto: number;
+  tasa_iva_pct: number;
+  monto_iva: number;
+  monto_total: number;
+  moneda: string;
+  numero_comprobante?: string;
+  forma_pago: string;
+  estado: string;
+}
+
+export interface JournalLineItem {
+  id: number;
+  cuenta_codigo: string;
+  cuenta_nombre: string;
+  debe: number;
+  haber: number;
+}
+
+export interface JournalEntryItem {
+  id: number;
+  numero_asiento: number;
+  fecha: string;
+  glosa: string;
+  tipo_operacion: string;
+  referencia_doc?: string;
+  total_debe: number;
+  total_haber: number;
+  balanceado: boolean;
+  lines: JournalLineItem[];
+}
+
+export interface TaxSummaryResponse {
+  periodo: string;
+  ventas_netas: number;
+  gastos_netos: number;
+  iva_debito_fiscal: number;
+  iva_credito_fiscal: number;
+  saldo_iva_neto: number;
+  estado_iva: 'A_PAGAR' | 'SALDO_A_FAVOR' | string;
+  nomina_imponible: number;
+  bps_patronal_jubilatorio: number;
+  bps_fonasa: number;
+  total_bps: number;
+  anticipo_irae: number;
+  total_obligaciones_fiscales: number;
+  recomendacion_fiscal_ia: string;
+}
+
+// =====================================================================
+// DIMENSIÓN: MONITOREO & USUARIOS (Audit & RBAC)
+// =====================================================================
+export interface AuditLogItem {
+  id: number;
+  timestamp: string;
+  fecha: string;
+  hora: string;
+  user_id: string;
+  role: string;
+  action: string;
+  resource: string;
+  ip_address?: string;
+  ubicacion?: string;
+  evento_realizado: string;
+  severidad: 'INFO' | 'WARNING' | 'CRITICAL' | string;
+  details?: any;
+}
+
+export interface SystemUserItem {
+  id: number;
+  username: string;
+  email: string;
+  nombre_completo: string;
+  puesto: string;
+  role: string;
+  restricted_modules: string[];
+  activo: boolean;
+  created_at: string;
+  last_login?: string;
+}
+

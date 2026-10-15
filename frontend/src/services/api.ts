@@ -128,6 +128,13 @@ import type {
   ProcurementBuyersResponse,
   ProcurementIntendenciasResponse,
   ProcurementCalendarResponse,
+  Invoice,
+  InvoiceSummary,
+  ExpenseItem,
+  JournalEntryItem,
+  TaxSummaryResponse,
+  AuditLogItem,
+  SystemUserItem,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -161,6 +168,11 @@ export const setCustomApiBaseUrl = (url: string) => {
       localStorage.setItem(CUSTOM_API_STORAGE_KEY, url.trim().replace(/\/+$/, ''));
     }
   }
+};
+
+export const getWsBaseUrl = (): string => {
+  const httpUrl = getApiBaseUrl();
+  return httpUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -550,6 +562,27 @@ export const apiService = {
     const res = await apiClient.post<CompetitorSelectionEvaluationResponse>('/api/v1/initiatives/evaluate-selection', req, {
       timeout: 0, // Inferencia completa sin interrupción
     });
+    return res.data;
+  },
+
+  // MÓDULO: Sugerencias IA de Iniciativas según Tendencias de Mercado & Costos Reales
+  async getInitiativeAiSuggestions(): Promise<{
+    status: string;
+    model_used: string;
+    sugerencias: Array<{
+      titulo: string;
+      categoria: string;
+      capex_estimado: number;
+      costos_fijos_mensuales: number;
+      costo_unitario: number;
+      precio_target: number;
+      volumen_mensual_estimado: number;
+      tendencia_mercado: string;
+      fuentes_comprobables: string[];
+      justificacion_retorno: string;
+    }>;
+  }> {
+    const res = await apiClient.get<any>('/api/v1/initiatives/ai-suggestions');
     return res.data;
   },
 
@@ -1363,6 +1396,163 @@ export const apiService = {
     end_date?: string;
   }): Promise<ProcurementCalendarResponse> {
     const res = await apiClient.get<ProcurementCalendarResponse>('/api/v1/procurement/calendar', { params });
+    return res.data;
+  },
+
+  // ===================================================================
+  // DIMENSIÓN: FACTURACIÓN B2B (e-Facturas CFE DGI)
+  // ===================================================================
+  async getInvoices(params?: {
+    periodo?: string;
+    estado?: string;
+    cliente_rut?: string;
+    limit?: number;
+  }): Promise<Invoice[]> {
+    const res = await apiClient.get<Invoice[]>('/api/v1/invoices', { params });
+    return res.data;
+  },
+
+  async getInvoiceDetail(invoiceId: number): Promise<Invoice> {
+    const res = await apiClient.get<Invoice>(`/api/v1/invoices/${invoiceId}`);
+    return res.data;
+  },
+
+  async createInvoice(payload: {
+    cliente_nombre: string;
+    cliente_rut: string;
+    cliente_direccion?: string;
+    fecha_emision?: string;
+    fecha_vencimiento?: string;
+    forma_pago?: string;
+    tipo_cfe?: string;
+    moneda?: string;
+    tipo_cambio?: number;
+    notas?: string;
+    items: Array<{
+      sku_id?: string;
+      descripcion: string;
+      cantidad: number;
+      precio_unitario: number;
+      tasa_iva_pct: number;
+    }>;
+  }): Promise<{ success: boolean; message: string; invoice_id: number; numero_factura: string; total: number }> {
+    const res = await apiClient.post('/api/v1/invoices', payload);
+    return res.data;
+  },
+
+  async updateInvoiceStatus(invoiceId: number, estado: string): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.post(`/api/v1/invoices/${invoiceId}/status`, null, { params: { estado } });
+    return res.data;
+  },
+
+  async getInvoicesSummary(params?: { periodo?: string }): Promise<InvoiceSummary> {
+    const res = await apiClient.get<InvoiceSummary>('/api/v1/invoices/summary', { params });
+    return res.data;
+  },
+
+  // ===================================================================
+  // DIMENSIÓN: GASTOS & LIBROS CONTABLES (Accounting Ledger)
+  // ===================================================================
+  async getExpenses(params?: {
+    periodo?: string;
+    categoria?: string;
+    centro_costo_id?: number;
+    limit?: number;
+  }): Promise<ExpenseItem[]> {
+    const res = await apiClient.get<ExpenseItem[]>('/api/v1/accounting/expenses', { params });
+    return res.data;
+  },
+
+  async createExpense(payload: {
+    fecha?: string;
+    proveedor_beneficiario: string;
+    rut_proveedor?: string;
+    concepto: string;
+    categoria_gasto: string;
+    centro_costo_id?: number;
+    subtotal_neto: number;
+    tasa_iva_pct?: number;
+    moneda?: string;
+    numero_comprobante?: string;
+    forma_pago?: string;
+    estado?: string;
+  }): Promise<{ success: boolean; message: string; expense_id: number; monto_total: number }> {
+    const res = await apiClient.post('/api/v1/accounting/expenses', payload);
+    return res.data;
+  },
+
+  async getJournal(limit: number = 100): Promise<JournalEntryItem[]> {
+    const res = await apiClient.get<JournalEntryItem[]>('/api/v1/accounting/journal', { params: { limit } });
+    return res.data;
+  },
+
+  async getTaxSummary(periodo?: string): Promise<TaxSummaryResponse> {
+    const res = await apiClient.get<TaxSummaryResponse>('/api/v1/accounting/tax-summary', { params: { periodo } });
+    return res.data;
+  },
+
+  // ===================================================================
+  // DIMENSIÓN: MONITOREO & USUARIOS (Audit & RBAC)
+  // ===================================================================
+  async getMonitoringAuditLogs(params?: {
+    severidad?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<AuditLogItem[]> {
+    const res = await apiClient.get<AuditLogItem[]>('/api/v1/monitoring/audit-logs', { params });
+    return res.data;
+  },
+
+  async recordAuditLog(payload: {
+    user_id: string;
+    role: string;
+    action: string;
+    resource: string;
+    evento_realizado: string;
+    severidad?: string;
+    ip_address?: string;
+    ubicacion?: string;
+    details?: any;
+  }): Promise<{ success: boolean; id: number; timestamp: string }> {
+    const res = await apiClient.post('/api/v1/monitoring/audit-logs', payload);
+    return res.data;
+  },
+
+  async getSystemUsers(): Promise<SystemUserItem[]> {
+    const res = await apiClient.get<SystemUserItem[]>('/api/v1/monitoring/users');
+    return res.data;
+  },
+
+  async createSystemUser(payload: {
+    username: string;
+    email: string;
+    nombre_completo: string;
+    puesto: string;
+    role?: string;
+    restricted_modules?: string[];
+    activo?: boolean;
+  }): Promise<{ success: boolean; message: string; user_id: number; restricted_modules: string[] }> {
+    const res = await apiClient.post('/api/v1/monitoring/users', payload);
+    return res.data;
+  },
+
+  async updateUserPermissions(userId: number, payload: {
+    puesto?: string;
+    role?: string;
+    restricted_modules?: string[];
+    activo?: boolean;
+  }): Promise<{ success: boolean; message: string; restricted_modules: string[] }> {
+    const res = await apiClient.put(`/api/v1/monitoring/users/${userId}/permissions`, payload);
+    return res.data;
+  },
+
+  async toggleUserActive(userId: number): Promise<{ success: boolean; activo: boolean; message: string }> {
+    const res = await apiClient.delete(`/api/v1/monitoring/users/${userId}`);
+    return res.data;
+  },
+
+  async getPositionPresets(): Promise<Record<string, { role: string; restricted_modules: string[] }>> {
+    const res = await apiClient.get<Record<string, { role: string; restricted_modules: string[] }>>('/api/v1/monitoring/presets');
     return res.data;
   },
 };

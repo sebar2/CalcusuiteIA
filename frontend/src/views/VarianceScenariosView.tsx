@@ -17,6 +17,8 @@ import {
   ShieldAlert,
   Check,
   X,
+  BookOpen,
+  Briefcase,
 } from 'lucide-react';
 import {
   BarChart,
@@ -703,6 +705,141 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Guía Metodológica: Los 4 Efectos Económicos */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="p-1.5 bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] rounded-lg">
+                        <BookOpen size={18} />
+                      </span>
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100">
+                          Descomposición Multinivel: Guía de Interpretación de los 4 Efectos
+                        </h4>
+                        <p className="text-[11px] text-[#535c69] dark:text-slate-400">
+                          Aislamiento econométrico riguroso para separar fallas comerciales de ineficiencias de compras o logística
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700">
+                      Metodología FP&A Estándar
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    {/* Efecto Precio */}
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">1. Efecto Precio</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_price_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                          {(multilevelData.total_price_variance ?? 0) >= 0 ? 'Favorable' : 'Desfavorable'}
+                        </span>
+                      </div>
+                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
+                        (P_real - P_pres) × Q_real
+                      </code>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Aísla el poder de fijación de precios y descuentos comerciales otorgados, sin contaminación del volumen vendido.
+                      </p>
+                    </div>
+
+                    {/* Efecto Volumen */}
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">2. Efecto Volumen</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_volume_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                          {(multilevelData.total_volume_variance ?? 0) >= 0 ? 'Favorable' : 'Desfavorable'}
+                        </span>
+                      </div>
+                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
+                        (Q_real - Q_pres) × P_pres
+                      </code>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Cuantifica el impacto de la mayor o menor cantidad física de bultos o unidades transaccionadas en el mercado.
+                      </p>
+                    </div>
+
+                    {/* Efecto Mix de Cartera */}
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">3. Efecto Mix</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_mix_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                          {(multilevelData.total_mix_variance ?? 0) >= 0 ? 'Favorable' : 'Alerta'}
+                        </span>
+                      </div>
+                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
+                        Σ (w_real - w_pres) × M_pres
+                      </code>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Mide si los clientes adquirieron más productos de alto margen o si las ventas migraron a categorías de bajo margen.
+                      </p>
+                    </div>
+
+                    {/* Efecto Costo / CMV */}
+                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">4. Efecto Costo / OPEX</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
+                          Eficiencia
+                        </span>
+                      </div>
+                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
+                        (C_pres - C_real) × Q_real
+                      </code>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Detecta sobrecostos de importación, variaciones en fletes 3PL y desvíos de compras frente a cotizaciones acordadas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Síntesis Ejecutiva IA para el Directorio */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 shadow-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-400/30">
+                        <Briefcase size={20} />
+                      </span>
+                      <div>
+                        <h4 className="font-bold text-sm text-white">
+                          Dictamen de Síntesis Ejecutiva para el Directorio (Board Copilot)
+                        </h4>
+                        <p className="text-xs text-indigo-200/70">
+                          Diagnóstico automatizado consolidado para el período {selectedPeriod}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-indigo-600/30 border border-indigo-400/40 text-indigo-200 text-xs font-semibold rounded-full self-start sm:self-auto">
+                      Dictamen Trimestral Calcu FP&A
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
+                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">1. Diagnóstico de Margen</span>
+                      <p className="text-slate-300 leading-relaxed">
+                        El desvío consolidado de <strong>${Math.abs(multilevelData.net_variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> ({multilevelData.net_variance_pct >= 0 ? '+' : ''}{Number(multilevelData.net_variance_pct || 0).toFixed(1)}%) refleja que {(multilevelData.total_price_variance || 0) >= 0 ? 'la política tarifaria protegió la rentabilidad' : 'hubo una erosión por descuentos comerciales excesivos'}.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
+                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">2. Comportamiento de Demanda</span>
+                      <p className="text-slate-300 leading-relaxed">
+                        El efecto volumen ({Number(multilevelData.total_volume_variance || 0) >= 0 ? 'expansivo' : 'contractivo'}) combinado con el efecto mix indica que {(multilevelData.total_mix_variance || 0) >= 0 ? 'la cartera se inclinó hacia productos premium con mayor contribución' : 'la rotación migró hacia categorías básicas de menor margen unitario'}.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
+                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">3. Directiva Estratégica</span>
+                      <p className="text-slate-300 leading-relaxed">
+                        {multilevelData.requires_mitigation 
+                          ? 'Se activó protocolo de mitigación estricto: congelar ampliaciones OPEX no esenciales y auditar licitaciones de reposición en DEP-CENTRAL-MVD y DEP-SALTO.' 
+                          : 'Operación dentro de los límites de tolerancia presupuestaria (±5%). Autorizar avances de inversión en expansión comercial y logística 3PL.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </>
             ) : (
               <div className="p-8 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -939,8 +1076,8 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
                                 <span>Centro de Costo</span>
                                 <span>Monto USD</span>
                               </div>
-                              {(s.desglose_centros_costo || []).map((cc) => (
-                                <div key={cc.centro_costo_id} className="py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0">
+                              {(s.desglose_centros_costo || []).map((cc, ccIdx) => (
+                                <div key={cc.centro_costo_id ?? `cc-scen-${ccIdx}`} className="py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0">
                                   <div className="flex justify-between items-center">
                                     <span className="font-medium text-slate-700 dark:text-slate-200">
                                       {cc.nombre}
@@ -1024,8 +1161,8 @@ export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
                         </p>
 
                         <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto space-y-1.5">
-                          {selectedScenarioForAdoption.data.desglose_centros_costo.map((cc) => (
-                            <div key={cc.centro_costo_id} className="flex justify-between items-center text-[11px] py-0.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                          {selectedScenarioForAdoption.data.desglose_centros_costo.map((cc, ccIdx) => (
+                            <div key={cc.centro_costo_id ?? `adopt-cc-${ccIdx}`} className="flex justify-between items-center text-[11px] py-0.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
                               <span className="text-slate-700 dark:text-slate-200">{cc.nombre}</span>
                               <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{formatCurrency(cc.monto_sugerido)}</span>
                             </div>

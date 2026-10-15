@@ -632,6 +632,7 @@ export const InitiativesStepper: React.FC<InitiativesStepperProps> = ({ engineMo
                 className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-[#333333] dark:text-slate-100 focus:outline-none focus:border-[#00a2e8]"
               >
                 <option value="google_serper">Google Search (Serper.dev - Directo)</option>
+                <option value="google_maps">Google Maps (Locales Comerciales & Puntos de Venta)</option>
                 <option value="web_ddgs">Búsqueda Web Gratuita (DuckDuckGo)</option>
                 <option value="mercadolibre">Mercado Libre (API Oficial)</option>
                 <option value="hybrid">Ambos / Híbrido</option>

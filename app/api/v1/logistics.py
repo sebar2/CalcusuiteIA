@@ -8,13 +8,14 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Optional, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 
-from app.database.session import get_db
+from app.database.session import get_db, SessionLocal
+from app.services.telemetry_ws import telemetry_manager
 from app.core.security import get_current_user, UserContext
 from app.models.logistics_entities import (
     LogisticsClient,
@@ -1640,16 +1641,77 @@ def receive_telemetry_ping(order_id: int, payload: TelemetryPingCreate, db: Sess
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    ping = LogisticsTelemetryPing(
+    marker = telemetry_manager.record_and_broadcast_ping(
         order_id=order_id,
         lat=payload.lat,
         lng=payload.lng,
         velocidad_kmh=payload.velocidad_kmh,
         bateria_pct=payload.bateria_pct,
+        db=db,
     )
-    db.add(ping)
-    db.commit()
-    return {"message": "Coordenadas GPS recibidas en tiempo real", "timestamp": ping.timestamp.isoformat()}
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(telemetry_manager.broadcast_to_fleet({"type": "FLEET_UPDATE", "data": marker}))
+    except Exception:
+        pass
+
+    return {"message": "Coordenadas GPS recibidas en tiempo real", "timestamp": marker["timestamp"]}
+
+
+@router.websocket("/tracking/ws/driver/{order_id}")
+async def websocket_driver_telemetry(websocket: WebSocket, order_id: int):
+    """
+    Canal WebSocket persistente de baja sobrecarga para telemetría continua del chofer móvil.
+    Reemplaza sondeos y posts HTTP periódicos en Capacitor/Android sobre Tailscale VPN.
+    """
+    await telemetry_manager.connect_driver(websocket, order_id)
+    try:
+        while True:
+            data_text = await websocket.receive_text()
+            try:
+                data = json.loads(data_text)
+                lat = float(data.get("lat", 0.0))
+                lng = float(data.get("lng", 0.0))
+                speed = float(data.get("velocidad_kmh", 0.0))
+                battery = int(data.get("bateria_pct", 100))
+
+                marker = telemetry_manager.record_and_broadcast_ping(
+                    order_id=order_id,
+                    lat=lat,
+                    lng=lng,
+                    velocidad_kmh=speed,
+                    bateria_pct=battery,
+                )
+                await telemetry_manager.broadcast_to_fleet({"type": "FLEET_UPDATE", "data": marker})
+                await websocket.send_text(json.dumps({"status": "ACK", "order_id": order_id, "timestamp": marker["timestamp"]}))
+            except Exception as e:
+                await websocket.send_text(json.dumps({"status": "ERROR", "detail": str(e)}))
+    except WebSocketDisconnect:
+        telemetry_manager.disconnect_driver(websocket, order_id)
+
+
+@router.websocket("/tracking/ws/fleet")
+async def websocket_fleet_monitoring(websocket: WebSocket):
+    """
+    Canal WebSocket push para la torre de control y despacho logístico.
+    Recibe la instantánea inicial de la flota y actualizaciones push en tiempo real
+    sin requerir HTTP polling periódico.
+    """
+    await telemetry_manager.connect_fleet(websocket)
+    db = SessionLocal()
+    try:
+        initial_fleet = get_live_tracking(db=db)
+        await websocket.send_text(json.dumps({"type": "FLEET_SNAPSHOT", "data": initial_fleet}, default=str))
+        while True:
+            msg = await websocket.receive_text()
+            if msg == "PING":
+                await websocket.send_text("PONG")
+    except WebSocketDisconnect:
+        telemetry_manager.disconnect_fleet(websocket)
+    finally:
+        db.close()
 
 
 @router.get("/tracking/live")

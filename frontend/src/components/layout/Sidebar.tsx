@@ -25,6 +25,8 @@ import {
   Receipt,
   CircleDollarSign,
   ClipboardList,
+  Scale,
+  ShieldAlert,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -34,6 +36,7 @@ export type ActiveTab =
   | 'pricing' 
   | 'crm'
   | 'clients'
+  | 'invoices'
   | 'suppliers'
   | 'supplier-catalogs'
   | 'tenders'
@@ -53,6 +56,8 @@ export type ActiveTab =
   | 'initiatives' 
   | 'variance' 
   | 'reports' 
+  | 'accounting'
+  | 'monitoring'
   | 'etl';
 
 interface SidebarProps {
@@ -62,6 +67,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   alertCount: number;
   currentRole?: string;
+  restrictedModules?: string[];
 }
 
 interface NavSection {
@@ -84,6 +90,7 @@ export const Sidebar = ({
   onToggleCollapse,
   alertCount,
   currentRole = 'controller_admin',
+  restrictedModules = [],
 }: SidebarProps) => {
   const sections: NavSection[] = [
     {
@@ -279,6 +286,37 @@ export const Sidebar = ({
           icon: Users,
           roles: ['controller_admin', 'comercial', 'analista_comercial'],
         },
+        {
+          id: 'invoices',
+          label: 'Facturación B2B (e-Facturas)',
+          shortLabel: 'e-Facturas',
+          icon: Receipt,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+      ],
+    },
+    {
+      title: 'Gastos & Contabilidad',
+      items: [
+        {
+          id: 'accounting',
+          label: 'Libros Contables & Gastos',
+          shortLabel: 'Contabilidad',
+          icon: Scale,
+          roles: ['controller_admin'],
+        },
+      ],
+    },
+    {
+      title: 'Monitoreo & Ciberseguridad',
+      items: [
+        {
+          id: 'monitoring',
+          label: 'Auditoría & Control Usuarios',
+          shortLabel: 'Monitoreo',
+          icon: ShieldAlert,
+          roles: ['controller_admin'],
+        },
       ],
     },
     {
@@ -299,7 +337,7 @@ export const Sidebar = ({
   const is3PLRole = currentRole === 'admin_3pl' || currentRole === 'operario_3pl' || currentRole === 'conductor_3pl';
   const is3PLOnly = is3PLUrlMode || is3PLRole;
 
-  // Filtrar según el rol activo y el modo 3PL
+  // Filtrar según el rol activo, lista negra de módulos y el modo 3PL
   const candidateSections = is3PLOnly
     ? sections.filter((sec) => sec.title === '3PL Logística & Distribución')
     : sections;
@@ -308,6 +346,7 @@ export const Sidebar = ({
     .map((sec) => ({
       ...sec,
       items: sec.items.filter((item) => {
+        if (restrictedModules && restrictedModules.includes(item.id)) return false;
         if (currentRole === 'controller_admin') return true;
         return item.roles.includes(currentRole);
       }),

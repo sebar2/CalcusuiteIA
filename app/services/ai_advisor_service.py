@@ -1418,21 +1418,41 @@ Por favor redacta:
     ) -> CrossReportResponse:
         start_time = time.perf_counter()
 
-        # Recopilar métricas de la base de datos
+        # Recopilar métricas de la base de datos multisectorial
         total_ventas = Decimal('0')
         total_costos = Decimal('0')
         total_skus = 0
         skus_alerta = 0
         avg_doh = Decimal('0.0')
+        problemas_detectados = []
+        periodo_sel = req.periodo or "2026-07"
 
         if db is not None:
-            budgets = db.query(Budget).all()
-            for b in budgets:
-                if "VENTA" in b.tipo.upper():
-                    total_ventas += b.monto_real if b.monto_real > Decimal('0') else b.monto_presupuestado
-                else:
-                    total_costos += b.monto_real if b.monto_real > Decimal('0') else b.monto_presupuestado
+            # 1. Analizar Presupuestos y OPEX para el período específico
+            pcc_lines = db.query(PresupuestoCentroCosto).filter(PresupuestoCentroCosto.periodo == periodo_sel).all()
+            if not pcc_lines:
+                pcc_lines = db.query(PresupuestoCentroCosto).all()
 
+            for line in pcc_lines:
+                m_real = line.monto_real or Decimal('0.0')
+                m_pres = line.monto_presupuestado or Decimal('0.0')
+                total_costos += m_real if m_real > Decimal('0') else m_pres
+                if m_real > m_pres:
+                    exceso = m_real - m_pres
+                    pct = ((exceso / m_pres) * Decimal('100')).quantize(Decimal('0.1')) if m_pres > 0 else Decimal('100.0')
+                    cc_nom = line.centro_costo.nombre if line.centro_costo else "Área Operativa"
+                    problemas_detectados.append(
+                        f"Sobrecosto en {line.concepto_opex} ({cc_nom}): Real ${m_real:,.2f} vs Meta ${m_pres:,.2f} (+{pct}%)"
+                    )
+
+            # 2. Analizar Metas Comerciales y Ventas
+            metas = db.query(PresupuestoMeta).filter(PresupuestoMeta.periodo == periodo_sel).all()
+            if not metas:
+                metas = db.query(PresupuestoMeta).all()
+            for m in metas:
+                total_ventas += m.monto_presupuestado
+
+            # 3. Analizar Inventario y Puntos de Reorden (WMS)
             products = db.query(Product).all()
             total_skus = len(products)
             doh_list = []
@@ -1443,6 +1463,9 @@ Por favor redacta:
                     rop = calculate_rop(inv.demanda_diaria_promedio, inv.lead_time_dias, Decimal(str(inv.stock_seguridad)))
                     if stk <= rop:
                         skus_alerta += 1
+                        problemas_detectados.append(
+                            f"Riesgo de Quiebre en SKU {p.sku} ('{p.nombre}'): Stock actual {stk} un. menor o igual al ROP {int(rop)} un."
+                        )
                     cogs_a = inv.demanda_diaria_promedio * p.costo_unitario * Decimal('365')
                     if cogs_a > Decimal('0'):
                         doh_list.append(calculate_doh(Decimal(str(stk)) * p.costo_unitario, cogs_a))
@@ -1459,23 +1482,28 @@ Por favor redacta:
         ebitda_est = total_ventas - total_costos - (total_ventas * Decimal('0.15'))
         gm_pct = ((total_ventas - total_costos) / total_ventas * Decimal('100')).quantize(Decimal('0.01')) if total_ventas > Decimal('0') else Decimal('0.00')
 
+        problemas_str = "\n".join([f"- ⚠️ {p}" for p in problemas_detectados[:6]]) if problemas_detectados else "- Sin alertas críticas detectadas en el período."
+
         user_prompt = f"""REPORTE EJECUTIVO CROSS-ÁREA:
 Audiencia Destino: {req.audience}
 Período: {req.periodo or 'Actual'}
 Datos Operativos y Financieros Disponibles:
 - Ventas Totales: ${total_ventas:,.2f}
-- Costos / CMV Totales: ${total_costos:,.2f}
+- Costos / OPEX Totales: ${total_costos:,.2f}
 - Margen Bruto: {gm_pct}% (${total_ventas - total_costos:,.2f})
 - EBITDA Operativo Estimado: ${ebitda_est:,.2f}
 - Catálogo: {total_skus} SKUs | SKUs en Alerta/Quiebre: {skus_alerta}
 - DOH Cobertura Promedio: {avg_doh:.1f} días
 - Contexto Adicional: {req.extra_context or 'Sin novedades extraordinarias'}
 
+PROBLEMAS Y DESVÍOS REALES DETECTADOS EN LA OPERACIÓN:
+{problemas_str}
+
 Estructura el informe adaptado específicamente para {req.audience}:
 - Si es Directorio / Gerencia General: Enfócate en EBITDA, liquidez, flujo de caja, retorno sobre capital y riesgos macro.
 - Si es Gerencia Comercial: Enfócate en cumplimiento de metas de venta, mix de categorías, pricing por canal y márgenes.
 - Si es Jefatura de Logística / Operaciones: Enfócate en DOH, quiebres de inventario, tiempos de reposición (lead times) y plan de compras.
-Entrega un resumen ejecutivo contundente y directrices claras con formato Markdown profesional.
+Plantea soluciones concretas a los problemas detectados arriba y directrices claras con formato Markdown profesional.
 """
         engine_mode = getattr(req, "engine_mode", "auto") or "auto"
         llm_res = await cls._call_local_llm(user_prompt, system_prompt=SYSTEM_PROMPT_CROSS_REPORT, engine_mode=engine_mode)
@@ -1493,19 +1521,23 @@ Entrega un resumen ejecutivo contundente y directrices claras con formato Markdo
             total_lat = lat_ms
             exec_summary = f"Minuta ejecutiva para {req.audience} generada exitosamente por {model}."
         else:
-            raw_markdown = f"""### Minuta Ejecutiva de Rendimiento
-**Audiencia:** {req.audience} | **Metodología:** {status.capitalize()} (Heurística Determinística)
+            raw_markdown = f"""### Minuta Ejecutiva de Rendimiento & Gestión Cross-Área
+**Audiencia:** {req.audience} | **Período:** {periodo_sel} | **Metodología:** {status.capitalize()} (Heurística Determinística)
 
-#### Resumen de Indicadores Clave
-- **Ventas Totales:** ${total_ventas:,.2f}
-- **Margen Bruto:** {gm_pct}% (${total_ventas - total_costos:,.2f})
-- **EBITDA Estimado:** ${ebitda_est:,.2f}
+#### 1. Resumen de Indicadores Clave
+- **Ventas Totales Proyectadas:** ${total_ventas:,.2f}
+- **Costos & OPEX Operativo:** ${total_costos:,.2f}
+- **Margen Bruto Estimado:** {gm_pct}% (${total_ventas - total_costos:,.2f})
+- **EBITDA Operativo:** ${ebitda_est:,.2f}
 - **Estado de Cadena de Suministro:** {skus_alerta} de {total_skus} SKUs en reorden | Cobertura media: {avg_doh:.1f} días.
 
-#### Directrices Específicas para {req.audience}:
-1. Priorizar el control riguroso de capital de trabajo y la disciplina presupuestaria.
+#### 2. Problemas Críticos Detectados en el Período {periodo_sel}:
+{problemas_str}
+
+#### 3. Directrices Específicas para {req.audience}:
+1. Priorizar la contención de sobrecostos en las partidas con desvío desfavorable > 5%.
 2. Garantizar que las decisiones de precios y descuentos protejan el margen de contribución.
-3. Monitorear el plan semanal de reposición de inventario para sostener el nivel de servicio OTIF.
+3. Activar pedidos de reabastecimiento urgente para los SKUs con quiebre de stock inminente.
 """
             total_lat = (time.perf_counter() - start_time) * 1000
             exec_summary = f"Minuta ejecutiva para {req.audience} generada con heurística financiera."
@@ -1934,7 +1966,9 @@ Genera un dictamen ejecutivo en Markdown riguroso con estas 4 secciones:
 
         # Normalización defensiva de plataforma
         plat = (getattr(req, "platform", None) or "").lower()
-        if "mercado" in plat or "meli" in plat:
+        if "maps" in plat or "google_maps" in plat or "places" in plat:
+            platform = "google_maps"
+        elif "mercado" in plat or "meli" in plat:
             platform = "mercadolibre"
         elif "ambos" in plat or "hibrido" in plat or "hybrid" in plat:
             platform = "hybrid"
@@ -2034,7 +2068,51 @@ Genera un dictamen ejecutivo en Markdown riguroso con estas 4 secciones:
             )
             all_candidates.extend(ddg_items)
 
-        # 4. Curaduría y Entrega
+        elif platform == "google_maps":
+            import httpx
+            serper_api_key = os.getenv("SERPER_API_KEY", "")
+            maps_query = f"{product_clean} {region_clean} {country}".strip()
+            gl_code = "uy" if country == "Uruguay" else ("ar" if country == "Argentina" else "cl")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        "https://google.serper.dev/places",
+                        headers={"X-API-KEY": serper_api_key, "Content-Type": "application/json"},
+                        json={"q": maps_query, "gl": gl_code}
+                    )
+                    if resp.status_code == 200:
+                        places = resp.json().get("places", [])
+                        for pl in places:
+                            title = pl.get("title", "Local Comercial")
+                            addr = pl.get("address", "")
+                            rating = pl.get("rating")
+                            rcount = pl.get("ratingCount", 0)
+                            cat = pl.get("category", "Comercio Local")
+                            phone = pl.get("phoneNumber", "")
+                            website = pl.get("website") or f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(title + ' ' + addr)}"
+                            notes = f"Google Maps: {cat} | Dirección: {addr}"
+                            if rating:
+                                notes += f" | Rating: ⭐{rating} ({rcount} reseñas)"
+                            if phone:
+                                notes += f" | Tel: {phone}"
+
+                            all_candidates.append(CompetitorItemResponse(
+                                id=str(uuid.uuid4())[:8],
+                                title=f"📍 {title} ({addr})",
+                                price=p_target,
+                                original_price=p_target,
+                                currency=target_currency,
+                                store=cat or "Local Comercial",
+                                link=website,
+                                reputation=f"Rating {rating}/5 ({rcount} reseñas)" if rating else "Sin reseñas",
+                                shipping="Atención en Local / Envíos",
+                                condition="Nuevo",
+                                notes=notes,
+                                is_official_store=True if (rating and rating >= 4.0) else False,
+                                relevance_score=95
+                            ))
+            except Exception as e:
+                logger.error("Error en búsqueda Google Maps Places: %s", e)
         unique_candidates: List[CompetitorItemResponse] = []
         seen_urls = set()
         seen_titles = set()

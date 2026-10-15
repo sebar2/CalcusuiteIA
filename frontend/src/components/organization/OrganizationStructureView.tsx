@@ -336,11 +336,11 @@ export const OrganizationStructureView: React.FC = () => {
                 No hay áreas registradas.
               </div>
             ) : (
-              areas.map((area) => {
+              areas.map((area, aIdx) => {
                 const isSelected = selectedAreaFilter === area.id;
                 return (
                   <div
-                    key={area.id}
+                    key={area.id ?? `area-${aIdx}`}
                     onClick={() => setSelectedAreaFilter(isSelected ? 'ALL' : area.id)}
                     className={`p-4 flex items-center justify-between cursor-pointer transition-colors ${
                       isSelected
@@ -425,9 +425,9 @@ export const OrganizationStructureView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((user) => (
+                  filteredUsers.map((user, uIdx) => (
                     <tr
-                      key={user.id}
+                      key={user.id ?? `user-${uIdx}`}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <td className="px-4 py-3">

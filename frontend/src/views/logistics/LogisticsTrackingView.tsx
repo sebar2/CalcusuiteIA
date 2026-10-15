@@ -22,6 +22,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { logisticsApi } from '../../services/logisticsApi';
+import { getWsBaseUrl } from '../../services/api';
 import type {
   LiveFleetMarker,
   DriverDeliverySheetResponse,
@@ -51,11 +52,15 @@ export const LogisticsTrackingView: React.FC = () => {
   const [driverSheet, setDriverSheet] = useState<DriverDeliverySheetResponse | null>(null);
   const [loadingSheet, setLoadingSheet] = useState<boolean>(false);
 
-  // Real-time GPS Watch from Driver Mobile
+  // Real-time GPS Watch & WebSocket Telemetry
   const [isGpsTransmitting, setIsGpsTransmitting] = useState<boolean>(false);
   const [currentGpsCoord, setCurrentGpsCoord] = useState<{ lat: number; lng: number; speed: number } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [wsMode, setWsMode] = useState<'websocket' | 'polling'>('websocket');
+  const [wsConnected, setWsConnected] = useState<boolean>(false);
   const watchIdRef = useRef<number | null>(null);
+  const fleetWsRef = useRef<WebSocket | null>(null);
+  const driverWsRef = useRef<WebSocket | null>(null);
 
   // Digital Signature Canvas
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -106,10 +111,68 @@ export const LogisticsTrackingView: React.FC = () => {
   useEffect(() => {
     loadTracking();
     loadActiveOrders();
-    const interval = setInterval(() => {
-      logisticsApi.getLiveTracking().then(setFleet).catch(() => {});
-    }, 6000);
-    return () => clearInterval(interval);
+
+    // WebSocket persistente para Torre de Control / Flota
+    let ws: WebSocket | null = null;
+    let pollInterval: any = null;
+
+    try {
+      const wsUrl = `${getWsBaseUrl()}/api/v1/logistics/tracking/ws/fleet`;
+      ws = new WebSocket(wsUrl);
+      fleetWsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        setWsMode('websocket');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'FLEET_SNAPSHOT' && Array.isArray(msg.data)) {
+            setFleet(msg.data);
+          } else if (msg.type === 'FLEET_UPDATE' && msg.data) {
+            setFleet((prev) => {
+              const updated = msg.data;
+              const idx = prev.findIndex((p) => p.order_id === updated.order_id);
+              if (idx >= 0) {
+                const clone = [...prev];
+                clone[idx] = { ...clone[idx], ...updated };
+                return clone;
+              }
+              return [...prev, updated];
+            });
+          }
+        } catch {
+          // ignore json errors
+        }
+      };
+
+      ws.onerror = () => {
+        setWsConnected(false);
+        setWsMode('polling');
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        setWsMode('polling');
+      };
+    } catch {
+      setWsConnected(false);
+      setWsMode('polling');
+    }
+
+    // Fallback: Si WebSocket no está activo, mantener polling suave cada 10s
+    pollInterval = setInterval(() => {
+      if (!fleetWsRef.current || fleetWsRef.current.readyState !== WebSocket.OPEN) {
+        logisticsApi.getLiveTracking().then(setFleet).catch(() => {});
+      }
+    }, 10000);
+
+    return () => {
+      if (ws) ws.close();
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, []);
 
   // When selected order changes in Driver App, fetch sheet
@@ -134,22 +197,29 @@ export const LogisticsTrackingView: React.FC = () => {
     fetchSheet();
   }, [selectedOrderId]);
 
-  // Clean up GPS watch on unmount
+  // Clean up GPS watch & driver WS on unmount
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
+      if (driverWsRef.current) {
+        driverWsRef.current.close();
+      }
     };
   }, []);
 
-  // Real Mobile GPS Transmission Handlers
+  // Real Mobile GPS Transmission Handlers con WebSocket persistente
   const toggleGpsTransmission = () => {
     if (isGpsTransmitting) {
-      // Stop watch
+      // Stop watch & close WS
       if (watchIdRef.current !== null && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
+      }
+      if (driverWsRef.current) {
+        driverWsRef.current.close();
+        driverWsRef.current = null;
       }
       setIsGpsTransmitting(false);
       setGpsError(null);
@@ -166,6 +236,15 @@ export const LogisticsTrackingView: React.FC = () => {
       setGpsError(null);
       setIsGpsTransmitting(true);
 
+      // Iniciar WebSocket de chofer persistente
+      try {
+        const dWsUrl = `${getWsBaseUrl()}/api/v1/logistics/tracking/ws/driver/${selectedOrderId}`;
+        const dws = new WebSocket(dWsUrl);
+        driverWsRef.current = dws;
+      } catch (err) {
+        console.warn('No se pudo abrir WS de chofer, usando HTTP fallback:', err);
+      }
+
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude, speed } = position.coords;
@@ -173,21 +252,25 @@ export const LogisticsTrackingView: React.FC = () => {
           setCurrentGpsCoord({ lat: latitude, lng: longitude, speed: speedKmh });
 
           try {
-            // Get device battery if supported
             let batPct = 85;
             if ('getBattery' in navigator) {
               const battery: any = await (navigator as any).getBattery();
               batPct = Math.round(battery.level * 100);
             }
 
-            await logisticsApi.sendTelemetryPing(selectedOrderId, {
+            const payload = {
               lat: latitude,
               lng: longitude,
               velocidad_kmh: speedKmh,
               bateria_pct: batPct,
-            });
-            // Refresh dispatcher view
-            loadTracking();
+            };
+
+            // Enviar vía WebSocket persistente; fallback a HTTP si WS no está listo
+            if (driverWsRef.current && driverWsRef.current.readyState === WebSocket.OPEN) {
+              driverWsRef.current.send(JSON.stringify(payload));
+            } else {
+              await logisticsApi.sendTelemetryPing(selectedOrderId, payload);
+            }
           } catch (err) {
             console.error('Error al enviar telemetría móvil:', err);
           }
@@ -449,6 +532,22 @@ export const LogisticsTrackingView: React.FC = () => {
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Telemetría en tiempo real desde el móvil del chofer, Google Maps Turn-by-Turn y firma digital
               </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span
+                  className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    wsConnected
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900'
+                      : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      wsConnected && wsMode === 'websocket' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`}
+                  />
+                  {wsConnected && wsMode === 'websocket' ? '⚡ WebSocket P2P Activo (<50ms)' : '📡 Modo Fallback HTTP Polling'}
+                </span>
+              </div>
             </div>
           </div>
         </div>

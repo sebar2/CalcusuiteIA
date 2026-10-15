@@ -20,6 +20,8 @@ def create_app_engine(database_url: str) -> Engine:
     - SQLite: Conexión monohilo desactivada y StaticPool en bases en memoria.
     """
     database_url = database_url.strip()
+    if "@localhost:" in database_url:
+        database_url = database_url.replace("@localhost:", "@127.0.0.1:")
     if database_url.startswith("postgresql"):
         return create_engine(
             database_url,
@@ -141,6 +143,12 @@ def sync_table_columns(conn):
     add_col_if_missing("logistics_dispatch_orders", "kilometros_recorrido", "NUMERIC(14, 4)", "0.0")
     add_col_if_missing("logistics_dispatch_orders", "tipo_despacho", "VARCHAR(50)", "'ESTANDAR'")
     add_col_if_missing("logistics_dispatch_orders", "firma_digital_receptor", "TEXT")
+
+    # 7.2. Auditoría y Monitoreo Perimetral
+    add_col_if_missing("audit_logs", "ip_address", "VARCHAR(50)", "'100.64.0.1'")
+    add_col_if_missing("audit_logs", "ubicacion", "VARCHAR(100)", "'Montevideo (Nodo Tailscale Central)'")
+    add_col_if_missing("audit_logs", "evento_realizado", "VARCHAR(255)")
+    add_col_if_missing("audit_logs", "severidad", "VARCHAR(20)", "'INFO'")
     add_col_if_missing("logistics_dispatch_orders", "firma_fecha_hora", "TIMESTAMP")
     add_col_if_missing("logistics_dispatch_orders", "firma_aclaracion", "VARCHAR(150)")
 
@@ -1068,6 +1076,7 @@ def init_db(target_engine: Engine = None):
     eng = target_engine or engine
     from app.models import entities  # Asegurar registro de modelos
     from app.models import logistics_entities  # Asegurar registro de modelos 3PL Logística
+    from app.models import accounting_entities  # Asegurar registro de facturación, contabilidad y RBAC
     from app.domain import models   # Asegurar registro de modelos del dominio
     Base.metadata.create_all(bind=eng)
     with eng.connect() as conn:

@@ -38,6 +38,8 @@ export const ExecutiveReportsView = ({
   engineMode = 'auto',
 }: ExecutiveReportsViewProps) => {
   const [audience, setAudience] = useState<string>('Directorio / Gerencia General');
+  const [currentPeriod, setCurrentPeriod] = useState<string>(selectedPeriod || '2026-07');
+  const [analysisFocus, setAnalysisFocus] = useState<string>('all');
   const [extraContext, setExtraContext] = useState<string>('');
   const [report, setReport] = useState<CrossReportResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -328,10 +330,15 @@ export const ExecutiveReportsView = ({
     setError(null);
     setConversionSuccess(null);
     try {
+      const combinedContext = [
+        analysisFocus !== 'all' ? `Foco prioritario de evaluación: ${analysisFocus}` : null,
+        extraContext.trim() || null
+      ].filter(Boolean).join(' | ');
+
       const res = await apiService.getCrossReport({
         audience,
-        periodo: selectedPeriod,
-        extra_context: extraContext.trim() || undefined,
+        periodo: currentPeriod,
+        extra_context: combinedContext || undefined,
       });
       setReport(res);
     } catch (err: any) {
@@ -437,6 +444,42 @@ export const ExecutiveReportsView = ({
                 Adapta el tono, métricas clave y recomendaciones según el stakeholder destinatario
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Selector de Período y Foco de Gestión Multisectorial */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              📅 Período Presupuestario &amp; Operativo:
+            </label>
+            <select
+              value={currentPeriod}
+              onChange={(e) => setCurrentPeriod(e.target.value)}
+              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+            >
+              <option value="2026-07">Presupuesto M7 - Julio 2026 (Demo)</option>
+              <option value="2026-08">Presupuesto M8 - Agosto 2026 (Demo)</option>
+              <option value="2026-09">Presupuesto M9 - Setiembre 2026 (Demo)</option>
+              <option value="2026-10">Presupuesto M10 - Octubre 2026 (Demo)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              🎯 Foco Primario de la Reunión / Minuta:
+            </label>
+            <select
+              value={analysisFocus}
+              onChange={(e) => setAnalysisFocus(e.target.value)}
+              className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+            >
+              <option value="all">Balance Integral (Finanzas, Ventas, WMS y 3PL)</option>
+              <option value="costs">Contención de Gastos &amp; Desvíos OPEX</option>
+              <option value="sales">Cumplimiento Comercial, Margen &amp; Pricing B2B</option>
+              <option value="stock">Riesgos de Quiebre de Inventario &amp; ROP (WMS)</option>
+              <option value="logistics">Tiempos de Entrega, Fletes &amp; Desempeño 3PL</option>
+            </select>
           </div>
         </div>
 

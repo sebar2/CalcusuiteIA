@@ -95,6 +95,9 @@ class ArbitrageService:
             logger.warning("Error consultando tags de Ollama: %s", e)
         return ["qwen2.5:7b", "qwen2.5:3b", "gemma4:latest", "llama3.2:latest"]
 
+    _TRANSLATION_CACHE: Dict[str, str] = {}
+    _SEMAPHORE = asyncio.Semaphore(3)
+
     @classmethod
     async def translate_to_b2b_query(
         cls, 
@@ -104,10 +107,15 @@ class ArbitrageService:
         """
         Transforma un título de producto minorista en español a un término técnico B2B
         de sourcing para Alibaba utilizando el modelo LLM local (Ollama).
+        Utiliza caché en memoria LRU para evitar peticiones redundantes.
         """
         clean_title = re.sub(r'[\r\n\t]+', ' ', spanish_title).strip()
         if not clean_title:
             return "OEM electronic wholesale"
+
+        # 1. Verificar si ya fue traducido previamente en caché
+        if clean_title in cls._TRANSLATION_CACHE:
+            return cls._TRANSLATION_CACHE[clean_title]
 
         # Heurística inicial para evitar latencia si no hay Ollama disponible
         fallback_query = re.sub(r'\b(para|de|con|en|y|el|la|los|las|un|una|del|al)\b', '', clean_title, flags=re.IGNORECASE)
@@ -143,11 +151,14 @@ class ArbitrageService:
                     ans_clean = re.sub(r'["\n\r`\']', ' ', ans_clean).strip()
                     ans_clean = " ".join(ans_clean.split()[:7])
                     if len(ans_clean) > 3 and not ans_clean.lower().startswith("here"):
+                        cls._TRANSLATION_CACHE[clean_title] = ans_clean
                         return ans_clean
         except Exception as err:
             logger.debug("Ollama translation fallback: %s", err)
 
-        return fallback_query or clean_title
+        res_fb = fallback_query or clean_title
+        cls._TRANSLATION_CACHE[clean_title] = res_fb
+        return res_fb
 
     @classmethod
     async def fetch_mlu_highlights_or_search(
@@ -461,23 +472,32 @@ class ArbitrageService:
             limit=limit
         )
 
-        # 2. Traducir y Construir Contraparte de Alibaba
+        # 2. Traducir y Construir Contraparte de Alibaba (Evitando peticiones redundantes a Ollama)
         processed_items: List[Dict[str, Any]] = []
-
-        # Recolectar títulos para traducir con Ollama
-        unique_titles = list({it["title"] for it in raw_items})
         translation_map: Dict[str, str] = {}
 
-        # Traducción por lotes con Ollama (hasta 25 concurrentes para máxima velocidad)
-        sample_to_translate = unique_titles[:25]
-        tasks = [cls.translate_to_b2b_query(t, ollama_model) for t in sample_to_translate]
-        translated_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for orig, res in zip(sample_to_translate, translated_results):
-            if isinstance(res, str) and res:
-                translation_map[orig] = res
+        # Identificar solo títulos que no tengan preset_english y no estén ya en la caché
+        titles_needing_translation = []
+        for it in raw_items:
+            t = it["title"]
+            if t in cls._TRANSLATION_CACHE:
+                translation_map[t] = cls._TRANSLATION_CACHE[t]
+            elif it.get("preset_english"):
+                translation_map[t] = it["preset_english"]
             else:
-                translation_map[orig] = orig
+                if t not in titles_needing_translation:
+                    titles_needing_translation.append(t)
+
+        # Traducir en lote controlado solo los necesarios (máx 5 simultáneos para no ahogar Ollama local)
+        sample_to_translate = titles_needing_translation[:5]
+        if sample_to_translate:
+            tasks = [cls.translate_to_b2b_query(t, ollama_model) for t in sample_to_translate]
+            translated_results = await asyncio.gather(*tasks, return_exceptions=True)
+            for orig, res in zip(sample_to_translate, translated_results):
+                if isinstance(res, str) and res:
+                    translation_map[orig] = res
+                else:
+                    translation_map[orig] = orig
 
         for rank, item in enumerate(raw_items, start=1):
             p_usd = float(item["price_usd"])

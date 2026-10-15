@@ -399,11 +399,11 @@ export const BudgetCommitmentsManager: React.FC<BudgetCommitmentsManagerProps> =
                   </td>
                 </tr>
               ) : (
-                commitments.map((c) => {
+                commitments.map((c, idx) => {
                   const isAlta = c.urgencia === 'ALTA';
                   const isCumplido = c.estado === 'CUMPLIDO';
                   return (
-                    <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <tr key={c.id ?? `commitment-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 max-w-[280px]">
                         <span className="font-bold text-slate-900 dark:text-slate-100 block">
                           {c.tarea}

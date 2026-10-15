@@ -74,6 +74,10 @@ class AuditLog(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True) # MOVE_STAGE, APPROVE_ORDER, AUTHORIZE_VARIANCE, etc.
     resource: Mapped[str] = mapped_column(String(150), nullable=False) # e.g. ordenes_reposicion/12
+    ip_address: Mapped[Optional[str]] = mapped_column(String(50), default="100.64.0.1", nullable=True) # Tailscale IP / LAN
+    ubicacion: Mapped[Optional[str]] = mapped_column(String(100), default="Montevideo (Tailscale VPN Node)", nullable=True)
+    evento_realizado: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    severidad: Mapped[str] = mapped_column(String(20), default="INFO", nullable=False) # INFO, WARNING, CRITICAL
     details: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 

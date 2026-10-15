@@ -14,6 +14,12 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.procurement import router as procurement_router, b2b_tenders_router
 from app.api.v1.suppliers import router as suppliers_catalog_router
 from app.api.v1.logistics import router as logistics_router, seed_logistics_demo
+from app.api.v1.security import router as security_router
+from app.api.v1.invoices import router as invoices_router
+from app.api.v1.accounting import router as accounting_router
+from app.api.v1.monitoring import router as monitoring_router
+from app.services.security_agent import security_agent
+from starlette.middleware.gzip import GZipMiddleware
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -30,6 +36,11 @@ async def lifespan(app: FastAPI):
         seed_logistics_demo(db)
     finally:
         db.close()
+    # Baseline ISO 27001: Ejecutar escaneo perimetral en arranque
+    try:
+        security_agent.run_perimeter_audit()
+    except Exception:
+        pass
     yield
     # Shutdown
 
@@ -42,6 +53,9 @@ app = FastAPI(
     openapi_url="/openapi.json",
     lifespan=lifespan
 )
+
+# Compresión dinámica Gzip/Brotli para reducción crítica de latencia en payloads grandes (>1KB)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Middleware CORS con soporte para Localhost, Tailscale VPN (100.x.y.z), Red LAN y Capacitor Mobile
 app.add_middleware(
@@ -67,11 +81,22 @@ app.add_middleware(
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
-# Controladores globales de excepciones
+def get_cors_headers(request: Request) -> dict:
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return headers
+
+# Controladores globales de excepciones con preservación de CORS
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
+        headers=get_cors_headers(request),
         content={
             "error": "HTTPException",
             "status_code": exc.status_code,
@@ -84,6 +109,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        headers=get_cors_headers(request),
         content={
             "error": "ValidationError",
             "status_code": status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -96,6 +122,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        headers=get_cors_headers(request),
         content={
             "error": "InternalServerError",
             "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -134,6 +161,10 @@ app.include_router(procurement_router)
 app.include_router(b2b_tenders_router)
 app.include_router(suppliers_catalog_router)
 app.include_router(logistics_router)
+app.include_router(security_router)
+app.include_router(invoices_router, prefix="/api/v1")
+app.include_router(accounting_router, prefix="/api/v1")
+app.include_router(monitoring_router, prefix="/api/v1")
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

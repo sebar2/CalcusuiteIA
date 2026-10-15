@@ -11,7 +11,11 @@ import {
   X,
   Edit2,
   Trash2,
+  Store,
+  Package,
+  Briefcase,
 } from 'lucide-react';
+import { KPICard } from '../../components/common/KPICard';
 import { logisticsApi } from '../../services/logisticsApi';
 import type { LogisticsClientItem, LogisticsPricing, LogisticsBranchItem } from '../../services/logisticsApi';
 
@@ -285,55 +289,43 @@ export const LogisticsClientsView: React.FC = () => {
         </button>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards Estandarizados */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Total Empresas 3PL
-          </span>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              {clients.length}
-            </span>
-            <span className="text-xs text-emerald-600 font-medium">Activas</span>
-          </div>
-        </div>
+        <KPICard
+          title="Total Empresas 3PL"
+          value={clients.length}
+          secondaryValue="Activas"
+          subtitle="Directorio centralizado de clientes"
+          icon={Building2}
+          variant="success"
+        />
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Grandes Superficies
-          </span>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-sky-600 dark:text-sky-400">
-              {totalSupermercados}
-            </span>
-            <span className="text-xs text-slate-400">Supermercados</span>
-          </div>
-        </div>
+        <KPICard
+          title="Grandes Superficies"
+          value={totalSupermercados}
+          secondaryValue="Supermercados"
+          subtitle="Cuentas retail de alta rotación"
+          icon={Store}
+          variant="info"
+        />
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            PyMEs & Distribuidores
-          </span>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-violet-600 dark:text-violet-400">
-              {totalPymes}
-            </span>
-            <span className="text-xs text-slate-400">Cuentas Clave</span>
-          </div>
-        </div>
+        <KPICard
+          title="PyMEs & Distribuidores"
+          value={totalPymes}
+          secondaryValue="Cuentas Clave"
+          subtitle="Contratos de distribución regional"
+          icon={Briefcase}
+          variant="purple"
+        />
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Bultos en Custodia
-          </span>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {totalBultosGlobal.toLocaleString()}
-            </span>
-            <span className="text-xs text-slate-400">Almacén Central</span>
-          </div>
-        </div>
+        <KPICard
+          title="Bultos en Custodia"
+          value={totalBultosGlobal.toLocaleString()}
+          secondaryValue="Almacén Central"
+          subtitle="Inventario total bajo gestión 3PL"
+          icon={Package}
+          variant="amber"
+        />
       </div>
 
       {/* Filters */}

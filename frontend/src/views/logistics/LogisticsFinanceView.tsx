@@ -9,7 +9,11 @@ import {
   Trash2,
   X,
   Lock,
+  Truck,
+  TrendingUp,
+  Receipt,
 } from 'lucide-react';
+import { KPICard } from '../../components/common/KPICard';
 import { logisticsApi } from '../../services/logisticsApi';
 import { getStoredUser } from '../../services/api';
 import type {
@@ -218,73 +222,44 @@ export const LogisticsFinanceView: React.FC = () => {
           {/* Main KPI Cards */}
           {ebitda && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Despachos & Kilometraje
-                </span>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                    {ebitda.total_viajes} viajes
-                  </span>
-                  <span className="text-xs text-sky-600 font-bold">
-                    {ebitda.total_km_recorridos.toFixed(1)} km
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">Acumulador total de rutas 3PL</p>
-              </div>
+              <KPICard
+                title="Despachos & Kilometraje"
+                value={`${ebitda.total_viajes} viajes`}
+                secondaryValue={`${ebitda.total_km_recorridos.toFixed(1)} km`}
+                subtitle="Acumulador total de rutas 3PL"
+                icon={Truck}
+                variant="info"
+              />
 
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Facturación Total Servicios
-                </span>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                    ${ebitda.ingresos_servicios_totales.toLocaleString()}
-                  </span>
-                  <span className="text-xs text-emerald-700 font-medium">Ingresos Brutos</span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">Almacenaje, VAS y Fletes</p>
-              </div>
+              <KPICard
+                title="Facturación Total Servicios"
+                value={`$${ebitda.ingresos_servicios_totales.toLocaleString()}`}
+                secondaryValue="Ingresos Brutos"
+                subtitle="Almacenaje, VAS y Fletes"
+                icon={CircleDollarSign}
+                variant="success"
+              />
 
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Costos Operativos Totales
-                </span>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span className="text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono">
-                    ${(ebitda.costos_fijos_totales + ebitda.costos_variables_operativos + ebitda.costos_directos_choferes).toLocaleString()}
-                  </span>
-                  <span className="text-xs text-rose-500 font-medium">Fijos + Var + Fleteros</span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Fijos: ${ebitda.costos_fijos_totales.toLocaleString()} | Variables: ${(ebitda.costos_variables_operativos + ebitda.costos_directos_choferes).toLocaleString()}
-                </p>
-              </div>
+              <KPICard
+                title="Costos Operativos Totales"
+                value={`$${(ebitda.costos_fijos_totales + ebitda.costos_variables_operativos + ebitda.costos_directos_choferes).toLocaleString()}`}
+                secondaryValue="Fijos + Var + Choferes"
+                subtitle={`Fijos: $${ebitda.costos_fijos_totales.toLocaleString()} | Variables: $${(ebitda.costos_variables_operativos + ebitda.costos_directos_choferes).toLocaleString()}`}
+                icon={Receipt}
+                variant="danger"
+              />
 
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  EBITDA Neto Operativo
-                </span>
-                <div className="mt-2 flex items-baseline justify-between">
-                  <span
-                    className={`text-2xl font-bold font-mono ${
-                      ebitda.ebitda_neto >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                    }`}
-                  >
-                    ${ebitda.ebitda_neto.toLocaleString()}
-                  </span>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      ebitda.ebitda_neto >= 0
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
-                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
-                    }`}
-                  >
-                    {ebitda.ebitda_pct.toFixed(1)}%
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">Beneficio antes de amortizaciones</p>
-              </div>
+              <KPICard
+                title="EBITDA Neto Operativo"
+                value={`$${ebitda.ebitda_neto.toLocaleString()}`}
+                subtitle="Beneficio antes de amortizaciones"
+                icon={TrendingUp}
+                variant={ebitda.ebitda_neto >= 0 ? 'success' : 'danger'}
+                badge={{
+                  text: `${ebitda.ebitda_pct.toFixed(1)}%`,
+                  variant: ebitda.ebitda_neto >= 0 ? 'success' : 'danger',
+                }}
+              />
             </div>
           )}
 

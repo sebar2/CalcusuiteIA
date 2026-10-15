@@ -324,10 +324,10 @@ export const CostCentersBudgetGrid: React.FC<CostCentersBudgetGridProps> = ({
         </div>
 
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {(report?.centros_costo || []).map((cc: CostCenterSummaryItem) => {
+          {(report?.centros_costo || []).map((cc: CostCenterSummaryItem, ccIdx: number) => {
             const isExpanded = !!expandedCC[cc.centro_costo_id];
             return (
-              <div key={cc.centro_costo_id} className="transition-colors">
+              <div key={cc.centro_costo_id ?? `cc-item-${ccIdx}`} className="transition-colors">
                 {/* Cabecera del Centro de Costo */}
                 <div
                   onClick={() => toggleExpand(cc.centro_costo_id)}
@@ -493,8 +493,8 @@ export const CostCentersBudgetGrid: React.FC<CostCentersBudgetGridProps> = ({
                   onChange={(e) => setSelectedCCId(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
                 >
-                  {costCenters.map((cc) => (
-                    <option key={cc.id} value={cc.id}>
+                  {costCenters.map((cc, idx) => (
+                    <option key={cc.id ?? `cc-opt-${idx}`} value={cc.id}>
                       {cc.codigo} - {cc.nombre}
                     </option>
                   ))}
@@ -624,8 +624,8 @@ export const CostCentersBudgetGrid: React.FC<CostCentersBudgetGridProps> = ({
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
                 >
                   <option value="">-- Sin área asignada --</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
+                  {areas.map((a, idx) => (
+                    <option key={a.id ?? `area-opt-${idx}`} value={a.id}>
                       {a.codigo} - {a.nombre}
                     </option>
                   ))}
@@ -651,8 +651,8 @@ export const CostCentersBudgetGrid: React.FC<CostCentersBudgetGridProps> = ({
                   <option value="">-- Seleccionar usuario gestor o escribir manual abajo --</option>
                   {users
                     .filter((u) => !newCCAreaId || u.area_id === Number(newCCAreaId))
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
+                    .map((u, idx) => (
+                      <option key={u.id ?? `usr-opt-${idx}`} value={u.id}>
                         {u.nombre} ({u.cargo || 'Responsable'})
                       </option>
                     ))}

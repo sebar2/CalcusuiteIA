@@ -37,6 +37,13 @@ const LogisticsTrackingView = lazy(() => import('./views/logistics/LogisticsTrac
 const LogisticsOrdersView = lazy(() => import('./views/logistics/LogisticsOrdersView').then(m => ({ default: m.LogisticsOrdersView })));
 const LogisticsFinanceView = lazy(() => import('./views/logistics/LogisticsFinanceView').then(m => ({ default: m.LogisticsFinanceView })));
 
+// NUEVOS MÓDULOS: FACTURACIÓN B2B, GASTOS & CONTABILIDAD, MONITOREO
+const InvoicesB2BView = lazy(() => import('./views/InvoicesB2BView').then(m => ({ default: m.InvoicesB2BView })));
+const AccountingLedgerView = lazy(() => import('./views/AccountingLedgerView').then(m => ({ default: m.AccountingLedgerView })));
+const MonitoringAuditView = lazy(() => import('./views/MonitoringAuditView').then(m => ({ default: m.MonitoringAuditView })));
+
+import { Lock } from 'lucide-react';
+
 const ViewLoading = () => (
   <div className="h-96 flex flex-col items-center justify-center space-y-3 text-slate-400">
     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -61,6 +68,18 @@ export function AppContent() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('auto');
   const [selectedSupplierForCatalogId, setSelectedSupplierForCatalogId] = useState<number | null>(null);
+  const [restrictedModules, setRestrictedModules] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiService.getSystemUsers().then((users) => {
+      const u = users.find(x => x.username === currentUser?.user_id || x.role === currentRole);
+      if (u && u.restricted_modules) {
+        setRestrictedModules(u.restricted_modules);
+      } else {
+        setRestrictedModules([]);
+      }
+    }).catch(() => {});
+  }, [currentUser, currentRole]);
 
   useEffect(() => {
     const handleLoginEvent = (e: Event) => {
@@ -318,6 +337,7 @@ export function AppContent() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         alertCount={alertCount}
         currentRole={currentRole}
+        restrictedModules={restrictedModules}
       />
 
       {/* 2. Main Wrapper */}
@@ -353,8 +373,31 @@ export function AppContent() {
         {/* Content Area con Padding del Header Fijo */}
         <main className="flex-1 mt-16 p-6 overflow-y-auto">
           <Suspense fallback={<ViewLoading />}>
-            {activeTab === 'control_room' && (
-              <ErrorBoundary fallbackTitle="Error al cargar Sala de Control">
+            {restrictedModules.includes(activeTab) ? (
+              <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/50 shadow-sm space-y-3 max-w-lg mx-auto mt-12 animate-in fade-in">
+                <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-800">
+                  <Lock size={26} />
+                </div>
+                <h3 className="font-bold text-base text-slate-800 dark:text-slate-100">
+                  Acceso Restringido por Política Corporativa
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Su usuario ({currentUser?.nombre || currentUser?.user_id || currentRole}) no tiene autorización para acceder al módulo <strong>{activeTab}</strong>.
+                  Para solicitar habilitación de permisos, comuníquese con el Controller General o con el Administrador de Monitoreo.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setActiveTab('control_room')}
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Volver a Sala de Control
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'control_room' && (
+                  <ErrorBoundary fallbackTitle="Error al cargar Sala de Control">
                 <ControlRoomView
                   inventory={inventory}
                   isLoading={isRefreshing}
@@ -569,6 +612,26 @@ export function AppContent() {
                   onUploadSuccess={loadBusinessData}
                 />
               </ErrorBoundary>
+            )}
+
+            {activeTab === 'invoices' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Facturación B2B">
+                <InvoicesB2BView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'accounting' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Libros Contables & Gastos">
+                <AccountingLedgerView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'monitoring' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Módulo de Monitoreo">
+                <MonitoringAuditView />
+              </ErrorBoundary>
+            )}
+              </>
             )}
           </Suspense>
         </main>

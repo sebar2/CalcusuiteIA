@@ -138,6 +138,7 @@ from app.domain.schemas import (
     WarehouseTransferPayload,
     WarehouseAssignStockPayload,
     WarehouseStockItem,
+    WarehouseBatchDetail,
     TenderLiveFeedResponse,
     TenderImportFeedRequest,
     TenderFeedSyncRequest,
@@ -3995,10 +3996,15 @@ def audit_commitments_ai(
     
     overrun_items = []
     for line in cost_centers_lines:
-        dif = float(line.monto_real - line.monto_presupuestado)
-        if dif > 0:
-            cc_nom = line.centro_costo.nombre if line.centro_costo else "Gasto General"
-            overrun_items.append((cc_nom, line.concepto_opex, dif))
+        try:
+            m_real = float(line.monto_real if line.monto_real is not None else 0.0)
+            m_pres = float(line.monto_presupuestado if line.monto_presupuestado is not None else 0.0)
+            dif = m_real - m_pres
+            if dif > 0:
+                cc_nom = line.centro_costo.nombre if (line.centro_costo and line.centro_costo.nombre) else "Gasto General"
+                overrun_items.append((cc_nom, line.concepto_opex or "Partida General", dif))
+        except Exception:
+            continue
     
     overrun_items.sort(key=lambda x: x[2], reverse=True)
     today = datetime.now(timezone.utc).date()

@@ -7,7 +7,10 @@ import {
   Lightbulb,
   Globe,
   BarChart2,
-  ShoppingBag
+  ShoppingBag,
+  Sparkles,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
@@ -49,6 +52,39 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
   const [evaluation, setEvaluation] = useState<InitiativeEvaluationResponse | null>(null);
   const [isEvaluating, setIsEvaluating] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Sugerencias de Iniciativas IA según Tendencias de Mercado
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [isLoadingAiSuggestions, setIsLoadingAiSuggestions] = useState<boolean>(false);
+  const [showAiModal, setShowAiModal] = useState<boolean>(false);
+
+  const fetchAiSuggestions = async () => {
+    setIsLoadingAiSuggestions(true);
+    setErrorMsg(null);
+    try {
+      const res = await apiService.getInitiativeAiSuggestions();
+      setAiSuggestions(res.sugerencias || []);
+      setShowAiModal(true);
+    } catch (err: any) {
+      console.error('Error fetching AI suggestions', err);
+      setErrorMsg('No se pudieron cargar sugerencias de IA con tendencias de mercado.');
+    } finally {
+      setIsLoadingAiSuggestions(false);
+    }
+  };
+
+  const applySuggestion = (s: any) => {
+    setInitiativeName(s.titulo);
+    setInitialInvestment(s.capex_estimado);
+    setFixedCosts(s.costos_fijos_mensuales);
+    setEstimatedUnitCost(s.costo_unitario);
+    setEstimatedUnitPrice(s.precio_target);
+    setExpectedDemand(s.volumen_mensual_estimado);
+    setCompetitorsNotes(
+      `Tendencia de mercado: ${s.tendencia_mercado}\nFuentes comprobables: ${s.fuentes_comprobables.join('; ')}\nJustificación: ${s.justificacion_retorno}`
+    );
+    setShowAiModal(false);
+  };
 
   const handleEvaluate = async () => {
     setIsEvaluating(true);
@@ -153,10 +189,23 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
         {activeSubTab === 'capex_standalone' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in">
             <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span>Parámetros del Business Case</span>
-                <span className="text-[11px] text-[#00a2e8] font-normal">Inversión &amp; Proyección</span>
-              </h3>
+              <div className="pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">
+                    Parámetros del Business Case
+                  </h3>
+                  <span className="text-[11px] text-[#00a2e8] font-normal">Inversión &amp; Proyección</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchAiSuggestions}
+                  disabled={isLoadingAiSuggestions}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles size={13} className={isLoadingAiSuggestions ? 'animate-spin' : ''} />
+                  <span>{isLoadingAiSuggestions ? 'Buscando Tendencias...' : 'Sugerir con Tendencias IA'}</span>
+                </button>
+              </div>
 
               {errorMsg && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-300">
@@ -337,6 +386,90 @@ export const InitiativesEvaluatorView: React.FC<InitiativesEvaluatorViewProps> =
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: Sugerencias de Iniciativas de Mercado con IA */}
+        {showAiModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-sky-50/80 via-white to-indigo-50/80 dark:from-slate-900 dark:to-slate-900">
+                <div className="flex items-center space-x-2.5">
+                  <span className="p-2 bg-[#00a2e8]/10 text-[#00a2e8] rounded-xl">
+                    <Sparkles size={20} />
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                      Iniciativas Recomendadas por IA (Tendencias &amp; Costos Reales)
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Basado en compras públicas de Uruguay (ARCE), importaciones aduaneras y retail regional 2026.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAiModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-4">
+                {aiSuggestions.map((sug, idx) => (
+                  <div
+                    key={`ai-sug-${idx}`}
+                    className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-[#00a2e8] transition-all space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/80 text-[#00a2e8] text-[10px] font-bold uppercase tracking-wider">
+                          {sug.categoria}
+                        </span>
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 mt-1">
+                          {sug.titulo}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => applySuggestion(sug)}
+                        className="px-3 py-1.5 bg-[#00a2e8] hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center space-x-1 cursor-pointer shrink-0"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>Aplicar a este Business Case</span>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      <strong>Tendencia de Mercado:</strong> {sug.tendencia_mercado}
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block font-sans">CAPEX Inicial</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100">${sug.capex_estimado.toLocaleString()}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block font-sans">Costo Unitario</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-100">${sug.costo_unitario}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block font-sans">Precio Target</span>
+                        <span className="font-bold text-[#00a2e8]">${sug.precio_target}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block font-sans">Demanda/Mes</span>
+                        <span className="font-bold text-emerald-600">{sug.volumen_mensual_estimado} un</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-800/80">
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">Fuentes Comprobables: </span>
+                      {sug.fuentes_comprobables.join(' • ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
