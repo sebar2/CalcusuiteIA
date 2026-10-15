@@ -1535,6 +1535,8 @@ export const apiService = {
     nombre_completo: string;
     puesto: string;
     role?: string;
+    password?: string;
+    send_email?: boolean;
     restricted_modules?: string[];
     activo?: boolean;
   }): Promise<{ success: boolean; message: string; user_id: number; restricted_modules: string[] }> {
@@ -1545,10 +1547,17 @@ export const apiService = {
   async updateUserPermissions(userId: number, payload: {
     puesto?: string;
     role?: string;
+    password?: string;
+    send_email?: boolean;
     restricted_modules?: string[];
     activo?: boolean;
   }): Promise<{ success: boolean; message: string; restricted_modules: string[] }> {
     const res = await apiClient.put(`/api/v1/monitoring/users/${userId}/permissions`, payload);
+    return res.data;
+  },
+
+  async sendUserCredentials(userId: number, password?: string): Promise<{ success: boolean; email: string; password: string; notified: boolean; message: string }> {
+    const res = await apiClient.post(`/api/v1/monitoring/users/${userId}/send-credentials`, password ? { password } : {});
     return res.data;
   },
 

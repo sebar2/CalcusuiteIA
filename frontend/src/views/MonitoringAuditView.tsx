@@ -19,7 +19,12 @@ import {
   TrendingUp,
   Package,
   CreditCard,
-  Building2
+  Building2,
+  Mail,
+  Lock,
+  Key,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { AuditLogItem, SystemUserItem, DashboardMetricsResponse } from '../types';
@@ -100,11 +105,43 @@ export const MonitoringAuditView: React.FC = () => {
     username: '',
     email: '',
     nombre_completo: '',
+    password: '',
+    send_email: true,
     puesto: 'Ejecutivo de Cuentas B2B',
     role: 'analista_comercial',
     restricted_modules: [] as string[],
     activo: true,
   });
+  const [editPassword, setEditPassword] = useState('');
+  const [editSendEmail, setEditSendEmail] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [userToast, setUserToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
+    let pwd = 'Calcu-';
+    for (let i = 0; i < 6; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pwd;
+  };
+
+  const handleSendCredentials = async (u: SystemUserItem) => {
+    try {
+      const res = await apiService.sendUserCredentials(u.id);
+      setUserToast({
+        type: 'success',
+        message: `Credenciales notificadas a ${u.email}. Clave: ${res.password}`
+      });
+      setTimeout(() => setUserToast(null), 6000);
+    } catch (err: any) {
+      setUserToast({
+        type: 'error',
+        message: err?.response?.data?.detail || 'Error al enviar credenciales por correo'
+      });
+      setTimeout(() => setUserToast(null), 5000);
+    }
+  };
 
   // Carga de Datos
   const fetchAuditLogs = async () => {
@@ -231,12 +268,23 @@ export const MonitoringAuditView: React.FC = () => {
     setIsSubmittingUser(true);
     setUserFormError(null);
     try {
-      await apiService.createSystemUser(userForm);
+      const finalPassword = userForm.password.trim() || generateRandomPassword();
+      await apiService.createSystemUser({
+        ...userForm,
+        password: finalPassword
+      });
       setShowCreateUserModal(false);
+      setUserToast({
+        type: 'success',
+        message: `Usuario @${userForm.username} creado exitosamente. Clave: ${finalPassword}${userForm.send_email ? ' (notificado al correo)' : ''}`
+      });
+      setTimeout(() => setUserToast(null), 6000);
       setUserForm({
         username: '',
         email: '',
         nombre_completo: '',
+        password: '',
+        send_email: true,
         puesto: 'Ejecutivo de Cuentas B2B',
         role: 'analista_comercial',
         restricted_modules: [],
@@ -259,10 +307,19 @@ export const MonitoringAuditView: React.FC = () => {
       await apiService.updateUserPermissions(editingUser.id, {
         puesto: editingUser.puesto,
         role: editingUser.role,
+        password: editPassword.trim() || undefined,
+        send_email: editSendEmail,
         restricted_modules: editingUser.restricted_modules,
         activo: editingUser.activo
       });
+      setUserToast({
+        type: 'success',
+        message: `Permisos actualizados para @${editingUser.username}.${editPassword.trim() ? ' Nueva clave asignada.' : ''}`
+      });
+      setTimeout(() => setUserToast(null), 5000);
       setEditingUser(null);
+      setEditPassword('');
+      setEditSendEmail(false);
       fetchUsers();
     } catch (err: any) {
       setUserFormError(err.response?.data?.detail || err.message || 'Error al actualizar permisos');
@@ -329,6 +386,22 @@ export const MonitoringAuditView: React.FC = () => {
   return (
     <ErrorBoundary>
       <div className="space-y-6 animate-in fade-in duration-200">
+        {userToast && (
+          <div className={`p-3.5 rounded-2xl flex items-center justify-between border shadow-sm transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${
+            userToast.type === 'success' 
+              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200' 
+              : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+          }`}>
+            <div className="flex items-center space-x-2.5">
+              <CheckCircle2 size={18} className={userToast.type === 'success' ? 'text-emerald-600' : 'text-rose-600'} />
+              <span className="text-xs font-semibold">{userToast.message}</span>
+            </div>
+            <button onClick={() => setUserToast(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
         {/* Cabecera Principal */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-5">
           <div className="flex items-center space-x-3">
@@ -974,13 +1047,27 @@ export const MonitoringAuditView: React.FC = () => {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => setEditingUser(u)}
-                    className="w-full mt-2 py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer transition-colors"
-                  >
-                    <Edit3 size={13} />
-                    <span>Editar Permisos &amp; Blacklist</span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        setEditingUser(u);
+                        setEditPassword('');
+                        setEditSendEmail(false);
+                      }}
+                      className="py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                    >
+                      <Edit3 size={13} />
+                      <span>Editar</span>
+                    </button>
+                    <button
+                      onClick={() => handleSendCredentials(u)}
+                      className="py-1.5 px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer transition-colors"
+                      title="Notificar o reenviar credenciales al email corporativo"
+                    >
+                      <Mail size={13} />
+                      <span>Enviar Clave</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1040,6 +1127,49 @@ export const MonitoringAuditView: React.FC = () => {
                     onChange={(e) => setUserForm({ ...userForm, nombre_completo: e.target.value })}
                     className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-slate-800 dark:text-slate-100"
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-1">
+                      <Lock size={12} className="text-indigo-500" />
+                      <span>Contraseña de Acceso</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setUserForm({ ...userForm, password: generateRandomPassword() })}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-bold underline cursor-pointer"
+                    >
+                      Generar Clave Aleatoria
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Dejar vacío para autogenerar o escribir una..."
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 pr-9 font-mono text-slate-800 dark:text-slate-100 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  <label className="mt-2 flex items-center space-x-2 cursor-pointer bg-slate-50 dark:bg-slate-800/40 p-2 rounded-lg border border-slate-200/60 dark:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={userForm.send_email}
+                      onChange={(e) => setUserForm({ ...userForm, send_email: e.target.checked })}
+                      className="rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Notificar credenciales de acceso automáticamente por correo a <span className="font-mono font-semibold">{userForm.email || 'la casilla indicada'}</span>
+                    </span>
+                  </label>
                 </div>
 
                 <div>
@@ -1122,6 +1252,51 @@ export const MonitoringAuditView: React.FC = () => {
                       <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center space-x-1">
+                      <Key size={12} className="text-amber-500" />
+                      <span>Cambiar Contraseña (Opcional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setEditPassword(generateRandomPassword())}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-bold underline cursor-pointer"
+                    >
+                      Generar Clave
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Dejar en blanco para mantener la actual..."
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 pr-9 font-mono text-slate-800 dark:text-slate-100 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  {editPassword.trim() && (
+                    <label className="mt-2 flex items-center space-x-2 cursor-pointer bg-slate-50 dark:bg-slate-800/40 p-2 rounded-lg border border-slate-200/60 dark:border-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={editSendEmail}
+                        onChange={(e) => setEditSendEmail(e.target.checked)}
+                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                        Enviar nueva clave por correo a <span className="font-mono font-semibold">{editingUser.email}</span>
+                      </span>
+                    </label>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">

@@ -11,13 +11,11 @@ import {
   Zap,
   Activity,
   Shield,
-  User,
   LogOut,
-  Key,
   Check,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import api, { apiService, getStoredUser, login as apiLogin, logout as apiLogout } from '../../services/api';
+import api, { apiService, getStoredUser, logout as apiLogout } from '../../services/api';
 import type { StoredUser } from '../../services/api';
 import type { EngineMode, OllamaStatus, OllamaModelItem } from '../../types';
 
@@ -79,10 +77,9 @@ export const TopHeader = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Estado de Autenticación JWT y Switcher de Usuarios Demo
+  // Estado de Autenticación JWT
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
   const [isAuthMenuOpen, setIsAuthMenuOpen] = useState<boolean>(false);
-  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   useEffect(() => {
     const handleLoginEvent = (e: Event) => {
@@ -105,20 +102,6 @@ export const TopHeader = ({
       window.removeEventListener('calcu:auth:logout', handleLogoutEvent);
     };
   }, [onRoleChange]);
-
-  const handleQuickLogin = async (username: string, pass: string) => {
-    setIsLoggingIn(true);
-    try {
-      const user = await apiLogin(username, pass);
-      setCurrentUser(user);
-      if (onRoleChange) onRoleChange(user.role);
-      setIsAuthMenuOpen(false);
-    } catch (err) {
-      console.error('Error en autenticación rápida:', err);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleLogout = () => {
     apiLogout();
@@ -444,59 +427,34 @@ export const TopHeader = ({
                 </span>
               </div>
 
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
-                  Acceso Rápido Demo (1-Clic)
-                </p>
-
-                <button
-                  onClick={() => handleQuickLogin('admin', 'admin123')}
-                  disabled={isLoggingIn}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/40 text-slate-700 dark:text-slate-200 hover:text-purple-700 dark:hover:text-purple-300"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Shield size={14} className="text-purple-500" />
-                    <span>Controller Admin</span>
+              <div className="space-y-2.5">
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                    Sesión Activa
+                  </span>
+                  <div className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                    {currentUser?.nombre || currentUser?.user_id || 'Sebastian Rodriguez'}
                   </div>
-                  <span className="text-[10px] text-slate-400">admin123</span>
-                </button>
-
-                <button
-                  onClick={() => handleQuickLogin('operaciones', 'ops123')}
-                  disabled={isLoggingIn}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-700 dark:text-slate-200 hover:text-[#00a2e8] dark:hover:text-sky-300"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Key size={14} className="text-[#00a2e8]" />
-                    <span>Analista Operaciones</span>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                    @{currentUser?.user_id || 'seba'}
                   </div>
-                  <span className="text-[10px] text-slate-400">ops123</span>
-                </button>
+                </div>
 
-                <button
-                  onClick={() => handleQuickLogin('comercial', 'com123')}
-                  disabled={isLoggingIn}
-                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300"
-                >
-                  <div className="flex items-center space-x-2">
-                    <User size={14} className="text-emerald-500" />
-                    <span>Analista Comercial</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">com123</span>
-                </button>
+                <div className="flex items-center space-x-1.5 px-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Shield size={12} />
+                  <span>Auditoría ISO 27001 Activa</span>
+                </div>
               </div>
 
-              {currentUser && (
-                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center space-x-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                  >
-                    <LogOut size={13} />
-                    <span>Cerrar Sesión / Cambiar Rol</span>
-                  </button>
-                </div>
-              )}
+              <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                >
+                  <LogOut size={13} />
+                  <span>Cerrar Sesión</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

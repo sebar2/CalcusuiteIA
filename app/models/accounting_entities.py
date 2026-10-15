@@ -148,6 +148,7 @@ class SystemUser(Base):
     role: Mapped[str] = mapped_column(String(50), default="operaciones", nullable=False)
     restricted_modules: Mapped[Optional[Any]] = mapped_column(JSON, default=list, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

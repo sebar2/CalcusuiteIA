@@ -25,12 +25,16 @@ class UserCreateSchema(BaseModel):
     nombre_completo: str
     puesto: str
     role: Optional[str] = "operaciones"
+    password: Optional[str] = None
+    send_email: Optional[bool] = False
     restricted_modules: Optional[List[str]] = None
     activo: bool = True
 
 class UserUpdatePermissionsSchema(BaseModel):
     puesto: Optional[str] = None
     role: Optional[str] = None
+    password: Optional[str] = None
+    send_email: Optional[bool] = False
     restricted_modules: Optional[List[str]] = None
     activo: Optional[bool] = None
 
@@ -140,6 +144,37 @@ def toggle_user_active(user_id: int, db: Session = Depends(get_db)):
     user.activo = not user.activo
     db.commit()
     return {"success": True, "activo": user.activo, "message": f"Usuario '{user.username}' {'activado' if user.activo else 'desactivado'}"}
+
+@router.post("/users/{user_id}/send-credentials", response_model=Dict[str, Any])
+def send_user_credentials(user_id: int, payload: Optional[Dict[str, Any]] = None, db: Session = Depends(get_db)):
+    """Genera o reenvía credenciales de acceso seguras por correo al usuario corporativo."""
+    from app.models.accounting_entities import SystemUser
+    from app.services.monitoring_service import send_credentials_notification, hash_password
+    import secrets
+
+    user = db.query(SystemUser).filter(SystemUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    pwd = (payload and payload.get("password")) or f"Calcu-{secrets.token_hex(3).upper()}"
+    user.password_hash = hash_password(pwd)
+    db.commit()
+
+    sent = send_credentials_notification(
+        email=user.email,
+        username=user.username,
+        password=pwd,
+        nombre=user.nombre_completo,
+        role=user.role
+    )
+
+    return {
+        "success": True,
+        "email": user.email,
+        "password": pwd,
+        "notified": sent,
+        "message": f"Credenciales enviadas a {user.email}"
+    }
 
 class AICopilotQuerySchema(BaseModel):
     prompt: str

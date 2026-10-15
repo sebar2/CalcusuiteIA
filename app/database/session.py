@@ -177,6 +177,10 @@ def sync_table_columns(conn):
     add_col_if_missing("invoices", "orden_compra_ref", "VARCHAR(50)")
     add_col_if_missing("invoices", "factura_referencia_id", "INTEGER")
 
+    # 7.5. Usuarios del Sistema & Contraseñas
+    add_col_if_missing("system_users", "password_hash", "VARCHAR(255)")
+
+
 
     # 8. Semilla de Proveedores Uruguay y Servicios Implícitos si la tabla existe
     if "suppliers" in existing_tables:

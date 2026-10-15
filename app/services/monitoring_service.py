@@ -1,4 +1,9 @@
 import logging
+import os
+import hashlib
+import secrets
+import smtplib
+from email.mime.text import MIMEText
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -8,6 +13,73 @@ from app.domain.models import AuditLog
 from app.models.accounting_entities import SystemUser
 
 logger = logging.getLogger(__name__)
+
+def hash_password(plain_password: str) -> str:
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("utf-8"), 100000)
+    return f"pbkdf2:sha256:100000${salt}${key.hex()}"
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if not hashed_password or not plain_password:
+        return False
+    try:
+        parts = hashed_password.split("$")
+        if len(parts) != 3 or not parts[0].startswith("pbkdf2:sha256"):
+            return False
+        salt = parts[1]
+        stored_hash = parts[2]
+        new_key = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt.encode("utf-8"), 100000)
+        return secrets.compare_digest(new_key.hex(), stored_hash)
+    except Exception:
+        return False
+
+def send_credentials_notification(email: str, username: str, password: str, nombre: str, role: str) -> bool:
+    """
+    Envía notificación de credenciales por email al usuario o simula el despacho seguro
+    registrándolo en los logs del sistema.
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", "seguridad@calcu.com.uy")
+
+    subject = f"🔐 Credenciales de Acceso - Suite Calcu ERP ({username})"
+    body = f"""Hola {nombre},
+
+Se han configurado tus credenciales de acceso a la plataforma Calcu ERP & 3PL Logística:
+
+- Portal: https://calcu.local / Tailscale VPN
+- Usuario / Email: {username} ({email})
+- Contraseña temporal / asignada: {password}
+- Rol en el sistema: {role}
+
+Por favor cambia tu contraseña una vez ingreses al sistema.
+Seguridad de la Información & Auditoría ISO 27001 - Calcu Suite
+"""
+
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            msg = MIMEText(body, "plain", "utf-8")
+            msg["Subject"] = subject
+            msg["From"] = smtp_from
+            msg["To"] = email
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            logger.info("Credenciales enviadas por email a %s vía SMTP", email)
+            return True
+        except Exception as e:
+            logger.warning("Fallo al enviar email real vía SMTP a %s: %s", email, e)
+            return False
+    else:
+        logger.info(
+            "SIMULACIÓN EMAIL CREDENCIALES: Notificación despachada para %s <%s>. Usuario: %s, Clave: %s, Rol: %s",
+            nombre, email, username, password, role
+        )
+        return True
+
 
 # Presets de puestos corporativos con módulos restringidos sugeridos
 POSITION_PRESETS = {
@@ -114,11 +186,13 @@ class MonitoringService:
 
     @staticmethod
     def create_user(db: Session, data: Dict[str, Any], created_by: str = "controller_admin") -> SystemUser:
-        """Crea un nuevo usuario del sistema con su rol y módulos restringidos."""
+        """Crea un nuevo usuario del sistema con su rol, contraseña y módulos restringidos."""
         username = data.get("username", "").strip()
         email = data.get("email", "").strip()
         nombre = data.get("nombre_completo", "").strip()
         puesto = data.get("puesto", "Operador de Sistema").strip()
+        raw_password = data.get("password", "").strip() if data.get("password") else None
+        send_email = data.get("send_email", False)
         
         # Si no se definieron módulos restringidos manualmente, aplicar preset según puesto
         restricted = data.get("restricted_modules")
@@ -129,18 +203,31 @@ class MonitoringService:
             role = data.get("role", "operaciones")
             restricted = restricted or []
 
+        pwd_hash = hash_password(raw_password) if raw_password else None
+
         user = SystemUser(
             username=username,
             email=email,
             nombre_completo=nombre,
             puesto=puesto,
             role=role,
+            password_hash=pwd_hash,
             restricted_modules=restricted,
             activo=data.get("activo", True),
             created_at=datetime.now(timezone.utc)
         )
         db.add(user)
         db.flush()
+
+        # Si se solicitó notificar por email
+        if send_email and raw_password and email:
+            send_credentials_notification(
+                email=email,
+                username=username,
+                password=raw_password,
+                nombre=nombre,
+                role=role
+            )
 
         # Registrar en auditoría
         MonitoringService.log_activity(
@@ -149,13 +236,14 @@ class MonitoringService:
             role="controller_admin",
             action="CREAR_USUARIO",
             resource=f"system_users/{user.id}",
-            evento_realizado=f"Creación del usuario '{user.username}' ({user.puesto}) con {len(restricted)} módulos restringidos",
+            evento_realizado=f"Creación del usuario '{user.username}' ({user.puesto}) con credenciales de acceso",
             severidad="INFO",
             details={
                 "username": user.username,
                 "email": user.email,
                 "puesto": user.puesto,
                 "role": user.role,
+                "notificado_email": send_email,
                 "restricted_modules": restricted
             }
         )
@@ -165,7 +253,7 @@ class MonitoringService:
 
     @staticmethod
     def update_user_permissions(db: Session, user_id: int, data: Dict[str, Any], updated_by: str = "controller_admin") -> Optional[SystemUser]:
-        """Modifica los permisos, puesto o módulos restringidos de un usuario."""
+        """Modifica los permisos, contraseña, puesto o módulos restringidos de un usuario."""
         user = db.query(SystemUser).filter(SystemUser.id == user_id).first()
         if not user:
             return None
@@ -179,6 +267,18 @@ class MonitoringService:
             user.role = data["role"]
         if "activo" in data:
             user.activo = data["activo"]
+
+        raw_pwd = data.get("password")
+        if raw_pwd and str(raw_pwd).strip():
+            user.password_hash = hash_password(str(raw_pwd).strip())
+            if data.get("send_email", False) and user.email:
+                send_credentials_notification(
+                    email=user.email,
+                    username=user.username,
+                    password=str(raw_pwd).strip(),
+                    nombre=user.nombre_completo,
+                    role=user.role
+                )
 
         # Auditoría de cambio de permisos
         MonitoringService.log_activity(
@@ -202,18 +302,22 @@ class MonitoringService:
 
     @staticmethod
     def seed_default_users(db: Session):
-        """Siembra la plantilla inicial de usuarios corporativos con sus roles y restricciones."""
+        """Siembra la plantilla inicial de usuarios corporativos con sus roles, contraseñas y restricciones."""
         initial_users = [
-            ("valentina.rossi", "vrossi@calcu.com.uy", "Lic. Valentina Rossi", "CEO / Directora General", "controller_admin", []),
-            ("matias.fernandez", "mfernandez@calcu.com.uy", "Cr. Matías Fernández", "CFO / Director de Finanzas", "controller_admin", []),
-            ("lucia.benitez", "lbenitez@calcu.com.uy", "Ing. Lucía Benítez", "Gerente Comercial B2B", "comercial", ["monitoring", "accounting"]),
-            ("rodrigo.mendez", "rmendez@calcu.com.uy", "Rodrigo Méndez", "Jefe de Depósito & WMS", "operaciones", ["monitoring", "accounting", "variance", "pricing"]),
-            ("carlos.techera", "ctechera@calcu.com.uy", "Carlos Techera", "Supervisor Logístico 3PL", "admin_3pl", ["monitoring", "accounting", "variance", "crm"]),
-            ("gabriel.silva", "gsilva@calcu.com.uy", "Ing. Gabriel Silva", "Auditor de Seguridad ISO 27001", "controller_admin", []),
+            ("valentina.rossi", "vrossi@calcu.com.uy", "Lic. Valentina Rossi", "CEO / Directora General", "controller_admin", [], "admin123"),
+            ("matias.fernandez", "mfernandez@calcu.com.uy", "Cr. Matías Fernández", "CFO / Director de Finanzas", "controller_admin", [], "admin123"),
+            ("lucia.benitez", "lbenitez@calcu.com.uy", "Ing. Lucía Benítez", "Gerente Comercial B2B", "comercial", ["monitoring", "accounting"], "com123"),
+            ("rodrigo.mendez", "rmendez@calcu.com.uy", "Rodrigo Méndez", "Jefe de Depósito & WMS", "operaciones", ["monitoring", "accounting", "variance", "pricing"], "ops123"),
+            ("carlos.techera", "ctechera@calcu.com.uy", "Carlos Techera", "Supervisor Logístico 3PL", "admin_3pl", ["monitoring", "accounting", "variance", "crm"], "admin3pl123"),
+            ("gabriel.silva", "gsilva@calcu.com.uy", "Ing. Gabriel Silva", "Auditor de Seguridad ISO 27001", "controller_admin", [], "admin123"),
+            ("seba", "sebar_2@hotmail.com", "Sebastian Rodriguez", "Controller General & Propietario", "controller_admin", [], "bato1420"),
         ]
 
-        for u, em, nom, pst, rol, rest in initial_users:
-            exists = db.query(SystemUser).filter(SystemUser.username == u).first()
+        for item in initial_users:
+            u, em, nom, pst, rol, rest, default_pwd = item
+            exists = db.query(SystemUser).filter(
+                (SystemUser.username == u) | (SystemUser.email == em)
+            ).first()
             if not exists:
                 db.add(SystemUser(
                     username=u,
@@ -221,10 +325,18 @@ class MonitoringService:
                     nombre_completo=nom,
                     puesto=pst,
                     role=rol,
+                    password_hash=hash_password(default_pwd),
                     restricted_modules=rest,
                     activo=True,
                     created_at=datetime.now(timezone.utc)
                 ))
+            else:
+                if not exists.password_hash:
+                    exists.password_hash = hash_password(default_pwd)
+                if exists.username.lower() in {"seba", "sebastian"}:
+                    exists.role = "controller_admin"
+                    exists.activo = True
+        db.commit()
 
         # Si no hay logs de auditoría, sembrar eventos de inicio
         logs_count = db.query(func.count(AuditLog.id)).scalar() or 0
