@@ -78,7 +78,16 @@ def get_authorized_users() -> Dict[str, Dict[str, Any]]:
     conductor_3pl_user = os.getenv("CALCU_3PL_CHOFER_USER", "conductor_3pl").strip().lower()
     conductor_3pl_pass = os.getenv("CALCU_3PL_CHOFER_PASSWORD", "chofer123")
 
+    demo_user = os.getenv("CALCU_DEMO_USER", "demo").strip().lower()
+    demo_pass = os.getenv("CALCU_DEMO_PASSWORD", "demo123")
+
     return {
+        demo_user: {
+            "password": demo_pass,
+            "role": ROLE_CONTROLLER_ADMIN,
+            "name": "Usuario Demo (Sandbox Aislado)",
+            "driver_id": None
+        },
         admin_user: {
             "password": admin_pass,
             "role": ROLE_CONTROLLER_ADMIN,

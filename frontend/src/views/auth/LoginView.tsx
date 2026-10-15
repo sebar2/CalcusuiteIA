@@ -303,7 +303,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={authMode === '3pl' ? 'admin_3pl, operario_3pl, conductor_3pl' : 'admin, operaciones, comercial'}
+                    placeholder="Usuario asignado o 'demo'"
                     disabled={isLoading}
                     className="w-full bg-slate-950/70 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#00a2e8] focus:ring-1 focus:ring-[#00a2e8] transition-all"
                   />
@@ -356,6 +356,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Para resguardar la confidencialidad de la información financiera y operativa, el acceso requiere autenticación obligatoria. Cada evento de inicio de sesión queda registrado en el historial inmutable de auditoría.
                 </p>
+              </div>
+
+              {/* Acceso Evaluador Sandbox Aislado */}
+              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-800/40 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-cyan-200">Acceso Evaluador / Modo Demo</div>
+                  <div className="text-[11px] text-slate-300">
+                    Usuario: <span className="text-cyan-400 font-mono font-bold">demo</span> &bull; Clave: <span className="text-cyan-400 font-mono font-bold">demo123</span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  Sandbox Aislado
+                </span>
               </div>
 
               {/* Asistencia con Credenciales & Soporte */}

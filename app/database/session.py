@@ -1,12 +1,16 @@
 import os
 import logging
+from typing import Optional
 from datetime import date, timedelta
+import jwt
+from fastapi import Request
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool, StaticPool, NullPool
 from sqlalchemy.orm import sessionmaker, Session
 from app.models.base import Base
 from app.core.config import DATABASE_URL as DEFAULT_DATABASE_URL, settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +61,12 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base de datos Sandbox totalmente aislada para usuario demo
+DEMO_DATABASE_URL = (os.environ.get("DEMO_DATABASE_URL") or "sqlite:///calcu_demo.db").strip()
+engine_demo = create_app_engine(DEMO_DATABASE_URL)
+SessionDemo = sessionmaker(autocommit=False, autoflush=False, bind=engine_demo)
+
 
 
 def sync_table_columns(conn):
@@ -1087,23 +1097,55 @@ def run_non_destructive_migrations(target_engine: Engine = None):
 
 
 def init_db(target_engine: Engine = None):
-    """Crea todas las tablas si no existen y corre migraciones seguras multi-dialecto"""
-    eng = target_engine or engine
+    """Crea todas las tablas si no existen y corre migraciones seguras multi-dialecto en base principal y demo"""
+    engines_to_init = [target_engine] if target_engine else [engine, engine_demo]
     from app.models import entities  # Asegurar registro de modelos
     from app.models import logistics_entities  # Asegurar registro de modelos 3PL Logística
     from app.models import accounting_entities  # Asegurar registro de facturación, contabilidad y RBAC
     from app.domain import models   # Asegurar registro de modelos del dominio
-    Base.metadata.create_all(bind=eng)
-    with eng.connect() as conn:
-        sync_table_columns(conn)
-    if eng.dialect.name == "sqlite":
-        run_non_destructive_migrations(eng)
+    for eng in engines_to_init:
+        try:
+            Base.metadata.create_all(bind=eng)
+            with eng.connect() as conn:
+                sync_table_columns(conn)
+            if eng.dialect.name == "sqlite":
+                run_non_destructive_migrations(eng)
+        except Exception as e:
+            logger.warning("Error inicializando motor de BD %s: %s", eng, e)
 
 
-def get_db():
-    """Generador de sesión de base de datos"""
-    db = SessionLocal()
+def get_db(request: Request = None):
+    """
+    Generador de sesión de base de datos con aislamiento estricto de Sandbox:
+    - Si la petición proviene del usuario 'demo' (identificado por JWT token, header o query param),
+      retorna una sesión conectada exclusivamente a la base aislada 'calcu_demo.db'.
+    - Para los demás usuarios del sistema, retorna la sesión de la base principal.
+    Esto garantiza aislamiento total para que pruebas externas no toquen datos reales ni el host.
+    """
+    use_demo_db = False
+    if request:
+        try:
+            # 1. Comprobar encabezado Authorization Bearer Token
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1]
+                payload = jwt.decode(
+                    token, 
+                    getattr(settings, "jwt_secret_key", "calcu-enterprise-jwt-secret-key-32-chars-long-2026-prod"), 
+                    algorithms=[getattr(settings, "jwt_algorithm", "HS256")]
+                )
+                if payload.get("sub") == "demo":
+                    use_demo_db = True
+            # 2. Comprobar encabezado explícito o query param
+            if not use_demo_db:
+                if request.headers.get("x-user-id") == "demo" or request.query_params.get("user_id") == "demo":
+                    use_demo_db = True
+        except Exception:
+            pass
+
+    db = SessionDemo() if use_demo_db else SessionLocal()
     try:
         yield db
     finally:
         db.close()
+

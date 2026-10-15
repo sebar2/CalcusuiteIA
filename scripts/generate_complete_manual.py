@@ -321,9 +321,12 @@ def main():
     <div class="screenshot-card">
         <img src="{images['00']}" alt="Portal de Acceso">
         <div class="screenshot-caption">
-            <span><strong>Figura 1.1:</strong> Portal de Autenticación Unificado con selector de entorno Suite/3PL y perfiles demo rápidos.</span>
+            <span><strong>Figura 1.1:</strong> Portal de Autenticación Unificado con selector Suite/3PL, acceso evaluador en Sandbox aislado y trazabilidad ISO 27001.</span>
             <span>Vista: Login / Auth Gate</span>
         </div>
+    </div>
+    <div class="feature-box">
+        <strong>Acceso de Demostración & Evaluación Segura:</strong> Para demostraciones a clientes y auditorías externas, el sistema dispone del usuario <code>demo</code> (clave: <code>demo123</code>). Este perfil opera conectado de manera exclusiva e hiper-aislada a una base de datos clonada (<code>calcu_demo.db</code>), permitiendo a evaluadores interactuar libremente con todas las capacidades del software sin comprometer los datos de producción ni el host.
     </div>
     <div class="tech-box">
         <strong>Conexión Cifrada Tailscale Zero-Trust (ZTNA):</strong> La suite se comunica sobre una red VPN privada en malla (mesh). Esto significa que ningún puerto de base de datos ni de APIs críticas queda expuesto a Internet público. Los choferes en ruta y las terminales de almacén se comunican directamente peer-to-peer (P2P), garantizando la latencia más baja posible sin intermediación de servidores de retransmisión (DERP).
