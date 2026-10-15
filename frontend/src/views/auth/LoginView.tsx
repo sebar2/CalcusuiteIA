@@ -3,9 +3,7 @@ import {
   Shield, 
   Lock, 
   User, 
-  Zap, 
   Package, 
-  Briefcase, 
   ArrowRight, 
   AlertCircle,
   Eye,
@@ -65,12 +63,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickDemo = (demoUser: string, demoPass: string) => {
-    setUsername(demoUser);
-    setPassword(demoPass);
-    executeLogin(demoUser, demoPass);
   };
 
   const handleSaveServerUrl = () => {
@@ -259,7 +251,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <div>
                 <h3 className="text-xl font-bold text-white tracking-tight">Iniciar Sesión</h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Ingrese credenciales o seleccione un perfil demo.
+                  Ingrese con sus credenciales autorizadas asignadas por el Administrador.
                 </p>
               </div>
 
@@ -354,165 +346,35 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
 
-            {/* Separador */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
+            {/* Aviso de Ciberseguridad ISO 27001 & Trazabilidad de Auditoría */}
+            <div className="mt-8 space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 space-y-2.5">
+                <div className="flex items-center gap-2 text-blue-400 font-bold">
+                  <Shield className="w-4 h-4 text-blue-400" />
+                  <span>Acceso Corporativo Auditado (ISO 27001)</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Para resguardar la confidencialidad de la información financiera y operativa, el acceso requiere autenticación obligatoria. Cada evento de inicio de sesión queda registrado en el historial inmutable de auditoría.
+                </p>
               </div>
-              <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-                <span className="bg-slate-900 px-3 text-slate-500 font-bold">
-                  {authMode === '3pl' ? 'Perfiles 3PL Logística (1-Clic)' : 'Perfiles Suite Corporativa (1-Clic)'}
-                </span>
+
+              {/* Asistencia con Credenciales & Soporte */}
+              <div className="p-4 rounded-2xl bg-blue-950/20 border border-blue-900/40 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-200">¿No tienes credenciales o las olvidaste?</div>
+                  <div className="text-[11px] text-slate-400">Solicítalas al Controller General o soporte directo.</div>
+                </div>
+                <a
+                  href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20necesito%20mis%20credenciales%20de%20acceso%20para%20Calcu%20Suite"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <span>Pedir Credenciales</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
-
-            {/* Panel de Acceso Rápido Demo (1-Clic) */}
-            {authMode === '3pl' ? (
-              <div className="space-y-2">
-                {/* 1. Admin 3PL */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('admin_3pl', 'admin3pl123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Admin 3PL Logística</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-mono">
-                          admin_3pl
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Acceso total a los 7 submódulos 3PL y Costos/Rentabilidad</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-purple-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-
-                {/* 2. Operario Depósito */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('operario_3pl', 'operario123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-amber-950/30 hover:bg-amber-950/50 border border-amber-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Boxes className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Operario de Depósito (Picking & WMS)</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
-                          operario_3pl
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Stock, QR/Code128, Picking y Kanban (Finanzas bloqueadas)</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-amber-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-
-                {/* 3. Conductor de Reparto */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('conductor_3pl', 'chofer123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Truck className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Conductor / Chofer de Flota</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                          conductor_3pl
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Vista móvil: Órdenes asignadas, Tracking GPS y Firma digital</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('admin', 'admin123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-purple-950/30 hover:bg-purple-950/50 border border-purple-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Controller Admin</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-mono">
-                          admin
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Acceso total a la suite, pricing y gobernanza</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-purple-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('operaciones', 'ops123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-sky-950/30 hover:bg-sky-950/50 border border-sky-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-[#00a2e8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Package className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Analista Operaciones</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono">
-                          operaciones
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Abastecimiento ROP, Multi-Depósito y ETL Ingest</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-[#00a2e8] opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo('comercial', 'com123')}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-800/40 text-left transition-all group active:scale-[0.99] cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                      <Briefcase className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Analista Comercial</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
-                          comercial
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Pipeline CRM, Proveedores y Licitaciones</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500">

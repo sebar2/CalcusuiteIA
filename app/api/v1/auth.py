@@ -43,58 +43,97 @@ class UserProfileResponse(BaseModel):
     status: str = "active"
 
 
-# Directorio de credenciales corporativas autorizadas
-DEMO_USERS: Dict[str, Dict[str, Any]] = {
-    "admin": {
-        "password": "admin123",
-        "role": ROLE_CONTROLLER_ADMIN,
-        "name": "Controller Financiero Administrador"
-    },
-    "controller_admin": {
-        "password": "calcu2026",
-        "role": ROLE_CONTROLLER_ADMIN,
-        "name": "Controller Financiero Senior"
-    },
-    "operaciones": {
-        "password": "ops123",
-        "role": ROLE_ANALISTA_OPERACIONES,
-        "name": "Jefe de Operaciones Logísticas"
-    },
-    "analista_operaciones": {
-        "password": "calcu2026",
-        "role": ROLE_ANALISTA_OPERACIONES,
-        "name": "Analista de Supply Chain"
-    },
-    "comercial": {
-        "password": "com123",
-        "role": ROLE_ANALISTA_COMERCIAL,
-        "name": "Gerente Comercial"
-    },
-    "analista_comercial": {
-        "password": "calcu2026",
-        "role": ROLE_ANALISTA_COMERCIAL,
-        "name": "Ejecutivo de Cuentas B2B"
-    },
-    # Credenciales exclusivas Unidad de Negocio 3PL
-    "admin_3pl": {
-        "password": "admin3pl123",
-        "role": ROLE_3PL_ADMIN,
-        "name": "Administrador 3PL Distribución",
-        "driver_id": None
-    },
-    "operario_3pl": {
-        "password": "operario123",
-        "role": ROLE_3PL_OPERARIO,
-        "name": "Operario Depósito & Picking",
-        "driver_id": None
-    },
-    "conductor_3pl": {
-        "password": "chofer123",
-        "role": ROLE_3PL_CONDUCTOR,
-        "name": "Carlos Rodríguez (Chofer)",
-        "driver_id": 1
-    },
-}
+import os
+
+def get_authorized_users() -> Dict[str, Dict[str, Any]]:
+    """
+    Directorio de credenciales corporativas autorizadas.
+    Carga de forma dinámica y segura las credenciales desde variables de entorno (.env),
+    asegurando que ninguna contraseña real sea expuesta en el repositorio público de GitHub.
+    """
+    admin_user = os.getenv("CALCU_ADMIN_USER", "admin").strip().lower()
+    admin_pass = os.getenv("CALCU_ADMIN_PASSWORD", "admin123")
+
+    controller_user = os.getenv("CALCU_CONTROLLER_USER", "controller_admin").strip().lower()
+    controller_pass = os.getenv("CALCU_CONTROLLER_PASSWORD", "calcu2026")
+
+    ops_user = os.getenv("CALCU_OPS_USER", "operaciones").strip().lower()
+    ops_pass = os.getenv("CALCU_OPS_PASSWORD", "ops123")
+
+    ops_analyst_user = os.getenv("CALCU_OPS_ANALYST_USER", "analista_operaciones").strip().lower()
+    ops_analyst_pass = os.getenv("CALCU_OPS_ANALYST_PASSWORD", "calcu2026")
+
+    com_user = os.getenv("CALCU_COM_USER", "comercial").strip().lower()
+    com_pass = os.getenv("CALCU_COM_PASSWORD", "com123")
+
+    com_analyst_user = os.getenv("CALCU_COM_ANALYST_USER", "analista_comercial").strip().lower()
+    com_analyst_pass = os.getenv("CALCU_COM_ANALYST_PASSWORD", "calcu2026")
+
+    admin_3pl_user = os.getenv("CALCU_3PL_ADMIN_USER", "admin_3pl").strip().lower()
+    admin_3pl_pass = os.getenv("CALCU_3PL_ADMIN_PASSWORD", "admin3pl123")
+
+    operario_3pl_user = os.getenv("CALCU_3PL_OPERARIO_USER", "operario_3pl").strip().lower()
+    operario_3pl_pass = os.getenv("CALCU_3PL_OPERARIO_PASSWORD", "operario123")
+
+    conductor_3pl_user = os.getenv("CALCU_3PL_CHOFER_USER", "conductor_3pl").strip().lower()
+    conductor_3pl_pass = os.getenv("CALCU_3PL_CHOFER_PASSWORD", "chofer123")
+
+    return {
+        admin_user: {
+            "password": admin_pass,
+            "role": ROLE_CONTROLLER_ADMIN,
+            "name": "Controller Financiero Administrador",
+            "driver_id": None
+        },
+        controller_user: {
+            "password": controller_pass,
+            "role": ROLE_CONTROLLER_ADMIN,
+            "name": "Controller Financiero Senior",
+            "driver_id": None
+        },
+        ops_user: {
+            "password": ops_pass,
+            "role": ROLE_ANALISTA_OPERACIONES,
+            "name": "Jefe de Operaciones Logísticas",
+            "driver_id": None
+        },
+        ops_analyst_user: {
+            "password": ops_analyst_pass,
+            "role": ROLE_ANALISTA_OPERACIONES,
+            "name": "Analista de Supply Chain",
+            "driver_id": None
+        },
+        com_user: {
+            "password": com_pass,
+            "role": ROLE_ANALISTA_COMERCIAL,
+            "name": "Gerente Comercial",
+            "driver_id": None
+        },
+        com_analyst_user: {
+            "password": com_analyst_pass,
+            "role": ROLE_ANALISTA_COMERCIAL,
+            "name": "Ejecutivo de Cuentas B2B",
+            "driver_id": None
+        },
+        admin_3pl_user: {
+            "password": admin_3pl_pass,
+            "role": ROLE_3PL_ADMIN,
+            "name": "Administrador 3PL Distribución",
+            "driver_id": None
+        },
+        operario_3pl_user: {
+            "password": operario_3pl_pass,
+            "role": ROLE_3PL_OPERARIO,
+            "name": "Operario Depósito & Picking",
+            "driver_id": None
+        },
+        conductor_3pl_user: {
+            "password": conductor_3pl_pass,
+            "role": ROLE_3PL_CONDUCTOR,
+            "name": "Carlos Rodríguez (Chofer)",
+            "driver_id": 1
+        },
+    }
 
 
 @router.post(
@@ -108,7 +147,8 @@ def login(payload: LoginRequest):
     firmado digitalmente con tiempo de expiración y rol financiero/logístico.
     """
     clean_user = payload.username.strip().lower()
-    user_info = DEMO_USERS.get(clean_user)
+    authorized_users = get_authorized_users()
+    user_info = authorized_users.get(clean_user)
 
     if not user_info or user_info["password"] != payload.password:
         raise HTTPException(
