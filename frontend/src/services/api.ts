@@ -135,6 +135,12 @@ import type {
   TaxSummaryResponse,
   AuditLogItem,
   SystemUserItem,
+  ProductSearchResult,
+  ClientSearchResult,
+  CollectionsOverviewResponse,
+  LegalNoticeResponse,
+  GeneralLedgerAccount,
+  DashboardMetricsResponse,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -1553,6 +1559,67 @@ export const apiService = {
 
   async getPositionPresets(): Promise<Record<string, { role: string; restricted_modules: string[] }>> {
     const res = await apiClient.get<Record<string, { role: string; restricted_modules: string[] }>>('/api/v1/monitoring/presets');
+    return res.data;
+  },
+
+  // MÓDULO FACTURACIÓN B2B: Búsquedas predictivas, órdenes y notas de crédito
+  async searchProductsPredictive(query: string): Promise<ProductSearchResult[]> {
+    if (!query || query.trim().length < 2) return [];
+    const res = await apiClient.get<ProductSearchResult[]>('/api/v1/invoices/search-products', { params: { q: query.trim() } });
+    return res.data;
+  },
+
+  async searchClientsPredictive(query: string): Promise<ClientSearchResult[]> {
+    if (!query || query.trim().length < 2) return [];
+    const res = await apiClient.get<ClientSearchResult[]>('/api/v1/invoices/search-clients', { params: { q: query.trim() } });
+    return res.data;
+  },
+
+  async getSalesOrdersAvailable(): Promise<any[]> {
+    const res = await apiClient.get<any[]>('/api/v1/invoices/sales-orders');
+    return res.data;
+  },
+
+  // MÓDULO CONTABILIDAD & COBRANZAS: Cobranzas Kanban, Intimación Legal y Libro Mayor
+  async getCollectionsOverview(filter_days?: number): Promise<CollectionsOverviewResponse> {
+    const res = await apiClient.get<CollectionsOverviewResponse>('/api/v1/accounting/collections/overview', {
+      params: filter_days ? { filter_days } : undefined
+    });
+    return res.data;
+  },
+
+  async getLegalNotice(rut: string): Promise<LegalNoticeResponse> {
+    const res = await apiClient.get<LegalNoticeResponse>(`/api/v1/accounting/collections/legal-notice/${encodeURIComponent(rut)}`);
+    return res.data;
+  },
+
+  async getGeneralLedger(periodo?: string): Promise<GeneralLedgerAccount[]> {
+    const res = await apiClient.get<GeneralLedgerAccount[]>('/api/v1/accounting/general-ledger', {
+      params: periodo ? { periodo } : undefined
+    });
+    return res.data;
+  },
+
+  // MÓDULO MONITOREO: Reportes de Deudores, Dashboard de 6 Cuadrantes y Copiloto IA Gemini
+  async getDebtorsReport(filter_days?: number): Promise<{
+    filtro_aplicado_dias?: number;
+    resumen: any;
+    cantidad_deudores: number;
+    deudores: any[];
+  }> {
+    const res = await apiClient.get('/api/v1/monitoring/reports/debtors', {
+      params: filter_days ? { filter_days } : undefined
+    });
+    return res.data;
+  },
+
+  async getDashboardMetrics(): Promise<DashboardMetricsResponse> {
+    const res = await apiClient.get<DashboardMetricsResponse>('/api/v1/monitoring/dashboard/metrics');
+    return res.data;
+  },
+
+  async askMonitoringCopilot(prompt: string): Promise<{ success: boolean; model: string; respuesta: string; timestamp: string }> {
+    const res = await apiClient.post('/api/v1/monitoring/dashboard/ai-copilot', { prompt });
     return res.data;
   },
 };

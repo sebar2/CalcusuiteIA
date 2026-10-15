@@ -526,7 +526,13 @@ class Client(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    razon_social: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    nombre_fantasia: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     rut: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    documento: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    tipo_documento: Mapped[str] = mapped_column(String(20), default="RUT", nullable=False)
+    es_consumidor_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    limite_credito: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=False)
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -719,6 +725,7 @@ from app.models.accounting_entities import (
     JournalEntry,
     JournalLine,
     SystemUser,
+    CollectionCase,
 )
 
 

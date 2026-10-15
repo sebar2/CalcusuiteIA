@@ -2289,6 +2289,11 @@ export interface Invoice {
   fecha_vencimiento: string;
   cliente_nombre: string;
   cliente_rut: string;
+  cliente_documento?: string;
+  tipo_documento_receptor?: string;
+  es_consumidor_final?: boolean;
+  orden_compra_ref?: string;
+  factura_referencia_id?: number;
   cliente_direccion?: string;
   moneda: string;
   tipo_cambio: number;
@@ -2405,4 +2410,173 @@ export interface SystemUserItem {
   created_at: string;
   last_login?: string;
 }
+
+// =====================================================================
+// BÚSQUEDA PREDICTIVA & AUTOCOMPLETADO (>2 CARACTERES)
+// =====================================================================
+export interface ProductSearchResult {
+  sku: string;
+  nombre: string;
+  descripcion: string;
+  precio_unitario: number;
+  costo: number;
+  stock_actual: number;
+  tasa_iva_pct: number;
+  origen: string;
+}
+
+export interface ClientSearchResult {
+  id: number;
+  nombre: string;
+  razon_social: string;
+  nombre_fantasia: string;
+  rut: string;
+  documento: string;
+  tipo_documento: string;
+  es_consumidor_final: boolean;
+  email?: string;
+  phone?: string;
+  address?: string;
+  limite_credito: number;
+  deuda_acumulada: number;
+  cupo_disponible: number;
+  bloqueo_credito: boolean;
+}
+
+// =====================================================================
+// GESTIÓN DE COBRANZAS & DEUDORES (KANBAN 5 ETAPAS)
+// =====================================================================
+export interface DebtorInvoiceItem {
+  id: number;
+  numero_factura: string;
+  fecha_emision: string;
+  fecha_vencimiento: string;
+  dias_vencido: number;
+  moneda: string;
+  total: number;
+}
+
+export interface DebtorItem {
+  client_id?: number;
+  cliente_nombre: string;
+  cliente_rut: string;
+  tipo_documento: string;
+  es_consumidor_final: boolean;
+  email?: string;
+  phone?: string;
+  address?: string;
+  limite_credito: number;
+  monto_total_deuda: number;
+  dias_max_vencido: number;
+  etapa: '1_NUEVO_DEUDOR' | '2_CONTACTADO' | '3_ADVERTIDO' | '4_COMPLICADO' | '5_JURIDICO' | string;
+  facturas_numeros: string[];
+  facturas?: DebtorInvoiceItem[];
+  facturas_detalle?: DebtorInvoiceItem[];
+  excede_limite?: boolean;
+  cupo_disponible?: number;
+}
+
+export interface CollectionsKanbanStage {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  color: string;
+  items: DebtorItem[];
+  total_monto: number;
+}
+
+export interface CollectionsOverviewResponse {
+  resumen: {
+    total_cartera_vencida: number;
+    cantidad_deudores: number;
+    dias_mora_promedio: number;
+    casos_criticos_60d: number;
+  };
+  kanban: Record<string, CollectionsKanbanStage>;
+  deudores: DebtorItem[];
+}
+
+export interface LegalNoticeResponse {
+  cliente_nombre: string;
+  cliente_rut: string;
+  monto_total: number;
+  dias_vencido: number;
+  facturas: string[];
+  texto_intimacion: string;
+}
+
+export interface GeneralLedgerMovement {
+  fecha: string;
+  asiento: number;
+  glosa: string;
+  referencia?: string;
+  debe: number;
+  haber: number;
+}
+
+export interface GeneralLedgerAccount {
+  cuenta_codigo: string;
+  cuenta_nombre: string;
+  total_debe: number;
+  total_haber: number;
+  saldo: number;
+  movimientos: GeneralLedgerMovement[];
+}
+
+export interface DashboardMetricsResponse {
+  fecha_reporte: string;
+  deudores: {
+    resumen: {
+      total_cartera_vencida: number;
+      cantidad_deudores: number;
+      dias_mora_promedio: number;
+      casos_criticos_60d: number;
+    };
+    etapas: Array<{
+      etapa: string;
+      titulo: string;
+      monto: number;
+      cantidad: number;
+      color: string;
+    }>;
+    total_deudores: number;
+  };
+  vendedores: Array<{
+    nombre: string;
+    ventas: number;
+    cobrado: number;
+    mora: number;
+    clientes: number;
+    cumplimiento_meta_pct: number;
+  }>;
+  asistencia_horarios: Array<{
+    usuario: string;
+    username: string;
+    puesto: string;
+    hora_ingreso: string;
+    hora_egreso: string;
+    nodo_tailscale: string;
+    estado_conexion: string;
+    tiempo_sesion: string;
+  }>;
+  top_productos: Array<{
+    sku: string;
+    descripcion: string;
+    unidades_vendidas: number;
+    total_facturado: number;
+    margen_estimado_pct: number;
+  }>;
+  formas_pago: Array<{
+    forma_pago: string;
+    monto: number;
+    porcentaje: number;
+  }>;
+  medios_compra: Array<{
+    canal: string;
+    monto: number;
+    participacion_pct: number;
+    ordenes: number;
+  }>;
+}
+
 

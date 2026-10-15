@@ -152,6 +152,21 @@ def sync_table_columns(conn):
     add_col_if_missing("logistics_dispatch_orders", "firma_fecha_hora", "TIMESTAMP")
     add_col_if_missing("logistics_dispatch_orders", "firma_aclaracion", "VARCHAR(150)")
 
+    # 7.3. Clientes B2B & Consumidor Final (Límite de crédito y documento CI/RUT)
+    add_col_if_missing("clients", "razon_social", "VARCHAR(200)")
+    add_col_if_missing("clients", "nombre_fantasia", "VARCHAR(200)")
+    add_col_if_missing("clients", "documento", "VARCHAR(50)")
+    add_col_if_missing("clients", "tipo_documento", "VARCHAR(20)", "'RUT'")
+    add_col_if_missing("clients", "es_consumidor_final", "BOOLEAN", "FALSE")
+    add_col_if_missing("clients", "limite_credito", "NUMERIC(14, 4)", "0.0")
+
+    # 7.4. Facturación B2B & Notas de Crédito
+    add_col_if_missing("invoices", "cliente_documento", "VARCHAR(50)")
+    add_col_if_missing("invoices", "tipo_documento_receptor", "VARCHAR(20)", "'RUT'")
+    add_col_if_missing("invoices", "es_consumidor_final", "BOOLEAN", "FALSE")
+    add_col_if_missing("invoices", "orden_compra_ref", "VARCHAR(50)")
+    add_col_if_missing("invoices", "factura_referencia_id", "INTEGER")
+
 
     # 8. Semilla de Proveedores Uruguay y Servicios Implícitos si la tabla existe
     if "suppliers" in existing_tables:

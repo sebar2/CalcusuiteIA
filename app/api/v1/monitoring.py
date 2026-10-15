@@ -140,3 +140,56 @@ def toggle_user_active(user_id: int, db: Session = Depends(get_db)):
     user.activo = not user.activo
     db.commit()
     return {"success": True, "activo": user.activo, "message": f"Usuario '{user.username}' {'activado' if user.activo else 'desactivado'}"}
+
+class AICopilotQuerySchema(BaseModel):
+    prompt: str
+
+@router.get("/reports/debtors", response_model=Dict[str, Any])
+def get_debtors_report(
+    filter_days: Optional[int] = Query(None, description="1, 30, 45, 60 días de vencimiento"),
+    db: Session = Depends(get_db)
+):
+    """
+    Reporte exhaustivo de deudores con monto total, facturas asociadas y filtros de antigüedad:
+    - 1 día vencido
+    - 30 días vencido
+    - 45 días vencido
+    - 60+ días vencido
+    """
+    from app.services.collection_service import CollectionService
+    overview = CollectionService.get_collections_overview(db, filter_days=filter_days)
+    return {
+        "filtro_aplicado_dias": filter_days,
+        "resumen": overview["resumen"],
+        "cantidad_deudores": len(overview["deudores"]),
+        "deudores": [
+            {
+                "cliente_nombre": d["cliente_nombre"],
+                "cliente_rut": d["cliente_rut"],
+                "tipo_documento": d["tipo_documento"],
+                "es_consumidor_final": d["es_consumidor_final"],
+                "email": d["email"],
+                "phone": d["phone"],
+                "address": d["address"],
+                "limite_credito": d["limite_credito"],
+                "monto_total_deuda": d["monto_total_deuda"],
+                "dias_max_vencido": d["dias_max_vencido"],
+                "etapa": d["etapa"],
+                "facturas_numeros": d["facturas_numeros"],
+                "cantidad_facturas": len(d["facturas"]),
+                "facturas_detalle": d["facturas"]
+            }
+            for d in overview["deudores"]
+        ]
+    }
+
+@router.get("/dashboard/metrics", response_model=Dict[str, Any])
+def get_dashboard_metrics(db: Session = Depends(get_db)):
+    """Consolida los 6 cuadrantes del Dashboard Ejecutivo de Monitoreo."""
+    return MonitoringService.get_dashboard_metrics(db)
+
+@router.post("/dashboard/ai-copilot", response_model=Dict[str, Any])
+def ask_monitoring_copilot(payload: AICopilotQuerySchema, db: Session = Depends(get_db)):
+    """Consulta al Agente IA Gemini para análisis de métricas y extracción de reportes."""
+    return MonitoringService.ask_monitoring_ai(db, payload.prompt)
+

@@ -296,11 +296,11 @@ export const Sidebar = ({
       ],
     },
     {
-      title: 'Gastos & Contabilidad',
+      title: 'Contabilidad & Cobranzas',
       items: [
         {
           id: 'accounting',
-          label: 'Libros Contables & Gastos',
+          label: 'Libros Contables & Cobranzas',
           shortLabel: 'Contabilidad',
           icon: Scale,
           roles: ['controller_admin'],

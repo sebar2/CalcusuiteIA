@@ -238,3 +238,45 @@ class AccountingService:
                 "Alerta de liquidez tributaria: Saldo elevado de IVA Débito. Se recomienda programar retenciones bancarias 48 hs antes del vencimiento del calendario DGI."
             )
         }
+
+    @staticmethod
+    def get_general_ledger(db: Session, periodo: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Libro Mayor por Cuenta (T-Accounts): Agrupa movimientos de todas las cuentas contables.
+        """
+        lines = (
+            db.query(JournalLine, JournalEntry)
+            .join(JournalEntry, JournalLine.entry_id == JournalEntry.id)
+            .order_by(JournalLine.cuenta_codigo, JournalEntry.fecha.asc())
+            .all()
+        )
+        
+        accounts_map: Dict[str, Dict[str, Any]] = {}
+        for line, entry in lines:
+            code = line.cuenta_codigo
+            if code not in accounts_map:
+                accounts_map[code] = {
+                    "cuenta_codigo": code,
+                    "cuenta_nombre": line.cuenta_nombre,
+                    "total_debe": 0.0,
+                    "total_haber": 0.0,
+                    "saldo": 0.0,
+                    "movimientos": []
+                }
+            acc = accounts_map[code]
+            debe = float(line.debe)
+            haber = float(line.haber)
+            acc["total_debe"] += debe
+            acc["total_haber"] += haber
+            acc["saldo"] = acc["total_debe"] - acc["total_haber"]
+            acc["movimientos"].append({
+                "fecha": entry.fecha.isoformat(),
+                "asiento": entry.numero_asiento,
+                "glosa": entry.glosa,
+                "referencia": entry.referencia_doc,
+                "debe": debe,
+                "haber": haber
+            })
+
+        return list(accounts_map.values())
+

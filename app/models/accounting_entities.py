@@ -21,6 +21,11 @@ class Invoice(Base):
     
     cliente_nombre: Mapped[str] = mapped_column(String(200), nullable=False)
     cliente_rut: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    cliente_documento: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    tipo_documento_receptor: Mapped[str] = mapped_column(String(20), default="RUT", nullable=False)
+    es_consumidor_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    orden_compra_ref: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    factura_referencia_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), nullable=True)
     cliente_direccion: Mapped[Optional[str]] = mapped_column(String(250), nullable=True)
     
     moneda: Mapped[str] = mapped_column(String(10), default="UYU", nullable=False)
@@ -37,7 +42,8 @@ class Invoice(Base):
     notas: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    items: Mapped[List["InvoiceItem"]] = relationship(back_populates="invoice_rel", cascade="all, delete-orphan")
+    items: Mapped[List["InvoiceItem"]] = relationship(back_populates="invoice_rel", cascade="all, delete-orphan", foreign_keys="InvoiceItem.invoice_id")
+    factura_referencia_rel: Mapped[Optional["Invoice"]] = relationship(remote_side="Invoice.id")
 
 
 class InvoiceItem(Base):
@@ -144,3 +150,30 @@ class SystemUser(Base):
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class CollectionCase(Base):
+    """
+    Expediente de Cobranzas y Gestión de Deudores (Kanban 5 Etapas)
+    1_NUEVO_DEUDOR (1-29d vencido)
+    2_CONTACTADO (30-44d vencido)
+    3_ADVERTIDO (45-59d vencido)
+    4_COMPLICADO (60-62d vencido - Intimación Legal)
+    5_JURIDICO (63d+ vencido - Estudio Jurídico)
+    """
+    __tablename__ = "collection_cases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cliente_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    cliente_nombre: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    cliente_rut: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    etapa: Mapped[str] = mapped_column(String(50), default="1_NUEVO_DEUDOR", nullable=False, index=True)
+    dias_max_vencido: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    monto_total_deuda: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.00"), nullable=False)
+    facturas_ids: Mapped[Optional[Any]] = mapped_column(JSON, default=list, nullable=True)
+    ultimo_contacto: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    observaciones: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    intimacion_enviada: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    estudio_juridico: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+

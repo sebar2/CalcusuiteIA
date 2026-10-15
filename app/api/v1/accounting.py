@@ -101,3 +101,29 @@ def get_journal(limit: int = Query(100, ge=1, le=500), db: Session = Depends(get
 def get_tax_summary(periodo: Optional[str] = Query(None), db: Session = Depends(get_db)):
     """Liquidación fiscal corporativa en tiempo real (IVA Débito/Crédito DGI, BPS e IRAE)."""
     return AccountingService.get_tax_summary(db, periodo=periodo)
+
+@router.get("/general-ledger", response_model=List[Dict[str, Any]])
+def get_general_ledger(periodo: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    """Libro Mayor por Cuenta (T-Accounts) con balance y detalle cronológico."""
+    return AccountingService.get_general_ledger(db, periodo=periodo)
+
+@router.get("/collections/overview", response_model=Dict[str, Any])
+def get_collections_overview(
+    filter_days: Optional[int] = Query(None, description="Filtrar por días vencido: 1, 30, 45, 60"),
+    db: Session = Depends(get_db)
+):
+    """Obtiene el resumen de cobranzas, cartera vencida y tablero Kanban de 5 etapas."""
+    from app.services.collection_service import CollectionService
+    return CollectionService.get_collections_overview(db, filter_days=filter_days)
+
+@router.get("/collections/legal-notice/{rut}", response_model=Dict[str, Any])
+def generate_legal_notice(rut: str, db: Session = Depends(get_db)):
+    """Genera la Intimación Legal prejudicial formal en texto/borrador con base jurídica uruguaya."""
+    from app.services.collection_service import CollectionService
+    try:
+        return CollectionService.generate_legal_notice(db, rut)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar intimación: {str(e)}")
+
