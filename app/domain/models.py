@@ -102,3 +102,23 @@ class AccionCompromiso(Base):
     responsable_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+
+class LeadProspect(Base):
+    """
+    Prospectos comerciales y solicitudes de demo recibidas a través de la web landing o API.
+    """
+    __tablename__ = "leads_prospects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(150), nullable=False)
+    empresa: Mapped[str] = mapped_column(String(150), nullable=False)
+    email: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    telefono: Mapped[str] = mapped_column(String(50), nullable=False)
+    interes: Mapped[str] = mapped_column(String(100), default="Demo Completa Enterprise", nullable=False)
+    mensaje: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    canal_origen: Mapped[str] = mapped_column(String(50), default="web_landing_github", nullable=False)
+    ip_origen: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    estado: Mapped[str] = mapped_column(String(50), default="NUEVO_LEAD", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+

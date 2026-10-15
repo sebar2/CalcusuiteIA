@@ -18,6 +18,7 @@ from app.api.v1.security import router as security_router
 from app.api.v1.invoices import router as invoices_router
 from app.api.v1.accounting import router as accounting_router
 from app.api.v1.monitoring import router as monitoring_router
+from app.api.v1.leads import router as leads_router
 from app.services.security_agent import security_agent
 from starlette.middleware.gzip import GZipMiddleware
 import os
@@ -165,9 +166,16 @@ app.include_router(security_router)
 app.include_router(invoices_router, prefix="/api/v1")
 app.include_router(accounting_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
+app.include_router(leads_router, prefix="/api/v1")
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Montar web landing para previsualización local y acceso directo
+DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs")
+if os.path.exists(DOCS_DIR):
+    app.mount("/landing", StaticFiles(directory=DOCS_DIR, html=True), name="landing")
+
 
 if __name__ == "__main__":
     import uvicorn

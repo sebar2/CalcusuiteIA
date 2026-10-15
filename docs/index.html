@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calcu Suite 2026 | ERP Logístico 3PL, Supply Chain & Contabilidad B2B</title>
+  <meta name="description" content="Plataforma empresarial moderna para logística 3PL, control de inventario ROP, facturación B2B, cobranzas automatizadas y liquidación fiscal DGI/BPS con IA.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
+
+  <!-- Tailwind CSS CDN & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+              950: '#0a192f',
+            },
+            accent: {
+              emerald: '#10b981',
+              violet: '#8b5cf6',
+              amber: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Estilos Modulares Externos -->
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Background Gradients -->
+  <div class="fixed inset-0 pointer-events-none -z-10">
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] glow-bg"></div>
+    <div class="absolute top-1/3 -left-48 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
+    <div class="absolute top-2/3 -right-48 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"></div>
+  </div>
+
+  <!-- Header / Navigation Bar -->
+  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <a href="#inicio" class="flex items-center gap-3 group">
+        <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform">
+          <i data-lucide="layers" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xl font-bold tracking-tight text-white group-hover:text-blue-400 transition-colors">CALCU</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold tracking-wider uppercase">Demo 2026</span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-medium">SupplyFinance & 3PL Logistics</p>
+        </div>
+      </a>
+
+      <!-- Desktop Navigation Menu -->
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+        <a href="#modulos" class="hover:text-blue-400 transition-colors">Módulos</a>
+        <a href="#galeria" class="hover:text-blue-400 transition-colors">Capturas</a>
+        <a href="#descargas" class="hover:text-blue-400 transition-colors">Descargas (APK/PDF)</a>
+        <a href="#demo" class="hover:text-blue-400 transition-colors">Solicitar Demo</a>
+        <a href="#contacto" class="hover:text-blue-400 transition-colors">Contacto</a>
+      </nav>
+
+      <!-- CTA Buttons & Contact -->
+      <div class="flex items-center gap-3">
+        <!-- WhatsApp Direct Pill -->
+        <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20estoy%20interesado%20en%20probar%20la%20demo%20de%20Calcu%20Suite%202026" 
+           target="_blank" 
+           rel="noopener noreferrer"
+           class="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-500/20 transition-all">
+          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+          <span>+598 94 858 791</span>
+        </a>
+
+        <!-- Main Demo Button -->
+        <a href="#demo" 
+           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs tracking-wide shadow-md shadow-blue-600/30 hover:shadow-blue-600/50 transition-all hover:scale-[1.02] active:scale-[0.98]">
+          <span>Probar Demo</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1">
+
+    <!-- HERO SECTION -->
+    <section id="inicio" class="relative pt-16 pb-20 md:pt-24 md:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+      
+      <!-- Status Badge -->
+      <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-blue-900/40 border border-blue-500/40 text-blue-300 text-xs font-semibold mb-8 animate-pulse">
+        <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+        <span>VERSIÓN EN PRODUCCIÓN & DEMO INTERACTIVA ACTIVA 2026</span>
+      </div>
+
+      <!-- Main Title -->
+      <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-5xl mx-auto leading-[1.12]">
+        Control Total de <span class="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">Logística 3PL</span>, Inventario ROP y Finanzas B2B
+      </h1>
+
+      <!-- Subtitle -->
+      <p class="mt-6 text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed">
+        Plataforma unificada para empresas de distribución, almacenamiento y comercio B2B. Conecta en tiempo real la flota GPS, gestión WMS con escaneo móvil, facturación electrónica, cobranzas en 5 etapas y liquidación fiscal DGI/BPS con inteligencia artificial.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <a href="#demo" 
+           class="px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/30 flex items-center gap-2 transition-all hover:scale-105">
+          <i data-lucide="sparkles" class="w-4 h-4"></i>
+          <span>Solicitar Acceso a la Demo</span>
+        </a>
+
+        <a href="./Calcu_3PL_Mobile_v2026.apk" download 
+           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
+          <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
+          <span>Descargar APK Móvil (5.9 MB)</span>
+        </a>
+
+        <a href="./MANUAL_COMPLETO_CALCU_2026.pdf" target="_blank"
+           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
+          <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i>
+          <span>Manual Oficial (PDF 20 Caps)</span>
+        </a>
+      </div>
+
+      <!-- Live Feature Pills -->
+      <div class="mt-14 pt-8 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-4xl mx-auto">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400">Ciberseguridad</div>
+            <div class="text-sm font-semibold text-slate-200">ISO 27001 Auditada</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <i data-lucide="truck" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400">Operaciones</div>
+            <div class="text-sm font-semibold text-slate-200">WMS & Flota 3PL Móvil</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+            <i data-lucide="receipt" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400">Fiscal & Legal</div>
+            <div class="text-sm font-semibold text-slate-200">DGI / BPS Uruguay</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+            <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400">Inteligencia Artificial</div>
+            <div class="text-sm font-semibold text-slate-200">Agente Gemini AI FP&A</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE SHOWCASE SECTION -->
+    <section id="modulos" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <h2 class="text-xs font-bold tracking-widest text-blue-400 uppercase">Arquitectura Funcional</h2>
+        <p class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">5 Módulos Estratégicos en una Sola Suite</p>
+        <p class="mt-4 text-slate-400 text-sm sm:text-base">
+          Diseñado para erradicar planillas dispersas y conectar almacén, transporte, cuentas corrientes, ventas mayoristas y reportes en una experiencia unificada.
+        </p>
+      </div>
+
+      <!-- Feature Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        
+        <!-- Card 1: 3PL & WMS -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center mb-6">
+              <i data-lucide="package-search" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Logística 3PL & WMS Móvil</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Control exhaustivo de pasillos, racks y pallets. Mapeo satelital GPS de buques en alta mar y camiones de reparto en calle. App móvil para choferes con registro fotográfico de entregas y firma digital.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Kanban de picking, packing y despacho</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Cálculo de liquidación a choferes (Km / Hora / Jornal)</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> App Android APK con funcionamiento Offline</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/12_3pl_tracking_gps_mapa.png', 'Mapeo Satelital GPS 3PL & Flota')" class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 group">
+            <span>Ver captura del mapa satelital</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Card 2: Cobranzas 5 Etapas -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6">
+              <i data-lucide="credit-card" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Cobranzas Automatizadas</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Pipeline Kanban de 5 etapas para cuentas corrientes deudoras. Transición automática de deudas a los 30, 45, 60 y 63 días de vencimiento con emisión de intimaciones formales y pase a estudio jurídico.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Límite de crédito por cliente y control RUT/CI</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Generador de Cartas de Intimación Legal en 1 clic</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Notas de crédito e imputación de facturas</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/05_cobranzas_kanban_5etapas.png', 'Kanban de Cobranzas en 5 Etapas')" class="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 group">
+            <span>Ver captura del Kanban de Cobranzas</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Card 3: Contabilidad DGI & BPS -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-6">
+              <i data-lucide="calculator" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Contabilidad & DGI/BPS</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Libro Diario con partida doble inmutable, Libro Mayor en cuentas 'T' y módulo de liquidación tributaria preconfigurado para Uruguay: Formulario 2178 DGI (IVA compras/ventas, IRAE) y aportes BPS patronal y personal.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Asientos contables automáticos por factura y cobro</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Estimación de anticipos de IRAE e IVA mínimo</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Nómina con montepío (15%), FONASA y FRL</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/09_liquidacion_fiscal_dgi_bps.png', 'Liquidación Fiscal DGI Formulario 2178 & BPS')" class="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 group">
+            <span>Ver liquidación DGI & BPS</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Card 4: Supply Chain ROP & Landed Costs -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-6">
+              <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Supply Chain ROP & Control Room</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Algoritmo matemático de punto de reorden (ROP) y DOH (Days on Hand). Incorporación del costo puesto en depósito (Landed Costs) con fletes marítimos, seguros y despacho aduanero para calcular márgenes brutos y netos reales.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Alerta temprana de quiebre de stock por SKU</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Simulación de pricing mayorista vs minorista</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Generación automática de órdenes de compra</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/16_supply_control_room.png', 'Supply Chain Control Room & Alertas')" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 group">
+            <span>Ver Control Room de Abastecimiento</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Card 5: Monitoreo RBAC & ISO 27001 -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center mb-6">
+              <i data-lucide="lock" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Monitoreo & Auditoría ISO 27001</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Registro append-only de cada evento con usuario, rol, fecha, hora, IP y geolocalización. Panel de administración de usuarios con presets corporativos y bloqueo granular de módulos para choferes o vendedores.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Escáner perimetral de puertos y servicios activos</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> RBAC granular con 8 perfiles preconfigurados</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Dashboard de trazabilidad ejecutiva de auditoría</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/03_monitoreo_auditoria_iso27001.png', 'Trazabilidad y Ciberseguridad ISO 27001')" class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 group">
+            <span>Ver registro de auditoría ISO 27001</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Card 6: Licitaciones Radar ARCE & IA -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-6">
+              <i data-lucide="radar" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Radar ARCE & Asistente IA</h3>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Monitoreo de compras públicas estatales y licitaciones privadas. Evaluación de viabilidad técnica y financiera asistida por modelos de lenguaje de Gemini y dictámenes automatizados de factibilidad.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Cruce automático de pliegos con stock disponible</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Estimación de margen y tiempos de entrega</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Asistente conversacional de finanzas y compras</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/19_licitaciones_radar_arce.png', 'Radar de Licitaciones ARCE & Análisis IA')" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 group">
+            <span>Ver Radar de Licitaciones ARCE</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- INTERACTIVE GALLERY / SCREENSHOT EXPLORER -->
+    <section id="galeria" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto bg-slate-900/40 rounded-3xl border border-slate-800/80 my-10">
+      
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-10">
+        <div>
+          <span class="text-xs font-bold tracking-widest text-blue-400 uppercase">Inspección Visual del Sistema</span>
+          <h2 class="mt-2 text-3xl font-extrabold text-white">Galería Interactiva de Capturas Reales</h2>
+          <p class="mt-2 text-slate-400 text-sm max-w-xl">
+            Haz clic en cualquier pestaña para examinar las pantallas reales del software en funcionamiento.
+          </p>
+        </div>
+        
+        <!-- Tab selector buttons -->
+        <div class="mt-6 md:mt-0 flex flex-wrap gap-2" id="galleryTabs">
+          <button onclick="switchTab('3pl')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition-all shadow-md" data-tab="3pl">Logística 3PL</button>
+          <button onclick="switchTab('cobranzas')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="cobranzas">Cobranzas & Facturación</button>
+          <button onclick="switchTab('contabilidad')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="contabilidad">Contabilidad DGI/BPS</button>
+          <button onclick="switchTab('supply')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="supply">Supply & Control Room</button>
+          <button onclick="switchTab('monitoreo')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="monitoreo">Monitoreo & Auditoría</button>
+        </div>
+      </div>
+
+      <!-- Main Showcase Frame -->
+      <div class="relative bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+        
+        <!-- Window Mockup Bar -->
+        <div class="bg-slate-900/90 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+            <span class="ml-3 text-xs font-mono text-slate-400" id="showcaseUrl">https://calcu.enterprise.app/logistics/tracking</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Conexión Cifrada Tailscale VPN</span>
+          </div>
+        </div>
+
+        <!-- Active Screenshot Container -->
+        <div class="p-4 sm:p-6 flex flex-col lg:flex-row gap-6 items-center">
+          
+          <div class="w-full lg:w-2/3 cursor-pointer group relative overflow-hidden rounded-xl border border-slate-800" onclick="expandCurrentScreenshot()">
+            <img id="showcaseImage" src="./screenshots/12_3pl_tracking_gps_mapa.png" alt="Captura Calcu" class="w-full h-auto object-cover rounded-xl transition-transform duration-500 group-hover:scale-[1.02]">
+            <div class="absolute inset-0 bg-blue-600/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span class="px-4 py-2 rounded-lg bg-slate-950/80 text-white text-xs font-semibold shadow-lg flex items-center gap-2">
+                <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                <span>Clic para ampliar imagen en alta resolución</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Feature Description Panel -->
+          <div class="w-full lg:w-1/3 flex flex-col justify-center text-left">
+            <div class="inline-block px-3 py-1 rounded-md text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 w-fit mb-3" id="showcaseBadge">Módulo 3PL Logística</div>
+            <h3 class="text-2xl font-bold text-white mb-3" id="showcaseTitle">Tracking GPS Satelital y Control de Flota</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-6" id="showcaseDesc">
+              Visualización geográfica en tiempo real de unidades de reparto en ruta y barcos portacontenedores en alta mar con tiempos estimados de arribo (ETA), estado de carga y cálculo de costos por viaje.
+            </p>
+            <div class="space-y-3" id="showcaseBullets">
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Georreferenciación en mapa interactivo</span></div>
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Integración directa con app móvil de choferes</span></div>
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Liquidación automática por distancia y tiempo</span></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ASSET DOWNLOADS & ARTIFACTS SECTION -->
+    <section id="descargas" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-bold tracking-widest text-emerald-400 uppercase">Recursos Listos para Descarga</span>
+        <h2 class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">APK Móvil y Manual Oficial de Operaciones</h2>
+        <p class="mt-4 text-slate-400 text-sm sm:text-base">
+          Accede directamente a los instaladores móviles para Android y a la documentación integral ilustrada paso a paso.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        
+        <!-- Card 1: APK Download -->
+        <div class="glass-card p-8 rounded-3xl border border-emerald-500/30 relative overflow-hidden flex flex-col justify-between">
+          <div class="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div>
+            <div class="flex items-center justify-between mb-6">
+              <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <i data-lucide="smartphone" class="w-7 h-7"></i>
+              </div>
+              <span class="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">v2026 • 5.94 MB</span>
+            </div>
+            
+            <h3 class="text-2xl font-bold text-white mb-3">Calcu 3PL Mobile App (APK)</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-6">
+              Aplicación nativa para conductores, personal de depósito y supervisores logísticos. Permite escaneo de códigos de barra/QR de bultos, firma de remito en pantalla, captura fotográfica de entrega y sincronización sin conexión (Offline-First).
+            </p>
+
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
+              <div class="flex justify-between"><span>Plataforma:</span><span class="text-white font-medium">Android 8.0+ (ARM64 & x86_64)</span></div>
+              <div class="flex justify-between"><span>Modo de Operación:</span><span class="text-white font-medium">Online / Offline con Auto-Sync</span></div>
+              <div class="flex justify-between"><span>Archivo:</span><span class="text-emerald-400 font-mono">Calcu_3PL_Mobile_v2026.apk</span></div>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a href="./Calcu_3PL_Mobile_v2026.apk" download 
+               class="flex-1 py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span>Descargar APK (Directo)</span>
+            </a>
+            <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20descargu%C3%A9%20la%20APK%20de%20Calcu%20y%20preciso%20el%20usuario%20demo%20de%20chofer" 
+               target="_blank"
+               class="py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all">
+              <i data-lucide="key" class="w-4 h-4 text-emerald-400"></i>
+              <span>Pedir Usuario Chofer</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Card 2: Manual PDF & Web -->
+        <div class="glass-card p-8 rounded-3xl border border-blue-500/30 relative overflow-hidden flex flex-col justify-between">
+          <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div>
+            <div class="flex items-center justify-between mb-6">
+              <div class="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <i data-lucide="book-open" class="w-7 h-7"></i>
+              </div>
+              <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40">20 Capítulos • 4.65 MB</span>
+            </div>
+            
+            <h3 class="text-2xl font-bold text-white mb-3">Manual Completo Calcu 2026</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-6">
+              Documento maestro ilustrado en alta definición que abarca el 100% de los módulos operativos, fórmulas contables, flujo de cobranzas, liquidación DGI Formulario 2178, nómina BPS y auditoría ISO 27001.
+            </p>
+
+            <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
+              <div class="flex justify-between"><span>Formato:</span><span class="text-white font-medium">PDF Vectorial con Capturas Reales</span></div>
+              <div class="flex justify-between"><span>Versión Web:</span><span class="text-white font-medium">HTML Interactivo Disponible</span></div>
+              <div class="flex justify-between"><span>Archivo:</span><span class="text-blue-400 font-mono">MANUAL_COMPLETO_CALCU_2026.pdf</span></div>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a href="./MANUAL_COMPLETO_CALCU_2026.pdf" target="_blank"
+               class="flex-1 py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]">
+              <i data-lucide="file-down" class="w-4 h-4"></i>
+              <span>Abrir / Descargar PDF</span>
+            </a>
+            <a href="./MANUAL_COMPLETO_CALCU_2026.html" target="_blank"
+               class="py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all">
+              <i data-lucide="globe" class="w-4 h-4 text-blue-400"></i>
+              <span>Ver Versión Web</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LEAD CAPTURE & CONTACT FORM SECTION -->
+    <section id="demo" class="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      
+      <div class="glass-card max-w-4xl mx-auto rounded-3xl p-8 sm:p-12 border border-slate-800 relative overflow-hidden shadow-2xl">
+        <div class="absolute -top-32 -left-32 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div class="text-center max-w-2xl mx-auto mb-10">
+          <span class="text-xs font-bold tracking-widest text-blue-400 uppercase">Acceso Exclusivo a la Demo</span>
+          <h2 class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">Solicita tu Prueba Guiada o Acceso Demo</h2>
+          <p class="mt-3 text-slate-400 text-sm">
+            Completa tus datos para enviarte las credenciales de acceso a la demo en producción o coordinar una videollamada personalizada para tu equipo directivo.
+          </p>
+        </div>
+
+        <!-- Feedback Alert Container -->
+        <div id="formAlert" class="hidden mb-6 p-4 rounded-xl text-xs font-medium"></div>
+
+        <!-- Lead Form -->
+        <form id="leadForm" onsubmit="handleLeadSubmit(event)" class="space-y-6">
+          
+          <!-- Anti-bot Honeypot Field (Hidden) -->
+          <div class="hidden">
+            <label for="honeypot">No completar este campo</label>
+            <input type="text" id="honeypot" name="honeypot" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            
+            <!-- Nombre -->
+            <div>
+              <label for="nombre" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Nombre y Apellido *</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <i data-lucide="user" class="w-4 h-4"></i>
+                </div>
+                <input type="text" id="nombre" name="nombre" required placeholder="Ej: Martín Gómez" 
+                       class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+              </div>
+            </div>
+
+            <!-- Empresa -->
+            <div>
+              <label for="empresa" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Empresa / Razón Social *</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <i data-lucide="building-2" class="w-4 h-4"></i>
+                </div>
+                <input type="text" id="empresa" name="empresa" required placeholder="Ej: Distribuidora del Este S.A." 
+                       class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+              </div>
+            </div>
+
+            <!-- Email -->
+            <div>
+              <label for="email" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Correo Electrónico *</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <i data-lucide="mail" class="w-4 h-4"></i>
+                </div>
+                <input type="email" id="email" name="email" required placeholder="mgomez@distribuidora.com" 
+                       class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+              </div>
+            </div>
+
+            <!-- Teléfono / WhatsApp -->
+            <div>
+              <label for="telefono" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Teléfono / WhatsApp *</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <i data-lucide="phone" class="w-4 h-4"></i>
+                </div>
+                <input type="tel" id="telefono" name="telefono" required placeholder="+598 99 123 456" 
+                       class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Módulo de Interés -->
+          <div>
+            <label for="interes" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Módulo o Solución de Principal Interés</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+              </div>
+              <select id="interes" name="interes" 
+                      class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none">
+                <option value="Demo Integral Enterprise">Demo Integral Enterprise (Todos los módulos)</option>
+                <option value="Logística 3PL & WMS Móvil">Logística 3PL, WMS y Flota Móvil</option>
+                <option value="Facturación B2B & Cobranzas 5 Etapas">Facturación B2B & Cobranzas Automatizadas</option>
+                <option value="Contabilidad & Liquidación DGI/BPS">Contabilidad DGI (Form 2178) y BPS Uruguay</option>
+                <option value="Supply Chain ROP & Landed Costs">Supply Chain ROP, Control Room & Landed Costs</option>
+                <option value="Radar ARCE & Licitaciones Públicas">Radar de Licitaciones ARCE & Análisis IA</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Mensaje Opcional -->
+          <div>
+            <label for="mensaje" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Comentarios o Requerimientos Específicos (Opcional)</label>
+            <textarea id="mensaje" name="mensaje" rows="3" placeholder="Describe brevemente el volumen de flota, depósitos o particularidades de tu empresa..." 
+                      class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"></textarea>
+          </div>
+
+          <!-- Submit Button & Disclaimer -->
+          <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="text-xs text-slate-400 flex items-center gap-2 text-center sm:text-left">
+              <i data-lucide="lock" class="w-4 h-4 text-emerald-400 flex-shrink-0"></i>
+              <span>Tus datos se encuentran resguardados bajo normas ISO 27001 de confidencialidad.</span>
+            </div>
+
+            <button type="submit" id="submitBtn" 
+                    class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 disabled:opacity-50">
+              <span id="btnText">Enviar Solicitud de Demo</span>
+              <i data-lucide="send" class="w-4 h-4" id="btnIcon"></i>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </section>
+
+    <!-- CONTACT DIRECT & SOCIAL NETWORKS -->
+    <section id="contacto" class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        
+        <!-- Direct Email -->
+        <a href="mailto:sebar_2@hotmail.com?subject=Consulta%20sobre%20Calcu%20Suite%202026" class="glass-card p-6 rounded-2xl flex items-center gap-4 hover:border-blue-500/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <i data-lucide="mail" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400 font-medium">Correo Electrónico Directo</div>
+            <div class="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">sebar_2@hotmail.com</div>
+          </div>
+        </a>
+
+        <!-- Direct WhatsApp -->
+        <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20estoy%20interesado%20en%20probar%20la%20demo%20de%20Calcu%20Suite%202026" target="_blank" class="glass-card p-6 rounded-2xl flex items-center gap-4 hover:border-emerald-500/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <i data-lucide="message-circle" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400 font-medium">WhatsApp Corporativo</div>
+            <div class="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">+598 94 858 791</div>
+          </div>
+        </a>
+
+        <!-- Location & Status -->
+        <div class="glass-card p-6 rounded-2xl flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+            <i data-lucide="map-pin" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-slate-400 font-medium">Sede Operacional</div>
+            <div class="text-sm font-bold text-white">Montevideo, Uruguay (LatAm)</div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-900 bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      
+      <!-- Logo & Copyright -->
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+          C
+        </div>
+        <div class="text-xs text-slate-400">
+          <span class="text-slate-200 font-semibold">Calcu Enterprise Suite 2026</span> • Todos los derechos reservados.
+        </div>
+      </div>
+
+      <!-- Social Media Links -->
+      <div class="flex items-center gap-4 text-slate-400">
+        <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-white hover:bg-slate-900 transition-colors" title="GitHub Repository">
+          <i data-lucide="github" class="w-5 h-5"></i>
+        </a>
+        <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-blue-400 hover:bg-slate-900 transition-colors" title="LinkedIn Profile">
+          <i data-lucide="linkedin" class="w-5 h-5"></i>
+        </a>
+        <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-sky-400 hover:bg-slate-900 transition-colors" title="X / Twitter">
+          <i data-lucide="twitter" class="w-5 h-5"></i>
+        </a>
+        <a href="https://wa.me/59894858791" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-emerald-400 hover:bg-slate-900 transition-colors" title="Chat WhatsApp">
+          <i data-lucide="phone" class="w-5 h-5"></i>
+        </a>
+      </div>
+
+      <!-- Version & Status -->
+      <div class="text-xs text-slate-500 font-mono flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>FastAPI v1.0 • React Vite • ISO 27001 Ready</span>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- FLOATING WHATSAPP CHAT WIDGET -->
+  <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    
+    <!-- Expandable WhatsApp Chat Bubble Dialog -->
+    <div id="waChatDialog" class="hidden mb-4 w-80 sm:w-96 rounded-2xl glass-card border border-emerald-500/40 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-300">
+      
+      <!-- Dialog Header -->
+      <div class="bg-gradient-to-r from-emerald-700 to-emerald-800 p-4 text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <div class="w-10 h-10 rounded-full bg-emerald-950 flex items-center justify-center font-bold text-emerald-300 border border-emerald-400">
+              S
+            </div>
+            <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-emerald-900"></span>
+          </div>
+          <div>
+            <div class="text-sm font-bold">Sebastián • Soporte Calcu</div>
+            <div class="text-[11px] text-emerald-200">En línea • Responde en minutos</div>
+          </div>
+        </div>
+        <button onclick="toggleWaChat()" class="text-emerald-200 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Dialog Body (Chat History Mockup) -->
+      <div class="p-4 bg-slate-950/90 text-xs space-y-3">
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl text-slate-200 max-w-[85%] leading-relaxed shadow">
+          👋 ¡Hola! Bienvenido a <strong>Calcu Suite Enterprise</strong>. ¿En qué podemos ayudarte hoy?
+        </div>
+        <div class="text-[10px] text-slate-500 text-right">Hoy 10:20</div>
+
+        <!-- Quick reply suggestion pills -->
+        <div class="pt-2 space-y-1.5">
+          <div class="text-[11px] text-slate-400 font-semibold mb-1">Respuestas rápidas sugeridas:</div>
+          <button onclick="sendQuickWa('¡Hola Sebastián! Me interesa solicitar una credencial de demo para probar Calcu.')" 
+                  class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
+            🚀 Solicitar credencial demo
+          </button>
+          <button onclick="sendQuickWa('Hola, me gustaría consultar por la APK de choferes y logística 3PL.')" 
+                  class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
+            📱 Consultar por App Móvil 3PL
+          </button>
+          <button onclick="sendQuickWa('Hola, necesito información sobre el módulo de cobranzas en 5 etapas y facturación.')" 
+                  class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
+            💼 Cobranzas en 5 etapas & DGI
+          </button>
+        </div>
+      </div>
+
+      <!-- Dialog Footer / Input -->
+      <div class="p-3 bg-slate-900/90 border-t border-slate-800 flex items-center gap-2">
+        <input type="text" id="waCustomMsg" placeholder="Escribe tu mensaje..." 
+               class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+               onkeydown="if(event.key === 'Enter') sendCustomWa()">
+        <button onclick="sendCustomWa()" class="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+          <i data-lucide="send" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Floating Trigger Button -->
+    <button onclick="toggleWaChat()" 
+            class="relative w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-2xl pulse-glow transition-all hover:scale-110 active:scale-95 group">
+      <i data-lucide="message-circle" class="w-7 h-7"></i>
+      <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center border-2 border-slate-950">1</span>
+    </button>
+
+  </div>
+
+  <!-- LIGHTBOX / FULLSCREEN SCREENSHOT MODAL -->
+  <div id="imageModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-4 sm:p-6" onclick="closeScreenshotModal()">
+    <div class="relative max-w-6xl w-full bg-slate-900 rounded-2xl border border-slate-800 p-2 shadow-2xl flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between p-3 border-b border-slate-800">
+        <h4 id="modalTitle" class="text-sm font-bold text-white">Previsualización de Pantalla</h4>
+        <button onclick="closeScreenshotModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-2 overflow-auto max-h-[80vh] flex items-center justify-center">
+        <img id="modalImg" src="" alt="Captura ampliada" class="max-w-full h-auto rounded-lg shadow-lg">
+      </div>
+    </div>
+  </div>
+  <!-- MODULAR JAVASCRIPT ARCHITECTURE -->
+  <script src="./js/whatsapp-widget.js"></script>
+  <script src="./js/leads.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+</html>
