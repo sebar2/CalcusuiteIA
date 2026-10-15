@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Calcu 3PL Logistica</string>
-    <string name="title_activity_main">Calcu 3PL Logistica</string>
-    <string name="package_name">com.calcu.logistics3pl</string>
-    <string name="custom_url_scheme">com.calcu.logistics3pl</string>
-</resources>
