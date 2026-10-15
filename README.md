@@ -53,3 +53,12 @@ Para evaluar y auditar el software en funcionamiento sin comprometer datos reale
 * **Email:** [sebar_2@hotmail.com](mailto:sebar_2@hotmail.com)
 * **WhatsApp:** [+598 94 858 791](https://wa.me/59894858791)
 * **Sitio Web:** [https://sebar2.github.io/CalcusuiteIA/](https://sebar2.github.io/CalcusuiteIA/)
+
+## ⚖️ Propiedad Intelectual y Licencia
+
+© 2026 Calcu Suite IA & 3PL Logística. Todos los derechos reservados.
+
+El código fuente, diseño visual, marcas, manuales técnicos y ejecutivos, así como la aplicación móvil (`Calcu_3PL_Mobile_v2026.apk`) contenidos en este repositorio son propiedad intelectual exclusiva de su autor.
+
+- **Uso no comercial y evaluación:** El acceso a este repositorio y a las credenciales en modo Sandbox se otorga exclusivamente para fines de demostración, auditoría y evaluación técnica.
+- **Restricciones:** Queda estrictamente prohibida la copia, reproducción, distribución, ingeniería inversa, modificación o explotación comercial total o parcial de cualquier componente sin la autorización previa y por escrito del titular.
