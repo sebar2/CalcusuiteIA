@@ -167,33 +167,33 @@ def test_omnichannel_message_media_storage():
     finally:
         db.close()
 
-def test_media_upload_oga_audio():
-    """Valida que los audios .oga (Ogg Opus) se reconozcan y guarden correctamente para WhatsApp PTT."""
+def test_media_upload_opus_audio():
+    """Valida que los audios .opus (Ogg Opus) se reconozcan y guarden correctamente para WhatsApp PTT."""
     token = get_auth_token()
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 1. Archivo .oga con firma OggS
-    valid_oga = io.BytesIO(b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00OpusHead\x01\x02\x00\x00\x80\xbb")
-    resp_oga = client.post(
+    # 1. Archivo .opus nativo con firma OggS y OpusHead
+    valid_opus = io.BytesIO(b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00OpusHead\x01\x02\x00\x00\x80\xbb")
+    resp_opus = client.post(
         "/api/v1/omnichannel/upload-media",
-        files={"file": ("nota_voz_123.oga", valid_oga, "audio/ogg")},
+        files={"file": ("nota_voz_456.opus", valid_opus, "audio/ogg; codecs=opus")},
         headers=headers,
     )
-    assert resp_oga.status_code == 200
-    data = resp_oga.json()
+    assert resp_opus.status_code == 200
+    data = resp_opus.json()
     assert data["media_type"] == "AUDIO"
-    assert data["media_url"].endswith(".oga")
+    assert data["media_url"].endswith(".opus")
 
-    # 2. Archivo .oga grabado en navegador con contenedor EBML
-    valid_ebml_oga = io.BytesIO(b"\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\xf7\x81\x01")
-    resp_ebml_oga = client.post(
+    # 2. Archivo .opus grabado en navegador con contenedor EBML
+    valid_ebml_opus = io.BytesIO(b"\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\xf7\x81\x01")
+    resp_ebml_opus = client.post(
         "/api/v1/omnichannel/upload-media",
-        files={"file": ("nota_voz_browser.oga", valid_ebml_oga, "audio/webm; codecs=opus")},
+        files={"file": ("nota_voz_browser.opus", valid_ebml_opus, "audio/webm; codecs=opus")},
         headers=headers,
     )
-    assert resp_ebml_oga.status_code == 200
-    assert resp_ebml_oga.json()["media_type"] == "AUDIO"
-    assert resp_ebml_oga.json()["media_url"].endswith(".oga")
+    assert resp_ebml_opus.status_code == 200
+    assert resp_ebml_opus.json()["media_type"] == "AUDIO"
+    assert resp_ebml_opus.json()["media_url"].endswith(".opus")
 
 def test_meli_custom_shipping_payload_validation():
     """Verifica que el schema de publicación de MeLi valide y acepte costos de envío personalizados."""

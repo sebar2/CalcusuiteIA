@@ -293,8 +293,8 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
         const audioBlob = new Blob(audioChunksRef.current, {
           type: preferredMime || 'audio/ogg; codecs=opus',
         });
-        // Generar archivo nativo .oga para compatibilidad total con WhatsApp en smartphones
-        const audioFile = new File([audioBlob], `nota_voz_${Date.now()}.oga`, {
+        // Generar archivo nativo .opus para compatibilidad total con WhatsApp en smartphones
+        const audioFile = new File([audioBlob], `nota_voz_${Date.now()}.opus`, {
           type: preferredMime || 'audio/ogg',
         });
         setAttachedFile(audioFile);
@@ -983,7 +983,7 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
-                    accept="image/*,audio/*,video/*"
+                    accept="image/*,audio/*,video/*,.opus,.oga"
                     className="hidden"
                   />
                   <div className="flex items-center gap-1 mb-1">
@@ -991,7 +991,7 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Adjuntar Imagen o Audio"
+                      title="Adjuntar Imagen, Audio (.opus) o Video"
                     >
                       <Paperclip size={18} />
                     </button>

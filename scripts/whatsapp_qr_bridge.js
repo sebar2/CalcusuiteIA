@@ -18,6 +18,54 @@ const fs = require("fs");
 const bridgeNodeModules = path.join(__dirname, "wa_bridge", "node_modules");
 module.paths.unshift(bridgeNodeModules);
 
+const os = require("os");
+const cp = require("child_process");
+
+let ffmpegPath = null;
+try {
+  ffmpegPath = require("ffmpeg-static");
+} catch {
+  const localFfmpeg = path.join(__dirname, "wa_bridge", "node_modules", "ffmpeg-static", "ffmpeg.exe");
+  if (fs.existsSync(localFfmpeg)) ffmpegPath = localFfmpeg;
+}
+
+/**
+ * Normaliza cualquier formato de audio (WebM Opus de navegador, MP3, WAV, etc.)
+ * a formato nativo WhatsApp PTT (.opus Ogg Mono 48kHz).
+ * Garantiza reproducción 100% fluida en smartphones (Android e iOS).
+ */
+function convertToWhatsAppOpus(inputBuffer) {
+  if (!ffmpegPath || !inputBuffer || inputBuffer.length === 0) {
+    return inputBuffer;
+  }
+  const tempInput = path.join(os.tmpdir(), `wa_in_${Date.now()}_${Math.random().toString(36).slice(2)}.tmp`);
+  const tempOutput = path.join(os.tmpdir(), `wa_out_${Date.now()}_${Math.random().toString(36).slice(2)}.opus`);
+  try {
+    fs.writeFileSync(tempInput, inputBuffer);
+    cp.execFileSync(ffmpegPath, [
+      "-i", tempInput,
+      "-c:a", "libopus",
+      "-ac", "1",
+      "-ar", "48000",
+      "-b:a", "48k",
+      "-avoid_negative_ts", "make_zero",
+      "-f", "ogg",
+      "-y",
+      tempOutput
+    ], { stdio: "ignore", timeout: 8000 });
+
+    if (fs.existsSync(tempOutput)) {
+      return fs.readFileSync(tempOutput);
+    }
+  } catch (err) {
+    console.error("[WA-QR] Error transcodificando audio a Opus PTT:", err.message);
+  } finally {
+    try { if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput); } catch {}
+    try { if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput); } catch {}
+  }
+  return inputBuffer;
+}
+
 const PORT = parseInt(process.env.WA_BRIDGE_PORT || "3010", 10);
 const CALCU_BASE_URL = process.env.CALCU_BASE_URL || "http://127.0.0.1:8000";
 const AUTH_DIR = path.join(__dirname, "..", "tenants_data", "wa_qr_auth_info");
@@ -359,7 +407,7 @@ async function startWhatsAppSocket(forceNew = false) {
               { reuploadRequest: sock.updateMediaMessage }
             );
             const mime = msg.message.audioMessage?.mimetype || "audio/ogg";
-            let ext = ".oga";
+            let ext = ".opus";
             if (mime.includes("mp4") || mime.includes("m4a")) ext = ".m4a";
             else if (mime.includes("mpeg") || mime.includes("mp3")) ext = ".mp3";
             const filename = `wa_audio_${Date.now()}_${msg.key.id}${ext}`;
@@ -559,7 +607,7 @@ const server = http.createServer(async (req, res) => {
             const localPath = path.join(__dirname, "..", "app", cleanRelative);
             if (fs.existsSync(localPath)) {
               audBuf = fs.readFileSync(localPath);
-              if (localPath.endsWith(".oga") || localPath.endsWith(".ogg") || localPath.endsWith(".weba")) {
+              if (localPath.endsWith(".opus") || localPath.endsWith(".oga") || localPath.endsWith(".ogg") || localPath.endsWith(".weba")) {
                 mimetype = "audio/ogg; codecs=opus";
               } else if (localPath.endsWith(".mp3")) {
                 mimetype = "audio/mpeg";
@@ -569,9 +617,11 @@ const server = http.createServer(async (req, res) => {
             }
           }
           if (audBuf) {
+            // Normalizar a Opus mono Ogg compliant nativo para reproducción perfecta en celulares
+            const finalAudioBuf = convertToWhatsAppOpus(audBuf);
             msgPayload = {
-              audio: audBuf,
-              mimetype: mimetype,
+              audio: finalAudioBuf,
+              mimetype: "audio/ogg; codecs=opus",
               ptt: true, // Renderizar como nota de voz oficial en WhatsApp
             };
           }
