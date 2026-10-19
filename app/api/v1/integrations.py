@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from decimal import Decimal
+import os
 import time
 import logging
 import uuid
@@ -53,7 +54,7 @@ def _ensure_mercadolibre_channel(db: Session, tenant_id: str = "tenant_calcu_cor
                 "app_id": client_id,
                 "site_id": "MLU",
                 "auth_type": "OAuth 2.0 (Authorization Code)",
-                "redirect_uri": "https://100.119.40.92:8000/api/v1/integrations/meli/callback",
+                "redirect_uri": os.getenv("MELI_REDIRECT_URI", "https://sebahost.taild84e22.ts.net/api/v1/integrations/meli/callback"),
             },
             webhook_token=f"whk_meli_{secrets.token_hex(8)}",
             auto_reply_enabled=False,
@@ -946,7 +947,7 @@ def get_meli_authorize_url(
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
 ):
     _ensure_mercadolibre_channel(db, user.tenant_id)
-    r_uri = redirect_uri or "https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+    r_uri = redirect_uri or os.getenv("MELI_REDIRECT_URI", "https://sebahost.taild84e22.ts.net/api/v1/integrations/meli/callback")
     auth_data = MeliService.build_authorization_url(
         tenant_id=user.tenant_id,
         redirect_uri=r_uri,
@@ -991,9 +992,10 @@ async def meli_oauth_callback(
     cfg = _ensure_mercadolibre_channel(db, tenant_id)
 
     try:
+        cb_uri = os.getenv("MELI_REDIRECT_URI", "https://sebahost.taild84e22.ts.net/api/v1/integrations/meli/callback")
         token_data = await MeliService.exchange_authorization_code(
             code=code,
-            redirect_uri="https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+            redirect_uri=cb_uri
         )
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
@@ -1059,4 +1061,190 @@ async def meli_oauth_callback(
             """,
             status_code=500,
         )
+
+
+# =========================================================================
+# CATÁLOGO DE MERCADO LIBRE: PUBLICACIÓN, SINCRONIZACIÓN Y ANALÍTICA
+# =========================================================================
+
+class MeliPredictCategoryRequest(BaseModel):
+    title: str = Field(..., min_length=2, max_length=150, description="Título del producto para predecir categoría")
+    site_id: Optional[str] = Field(default="MLU", description="ID del sitio MeLi (por defecto MLU)")
+
+
+class MeliPublishItemRequest(BaseModel):
+    product_id: Optional[int] = Field(default=None, description="ID de producto interno en Calcu")
+    sku: Optional[str] = Field(default=None, description="SKU interno para vincular y sincronizar existencias")
+    title: str = Field(..., min_length=3, max_length=60, description="Título oficial en MeLi (máximo 60 caracteres)")
+    category_id: str = Field(..., description="ID de categoría en MeLi (ej. MLU1055)")
+    price: Decimal = Field(..., gt=0, description="Precio de venta")
+    currency_id: str = Field(default="UYU", description="Moneda: UYU o USD")
+    available_quantity: int = Field(default=1, ge=1, description="Stock inicial disponible")
+    condition: str = Field(default="new", description="Condición del artículo (new, used)")
+    listing_type_id: str = Field(default="gold_special", description="Tipo de publicación: gold_special (Clásica), gold_pro (Premium), bronze")
+    pictures: List[str] = Field(default_factory=list, description="Lista de URLs de imágenes del producto")
+    image_url: Optional[str] = Field(default=None, description="URL de imagen principal")
+    description: Optional[str] = Field(default=None, description="Descripción en texto plano")
+    attributes: Optional[List[Dict[str, Any]]] = Field(default=None, description="Atributos opcionales de la categoría")
+
+
+class MeliUpdateItemRequest(BaseModel):
+    available_quantity: Optional[int] = Field(default=None, ge=0, description="Nuevo stock disponible")
+    price: Optional[Decimal] = Field(default=None, gt=0, description="Nuevo precio de venta")
+    status: Optional[str] = Field(default=None, description="Nuevo estado: active, paused, closed")
+    sku: Optional[str] = Field(default=None, description="SKU interno para sincronizar depósito si aplica")
+
+
+class MeliSyncStockRequest(BaseModel):
+    sku: str = Field(..., min_length=1, description="SKU interno del producto para sincronizar depósito central")
+
+
+@router.get(
+    "/meli/products",
+    summary="Listado de productos del inventario interno aptos para publicar en Mercado Libre"
+)
+def get_meli_ready_products(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    from app.models.entities import Product, Inventory
+    products = db.query(Product).filter(Product.activo == True).order_by(Product.nombre).all()
+    results = []
+    for p in products:
+        inv = db.query(Inventory).filter(Inventory.producto_id == p.id).first()
+        results.append({
+            "id": p.id,
+            "sku": p.sku,
+            "nombre": p.nombre,
+            "categoria": p.categoria,
+            "costo_base": float(p.costo_base),
+            "precio_lista": float(p.precio_lista),
+            "deposito_central": inv.deposito_central if inv else 0,
+            "image_url": p.image_url,
+        })
+    return results
+
+
+@router.post(
+    "/meli/predict-category",
+    summary="Predice categorías de Mercado Libre para un título usando Domain Discovery"
+)
+async def predict_meli_category(
+    req: MeliPredictCategoryRequest,
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    preds = await MeliService.predict_category(title=req.title, site_id=req.site_id or "MLU")
+    return {"predictions": preds}
+
+
+@router.post(
+    "/meli/items",
+    summary="Publica un producto en Mercado Libre Uruguay (MLU)"
+)
+async def publish_meli_item(
+    req: MeliPublishItemRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    payload = {
+        "title": req.title,
+        "category_id": req.category_id,
+        "price": float(req.price),
+        "currency_id": req.currency_id,
+        "available_quantity": req.available_quantity,
+        "condition": req.condition,
+        "listing_type_id": req.listing_type_id,
+        "pictures": req.pictures,
+        "image_url": req.image_url,
+        "description": req.description,
+        "attributes": req.attributes,
+    }
+
+    item_data = await MeliService.publish_item(db=db, tenant_id=user.tenant_id, payload=payload)
+    return {
+        "status": "published",
+        "item_id": item_data.get("id"),
+        "title": item_data.get("title"),
+        "permalink": item_data.get("permalink"),
+        "price": item_data.get("price"),
+        "available_quantity": item_data.get("available_quantity"),
+        "meli_status": item_data.get("status"),
+        "raw_response": item_data,
+    }
+
+
+@router.put(
+    "/meli/items/{item_id}",
+    summary="Actualiza precio, stock o estado de una publicación en Mercado Libre"
+)
+async def update_meli_item(
+    item_id: str,
+    req: MeliUpdateItemRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    updates = {}
+    if req.available_quantity is not None:
+        updates["available_quantity"] = req.available_quantity
+    if req.price is not None:
+        updates["price"] = float(req.price)
+    if req.status is not None:
+        updates["status"] = req.status
+
+    updated_data = await MeliService.update_item(
+        db=db,
+        tenant_id=user.tenant_id,
+        item_id=item_id,
+        updates=updates,
+    )
+    return {
+        "status": "updated",
+        "item_id": item_id,
+        "updated_fields": list(updates.keys()),
+        "raw_response": updated_data,
+    }
+
+
+@router.post(
+    "/meli/items/{item_id}/sync-stock",
+    summary="Sincroniza atómicamente el stock de MeLi con el depósito central de Calcu para un SKU"
+)
+async def sync_meli_item_stock(
+    item_id: str,
+    req: MeliSyncStockRequest,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    res = await MeliService.sync_stock_from_inventory(
+        db=db,
+        tenant_id=user.tenant_id,
+        item_id=item_id,
+        sku=req.sku,
+    )
+    return res
+
+
+@router.get(
+    "/meli/seller-reputation",
+    summary="Consulta la reputación y nivel del vendedor oficial en Mercado Libre"
+)
+async def get_meli_seller_reputation(
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    profile = await MeliService.get_seller_profile(db=db, tenant_id=user.tenant_id)
+    return profile
+
+
+@router.get(
+    "/meli/items/{item_id}/analytics",
+    summary="Consulta visitas, preguntas y conversión de una publicación en Mercado Libre"
+)
+async def get_meli_item_analytics(
+    item_id: str,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    analytics = await MeliService.get_item_analytics(db=db, tenant_id=user.tenant_id, item_id=item_id)
+    return analytics
 

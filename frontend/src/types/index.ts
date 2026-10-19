@@ -2741,5 +2741,99 @@ export interface TenantAccountItem {
   };
 }
 
+// --- MERCADO LIBRE URUGUAY (MLU) - CATÁLOGO, PUBLICACIÓN & ANALÍTICA ---
+export interface MeliReadyProductItem {
+  id: number;
+  sku: string;
+  nombre: string;
+  categoria: string;
+  costo_base: number;
+  precio_lista: number;
+  deposito_central: number;
+  image_url?: string | null;
+}
+
+export interface MeliCategoryPrediction {
+  category_id: string;
+  category_name: string;
+  domain_id?: string;
+  domain_name?: string;
+  attributes?: any[];
+}
+
+export interface MeliPublishItemPayload {
+  product_id?: number;
+  sku?: string;
+  title: string;
+  category_id: string;
+  price: number;
+  currency_id?: string;
+  available_quantity: number;
+  condition?: string;
+  listing_type_id?: string;
+  pictures?: string[];
+  image_url?: string;
+  description?: string;
+  attributes?: any[];
+}
+
+export interface MeliPublishItemResponse {
+  status: string;
+  item_id: string;
+  title: string;
+  permalink: string;
+  price: number;
+  available_quantity: number;
+  meli_status: string;
+  raw_response?: any;
+}
+
+export interface MeliUpdateItemPayload {
+  available_quantity?: number;
+  price?: number;
+  status?: string;
+  sku?: string;
+}
+
+export interface MeliSyncStockResponse {
+  item_id: string;
+  sku: string;
+  deposito_central_stock: number;
+  meli_available_quantity: number;
+  status: string;
+  message: string;
+}
+
+export interface MeliSellerReputationResponse {
+  seller_id: number;
+  nickname: string;
+  site_id: string;
+  permalink?: string;
+  reputation_level: string;
+  power_seller_status?: string;
+  transactions_completed: number;
+  transactions_canceled: number;
+  ratings_positive: number;
+  ratings_negative: number;
+  status?: Record<string, any>;
+}
+
+export interface MeliItemAnalyticsResponse {
+  item_id: string;
+  title: string;
+  price: number;
+  currency_id: string;
+  status: string;
+  available_quantity: number;
+  sold_quantity: number;
+  visits_last_30d: number;
+  questions_total: number;
+  questions_unanswered: number;
+  conversion_rate_pct: number;
+  permalink?: string;
+  thumbnail?: string;
+}
+
+
 
 

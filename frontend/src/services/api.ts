@@ -146,6 +146,14 @@ import type {
   OmnichannelMessageItem,
   AIChatSuggestionResponse,
   TenantAccountItem,
+  MeliReadyProductItem,
+  MeliCategoryPrediction,
+  MeliPublishItemPayload,
+  MeliPublishItemResponse,
+  MeliUpdateItemPayload,
+  MeliSyncStockResponse,
+  MeliSellerReputationResponse,
+  MeliItemAnalyticsResponse,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -1824,6 +1832,48 @@ export const apiService = {
     message: string;
   }> {
     const res = await apiClient.post(`/api/v1/integrations/webhooks/${channel}`, payload);
+    return res.data;
+  },
+
+  // --- MERCADO LIBRE URUGUAY (MLU) - CATÁLOGO, PUBLICACIONES Y ANALÍTICA ---
+  async getMeliReadyProducts(): Promise<MeliReadyProductItem[]> {
+    const res = await apiClient.get<MeliReadyProductItem[]>('/api/v1/integrations/meli/products');
+    return res.data;
+  },
+
+  async predictMeliCategory(title: string, siteId: string = 'MLU'): Promise<MeliCategoryPrediction[]> {
+    const res = await apiClient.post<{ predictions: MeliCategoryPrediction[] }>('/api/v1/integrations/meli/predict-category', {
+      title,
+      site_id: siteId,
+    });
+    return res.data.predictions || [];
+  },
+
+  async publishMeliItem(payload: MeliPublishItemPayload): Promise<MeliPublishItemResponse> {
+    const res = await apiClient.post<MeliPublishItemResponse>('/api/v1/integrations/meli/items', payload);
+    return res.data;
+  },
+
+  async updateMeliItem(
+    itemId: string,
+    payload: MeliUpdateItemPayload
+  ): Promise<{ status: string; item_id: string; updated_fields: string[] }> {
+    const res = await apiClient.put(`/api/v1/integrations/meli/items/${itemId}`, payload);
+    return res.data;
+  },
+
+  async syncMeliItemStock(itemId: string, sku: string): Promise<MeliSyncStockResponse> {
+    const res = await apiClient.post<MeliSyncStockResponse>(`/api/v1/integrations/meli/items/${itemId}/sync-stock`, { sku });
+    return res.data;
+  },
+
+  async getMeliSellerReputation(): Promise<MeliSellerReputationResponse> {
+    const res = await apiClient.get<MeliSellerReputationResponse>('/api/v1/integrations/meli/seller-reputation');
+    return res.data;
+  },
+
+  async getMeliItemAnalytics(itemId: string): Promise<MeliItemAnalyticsResponse> {
+    const res = await apiClient.get<MeliItemAnalyticsResponse>(`/api/v1/integrations/meli/items/${itemId}/analytics`);
     return res.data;
   },
 

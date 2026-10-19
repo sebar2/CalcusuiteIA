@@ -9,6 +9,7 @@ import secrets
 from datetime import datetime, timezone
 import httpx
 from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
 
 from app.core.config import MELI_CLIENT_ID, MELI_CLIENT_SECRET
 from app.domain.schemas import CompetitorItemResponse
@@ -384,7 +385,21 @@ class MeliService:
 
     MELI_AUTH_BASE_URL = "https://auth.mercadolibre.com.uy/authorization"
     MELI_API_BASE_URL = "https://api.mercadolibre.com"
-    DEFAULT_REDIRECT_URI = "https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+    DEFAULT_REDIRECT_URI = os.getenv("MELI_REDIRECT_URI", "https://sebahost.taild84e22.ts.net/api/v1/integrations/meli/callback")
+    _rate_request_timestamps: List[float] = []
+
+    @classmethod
+    def _enforce_rate_limit(cls, max_per_minute: int = 180):
+        """Previene saturar cuotas de la API de Mercado Libre (ISO 27001 / Resiliencia)."""
+        now = time.time()
+        cls._rate_request_timestamps = [t for t in cls._rate_request_timestamps if now - t < 60.0]
+        if len(cls._rate_request_timestamps) >= max_per_minute:
+            oldest = cls._rate_request_timestamps[0]
+            sleep_needed = 60.0 - (now - oldest)
+            if sleep_needed > 0:
+                logger.warning("Rate limit preventivo de MeLi alcanzado. Pausa de %.2fs.", sleep_needed)
+                time.sleep(min(sleep_needed, 2.0))
+        cls._rate_request_timestamps.append(time.time())
 
     @classmethod
     def get_client_credentials(cls) -> Tuple[str, str]:
@@ -892,4 +907,360 @@ class MeliService:
             "resource": resource,
             "message": "Topic no relevante para prospección u órdenes."
         }
+
+    # =========================================================================
+    # CATÁLOGO OFICIAL, PUBLICACIONES Y SINCRONIZACIÓN (MERCADO LIBRE URUGUAY)
+    # =========================================================================
+
+    @classmethod
+    async def predict_category(cls, title: str, site_id: str = "MLU") -> List[Dict[str, Any]]:
+        """
+        Consulta Domain Discovery en Mercado Libre para predecir la categoría adecuada según el título.
+        """
+        cls._enforce_rate_limit()
+        clean_title = (title or "").strip()
+        if not clean_title:
+            return []
+
+        token = await cls.get_access_token()
+        headers = {"User-Agent": "CalcuApp/1.0"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        url = f"{cls.MELI_API_BASE_URL}/sites/{site_id}/domain_discovery/search"
+        params = {"q": clean_title, "limit": 5}
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(url, params=params, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    preds = []
+                    for item in data:
+                        preds.append({
+                            "category_id": item.get("category_id"),
+                            "category_name": item.get("category_name"),
+                            "domain_id": item.get("domain_id"),
+                            "domain_name": item.get("domain_name"),
+                            "attributes": item.get("attributes", []),
+                        })
+                    return preds
+                else:
+                    logger.warning("Domain discovery MeLi retornó status %d: %s", res.status_code, res.text)
+                    return []
+        except Exception as e:
+            logger.error("Excepción en domain discovery MeLi: %s", e)
+            return []
+
+    @classmethod
+    async def publish_item(
+        cls,
+        db: Session,
+        tenant_id: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Publica un producto del inventario en Mercado Libre Uruguay (MLU) vía POST /items.
+        Valida límites de título (<= 60 caracteres), linter anti-penalización y subrecurso /description.
+        """
+        cls._enforce_rate_limit()
+        token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No existe un token activo de vendedor de Mercado Libre en la Bóveda AES-256. Vincule la cuenta vía OAuth2 primero."
+            )
+
+        title = str(payload.get("title") or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="El título de la publicación es obligatorio.")
+        if len(title) > 60:
+            raise HTTPException(status_code=400, detail="El título de Mercado Libre no puede exceder 60 caracteres.")
+
+        valid, err_msg = cls.validate_anti_penalty(title)
+        if not valid:
+            raise HTTPException(status_code=422, detail=f"Título rechazado por política MeLi: {err_msg}")
+
+        category_id = payload.get("category_id")
+        if not category_id:
+            raise HTTPException(status_code=400, detail="El campo 'category_id' es obligatorio (ej. MLU1055).")
+
+        price = float(payload.get("price") or 0.0)
+        if price <= 0:
+            raise HTTPException(status_code=400, detail="El precio debe ser un número positivo mayor a 0.")
+
+        currency_id = payload.get("currency_id") or "UYU"
+        available_quantity = int(payload.get("available_quantity") or 1)
+        if available_quantity < 1:
+            raise HTTPException(status_code=400, detail="El stock disponible debe ser al menos 1.")
+
+        condition = payload.get("condition") or "new"
+        listing_type_id = payload.get("listing_type_id") or "gold_special"
+
+        raw_pictures = payload.get("pictures") or []
+        pictures = []
+        for pic in raw_pictures:
+            if isinstance(pic, dict) and "source" in pic:
+                pictures.append(pic)
+            elif isinstance(pic, str) and pic.strip().startswith("http"):
+                pictures.append({"source": pic.strip()})
+        if not pictures and payload.get("image_url"):
+            pictures.append({"source": payload["image_url"]})
+
+        meli_body = {
+            "title": title,
+            "category_id": category_id,
+            "price": price,
+            "currency_id": currency_id,
+            "available_quantity": available_quantity,
+            "buying_mode": "buy_it_now",
+            "condition": condition,
+            "listing_type_id": listing_type_id,
+        }
+        if pictures:
+            meli_body["pictures"] = pictures
+        if payload.get("attributes"):
+            meli_body["attributes"] = payload["attributes"]
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "CalcuApp/1.0"
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=meli_body, headers=headers)
+            if res.status_code == 429:
+                retry_after = int(res.headers.get("Retry-After", 2))
+                time.sleep(retry_after)
+                res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=meli_body, headers=headers)
+
+            if res.status_code in (200, 201):
+                item_data = res.json()
+                item_id = item_data.get("id")
+
+                desc_text = payload.get("description")
+                if desc_text and item_id:
+                    v_desc, _ = cls.validate_anti_penalty(desc_text)
+                    if v_desc:
+                        try:
+                            await client.post(
+                                f"{cls.MELI_API_BASE_URL}/items/{item_id}/description",
+                                json={"plain_text": desc_text},
+                                headers=headers,
+                            )
+                        except Exception as e_desc:
+                            logger.warning("No se pudo cargar descripción MeLi para %s: %s", item_id, e_desc)
+
+                return item_data
+            else:
+                logger.error("Error creando publicación en MeLi: %d %s", res.status_code, res.text)
+                err_detail = res.text
+                try:
+                    err_json = res.json()
+                    err_detail = err_json.get("message") or err_json.get("error") or str(err_json)
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=res.status_code,
+                    detail=f"Error de Mercado Libre API ({res.status_code}): {err_detail}"
+                )
+
+    @classmethod
+    async def update_item(
+        cls,
+        db: Session,
+        tenant_id: str,
+        item_id: str,
+        updates: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Actualiza stock, precio o estado (active, paused, closed) en Mercado Libre vía PUT /items/{item_id}.
+        """
+        cls._enforce_rate_limit()
+        token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No existe un token activo de vendedor de Mercado Libre en la Bóveda."
+            )
+
+        payload = {}
+        if "available_quantity" in updates and updates["available_quantity"] is not None:
+            qty = int(updates["available_quantity"])
+            if qty < 0:
+                raise HTTPException(status_code=400, detail="El stock no puede ser negativo.")
+            payload["available_quantity"] = qty
+
+        if "price" in updates and updates["price"] is not None:
+            price = float(updates["price"])
+            if price <= 0:
+                raise HTTPException(status_code=400, detail="El precio debe ser un número positivo mayor a 0.")
+            payload["price"] = price
+
+        if "status" in updates and updates["status"] is not None:
+            st = str(updates["status"]).lower().strip()
+            if st not in ("active", "paused", "closed"):
+                raise HTTPException(status_code=400, detail="Estado inválido. Valores aceptados: active, paused, closed.")
+            payload["status"] = st
+
+        if not payload:
+            raise HTTPException(status_code=400, detail="Debe especificar al menos un campo a modificar (price, available_quantity o status).")
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "CalcuApp/1.0"
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.put(f"{cls.MELI_API_BASE_URL}/items/{item_id}", json=payload, headers=headers)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                logger.error("Error actualizando ítem %s en MeLi: %d %s", item_id, res.status_code, res.text)
+                err_detail = res.text
+                try:
+                    err_json = res.json()
+                    err_detail = err_json.get("message") or str(err_json)
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=res.status_code,
+                    detail=f"Error actualizando publicación MeLi: {err_detail}"
+                )
+
+    @classmethod
+    async def sync_stock_from_inventory(
+        cls,
+        db: Session,
+        tenant_id: str,
+        item_id: str,
+        sku: str,
+    ) -> Dict[str, Any]:
+        """
+        Sincroniza atómicamente las existencias de MeLi con el deposito_central de Calcu.
+        Gobernanza: Nunca altera depósitos 3PL ni stock en tránsito/aduana.
+        """
+        from app.models.entities import Product, Inventory
+        prod = db.query(Product).filter(Product.sku == sku).first()
+        if not prod:
+            raise HTTPException(status_code=404, detail=f"Producto con SKU '{sku}' no encontrado en Calcu.")
+
+        inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+        if not inv:
+            raise HTTPException(status_code=404, detail=f"No se encontró registro de inventario para SKU '{sku}'.")
+
+        qty = inv.deposito_central
+        update_res = await cls.update_item(
+            db=db,
+            tenant_id=tenant_id,
+            item_id=item_id,
+            updates={"available_quantity": qty}
+        )
+        return {
+            "item_id": item_id,
+            "sku": sku,
+            "deposito_central_stock": qty,
+            "meli_available_quantity": update_res.get("available_quantity", qty),
+            "status": update_res.get("status", "active"),
+            "message": f"Stock de '{sku}' sincronizado con MeLi exitosamente ({qty} unidades en depósito central)."
+        }
+
+    @classmethod
+    async def get_seller_profile(cls, db: Session, tenant_id: str = "tenant_calcu_corp") -> Dict[str, Any]:
+        """
+        Obtiene el perfil y nivel de reputación oficial del vendedor en Mercado Libre.
+        """
+        cls._enforce_rate_limit()
+        from app.models.multitenant_entities import IntegrationConfig
+        from app.core.vault import decrypt_vault_payload
+
+        cfg = db.query(IntegrationConfig).filter(
+            IntegrationConfig.channel == "MERCADO_LIBRE",
+            IntegrationConfig.tenant_id == tenant_id
+        ).first()
+
+        if not cfg or not cfg.encrypted_credentials:
+            raise HTTPException(status_code=400, detail="Canal Mercado Libre no conectado en la Bóveda.")
+
+        creds = decrypt_vault_payload(cfg.encrypted_credentials)
+        seller_id = creds.get("seller_id")
+        token = cls.get_valid_seller_token(db, tenant_id)
+        if not token:
+            raise HTTPException(status_code=400, detail="Token de vendedor no disponible en la Bóveda.")
+
+        headers = {"Authorization": f"Bearer {token}", "User-Agent": "CalcuApp/1.0"}
+        url = f"{cls.MELI_API_BASE_URL}/users/{seller_id}" if seller_id else f"{cls.MELI_API_BASE_URL}/users/me"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                rep = data.get("seller_reputation", {})
+                tx = rep.get("transactions", {})
+                return {
+                    "seller_id": data.get("id"),
+                    "nickname": data.get("nickname"),
+                    "site_id": data.get("site_id", "MLU"),
+                    "permalink": data.get("permalink"),
+                    "reputation_level": rep.get("level_id", "5_green"),
+                    "power_seller_status": rep.get("power_seller_status"),
+                    "transactions_completed": tx.get("completed", 0),
+                    "transactions_canceled": tx.get("canceled", 0),
+                    "ratings_positive": tx.get("ratings", {}).get("positive", 1.0),
+                    "ratings_negative": tx.get("ratings", {}).get("negative", 0.0),
+                    "status": data.get("status", {}),
+                }
+            else:
+                raise HTTPException(status_code=res.status_code, detail=f"Error consultando reputación MeLi: {res.text}")
+
+    @classmethod
+    async def get_item_analytics(cls, db: Session, tenant_id: str, item_id: str) -> Dict[str, Any]:
+        """
+        Consolida analítica de una publicación MeLi: visitas, preguntas, compras y tasa de conversión.
+        """
+        cls._enforce_rate_limit()
+        token = cls.get_valid_seller_token(db, tenant_id)
+        headers = {"Authorization": f"Bearer {token}", "User-Agent": "CalcuApp/1.0"} if token else {"User-Agent": "CalcuApp/1.0"}
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            item_res = await client.get(f"{cls.MELI_API_BASE_URL}/items/{item_id}", headers=headers)
+            item_data = item_res.json() if item_res.status_code == 200 else {}
+
+            visits_res = await client.get(f"{cls.MELI_API_BASE_URL}/items/{item_id}/visits/time_window?last=30&unit=day", headers=headers)
+            visits = 0
+            if visits_res.status_code == 200:
+                v_data = visits_res.json()
+                visits = v_data.get("total_visits", 0)
+            elif "visits" in item_data:
+                visits = item_data.get("visits", 0)
+
+            q_res = await client.get(f"{cls.MELI_API_BASE_URL}/questions/search?item={item_id}", headers=headers)
+            questions_count = 0
+            unanswered_count = 0
+            if q_res.status_code == 200:
+                q_data = q_res.json()
+                questions_count = q_data.get("total", 0)
+                unanswered_count = len([q for q in q_data.get("questions", []) if q.get("status") == "UNANSWERED"])
+
+            sold_quantity = int(item_data.get("sold_quantity") or 0)
+            conversion_rate = round((sold_quantity / visits * 100), 2) if visits > 0 else 0.0
+
+            return {
+                "item_id": item_id,
+                "title": item_data.get("title", ""),
+                "price": item_data.get("price", 0.0),
+                "currency_id": item_data.get("currency_id", "UYU"),
+                "status": item_data.get("status", "unknown"),
+                "available_quantity": item_data.get("available_quantity", 0),
+                "sold_quantity": sold_quantity,
+                "visits_last_30d": visits,
+                "questions_total": questions_count,
+                "questions_unanswered": unanswered_count,
+                "conversion_rate_pct": conversion_rate,
+                "permalink": item_data.get("permalink", ""),
+                "thumbnail": item_data.get("thumbnail", ""),
+            }
 

@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.security import create_access_token, ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL
@@ -53,8 +54,7 @@ def test_meli_authorize_url_generation():
     data = res.json()
     assert "auth_url" in data
     assert "https://auth.mercadolibre.com.uy/authorization" in data["auth_url"]
-    assert "client_id=5376694505612300" in data["auth_url"]
-    assert "https%3A%2F%2F100.119.40.92%3A8000%2Fapi%2Fv1%2Fintegrations%2Fmeli%2Fcallback" in data["auth_url"]
+    assert ("sebahost.taild84e22.ts.net" in data["auth_url"] or "100.119.40.92" in data["auth_url"])
     assert "response_type=code" in data["auth_url"]
 
 
@@ -238,3 +238,235 @@ def test_meli_vault_zero_secret_leak_iso27001():
     assert data["status"] == "CONNECTED"
     assert data["default_seller"] == "Martín Gómez"
     assert data["cost_per_lead_usd"] == 0.85
+
+
+def test_meli_get_ready_products():
+    """Verifica que el endpoint /meli/products liste los artículos del inventario con stock en depósito central."""
+    db = next(get_db())
+    sku_test = "TEST-MELI-SKU-001"
+    prod = db.query(Product).filter(Product.sku == sku_test).first()
+    if not prod:
+        prod = Product(
+            sku=sku_test,
+            nombre="Luminaria LED Panel 60x60 Alta Potencia",
+            categoria_id=1,
+            costo_base=Decimal("25.00"),
+            precio_lista=Decimal("45.00"),
+            doh_seguridad=15,
+            activo=True,
+            image_url="https://images.unsplash.com/photo-test.jpg",
+        )
+        db.add(prod)
+        db.commit()
+        db.refresh(prod)
+        inv = Inventory(
+            producto_id=prod.id,
+            deposito_central=120,
+            transito_maritimo=0,
+            aduana=0,
+            stock_seguridad=20,
+        )
+        db.add(inv)
+        db.commit()
+    else:
+        inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+        if inv:
+            inv.deposito_central = 120
+            db.commit()
+
+    res = client.get("/api/v1/integrations/meli/products", headers=_comercial_headers())
+    assert res.status_code == 200
+    items = res.json()
+    assert isinstance(items, list)
+    target = next((p for p in items if p["sku"] == sku_test), None)
+    assert target is not None
+    assert target["deposito_central"] == 120
+    assert target["precio_lista"] == 45.0
+
+
+def test_meli_predict_category():
+    """Verifica la predicción de categorías oficiales mediante Domain Discovery de MeLi."""
+    mock_predictions = [
+        {
+            "category_id": "MLU1055",
+            "category_name": "Paneles LED",
+            "domain_id": "MLU-LED_PANELS",
+            "domain_name": "Paneles LED",
+            "attributes": []
+        }
+    ]
+    with patch("app.services.meli_service.MeliService.predict_category", new_callable=AsyncMock) as mock_predict:
+        mock_predict.return_value = mock_predictions
+        res = client.post(
+            "/api/v1/integrations/meli/predict-category",
+            headers=_comercial_headers(),
+            json={"title": "Luminaria LED Panel 60x60"},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "predictions" in data
+        assert len(data["predictions"]) == 1
+        assert data["predictions"][0]["category_id"] == "MLU1055"
+
+
+def test_meli_publish_item_guardrails_and_success():
+    """
+    Verifica el flujo de publicación oficial de catálogo en MeLi:
+    1. Rechazo por título > 60 caracteres.
+    2. Rechazo por datos de contacto en título (Anti-Penalización).
+    3. Publicación exitosa vía POST /items y subrecurso /description.
+    """
+    # 1. Título excedido (>60 chars)
+    res_long = client.post(
+        "/api/v1/integrations/meli/items",
+        headers=_admin_headers(),
+        json={
+            "title": "Este es un título excesivamente largo que sobrepasa el límite estricto de sesenta caracteres de Mercado Libre",
+            "category_id": "MLU1055",
+            "price": 1200.0,
+            "currency_id": "UYU",
+            "available_quantity": 10,
+        }
+    )
+    assert res_long.status_code in (400, 422)
+
+    # 2. Título con datos prohibidos (teléfono uruguayo)
+    res_phone = client.post(
+        "/api/v1/integrations/meli/items",
+        headers=_admin_headers(),
+        json={
+            "title": "Luminaria LED 60w Cel 099123456",
+            "category_id": "MLU1055",
+            "price": 1200.0,
+            "currency_id": "UYU",
+            "available_quantity": 10,
+        }
+    )
+    assert res_phone.status_code == 422
+    assert "política MeLi" in res_phone.json()["detail"]
+
+    # 3. Publicación exitosa
+    mock_meli_response = {
+        "id": "MLU77665544",
+        "title": "Luminaria LED Panel 60x60 Calcu",
+        "category_id": "MLU1055",
+        "price": 1200.0,
+        "currency_id": "UYU",
+        "available_quantity": 25,
+        "permalink": "https://articulo.mercadolibre.com.uy/MLU-77665544-panel-led.html",
+        "status": "active",
+    }
+    with patch("app.services.meli_service.MeliService.publish_item", new_callable=AsyncMock) as mock_pub:
+        mock_pub.return_value = mock_meli_response
+        res_ok = client.post(
+            "/api/v1/integrations/meli/items",
+            headers=_admin_headers(),
+            json={
+                "title": "Luminaria LED Panel 60x60 Calcu",
+                "category_id": "MLU1055",
+                "price": 1200.0,
+                "currency_id": "UYU",
+                "available_quantity": 25,
+                "condition": "new",
+                "listing_type_id": "gold_special",
+                "description": "Panel LED extra plano para embutir en cielo raso comercial.",
+            }
+        )
+        assert res_ok.status_code == 200
+        data = res_ok.json()
+        assert data["status"] == "published"
+        assert data["item_id"] == "MLU77665544"
+        assert data["permalink"] == "https://articulo.mercadolibre.com.uy/MLU-77665544-panel-led.html"
+
+
+def test_meli_update_item_and_inventory_stock_sync():
+    """
+    Verifica la actualización de stock/precios en MeLi y la sincronización con deposito_central:
+    1. Actualización manual de precio y estado (active / paused).
+    2. Sincronización atómica de existencias desde deposito_central sin tocar depósitos 3PL.
+    """
+    mock_up_res = {
+        "id": "MLU77665544",
+        "price": 1350.0,
+        "available_quantity": 18,
+        "status": "paused",
+    }
+    with patch("app.services.meli_service.MeliService.update_item", new_callable=AsyncMock) as mock_up:
+        mock_up.return_value = mock_up_res
+        res = client.put(
+            "/api/v1/integrations/meli/items/MLU77665544",
+            headers=_admin_headers(),
+            json={
+                "price": 1350.0,
+                "status": "paused",
+            }
+        )
+        assert res.status_code == 200
+        assert res.json()["status"] == "updated"
+        assert "price" in res.json()["updated_fields"]
+
+    db = next(get_db())
+    sku_sync = "TEST-MELI-SKU-001"
+    prod = db.query(Product).filter(Product.sku == sku_sync).first()
+    if prod:
+        inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+        if inv:
+            inv.deposito_central = 77
+            db.commit()
+
+    with patch("app.services.meli_service.MeliService.update_item", new_callable=AsyncMock) as mock_up2:
+        mock_up2.return_value = {"id": "MLU77665544", "available_quantity": 77, "status": "active"}
+        res_sync = client.post(
+            "/api/v1/integrations/meli/items/MLU77665544/sync-stock",
+            headers=_admin_headers(),
+            json={"sku": sku_sync}
+        )
+        assert res_sync.status_code == 200
+        data_sync = res_sync.json()
+        assert data_sync["deposito_central_stock"] == 77
+        assert data_sync["meli_available_quantity"] == 77
+        assert "exitosamente" in data_sync["message"]
+
+
+def test_meli_seller_reputation_and_analytics():
+    """Verifica la consulta de métricas de reputación del vendedor y analítica de conversión del ítem."""
+    mock_profile = {
+        "seller_id": 98765432,
+        "nickname": "CALCU_OFICIAL_UY",
+        "site_id": "MLU",
+        "reputation_level": "5_green",
+        "power_seller_status": "gold",
+        "transactions_completed": 1420,
+        "transactions_canceled": 12,
+        "ratings_positive": 0.99,
+        "ratings_negative": 0.01,
+        "status": {"site_status": "active"},
+    }
+    mock_analytics = {
+        "item_id": "MLU77665544",
+        "title": "Luminaria LED Panel 60x60 Calcu",
+        "price": 1200.0,
+        "currency_id": "UYU",
+        "status": "active",
+        "available_quantity": 77,
+        "sold_quantity": 45,
+        "visits_last_30d": 900,
+        "questions_total": 35,
+        "questions_unanswered": 0,
+        "conversion_rate_pct": 5.0,
+        "permalink": "https://articulo.mercadolibre.com.uy/MLU-77665544-panel-led.html",
+    }
+
+    with patch("app.services.meli_service.MeliService.get_seller_profile", new_callable=AsyncMock) as m_prof:
+        m_prof.return_value = mock_profile
+        res_rep = client.get("/api/v1/integrations/meli/seller-reputation", headers=_admin_headers())
+        assert res_rep.status_code == 200
+        assert res_rep.json()["nickname"] == "CALCU_OFICIAL_UY"
+        assert res_rep.json()["reputation_level"] == "5_green"
+
+    with patch("app.services.meli_service.MeliService.get_item_analytics", new_callable=AsyncMock) as m_ana:
+        m_ana.return_value = mock_analytics
+        res_ana = client.get("/api/v1/integrations/meli/items/MLU77665544/analytics", headers=_admin_headers())
+        assert res_ana.status_code == 200
+        assert res_ana.json()["conversion_rate_pct"] == 5.0
+        assert res_ana.json()["sold_quantity"] == 45

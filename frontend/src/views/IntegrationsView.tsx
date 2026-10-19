@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { IntegrationChannelConfig, WhatsAppQRSessionResponse } from '../types';
+import { MeliPublishModal } from '../components/integrations/MeliPublishModal';
 
 interface IntegrationsViewProps {
   currentRole?: string;
@@ -93,6 +94,9 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   const [credentialsForm, setCredentialsForm] = useState<Record<string, string>>({});
   const [autoReplyEnabled, setAutoReplyEnabled] = useState<boolean>(false);
   const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
+
+  // Modal de Publicación y Catálogo Oficial MeLi (MLU)
+  const [isMeliPublishModalOpen, setIsMeliPublishModalOpen] = useState<boolean>(false);
 
   // Modal de Vinculación de WhatsApp Directo por Código QR
   const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
@@ -680,14 +684,29 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                     </button>
                   ) : ch.channel === 'MERCADO_LIBRE' ? (
                     <div className="flex items-center gap-1.5">
+                      {isConnected && (
+                        <button
+                          type="button"
+                          onClick={() => setIsMeliPublishModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] shadow-xs transition-colors cursor-pointer"
+                          title="Publicar producto del inventario en Mercado Libre Uruguay en 1 clic"
+                        >
+                          <ShoppingBag size={13} />
+                          <span>Publicar SKU</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={handleConnectMeliOAuth}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] shadow-xs transition-colors cursor-pointer"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer ${
+                          isConnected
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200'
+                            : 'bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277]'
+                        }`}
                         title="Iniciar flujo oficial OAuth 2.0 con Mercado Libre Developers"
                       >
                         <ShoppingBag size={13} />
-                        <span>{isConnected ? 'Reconectar MeLi' : 'Vincular MeLi'}</span>
+                        <span>{isConnected ? 'Reconectar' : 'Vincular MeLi'}</span>
                       </button>
                       <button
                         type="button"
@@ -1166,6 +1185,19 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal de Publicación Oficial en Mercado Libre Uruguay */}
+      <MeliPublishModal
+        isOpen={isMeliPublishModalOpen}
+        onClose={() => setIsMeliPublishModalOpen(false)}
+        onPublished={(item) => {
+          setBannerMsg({
+            type: 'success',
+            text: `¡Artículo "${item.title}" (${item.item_id}) publicado con éxito en Mercado Libre Uruguay!`,
+          });
+          loadChannels();
+        }}
+      />
     </div>
   );
 };
