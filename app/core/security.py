@@ -43,11 +43,13 @@ class UserContext:
         role: str,
         driver_id: Optional[int] = None,
         tenant_id: str = "tenant_calcu_corp",
+        is_master_superadmin: bool = False,
     ):
         self.user_id = user_id
         self.role = role
         self.driver_id = driver_id
         self.tenant_id = tenant_id or "tenant_calcu_corp"
+        self.is_master_superadmin = is_master_superadmin
 
     def is_admin(self) -> bool:
         return self.role in {ROLE_CONTROLLER_ADMIN, ROLE_3PL_ADMIN}
@@ -103,7 +105,21 @@ def decode_access_token(token: str) -> UserContext:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Rol no autorizado '{clean_role}'. Roles válidos: {list(VALID_ROLES)}"
             )
-        return UserContext(user_id=str(user_id), role=clean_role, driver_id=driver_id, tenant_id=tenant_id)
+        
+        clean_user = str(user_id).strip().lower()
+        is_super = bool(payload.get("is_master_superadmin", False))
+        if clean_user in {"seba", "sebar_2@hotmail.com"}:
+            is_super = True
+        elif clean_user in {"demo", "admin"}:
+            is_super = False
+
+        return UserContext(
+            user_id=str(user_id),
+            role=clean_role,
+            driver_id=driver_id,
+            tenant_id=tenant_id,
+            is_master_superadmin=is_super
+        )
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -140,10 +156,12 @@ def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Rol no autorizado '{clean_role}'. Roles válidos: {list(VALID_ROLES)}"
             )
-        return UserContext(user_id=x_user_id or "analista_usuario", role=clean_role)
+        clean_uid = (x_user_id or "analista_usuario").strip().lower()
+        is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
+        return UserContext(user_id=x_user_id or "analista_usuario", role=clean_role, is_master_superadmin=is_super)
 
     # Fallback predeterminado para endpoints informativos abiertos
-    return UserContext(user_id=x_user_id or "default_user", role=ROLE_CONTROLLER_ADMIN)
+    return UserContext(user_id=x_user_id or "default_user", role=ROLE_CONTROLLER_ADMIN, is_master_superadmin=False)
 
 
 def require_roles(allowed_roles: List[str]):
@@ -168,7 +186,9 @@ def require_roles(allowed_roles: List[str]):
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Rol no autorizado '{clean_role}'. Roles válidos: {list(VALID_ROLES)}"
                 )
-            user = UserContext(user_id=x_user_id or "analista_usuario", role=clean_role)
+            clean_uid = (x_user_id or "analista_usuario").strip().lower()
+            is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
+            user = UserContext(user_id=x_user_id or "analista_usuario", role=clean_role, is_master_superadmin=is_super)
 
         if user is None:
             raise HTTPException(
@@ -185,6 +205,42 @@ def require_roles(allowed_roles: List[str]):
         return user
 
     return role_checker
+
+
+def require_master_superadmin():
+    """
+    Dependencia estricta de seguridad: Exige que el usuario autenticado sea
+    exclusivamente el Super-Administrador Maestro ('seba' o 'sebar_2@hotmail.com').
+    Cualquier otro rol o administrador (incluso 'admin' o 'demo') es rechazado con 403.
+    """
+    def master_checker(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
+        x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+        x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+    ) -> UserContext:
+        user: Optional[UserContext] = None
+        if credentials and credentials.credentials:
+            user = decode_access_token(credentials.credentials)
+        elif x_user_id:
+            clean_uid = x_user_id.strip().lower()
+            is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
+            user = UserContext(user_id=clean_uid, role=x_user_role or ROLE_CONTROLLER_ADMIN, is_master_superadmin=is_super)
+        
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Se requiere autenticación Bearer JWT",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        clean_name = user.user_id.strip().lower()
+        if not (user.is_master_superadmin or clean_name in {"seba", "sebar_2@hotmail.com"}):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso restringido: Únicamente el usuario superadministrador 'seba' tiene autorización para crear cuentas, aprovisionar tenants y gestionar licencias globales.",
+            )
+        return user
+    return master_checker
 
 
 # Alias para compatibilidad con código preexistente

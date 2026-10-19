@@ -12,6 +12,7 @@ from app.models.accounting_entities import SystemUser
 from app.services.monitoring_service import hash_password, MonitoringService
 from app.core.security import (
     require_roles,
+    require_master_superadmin,
     UserContext,
     ROLE_CONTROLLER_ADMIN,
     VALID_ROLES,
@@ -180,10 +181,10 @@ def get_current_tenant(
 @router.get(
     "",
     response_model=List[TenantAccountResponse],
-    summary="Lista todas las empresas / cuentas aisladas registradas (Panel Super-Admin Maestro)"
+    summary="Lista todas las empresas / cuentas aisladas registradas (Exclusivo Super-Admin Maestro 'seba')"
 )
 def list_all_tenants(
-    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
+    user: UserContext = Depends(require_master_superadmin()),
 ):
     master_db = SessionLocal()
     try:
@@ -197,11 +198,11 @@ def list_all_tenants(
     "",
     response_model=TenantAccountResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Aprovisiona una nueva empresa con base de datos/esquema aislado y 14 días gratis en Licencia Enterprise & 3PL"
+    summary="Aprovisiona una nueva empresa (Exclusivo Super-Admin Maestro 'seba')"
 )
 def provision_new_tenant(
     payload: TenantCreateRequest,
-    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
+    user: UserContext = Depends(require_master_superadmin()),
 ):
     clean_slug = re.sub(r"[^a-z0-9_]", "_", payload.slug.strip().lower())
     tenant_id = f"tenant_{clean_slug}" if not clean_slug.startswith("tenant_") else clean_slug
@@ -297,6 +298,14 @@ def update_tenant_license(
     payload: LicenseSwitchRequest,
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
 ):
+    clean_name = user.user_id.strip().lower()
+    is_master = user.is_master_superadmin or clean_name in {"seba", "sebar_2@hotmail.com"}
+    if not is_master and user.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Solo el superadministrador maestro 'seba' puede modificar licencias de otras empresas.",
+        )
+
     master_db = SessionLocal()
     try:
         tenant = master_db.query(TenantAccount).filter(TenantAccount.id == tenant_id).first()

@@ -16,7 +16,7 @@ import {
   Check,
   Lock,
 } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, getStoredUser } from '../services/api';
 import type { TenantAccountItem } from '../types';
 
 interface MasterAdminTenantsViewProps {
@@ -85,15 +85,24 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
   const [totpVerifyCode, setTotpVerifyCode] = useState<string>('');
   const [isEnabling2FA, setIsEnabling2FA] = useState<boolean>(false);
 
+  const storedUser = getStoredUser();
+  const isMasterSuperAdmin = Boolean(
+    storedUser?.is_master_superadmin ||
+    storedUser?.user_id?.toLowerCase() === 'seba' ||
+    storedUser?.user_id?.toLowerCase() === 'sebar_2@hotmail.com'
+  );
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [curr, allTenants] = await Promise.all([
-        apiService.getCurrentTenant(),
-        apiService.getAllTenants().catch(() => []),
-      ]);
+      const curr = await apiService.getCurrentTenant();
       setCurrentTenant(curr);
-      setTenantsList(allTenants.length > 0 ? allTenants : [curr]);
+      if (isMasterSuperAdmin) {
+        const allTenants = await apiService.getAllTenants().catch(() => []);
+        setTenantsList(allTenants.length > 0 ? allTenants : [curr]);
+      } else {
+        setTenantsList([curr]);
+      }
     } catch (err: any) {
       setBanner({
         type: 'error',
@@ -224,7 +233,9 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                Licenciamiento SaaS Multi-Tenant &amp; Panel Super-Admin
+                {isMasterSuperAdmin
+                  ? "Licenciamiento SaaS Multi-Tenant & Panel Super-Admin"
+                  : "Licenciamiento SaaS & Estado de Cuenta Corporativa"}
               </h1>
               {currentTenant?.subscription_status === 'TRIAL_14_DAYS' && (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
@@ -234,7 +245,9 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Aislamiento de Base de Datos por Cuenta (`Schema-per-Tenant`), Simulador de Licencias en Modo Trial (14 días) y Seguridad 2FA TOTP.
+              {isMasterSuperAdmin
+                ? "Aislamiento de Base de Datos por Cuenta (`Schema-per-Tenant`), Simulador de Licencias en Modo Trial (14 días) y Seguridad 2FA TOTP."
+                : "Simulador de planes en modo evaluación de 14 días para su cuenta, verificación de módulos habilitados y seguridad 2FA TOTP."}
             </p>
           </div>
         </div>
@@ -248,13 +261,15 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
           >
             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
-          <button
-            onClick={() => setIsProvisionModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
-          >
-            <Plus size={15} />
-            <span>+ Aprovisionar Nueva Cuenta (Tenant)</span>
-          </button>
+          {isMasterSuperAdmin && (
+            <button
+              onClick={() => setIsProvisionModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>+ Aprovisionar Nueva Cuenta (Tenant)</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -364,7 +379,7 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
       )}
 
       {/* SECCIÓN 2: Seguridad 2FA TOTP & Automatización CLI */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className={`grid grid-cols-1 ${isMasterSuperAdmin ? 'lg:grid-cols-2' : ''} gap-5`}>
         {/* Tarjeta 2FA TOTP */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
           <div className="flex items-center gap-2.5">
@@ -424,110 +439,114 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
           )}
         </div>
 
-        {/* Tarjeta Script CLI de Aprovisionamiento */}
+        {/* Tarjeta Script CLI de Aprovisionamiento (Solo Superadministrador Maestro) */}
+        {isMasterSuperAdmin && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Terminal size={20} className="text-indigo-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Script CLI de Aprovisionamiento Automatizado
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cree licencias y bases de datos aisladas por terminal sin tocar código.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(cliCommand);
+                  setCopiedCli(true);
+                  setTimeout(() => setCopiedCli(false), 2000);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+              >
+                {copiedCli ? <Check size={13} /> : <Copy size={13} />}
+                <span>{copiedCli ? 'Copiado' : 'Copiar CLI'}</span>
+              </button>
+            </div>
+
+            <pre className="p-3 rounded-xl bg-slate-950 text-emerald-400 font-mono text-[11px] overflow-x-auto">
+              {cliCommand}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* SECCIÓN 3: Tabla de Cuentas (Tenants) Aprovisionadas (Solo Superadministrador Maestro) */}
+      {isMasterSuperAdmin && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Terminal size={20} className="text-indigo-600" />
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Script CLI de Aprovisionamiento Automatizado
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Cree licencias y bases de datos aisladas por terminal sin tocar código.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(cliCommand);
-                setCopiedCli(true);
-                setTimeout(() => setCopiedCli(false), 2000);
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
-            >
-              {copiedCli ? <Check size={13} /> : <Copy size={13} />}
-              <span>{copiedCli ? 'Copiado' : 'Copiar CLI'}</span>
-            </button>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Layers size={16} className="text-[#00a2e8]" />
+              <span>Cuentas Corporativas Aisladas ({tenantsList.length})</span>
+            </h3>
           </div>
 
-          <pre className="p-3 rounded-xl bg-slate-950 text-emerald-400 font-mono text-[11px] overflow-x-auto">
-            {cliCommand}
-          </pre>
-        </div>
-      </div>
-
-      {/* SECCIÓN 3: Tabla de Cuentas (Tenants) Aprovisionadas */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Layers size={16} className="text-[#00a2e8]" />
-            <span>Cuentas Corporativas Aisladas ({tenantsList.length})</span>
-          </h3>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider text-slate-400">
-                <th className="py-2.5 px-3">Tenant ID / Slug</th>
-                <th className="py-2.5 px-3">Empresa / Razón Social</th>
-                <th className="py-2.5 px-3">Esquema / DB Aislada</th>
-                <th className="py-2.5 px-3">Licencia Efectiva</th>
-                <th className="py-2.5 px-3">Estado Suscripción</th>
-                <th className="py-2.5 px-3 text-right">Conmutar Plan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {tenantsList.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                  <td className="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">
-                    <div>{t.id}</div>
-                    <div className="text-[10px] text-slate-400">@{t.admin_username}</div>
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <div className="font-bold text-slate-900 dark:text-white">{t.nombre_empresa}</div>
-                    {t.rut && <div className="text-[10px] text-slate-400 font-mono">RUT: {t.rut}</div>}
-                  </td>
-                  <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
-                    <div>Schema: {t.schema_name}</div>
-                    <div className="text-[10px] text-slate-400">Strategy: {t.db_strategy}</div>
-                  </td>
-                  <td className="py-2.5 px-3">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-[#00a2e8] border border-sky-200 dark:border-sky-800">
-                      {t.capabilities?.name || t.effective_tier}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3">
-                    {t.subscription_status === 'TRIAL_14_DAYS' ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                        14d Trial ({t.trial_days_remaining}d restantes)
-                      </span>
-                    ) : (
-                      <span className="text-emerald-600 font-semibold">{t.subscription_status}</span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3 text-right">
-                    <select
-                      value={t.effective_tier}
-                      onChange={(e) => handleSwitchLicense(e.target.value, t.id)}
-                      className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-white"
-                    >
-                      <option value="STARTER">Starter CRM</option>
-                      <option value="PRO">Pro Growth &amp; AdTech</option>
-                      <option value="ENTERPRISE_3PL">Enterprise &amp; 3PL</option>
-                    </select>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider text-slate-400">
+                  <th className="py-2.5 px-3">Tenant ID / Slug</th>
+                  <th className="py-2.5 px-3">Empresa / Razón Social</th>
+                  <th className="py-2.5 px-3">Esquema / DB Aislada</th>
+                  <th className="py-2.5 px-3">Licencia Efectiva</th>
+                  <th className="py-2.5 px-3">Estado Suscripción</th>
+                  <th className="py-2.5 px-3 text-right">Conmutar Plan</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {tenantsList.map((t) => (
+                  <tr key={t.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">
+                      <div>{t.id}</div>
+                      <div className="text-[10px] text-slate-400">@{t.admin_username}</div>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <div className="font-bold text-slate-900 dark:text-white">{t.nombre_empresa}</div>
+                      {t.rut && <div className="text-[10px] text-slate-400 font-mono">RUT: {t.rut}</div>}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                      <div>Schema: {t.schema_name}</div>
+                      <div className="text-[10px] text-slate-400">Strategy: {t.db_strategy}</div>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-[#00a2e8] border border-sky-200 dark:border-sky-800">
+                        {t.capabilities?.name || t.effective_tier}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {t.subscription_status === 'TRIAL_14_DAYS' ? (
+                        <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                          14d Trial ({t.trial_days_remaining}d restantes)
+                        </span>
+                      ) : (
+                        <span className="text-emerald-600 font-semibold">{t.subscription_status}</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <select
+                        value={t.effective_tier}
+                        onChange={(e) => handleSwitchLicense(e.target.value, t.id)}
+                        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-white"
+                      >
+                        <option value="STARTER">Starter CRM</option>
+                        <option value="PRO">Pro Growth &amp; AdTech</option>
+                        <option value="ENTERPRISE_3PL">Enterprise &amp; 3PL</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal Aprovisionar Nueva Cuenta Multi-Tenant */}
-      {isProvisionModalOpen && (
+      {isProvisionModalOpen && isMasterSuperAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">

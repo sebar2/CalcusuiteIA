@@ -63,7 +63,7 @@ const GALLERY_DATA = {
     desc: 'Aislamiento de base de datos por cliente (estrategia "Schema-per-Tenant"). Conmutador interactivo de licencias (Starter USD 79, Pro USD 190, Enterprise USD 490), autenticación de dos factores (2FA / TOTP RFC 6238) y aprovisionamiento automatizado vía script CLI.',
     bullets: [
       'Base de datos aislada e independiente para cada empresa cliente con backups diarios',
-      'Programa Pioneros: 100% gratis para los primeros 20 clientes con tarifa congelada de por vida',
+      'Programa Pioneros: 100% gratis hasta culminar desarrollo (aprox. 6 meses) y luego 50% de descuento por 6 meses',
       'Modo prueba gratuita de 14 días (ampliable a 1 mes) con acceso a todos los módulos'
     ]
   },

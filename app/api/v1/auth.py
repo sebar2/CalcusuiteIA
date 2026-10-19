@@ -112,6 +112,22 @@ def get_authorized_users() -> Dict[str, Dict[str, Any]]:
     demo_pass = os.getenv("CALCU_DEMO_PASSWORD", "demo123")
 
     return {
+        "seba": {
+            "password": os.getenv("CALCU_SEBA_PASSWORD", "seba2026!"),
+            "role": ROLE_CONTROLLER_ADMIN,
+            "name": "Sebastián (Superadministrador Maestro)",
+            "driver_id": None,
+            "tenant_id": "tenant_calcu_corp",
+            "is_master_superadmin": True,
+        },
+        "sebar_2@hotmail.com": {
+            "password": os.getenv("CALCU_SEBA_PASSWORD", "seba2026!"),
+            "role": ROLE_CONTROLLER_ADMIN,
+            "name": "Sebastián (Superadministrador Maestro)",
+            "driver_id": None,
+            "tenant_id": "tenant_calcu_corp",
+            "is_master_superadmin": True,
+        },
         demo_user: {
             "password": demo_pass,
             "role": ROLE_CONTROLLER_ADMIN,
@@ -123,10 +139,10 @@ def get_authorized_users() -> Dict[str, Dict[str, Any]]:
         admin_user: {
             "password": admin_pass,
             "role": ROLE_CONTROLLER_ADMIN,
-            "name": "Controller Financiero & Super-Admin Maestro",
+            "name": "Controller Financiero & Administrador",
             "driver_id": None,
             "tenant_id": "tenant_calcu_corp",
-            "is_master_superadmin": True,
+            "is_master_superadmin": False,
         },
         controller_user: {
             "password": controller_pass,
@@ -134,7 +150,7 @@ def get_authorized_users() -> Dict[str, Dict[str, Any]]:
             "name": "Controller Financiero Senior",
             "driver_id": None,
             "tenant_id": "tenant_calcu_corp",
-            "is_master_superadmin": True,
+            "is_master_superadmin": False,
         },
         ops_user: {
             "password": ops_pass,
@@ -319,7 +335,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                 )
 
             role = db_user.role
-            is_super = bool(db_user.is_master_superadmin or clean_user in {"admin", "seba", "sebar_2@hotmail.com"})
+            is_super = bool(clean_user in {"seba", "sebar_2@hotmail.com"})
             token_data = {
                 "sub": db_user.username,
                 "role": role,
@@ -400,7 +416,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         role = user_info["role"]
         driver_id = user_info.get("driver_id")
         resolved_tid = user_info.get("tenant_id", "tenant_calcu_corp")
-        is_super = bool(user_info.get("is_master_superadmin", False))
+        is_super = bool(clean_user in {"seba", "sebar_2@hotmail.com"})
         tenant_meta = _resolve_tenant_metadata(master_db, resolved_tid)
 
         if not tenant_meta["is_active"] or tenant_meta["subscription_status"] in ("SUSPENDED", "EXPIRED"):
