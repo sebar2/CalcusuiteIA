@@ -1956,7 +1956,7 @@ export const apiService = {
 
   async uploadOmnichannelMedia(file: File): Promise<{
     media_url: string;
-    media_type: 'IMAGE' | 'AUDIO';
+    media_type: 'IMAGE' | 'AUDIO' | 'VIDEO';
     filename: string;
     size_bytes: number;
   }> {

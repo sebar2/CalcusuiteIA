@@ -2687,7 +2687,7 @@ export interface OmnichannelMessageItem {
   is_ai_generated: boolean;
   created_at: string;
   media_url?: string | null;
-  media_type?: 'IMAGE' | 'AUDIO' | 'DOCUMENT' | null;
+  media_type?: 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT' | null;
 }
 
 export interface AIChatSuggestionItem {

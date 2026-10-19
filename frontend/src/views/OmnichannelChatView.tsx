@@ -25,6 +25,7 @@ import {
   Mic,
   Square,
   X,
+  Video,
 } from 'lucide-react';
 import { apiService, getStoredUser, getApiBaseUrl } from '../services/api';
 import type {
@@ -120,7 +121,7 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
   // Adjuntos Multimedia (Imágenes y Audios / Notas de Voz)
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
-  const [attachedType, setAttachedType] = useState<'IMAGE' | 'AUDIO' | null>(null);
+  const [attachedType, setAttachedType] = useState<'IMAGE' | 'AUDIO' | 'VIDEO' | null>(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -232,18 +233,19 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 25 * 1024 * 1024) {
-      alert('El archivo no puede superar los 25 MB.');
+    if (file.size > 50 * 1024 * 1024) {
+      alert('El archivo no puede superar los 50 MB.');
       return;
     }
     const isImg = file.type.startsWith('image/');
     const isAud = file.type.startsWith('audio/');
-    if (!isImg && !isAud) {
-      alert('Solo se admiten archivos de imagen (JPG, PNG, WebP) o audio (OGG, MP3, M4A).');
+    const isVid = file.type.startsWith('video/');
+    if (!isImg && !isAud && !isVid) {
+      alert('Solo se admiten imágenes (JPG, PNG, WebP), audios (OGG, MP3, M4A) o videos (MP4, WebM, MOV).');
       return;
     }
     setAttachedFile(file);
-    setAttachedType(isImg ? 'IMAGE' : 'AUDIO');
+    setAttachedType(isImg ? 'IMAGE' : isVid ? 'VIDEO' : 'AUDIO');
     setAttachedPreview(URL.createObjectURL(file));
   };
 
@@ -318,7 +320,11 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
 
       const defaultText =
         bodyToSend ||
-        (attachedType === 'IMAGE' ? '📷 Imagen adjunta enviada' : '🎙️ Nota de voz enviada');
+        (attachedType === 'IMAGE'
+          ? '📷 Imagen adjunta enviada'
+          : attachedType === 'VIDEO'
+          ? '🎬 Video adjunto enviado'
+          : '🎙️ Nota de voz enviada');
 
       const res = await apiService.sendOmnichannelMessage(selectedDealId, {
         channel: replyChannel,
@@ -714,6 +720,16 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                                     className="w-full max-w-[240px] h-8"
                                   />
                                 </div>
+                              ) : msg.media_type === 'VIDEO' ? (
+                                <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-black/40">
+                                  <video
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    src={msg.media_url.startsWith('http') ? msg.media_url : `${getApiBaseUrl()}${msg.media_url}`}
+                                    className="max-w-[260px] max-h-60 rounded-xl w-full"
+                                  />
+                                </div>
                               ) : null}
                             </div>
                           )}
@@ -893,6 +909,10 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                           alt="Preview"
                           className="w-10 h-10 object-cover rounded-lg border border-slate-300 dark:border-slate-600 shrink-0"
                         />
+                      ) : attachedType === 'VIDEO' ? (
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                          <Video size={18} />
+                        </div>
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
                           <Mic size={18} />
@@ -903,7 +923,10 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                           {attachedFile.name}
                         </p>
                         <p className="text-[10px] text-slate-500">
-                          {(attachedFile.size / 1024).toFixed(1)} KB · {attachedType === 'IMAGE' ? 'Imagen' : 'Audio / Nota de voz'}
+                          {attachedFile.size / (1024 * 1024) >= 1
+                            ? `${(attachedFile.size / (1024 * 1024)).toFixed(1)} MB`
+                            : `${(attachedFile.size / 1024).toFixed(1)} KB`}{' '}
+                          · {attachedType === 'IMAGE' ? 'Imagen' : attachedType === 'VIDEO' ? 'Video' : 'Audio / Nota de voz'}
                         </p>
                       </div>
                     </div>
@@ -940,7 +963,7 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileSelect}
-                    accept="image/*,audio/*"
+                    accept="image/*,audio/*,video/*"
                     className="hidden"
                   />
                   <div className="flex items-center gap-1 mb-1">

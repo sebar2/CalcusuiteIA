@@ -328,6 +328,7 @@ async function startWhatsAppSocket(forceNew = false) {
 
         const isImage = !!(msg.message.imageMessage);
         const isAudio = !!(msg.message.audioMessage);
+        const isVideo = !!(msg.message.videoMessage);
 
         if (isImage) {
           try {
@@ -368,15 +369,38 @@ async function startWhatsAppSocket(forceNew = false) {
           } catch (err) {
             console.error("[WA-QR] Error descargando audio:", err.message);
           }
+        } else if (isVideo) {
+          try {
+            durationSeconds = msg.message.videoMessage?.seconds || 0;
+            const buffer = await downloadMediaMessage(
+              msg,
+              "buffer",
+              {},
+              { reuploadRequest: sock.updateMediaMessage }
+            );
+            const mime = msg.message.videoMessage?.mimetype || "video/mp4";
+            let ext = ".mp4";
+            if (mime.includes("webm")) ext = ".webm";
+            else if (mime.includes("quicktime")) ext = ".mov";
+            const filename = `wa_vid_${Date.now()}_${msg.key.id}${ext}`;
+            fs.writeFileSync(path.join(MEDIA_DIR, filename), buffer);
+            mediaUrl = `/static/uploads/omnichannel_media/${filename}`;
+            mediaType = "VIDEO";
+          } catch (err) {
+            console.error("[WA-QR] Error descargando video:", err.message);
+          }
         }
 
         let text =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
-          msg.message.imageMessage?.caption;
+          msg.message.imageMessage?.caption ||
+          msg.message.videoMessage?.caption;
 
         if (!text) {
-          if (isAudio) {
+          if (isVideo) {
+            text = `🎬 Video recibido (${durationSeconds ? durationSeconds + "s" : "archivo de video"})`;
+          } else if (isAudio) {
             text = `🎙️ Nota de voz recibida (${durationSeconds || "audio"}s)`;
           } else if (isImage) {
             text = "📷 Imagen adjunta recibida";
@@ -540,6 +564,30 @@ const server = http.createServer(async (req, res) => {
               audio: audBuf,
               mimetype: mimetype,
               ptt: true, // Renderizar como nota de voz oficial en WhatsApp
+            };
+          }
+        } else if (reqMediaType === "VIDEO" && reqMediaUrl) {
+          let vidBuf = null;
+          let mimetype = "video/mp4";
+          if (reqMediaUrl.startsWith("data:video")) {
+            const parts = reqMediaUrl.split(",");
+            if (parts[0].includes("webm")) mimetype = "video/webm";
+            else if (parts[0].includes("quicktime")) mimetype = "video/quicktime";
+            vidBuf = Buffer.from(parts[1], "base64");
+          } else {
+            const cleanRelative = reqMediaUrl.replace(/^\/+/, "");
+            const localPath = path.join(__dirname, "..", "app", cleanRelative);
+            if (fs.existsSync(localPath)) {
+              vidBuf = fs.readFileSync(localPath);
+              if (localPath.endsWith(".webm")) mimetype = "video/webm";
+              else if (localPath.endsWith(".mov")) mimetype = "video/quicktime";
+            }
+          }
+          if (vidBuf) {
+            msgPayload = {
+              video: vidBuf,
+              caption: textToSend || undefined,
+              mimetype: mimetype,
             };
           }
         }

@@ -42,6 +42,8 @@ Thumbs.db
 # Uploads estáticos de productos
 app/static/uploads/products/*
 !app/static/uploads/products/.gitkeep
+app/static/uploads/omnichannel_media/*
+!app/static/uploads/omnichannel_media/.gitkeep
 
 # Tenants local auth data & secrets
 tenants_data/

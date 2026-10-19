@@ -286,18 +286,19 @@ async def upload_omnichannel_media(
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
 ):
     import uuid
-    # Límite estricto 25MB (Prevención DoS)
-    MAX_SIZE = 25 * 1024 * 1024
+    # Límite estricto 50MB para videos, imágenes y audios (Prevención DoS)
+    MAX_SIZE = 50 * 1024 * 1024
     content = await file.read()
     if len(content) > MAX_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="El archivo excede el tamaño máximo permitido de 25 MB."
+            detail="El archivo excede el tamaño máximo permitido de 50 MB."
         )
 
     # Detección y validación por Magic Bytes (Prevención RCE & CWE-434)
     media_type = None
     ext = None
+    content_type = (file.content_type or "").lower()
 
     if content.startswith(b"\xff\xd8\xff"):
         media_type = "IMAGE"
@@ -314,13 +315,28 @@ async def upload_omnichannel_media(
     elif content.startswith(b"ID3") or (len(content) > 2 and content[0] == 0xff and (content[1] & 0xe0) == 0xe0):
         media_type = "AUDIO"
         ext = ".mp3"
-    elif len(content) > 12 and content[4:8] == b"ftyp":
-        media_type = "AUDIO"
-        ext = ".m4a"
+    elif content.startswith(b"\x1a\x45\xdf\xa3"):
+        # Contenedor EBML (WebM / Matroska)
+        if "audio" in content_type:
+            media_type, ext = "AUDIO", ".weba"
+        else:
+            media_type, ext = "VIDEO", ".webm"
+    elif len(content) > 12 and (content[4:8] == b"ftyp" or b"ftyp" in content[:24]):
+        # Contenedor ISO BMFF / QuickTime (MP4 o M4A)
+        major_brand = content[8:12] if len(content) >= 12 else b""
+        if major_brand in (b"M4A ", b"M4B ") or "audio" in content_type:
+            media_type = "AUDIO"
+            ext = ".m4a"
+        else:
+            media_type = "VIDEO"
+            ext = ".mp4"
     else:
-        # Fallback a MIME si coincide con audio o imagen
-        content_type = (file.content_type or "").lower()
-        if "image/jpeg" in content_type:
+        # Fallback a MIME verificado si coincide con formatos autorizados
+        if "video/mp4" in content_type or "video/quicktime" in content_type:
+            media_type, ext = "VIDEO", ".mp4"
+        elif "video/webm" in content_type:
+            media_type, ext = "VIDEO", ".webm"
+        elif "image/jpeg" in content_type:
             media_type, ext = "IMAGE", ".jpg"
         elif "image/png" in content_type:
             media_type, ext = "IMAGE", ".png"
@@ -335,7 +351,7 @@ async def upload_omnichannel_media(
         else:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Formato de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, WebP) y audios (OGG, MP3, M4A, WebM)."
+                detail="Formato de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, WebP), audios (OGG, MP3, M4A) y videos (MP4, WebM, MOV)."
             )
 
     media_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uploads", "omnichannel_media")
