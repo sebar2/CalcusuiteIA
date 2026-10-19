@@ -26,6 +26,7 @@ import {
   Square,
   X,
   Video,
+  UploadCloud,
 } from 'lucide-react';
 import { apiService, getStoredUser, getApiBaseUrl } from '../services/api';
 import type {
@@ -124,7 +125,9 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
   const [attachedType, setAttachedType] = useState<'IMAGE' | 'AUDIO' | 'VIDEO' | null>(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
@@ -230,23 +233,127 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
     };
   }, [selectedDealId]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processAndAttachFile = (file: File): boolean => {
     if (file.size > 50 * 1024 * 1024) {
       alert('El archivo no puede superar los 50 MB.');
-      return;
+      return false;
     }
     const isImg = file.type.startsWith('image/');
-    const isAud = file.type.startsWith('audio/');
+    const isAud =
+      file.type.startsWith('audio/') ||
+      file.name.toLowerCase().endsWith('.opus') ||
+      file.name.toLowerCase().endsWith('.oga');
     const isVid = file.type.startsWith('video/');
     if (!isImg && !isAud && !isVid) {
-      alert('Solo se admiten imágenes (JPG, PNG, WebP), audios (OGG, MP3, M4A) o videos (MP4, WebM, MOV).');
-      return;
+      alert('Solo se admiten imágenes (JPG, PNG, WebP), audios (OGG, MP3, OPUS) o videos (MP4, WebM, MOV).');
+      return false;
+    }
+    if (attachedPreview) {
+      URL.revokeObjectURL(attachedPreview);
     }
     setAttachedFile(file);
     setAttachedType(isImg ? 'IMAGE' : isVid ? 'VIDEO' : 'AUDIO');
     setAttachedPreview(URL.createObjectURL(file));
+    textareaRef.current?.focus();
+    return true;
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processAndAttachFile(file);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardFiles = e.clipboardData?.files;
+    if (clipboardFiles && clipboardFiles.length > 0) {
+      for (let i = 0; i < clipboardFiles.length; i++) {
+        const file = clipboardFiles[i];
+        const isImg = file.type.startsWith('image/');
+        const isAud =
+          file.type.startsWith('audio/') ||
+          file.name.toLowerCase().endsWith('.opus') ||
+          file.name.toLowerCase().endsWith('.oga');
+        const isVid = file.type.startsWith('video/');
+        if (isImg || isAud || isVid) {
+          e.preventDefault();
+          processAndAttachFile(file);
+          return;
+        }
+      }
+    }
+
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) {
+            const isImg = file.type.startsWith('image/');
+            const isAud =
+              file.type.startsWith('audio/') ||
+              file.name.toLowerCase().endsWith('.opus') ||
+              file.name.toLowerCase().endsWith('.oga');
+            const isVid = file.type.startsWith('video/');
+            if (isImg || isAud || isVid) {
+              e.preventDefault();
+              processAndAttachFile(file);
+              return;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingOver) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      for (let i = 0; i < droppedFiles.length; i++) {
+        const file = droppedFiles[i];
+        const isImg = file.type.startsWith('image/');
+        const isAud =
+          file.type.startsWith('audio/') ||
+          file.name.toLowerCase().endsWith('.opus') ||
+          file.name.toLowerCase().endsWith('.oga');
+        const isVid = file.type.startsWith('video/');
+        if (isImg || isAud || isVid) {
+          processAndAttachFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const hasContent = messageText.trim() || attachedFile;
+      const meliBlocked = Boolean(
+        (replyChannel === 'MERCADO_LIBRE' || selectedConversation?.canal_origen === 'MERCADO_LIBRE') &&
+          checkMeliAntiPenaltyViolation(messageText)
+      );
+      if (!isSending && hasContent && !meliBlocked) {
+        handleSendMessage();
+      }
+    }
   };
 
   const handleClearAttachment = () => {
@@ -878,8 +985,20 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
               {/* Composer de Respuesta Multicanal */}
               <form
                 onSubmit={(e) => handleSendMessage(e)}
-                className="p-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className="relative p-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2 transition-colors"
               >
+                {isDraggingOver && (
+                  <div className="absolute inset-0 z-30 bg-sky-50/95 dark:bg-slate-900/95 border-2 border-dashed border-[#00a2e8] rounded-xl flex flex-col items-center justify-center gap-1.5 backdrop-blur-xs pointer-events-none transition-all shadow-lg">
+                    <UploadCloud size={30} className="text-[#00a2e8] animate-bounce" />
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                      Suelta aquí tu archivo para adjuntarlo
+                    </p>
+                    <p className="text-[10px] text-slate-500">Imágenes, Audios (.opus) o Videos (máx. 50 MB)</p>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-semibold text-slate-500">Responder vía:</span>
@@ -1009,10 +1128,13 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                     </button>
                   </div>
                   <textarea
+                    ref={textareaRef}
                     rows={2}
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={`Escribir mensaje para ${selectedConversation.cliente} por ${replyChannel}...`}
+                    onPaste={handlePaste}
+                    onKeyDown={handleKeyDown}
+                    placeholder={`Escribir mensaje para ${selectedConversation.cliente}... (Ctrl+V para pegar imagen/audio/video, Enter para enviar)`}
                     className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-[#00a2e8]"
                   />
                   <button
