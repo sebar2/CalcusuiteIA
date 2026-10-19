@@ -70,6 +70,7 @@ export function AppContent() {
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
   const [currentRole, setCurrentRole] = useState<UserRole>(() => (getStoredUser()?.role as UserRole) || 'controller_admin');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('auto');
   const [selectedSupplierForCatalogId, setSelectedSupplierForCatalogId] = useState<number | null>(null);
@@ -353,7 +354,7 @@ export function AppContent() {
 
   return (
     <div className="min-h-screen bg-[#eef2f4] dark:bg-slate-950 text-[#333333] dark:text-slate-100 flex transition-colors duration-200">
-      {/* 1. Sidebar Fijo */}
+      {/* 1. Sidebar Fijo / Mobile Drawer */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -362,12 +363,14 @@ export function AppContent() {
         alertCount={alertCount}
         currentRole={currentRole}
         restrictedModules={restrictedModules}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* 2. Main Wrapper */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ${
-          sidebarCollapsed ? 'ml-16' : 'ml-64'
+        className={`flex-1 flex flex-col transition-all duration-300 min-w-0 ml-0 ${
+          sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
         }`}
       >
         {/* Top Header Fijo */}
@@ -392,10 +395,12 @@ export function AppContent() {
           onRoleChange={handleRoleChange}
           engineMode={engineMode}
           onEngineModeChange={handleEngineModeChange}
+          isMobileMenuOpen={isMobileMenuOpen}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
 
-        {/* Content Area con Padding del Header Fijo */}
-        <main className="flex-1 mt-16 p-6 overflow-y-auto">
+        {/* Content Area con Padding del Header Fijo optimizado para Redmi Note 9 Pro */}
+        <main className="flex-1 mt-16 p-3 sm:p-6 overflow-y-auto">
           <Suspense fallback={<ViewLoading />}>
             {restrictedModules.includes(activeTab) ? (
               <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/50 shadow-sm space-y-3 max-w-lg mx-auto mt-12 animate-in fade-in">

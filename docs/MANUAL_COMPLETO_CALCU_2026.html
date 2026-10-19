@@ -262,6 +262,12 @@
             <li><strong>Capítulo 18:</strong> <a href="#pricing">Pricing Dinámico y Multicanal</a></li>
             <li><strong>Capítulo 19:</strong> <a href="#licitaciones">Radar de Licitaciones ARCE / SICE</a></li>
             <li><strong>Capítulo 20:</strong> <a href="#apk">App Móvil Android (APK) y Despliegue</a></li>
+            <li><strong>Capítulo 21:</strong> <a href="#meli-kanban">Mercado Libre Uruguay Kanban 5 Etapas & SLAs</a></li>
+            <li><strong>Capítulo 22:</strong> <a href="#meli-publicacion">Publicación Asistida MeLi (Modal Pinned & Selector 3 Vías)</a></li>
+            <li><strong>Capítulo 23:</strong> <a href="#omnichannel-chat">Chat Omnicanal & WhatsApp Directo QR (Multimedia & Audio PTT .Opus)</a></li>
+            <li><strong>Capítulo 24:</strong> <a href="#integraciones-leads">Integraciones Multicanal & Atribución de Leads (ROAS/CAC)</a></li>
+            <li><strong>Capítulo 25:</strong> <a href="#mobile-ux">Experiencia Móvil Optimizada (Menú Hamburguesa ☰ para Redmi Note 9 Pro)</a></li>
+            <li><strong>Capítulo 26:</strong> <a href="#licenciamiento">Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant</a></li>
         </ul>
     </div>
 
@@ -701,6 +707,158 @@
             <li><strong>Compatibilidad:</strong> Android 10.0 (API 29) hasta Android 15 (API 35)</li>
             <li><strong>Funcionalidades de Hardware:</strong> Receptor GPS continuo en segundo plano, cámara integrada para lectura de códigos QR de remitos y panel táctil para firma digital de entrega en pantalla.</li>
             <li><strong>Conexión Cifrada:</strong> Configuración automática para conectarse a la VPN Tailscale corporativa sin intervención técnica del chofer.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 21 -->
+    <div id="meli-kanban" class="section-header">
+        <div class="section-tag">Capítulo 21</div>
+        <h2>Módulo Mercado Libre Uruguay: Kanban 5 Etapas, SLA y Logística</h2>
+    </div>
+    <p>
+        El módulo oficial de integración con <strong>Mercado Libre Uruguay (MLU)</strong> conecta la tienda online de la empresa directamente con la operativa de empaque, despacho y finanzas de Calcu:
+    </p>
+    <div class="screenshot-container">
+        <img src="./screenshots/21_mercadolibre_kanban_5etapas.png" alt="Mercado Libre Kanban Operativo 5 Etapas">
+        <div class="screenshot-caption">
+            <span><strong>Figura 21.1:</strong> Tablero Kanban conmutable de 5 etapas para Mercado Libre Uruguay con reloj SLA de despacho, filtros por SKU y selector de columnas financieras.</span>
+            <span>Módulo: E-Commerce / Mercado Libre Kanban</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Las 5 Etapas del Flujo Operativo MeLi:</strong>
+        <ul>
+            <li><strong>1. Por Preparar / Pendiente de Despacho (<code>paid</code>, <code>to_be_agreed</code>):</strong> Órdenes con cobro acreditado esperando empaque en el Depósito Central Montevideo. Incluye un <em>reloj indicador de SLA</em> con cuenta regresiva del tiempo exigido por Mercado Libre para despachar y evitar penalizaciones de reputación.</li>
+            <li><strong>2. En Tránsito / Despachado (<code>shipped</code>, <code>in_transit</code>):</strong> Paquetes entregados al correo o colecta de Mercado Envíos (ME2), con enlace directo al código de seguimiento oficial.</li>
+            <li><strong>3. Entregado / Concluido (<code>delivered</code>, <code>completed</code>):</strong> Órdenes recibidas conforme por el comprador, con fecha de liberación de fondos en Mercado Pago y conciliación contable automática.</li>
+            <li><strong>4. Reclamos & Devoluciones (<code>claims</code>, <code>disputed</code>):</strong> Detección preventiva con alerta roja/ámbar y botón de mediación directa antes de que el reclamo afecte la reputación MercadoLíder.</li>
+            <li><strong>5. Cancelado / Reembolsado (<code>cancelled</code>):</strong> Reversión automática de existencias al Depósito Central de Calcu, previniendo quiebres de stock.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 22 -->
+    <div id="meli-publicacion" class="section-header">
+        <div class="section-tag">Capítulo 22</div>
+        <h2>Publicación Asistida MeLi: Modal Pinned y Selector de Envíos 3 Vías</h2>
+    </div>
+    <p>
+        El sistema integra un asistente ergonómico de publicación masiva y unitaria en Mercado Libre Uruguay, optimizado para una carga fluida sin desplazamientos molestos:
+    </p>
+    <div class="screenshot-container">
+        <img src="./screenshots/24_meli_publicacion_modal.png" alt="Modal de Publicación Mercado Libre">
+        <div class="screenshot-caption">
+            <span><strong>Figura 22.1:</strong> Modal de creación de publicación con cabecera y botonera fijas (Sticky Header & Footer), scroll vertical independiente y selector de envíos de 3 vías.</span>
+            <span>Módulo: E-Commerce / Asistente de Publicación MeLi</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Especificaciones de la Publicación Asistida:</strong>
+        <ul>
+            <li><strong>Cabecera y Botonera Fijas (<em>Sticky Header & Footer</em>):</strong> El título del producto, SKU y botones de acción rápida permanecen anclados a la vista, mientras que el cuerpo del formulario cuenta con scroll vertical fluido adaptado a cualquier resolución de pantalla.</li>
+            <li><strong>Selector Logístico de 3 Vías:</strong>
+                <ol style="margin-top: 6px; padding-left: 20px;">
+                    <li><em>Mercado Envíos (ME2):</em> Envío gratuito a cargo del vendedor o con flete oficial abonado por el comprador en el checkout.</li>
+                    <li><em>Costos de Envío Personalizados (Logística Propia):</em> Casillas independientes para ingresar el flete fijo para Montevideo y para el Interior del país, rentabilizando la flota 3PL de la empresa.</li>
+                    <li><em>A Convenir con el Comprador:</em> Modalidad de retiro en Depósito Central Calcu o coordinación particular.</li>
+                </ol>
+            </li>
+            <li><strong>Recuperación Automática de Categoría:</strong> Si la categoría seleccionada en MeLi no admite costos de envío personalizados, el motor reintenta automáticamente bajo la modalidad compatible sin truncar la publicación.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 23 -->
+    <div id="omnichannel-chat" class="section-header">
+        <div class="section-tag">Capítulo 23</div>
+        <h2>Chat Omnicanal & WhatsApp Directo QR (Multimedia & Audio PTT .Opus)</h2>
+    </div>
+    <p>
+        El centro de atención omnicanal unifica en una consola centralizada todas las conversaciones comerciales con clientes procedentes de WhatsApp, Mercado Libre, Email y formularios web:
+    </p>
+    <div class="screenshot-container">
+        <img src="./screenshots/23_omnichannel_chat_multimedia.png" alt="Chat Omnicanal y WhatsApp Directo QR">
+        <div class="screenshot-caption">
+            <span><strong>Figura 23.1:</strong> Consola Omnicanal con vinculación WhatsApp QR nativa, soporte de audio PTT .Opus 48kHz, copiado/pegado directo de archivos y previsualización de imágenes/videos.</span>
+            <span>Módulo: Atención al Cliente / Chat Omnicanal WhatsApp</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Capacidades Multimedia y Motor de Audio PTT:</strong>
+        <ul>
+            <li><strong>Vinculación Directa por Código QR:</strong> Conexión nativa con el número propio de la empresa mediante escaneo QR, sin pagar tarifas por mensaje ni requerir APIs de intermediarios.</li>
+            <li><strong>Intercambio Multimedia Bidireccional:</strong> Envío y recepción en vivo de imágenes, videos y notas de voz PTT.</li>
+            <li><strong>Motor de Audio Nativo <code>.opus</code> Mono a 48 kHz:</strong> Transcodificación asistida por <code>ffmpeg-static</code> que garantiza que las notas de voz grabadas desde la plataforma se reproduzcan con la burbuja de audio verde oficial de WhatsApp en smartphones (Android e iOS).</li>
+            <li><strong>Copiado y Pegado Directo (<code>Ctrl + V</code>):</strong> Permite capturar la pantalla con <code>Win + Shift + S</code> o copiar imágenes, audios o videos en el explorador y pegarlos directamente dentro del campo de texto, con miniatura previa flotante.</li>
+            <li><strong>Arrastrar y Soltar (<em>Drag & Drop</em>):</strong> Zona de impacto visual sobre la caja de redacción para soltar archivos de hasta 50 MB.</li>
+            <li><strong>Copiloto IA con Lectura de Catálogo y Stock:</strong> Análisis en tiempo real de existencias y precios para sugerir respuestas comerciales ejecutivas con un solo clic.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 24 -->
+    <div id="integraciones-leads" class="section-header">
+        <div class="section-tag">Capítulo 24</div>
+        <h2>Integraciones Multicanal & Atribución de Leads (ROAS/CAC)</h2>
+    </div>
+    <p>
+        Tablero centralizado de canales de adquisición comercial que monitorea la procedencia y el rendimiento financiero de cada prospecto que ingresa al CRM:
+    </p>
+    <div class="screenshot-container">
+        <img src="./screenshots/22_integraciones_whatsapp_qr.png" alt="Integraciones Multicanal">
+        <div class="screenshot-caption">
+            <span><strong>Figura 24.1:</strong> Centro de integraciones con estado de conexión de WhatsApp QR, Meta Ads, Google Ads y formularios de prospección web.</span>
+            <span>Módulo: Marketing & CRM / Integraciones Multicanal</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Atribución Comercial y Conexión Web Form:</strong>
+        <ul>
+            <li><strong>Canales Conectados:</strong> WhatsApp QR, Meta Ads (Facebook/Instagram), Google Ads, Email Corporativo, Webhook Web Form y Mercado Libre.</li>
+            <li><strong>Métricas Financieras en Tiempo Real:</strong> Costo por Lead (CPL), Retorno del Gasto Publicitario (ROAS) y Costo de Adquisición de Clientes (CAC) calculados automáticamente sobre los tratos ganados.</li>
+            <li><strong>Sincronización Web Automática:</strong> Los prospectos que envían el formulario de la landing web ingresan de forma instantánea al backend de Calcu (<code>/api/v1/leads</code>), creando un trato comercial y un mensaje omnicanal en el canal <code>WEB_FORM</code> con alerta en vivo por WebSockets.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 25 -->
+    <div id="mobile-ux" class="section-header">
+        <div class="section-tag">Capítulo 25</div>
+        <h2>Experiencia Móvil Optimizada (Menú Hamburguesa ☰ para Redmi Note 9 Pro)</h2>
+    </div>
+    <p>
+        Calcu Suite 2026 ha sido optimizada para smartphones de alta gama y pantallas panorámicas 20:9, como el <strong>Xiaomi Redmi Note 9 Pro</strong> corriendo <strong>LineageOS 22.2 (Android 15)</strong>:
+    </p>
+    <div class="tech-box">
+        <strong>Arquitectura de Navegación Móvil Responsive:</strong>
+        <ul>
+            <li><strong>Menú Hamburguesa (☰):</strong> En resoluciones móviles (&lt; 1024px), el sidebar tradicional se oculta automáticamente y es sustituido por un icono de tres líneas horizontales apiladas en el TopHeader con selector accesible <code>aria-expanded</code>.</li>
+            <li><strong>Navegación en Drawer Deslizable (<em>Off-Canvas</em>):</strong> Al tocar el menú ☰, se despliega un panel lateral suave con fondo oscuro translúcido (<em>backdrop touch</em>). Al seleccionar cualquier módulo o tocar el fondo, el menú se repliega de forma instantánea.</li>
+            <li><strong>Aprovechamiento Integral de Pantalla:</strong> Eliminación de márgenes laterales forzados (<code>ml-0</code> y padding <code>p-3</code>) para que las tarjetas analíticas, órdenes y mapas de ruteo ocupen el 100% del ancho del terminal sin recortes visuales.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 26 -->
+    <div id="licenciamiento" class="section-header">
+        <div class="section-tag">Capítulo 26</div>
+        <h2>Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant</h2>
+    </div>
+    <p>
+        Calcu opera bajo una arquitectura <strong>SaaS Multi-Tenant con Aislamiento Estricto</strong>, garantizando que los datos contables, de clientes y de stock de cada empresa permanezcan estrictamente separados y resguardados:
+    </p>
+    <div class="tech-box">
+        <strong>Aislamiento de Datos & Políticas Comerciales:</strong>
+        <ul>
+            <li><strong>Base de Datos Exclusiva & Respaldada:</strong> Cada licencia dispone de una base de datos aislada e independiente con copias de seguridad automáticas diarias, sin mezcla de registros entre inquilinos.</li>
+            <li><strong>Control de Identidad & RBAC:</strong> Políticas de roles y acceso granular configurables desde la consola central.</li>
+            <li><strong>1. Programa Pioneros (Primeros 20 Clientes Estratégicos):</strong>
+                <ul>
+                    <li><em>100% Gratuito:</em> Acceso irrestricto y sin costo mientras concluye la programación de todos los módulos del ecosistema.</li>
+                    <li><em>Precio Especial de por Vida (Lifetime Partner):</em> Bonificación preferencial congelada de por vida para crecer conjuntamente con el cliente.</li>
+                </ul>
+            </li>
+            <li><strong>2. Clientes Posteriores (Cliente 21 en adelante):</strong>
+                <ul>
+                    <li><em>Período de Prueba:</em> Demo gratuita de 14 días con datos reales o sandbox, ampliable hasta 1 mes según las necesidades de evaluación de la empresa.</li>
+                    <li><em>Licenciamiento Modular Flexible:</em> Pago mensual escalable únicamente por los módulos y herramientas que la empresa active (Logística 3PL, Supply Chain, Contabilidad DGI/BPS, Licitaciones, Omnicanal WhatsApp/MeLi).</li>
+                </ul>
+            </li>
         </ul>
     </div>
 

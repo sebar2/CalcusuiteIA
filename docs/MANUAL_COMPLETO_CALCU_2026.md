@@ -1,10 +1,10 @@
 # CALCU SUITE 2026 & 3PL LOGÍSTICA
 ## Manual Completo e Integral del Software para Clientes y Socios Estratégicos
-*Versión 2.4 Enterprise | Revisión Oficial Octubre 2026 | Arquitectura: FastAPI + React 19 + Capacitor Android + Tailscale*
+*Versión 2.5 Enterprise | Revisión Oficial Octubre 2026 | Arquitectura: FastAPI + React 19 + Capacitor Android + Tailscale*
 
 ---
 
-> **Nota para el Lector**: Este manual reúne en un único documento continuo todas las funcionalidades, flujos contables y logísticos, especificaciones técnicas y 20 capturas de pantalla reales en alta resolución del sistema en funcionamiento.
+> **Nota para el Lector**: Este manual reúne en un único documento continuo todas las funcionalidades, flujos contables y logísticos, especificaciones técnicas y 24 capturas de pantalla reales en alta resolución del sistema en funcionamiento, incluyendo las nuevas unidades de Mercado Libre Uruguay, Chat Omnicanal con WhatsApp QR y la experiencia móvil optimizada.
 
 ---
 
@@ -30,6 +30,12 @@
 18. [Comercial: Pricing Dinámico y Simulación de Canales](#18-comercial-pricing-dinámico-y-simulación-de-canales)
 19. [Licitaciones Estatales: Radar de Convocatorias ARCE / SICE](#19-licitaciones-estatales-radar-de-convocatorias-arce--sice)
 20. [Aplicación Móvil Android (APK) y Despliegue en Terreno](#20-aplicación-móvil-android-apk-y-despliegue-en-terreno)
+21. [Módulo Mercado Libre Uruguay: Kanban 5 Etapas, SLA y Logística](#21-módulo-mercado-libre-uruguay-kanban-5-etapas-sla-y-logística)
+22. [Publicación Asistida MeLi: Modal Pinned y Selector de Envíos 3 Vías](#22-publicación-asistida-meli-modal-pinned-y-selector-de-envíos-3-vías)
+23. [Chat Omnicanal & WhatsApp Directo QR (Multimedia & Audio PTT .Opus)](#23-chat-omnicanal--whatsapp-directo-qr-multimedia--audio-ptt-opus)
+24. [Integraciones Multicanal & Atribución de Leads (ROAS/CAC)](#24-integraciones-multicanal--atribución-de-leads-roascac)
+25. [Experiencia Móvil Optimizada (Menú Hamburguesa ☰ para Redmi Note 9 Pro)](#25-experiencia-móvil-optimizada-menú-hamburguesa--para-redmi-note-9-pro)
+26. [Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant](#26-modelo-de-licenciamiento-programa-pioneros--aislamiento-multi-tenant)
 
 ---
 
@@ -279,8 +285,110 @@ Para choferes y operarios, Calcu incluye un cliente móvil nativo Android:
 
 ---
 
+## 21. Módulo Mercado Libre Uruguay: Kanban 5 Etapas, SLA y Logística
+
+El módulo oficial de integración con **Mercado Libre Uruguay (MLU)** conecta la tienda online de la empresa directamente con la operativa de empaque, despacho y finanzas de Calcu:
+
+![Mercado Libre Kanban Operativo 5 Etapas](screenshots/21_mercadolibre_kanban_5etapas.png)
+
+### Las 5 Etapas del Flujo Operativo:
+1. **Por Preparar / Pendiente de Despacho** (`paid`, `to_be_agreed`):
+   * Órdenes con cobro acreditado esperando empaque en el Depósito Central Montevideo.
+   * **Reloj indicador de SLA de despacho**: Alerta visual con cuenta regresiva del tiempo exigido por Mercado Libre para despachar y evitar penalizaciones de reputación.
+2. **En Tránsito / Despachado** (`shipped`, `in_transit`):
+   * Paquetes entregados al correo o colecta de Mercado Envíos (ME2).
+   * Enlace directo con código de seguimiento al tracking oficial de MeLi.
+3. **Entregado / Concluido** (`delivered`, `completed`):
+   * Órdenes recibidas conforme por el comprador.
+   * Fecha de liberación de fondos en Mercado Pago y conciliación contable automática.
+4. **Reclamos & Devoluciones** (`claims`, `disputed`):
+   * Detección preventiva con alerta roja/ámbar. Botón de mediación para contestar al comprador antes de que el reclamo afecte la reputación MercadoLíder.
+5. **Cancelado / Reembolsado** (`cancelled`):
+   * Reversión automática de existencias al Depósito Central de Calcu, evitando discrepancias de stock.
+
+### Vista Conmutable (Tablero Kanban vs. Vista Lista / Tabla):
+* Mediante un selector superior, el usuario puede alternar instantáneamente entre la vista visual de tarjetas Kanban y una tabla analítica avanzada.
+* **Selector de Columnas Editables**: Permite ocultar o mostrar columnas operativas (ID de Orden, Comprador, SKU, Cantidad, Tipo de Envío, Tracking) y financieras (Monto Bruto UYU/USD, Comisión MeLi retenida, Costo de Envío, Ingreso Neto Real).
+* **Exportación**: Generación de remitos de despacho para colecta y exportación limpia a Excel/CSV.
+
+---
+
+## 22. Publicación Asistida MeLi: Modal Pinned y Selector de Envíos 3 Vías
+
+El sistema integra un asistente de publicación masiva y unitaria en Mercado Libre Uruguay, optimizado para una carga ergonómica sin desplazamientos molestos:
+
+![Modal de Publicación Mercado Libre](screenshots/24_meli_publicacion_modal.png)
+
+### Características de la Publicación:
+* **Cabecera y Botonera Fijas (*Sticky Header & Footer*)**: El título del producto, SKU y botones de acción rápida permanecen anclados a la vista, mientras que el cuerpo del formulario cuenta con scroll vertical fluido adaptado a cualquier resolución.
+* **Selector Logístico de 3 Vías**:
+  1. *Mercado Envíos (ME2)*: Permite configurar si el envío es gratuito para el comprador o si se traslada el costo del flete oficial calculado automáticamente por MeLi en el checkout.
+  2. *Costos de Envío Personalizados (Logística Propia)*: Casillas independientes para ingresar el costo fijo de flete para **Montevideo** y para el **Interior del país**, permitiendo rentabilizar la flota propia 3PL de la empresa.
+  3. *A Convenir con el Comprador*: Modalidad de retiro en Depósito Central Calcu o coordinación particular.
+* **Recuperación Automática de Categoría**: Si la categoría seleccionada en MeLi no admite costos personalizados, el motor reintenta automáticamente bajo la modalidad compatible sin truncar la publicación.
+
+---
+
+## 23. Chat Omnicanal & WhatsApp Directo QR (Multimedia & Audio PTT .Opus)
+
+El centro de atención omnicanal unifica en una única consola todas las conversaciones comerciales con clientes procedentes de WhatsApp, Mercado Libre, Email y formularios web:
+
+![Chat Omnicanal y WhatsApp Directo QR](screenshots/23_omnichannel_chat_multimedia.png)
+
+### Capacidades Multimedia & Ergonomía del Chat:
+* **Vinculación Directa por Código QR**: Conexión nativa con el número propio de la empresa mediante escaneo QR, sin pagar tarifas por mensaje ni requerir APIs de terceros.
+* **Intercambio Multimedia Bidireccional**: Envío y recepción en vivo de imágenes, videos y notas de voz PTT.
+* **Motor de Audio Nativo `.opus` Mono a 48 kHz**: Transcodificación interna asistida por `ffmpeg-static` que garantiza que los audios y notas de voz grabados o enviados desde la plataforma se escuchen de forma 100% nativa en smartphones (Android e iOS).
+* **Copiado y Pegado Directo (`Ctrl + V`)**: Permite capturar la pantalla con `Win + Shift + S` o copiar archivos de video/audio en el explorador de Windows y pegarlos directamente dentro del campo de texto, visualizando una miniatura flotante sin bloquear la redacción del mensaje.
+* **Arrastrar y Soltar (*Drag & Drop*)**: Zona de impacto visual sobre la caja de redacción para soltar archivos de hasta 50 MB.
+* **Agente IA con Lectura de Stock en Tiempo Real**: El copiloto analiza el contexto de la consulta, verifica existencias y precios en el catálogo de Calcu y propone respuestas ejecutivas listas para enviar con un clic.
+* **Filtro Anti-Penalización MeLi**: Escudo activo que bloquea accidentalmente números de teléfono o correos electrónicos en preguntas pre-venta de Mercado Libre.
+
+---
+
+## 24. Integraciones Multicanal & Atribución de Leads (ROAS/CAC)
+
+Tablero centralizado de canales de adquisición comercial que monitorea la procedencia de cada prospecto que ingresa al CRM:
+
+![Integraciones Multicanal](screenshots/22_integraciones_whatsapp_qr.png)
+
+* **Canales Conectados**: WhatsApp QR, Meta Ads (Facebook/Instagram), Google Ads, Email Corporativo, Webhook Web Form y Mercado Libre.
+* **Métricas Financieras en Tiempo Real**: Costo por Lead (CPL), Retorno del Gasto Publicitario (ROAS) y Costo de Adquisición de Clientes (CAC) calculados a partir de los negocios ganados en el CRM.
+* **Sincronización Web**: Los prospectos que completan el formulario en la web de GitHub Pages ingresan en tiempo real como tratos y mensajes bajo el canal `WEB_FORM`.
+
+---
+
+## 25. Experiencia Móvil Optimizada (Menú Hamburguesa ☰ para Redmi Note 9 Pro)
+
+Calcu Suite 2026 ha sido optimizada para smartphones de alta gama y pantallas panorámicas 20:9, como el **Xiaomi Redmi Note 9 Pro** corriendo **LineageOS 22.2 (Android 15)**:
+
+* **Menú Hamburguesa (☰)**: En resoluciones móviles (< 1024px), el sidebar tradicional se oculta automáticamente y es sustituido por un icono de tres líneas horizontales apiladas en el TopHeader.
+* **Navegación en Drawer Deslizable (*Off-Canvas*)**: Al tocar el menú ☰, se despliega un panel lateral suave con fondo oscuro translúcido (*backdrop touch*). Al seleccionar cualquier módulo o tocar el fondo, el menú se repliega de forma instantánea.
+* **Aprovechamiento Integral de Pantalla**: Eliminación de márgenes forzados para que las tarjetas analíticas, órdenes y mapas de ruteo ocupen el 100% del ancho del terminal sin recortes.
+
+---
+
+## 26. Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant
+
+Calcu opera bajo una arquitectura **SaaS Multi-Tenant con Aislamiento Estricto**, diseñada para proteger la confidencialidad de la información de cada empresa:
+
+### Aislamiento de Datos por Licencia:
+* **Base de Datos Exclusiva & Respaldada**: Cada empresa cliente dispone de un esquema/base de datos independiente y cifrada, con copias de seguridad automáticas y sin mezcla de tablas.
+* **Control de Identidad & RBAC**: Políticas de roles y denegación modular configurables desde la consola Master Admin.
+
+### Política Comercial & Programa Pioneros:
+1. **Primeros 20 Clientes Estratégicos (Programa Pioneros)**:
+   * **100% Gratuito**: Acceso completo y sin costo al software mientras culmina la programación de todos los módulos del ecosistema.
+   * **Tarifa Especial de por Vida (*Lifetime Partner*)**: Precio preferencial bonificado y congelado de forma permanente para crecer juntos con el socio comercial.
+2. **Clientes Posteriores (Cliente 21 en adelante)**:
+   * **Período de Prueba Gratuito**: Demo de 14 días con datos reales o sandbox, ampliable hasta 1 mes a solicitud del equipo directivo.
+   * **Licenciamiento Modular Flexible**: Pago mensual escalable únicamente por los módulos y herramientas que la empresa active (Logística 3PL, Supply Chain, Contabilidad DGI/BPS, Licitaciones, Omnicanal WhatsApp/MeLi).
+
+---
+
 ## Archivos Entregables
 
-1. **PDF Oficial de Presentación**: `MANUAL_COMPLETO_CALCU_2026.pdf` (4.65 MB, imprimible en formato A4 con capturas de pantalla de alta resolución).
-2. **HTML Interactivo Autocontenido**: `docs/MANUAL_COMPLETO_CALCU_2026.html`.
-3. **Aplicación Android Móvil**: `Calcu_3PL_Mobile_v2026.apk` (5.94 MB).
+1. **PDF Oficial de Presentación**: `MANUAL_COMPLETO_CALCU_2026.pdf` (imprimible en formato A4 con 24 capturas de pantalla de alta resolución).
+2. **HTML Interactivo Autocontenido**: `docs/MANUAL_COMPLETO_CALCU_2026.html` (con estilos modernos y navegación fluida).
+3. **Documento Markdown Maestro**: `docs/MANUAL_COMPLETO_CALCU_2026.md`.
+4. **Aplicación Android Móvil Compilada**: `Calcu_3PL_Mobile_v2026.apk` (5.95 MB, lista para instalación en Android 10 a 15).

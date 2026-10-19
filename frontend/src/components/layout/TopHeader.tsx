@@ -13,6 +13,7 @@ import {
   Shield,
   LogOut,
   Check,
+  Menu,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import api, { apiService, getStoredUser, logout as apiLogout } from '../../services/api';
@@ -40,6 +41,8 @@ interface TopHeaderProps {
   onRoleChange?: (role: string) => void;
   engineMode?: EngineMode;
   onEngineModeChange?: (mode: EngineMode) => void;
+  isMobileMenuOpen?: boolean;
+  onToggleMobileMenu?: () => void;
 }
 
 export const TopHeader = ({
@@ -54,6 +57,8 @@ export const TopHeader = ({
   onRoleChange,
   engineMode = 'auto',
   onEngineModeChange,
+  isMobileMenuOpen,
+  onToggleMobileMenu,
 }: TopHeaderProps) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { isDark, toggleTheme } = useTheme();
@@ -179,14 +184,26 @@ export const TopHeader = ({
 
   return (
     <header
-      className={`fixed top-0 right-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 z-20 transition-all duration-300 flex items-center justify-between px-6 ${
-        sidebarCollapsed ? 'left-16' : 'left-64'
+      className={`fixed top-0 right-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 z-20 transition-all duration-300 flex items-center justify-between px-3 sm:px-6 left-0 ${
+        sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'
       }`}
     >
-      {/* Buscador Global & Chips */}
-      <div className="flex items-center space-x-3 flex-1 max-w-4xl">
+      {/* Buscador Global, Menú Hamburguesa Móvil & Chips */}
+      <div className="flex items-center space-x-2 sm:space-x-3 flex-1 max-w-4xl">
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            aria-expanded={isMobileMenuOpen}
+            className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none transition-colors cursor-pointer"
+            title="Abrir menú de navegación"
+            aria-label="Abrir menú de navegación"
+          >
+            <Menu size={22} className="text-slate-700 dark:text-slate-200" />
+          </button>
+        )}
         {/* Input Buscador con Ctrl + K badge */}
-        <div className="relative w-56 md:w-64">
+        <div className="relative w-44 sm:w-56 md:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={15} />
           <input
             ref={searchInputRef}

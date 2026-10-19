@@ -100,8 +100,79 @@ def create_lead(
                 "mensaje": new_lead.mensaje
             }
         )
-    except Exception as e:
-        # No bloquear la creación del lead si falla la auditoría
+    # 4.1 Registro automático en CRM y Chat Omnicanal (Canal: WEB_FORM)
+    deal_id = None
+    try:
+        from app.domain.models import CommercialDeal
+        from app.models.multitenant_entities import OmnichannelMessage
+        from app.api.v1.omnichannel import ws_manager
+        import asyncio
+
+        deal = CommercialDeal(
+            cliente=f"{new_lead.nombre} / {new_lead.empresa}",
+            proyecto_nombre=f"Demo Web: {new_lead.empresa} ({new_lead.interes})",
+            monto_total=1200.0,
+            moneda="USD",
+            etapa="prospeccion",
+            probabilidad=0.80,
+            vendedor="Asignación Web / Automática",
+            canal_origen="WEB_FORM",
+            utm_campaign="Landing GitHub Pages",
+            phone=new_lead.telefono,
+            email=new_lead.email,
+            ai_score=92,
+            ai_classification="HOT",
+            observaciones=f"Interés: {new_lead.interes}. Mensaje: {new_lead.mensaje or 'Solicitud demo web'}"
+        )
+        db.add(deal)
+        db.commit()
+        db.refresh(deal)
+        deal_id = deal.id
+
+        welcome_msg = (
+            f"📥 Nuevo lead recibido desde el formulario web de la landing GitHub Pages:\n"
+            f"👤 Contacto: {new_lead.nombre}\n"
+            f"🏢 Empresa: {new_lead.empresa}\n"
+            f"📧 Email: {new_lead.email}\n"
+            f"📱 Teléfono/WhatsApp: {new_lead.telefono}\n"
+            f"🎯 Interés: {new_lead.interes}\n"
+            f"💬 Consulta: {new_lead.mensaje or 'Solicitud de acceso a la demo corporativa'}"
+        )
+        omni_msg = OmnichannelMessage(
+            deal_id=deal.id,
+            channel="WEB_FORM",
+            direction="INBOUND",
+            sender_name=new_lead.nombre,
+            sender_address=new_lead.email,
+            message_text=welcome_msg,
+            delivery_status="DELIVERED_API",
+            is_ai_generated=False,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(omni_msg)
+        db.commit()
+
+        # Emitir notificación WebSocket si el loop está activo
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(ws_manager.broadcast({
+                    "event": "NEW_MESSAGE",
+                    "deal_id": deal.id,
+                    "message": {
+                        "id": omni_msg.id,
+                        "deal_id": deal.id,
+                        "channel": "WEB_FORM",
+                        "direction": "INBOUND",
+                        "sender_name": new_lead.nombre,
+                        "message_text": welcome_msg,
+                        "delivery_status": "DELIVERED_API",
+                        "created_at": omni_msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                }))
+        except Exception:
+            pass
+    except Exception:
         pass
 
     # 5. Construcción de URL WhatsApp para contacto instantáneo
