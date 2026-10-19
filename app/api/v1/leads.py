@@ -5,9 +5,12 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+import logging
 from app.database.session import get_db
 from app.domain.models import LeadProspect
 from app.services.monitoring_service import MonitoringService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/leads", tags=["Leads & Prospección Comercial"])
 
@@ -100,6 +103,9 @@ def create_lead(
                 "mensaje": new_lead.mensaje
             }
         )
+    except Exception as audit_err:
+        logger.warning(f"No se pudo registrar la auditoría ISO 27001 para el lead: {audit_err}")
+
     # 4.1 Registro automático en CRM y Chat Omnicanal (Canal: WEB_FORM)
     deal_id = None
     try:

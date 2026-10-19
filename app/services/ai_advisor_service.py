@@ -59,7 +59,7 @@ from app.domain.schemas import (
     SkuPrioritarioItem,
     BusinessUnitDistribution,
 )
-from app.models.entities import Product, Inventory, Budget, Category, Sale, PresupuestoMeta
+from app.models.entities import Product, Inventory, Budget, Category, Sale, PresupuestoMeta, PresupuestoCentroCosto
 from app.engine.inventory import calculate_rop, calculate_doh, calculate_inventory_turnover
 from app.engine.pricing import (
     calculate_gross_margin,
