@@ -546,3 +546,92 @@ def test_meli_picture_upload_and_family_name_publishing():
         assert res_pub.json()["item_id"] == "MLU99887766"
         assert res_pub.json()["status"] == "published"
 
+
+def test_meli_get_my_items_and_shipping_configuration():
+    """Valida la consulta de publicaciones en vivo del vendedor y la configuración opcional de envíos."""
+    mock_my_items = {
+        "seller_id": "94100539",
+        "total": 2,
+        "items": [
+            {
+                "id": "MLU1521422182",
+                "title": "Panel Led 60x60 Embutir 48w Blanco Frio",
+                "category_id": "MLU1590",
+                "price": 1450.0,
+                "currency_id": "UYU",
+                "available_quantity": 10,
+                "sold_quantity": 3,
+                "status": "active",
+                "sub_status": [],
+                "condition": "new",
+                "listing_type_id": "gold_special",
+                "permalink": "https://articulo.mercadolibre.com.uy/MLU-1521422182.html",
+                "thumbnail": "http://http2.mlstatic.com/D_670267-MLU1521422182_I.jpg",
+                "pictures": [{"id": "670267-MLU1521422182"}],
+                "free_shipping": False,
+                "shipping_mode": "me2",
+                "local_pick_up": True,
+                "date_created": "2026-10-18T10:00:00.000Z",
+                "last_updated": "2026-10-19T10:00:00.000Z",
+            },
+            {
+                "id": "MLU606941273",
+                "title": "Indoor 1.2m Carpa Cultivo",
+                "category_id": "MLU416484",
+                "price": 8900.0,
+                "currency_id": "UYU",
+                "available_quantity": 2,
+                "sold_quantity": 1,
+                "status": "paused",
+                "sub_status": [],
+                "condition": "new",
+                "listing_type_id": "gold_special",
+                "permalink": "https://articulo.mercadolibre.com.uy/MLU-606941273.html",
+                "thumbnail": "",
+                "pictures": [],
+                "free_shipping": True,
+                "shipping_mode": "me2",
+                "local_pick_up": True,
+                "date_created": "2026-10-17T12:00:00.000Z",
+                "last_updated": "2026-10-18T15:00:00.000Z",
+            },
+        ],
+    }
+
+    with patch("app.services.meli_service.MeliService.get_seller_items", new_callable=AsyncMock) as m_items:
+        m_items.return_value = mock_my_items
+        res = client.get("/api/v1/integrations/meli/my-items", headers=_admin_headers())
+        assert res.status_code == 200
+        data = res.json()
+        assert data["seller_id"] == "94100539"
+        assert len(data["items"]) == 2
+        assert data["items"][0]["id"] == "MLU1521422182"
+        assert data["items"][0]["status"] == "active"
+        assert data["items"][1]["id"] == "MLU606941273"
+        assert data["items"][1]["status"] == "paused"
+
+    # Verificar que el payload de publicación acepta envíos opcionales
+    with patch("app.services.meli_service.MeliService.publish_item", new_callable=AsyncMock) as m_pub:
+        m_pub.return_value = {
+            "id": "MLU12345678",
+            "title": "Reflector Solar 100W",
+            "permalink": "https://articulo.mercadolibre.com.uy/MLU-12345678.html",
+            "price": 2200.0,
+            "available_quantity": 15,
+            "status": "active",
+        }
+        pub_payload = {
+            "title": "Reflector Solar 100W",
+            "category_id": "MLU1590",
+            "price": 2200.0,
+            "currency_id": "UYU",
+            "available_quantity": 15,
+            "enable_me2": True,
+            "free_shipping": True,
+            "local_pick_up": True,
+        }
+        res_pub = client.post("/api/v1/integrations/meli/items", json=pub_payload, headers=_admin_headers())
+        assert res_pub.status_code == 200
+        assert res_pub.json()["item_id"] == "MLU12345678"
+
+

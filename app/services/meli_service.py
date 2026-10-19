@@ -1157,6 +1157,24 @@ class MeliService:
         except Exception:
             pass
 
+        # Configuración opcional de envíos: Mercado Envíos (me2) o a convenir (not_specified)
+        shipping_cfg = payload.get("shipping")
+        if isinstance(shipping_cfg, dict) and "mode" in shipping_cfg:
+            shipping_dict = {
+                "mode": str(shipping_cfg.get("mode") or "not_specified"),
+                "local_pick_up": bool(shipping_cfg.get("local_pick_up", True)),
+                "free_shipping": bool(shipping_cfg.get("free_shipping", False)),
+            }
+        else:
+            enable_me2 = bool(payload.get("enable_me2", False))
+            free_shipping = bool(payload.get("free_shipping", False))
+            local_pick_up = bool(payload.get("local_pick_up", True))
+            shipping_dict = {
+                "mode": "me2" if enable_me2 else "not_specified",
+                "local_pick_up": local_pick_up,
+                "free_shipping": free_shipping,
+            }
+
         base_body: Dict[str, Any] = {
             "category_id": category_id,
             "price": price,
@@ -1167,11 +1185,7 @@ class MeliService:
             "listing_type_id": listing_type_id,
             "pictures": pictures,
             "attributes": attributes,
-            "shipping": {
-                "mode": "not_specified",
-                "local_pick_up": True,
-                "free_shipping": False,
-            },
+            "shipping": shipping_dict,
         }
 
         async with httpx.AsyncClient(timeout=18.0) as client:
@@ -1444,4 +1458,129 @@ class MeliService:
                 "permalink": item_data.get("permalink", ""),
                 "thumbnail": item_data.get("thumbnail", ""),
             }
+
+    @classmethod
+    async def get_seller_items(
+        cls,
+        db: Session,
+        tenant_id: str = "tenant_calcu_corp",
+        status_filter: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Obtiene el listado oficial de publicaciones del vendedor autenticado en Mercado Libre.
+        Consulta /users/{seller_id}/items/search y resuelve los detalles vía multiget /items?ids=...
+        """
+        cls._enforce_rate_limit()
+        from app.models.multitenant_entities import IntegrationConfig
+        from app.core.vault import decrypt_vault_payload
+
+        cfg = db.query(IntegrationConfig).filter(
+            IntegrationConfig.channel == "MERCADO_LIBRE",
+            IntegrationConfig.tenant_id == tenant_id
+        ).first()
+
+        if not cfg or not cfg.encrypted_credentials:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No existe un token activo de vendedor de Mercado Libre en la Bóveda AES-256. Vincule la cuenta vía OAuth2 primero."
+            )
+
+        creds = decrypt_vault_payload(cfg.encrypted_credentials)
+        seller_id = creds.get("seller_id")
+        token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token de vendedor expirado o no disponible en la Bóveda."
+            )
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "CalcuApp/1.0",
+            "Accept": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=18.0) as client:
+            if not seller_id:
+                me_resp = await client.get(f"{cls.MELI_API_BASE_URL}/users/me", headers=headers)
+                if me_resp.status_code == 200:
+                    seller_id = str(me_resp.json().get("id") or "")
+
+            if not seller_id:
+                raise HTTPException(status_code=400, detail="No se pudo determinar el ID de usuario de Mercado Libre.")
+
+            status_param = status_filter if status_filter else "active,paused,closed"
+            search_params = {
+                "status": status_param,
+                "limit": min(max(1, limit), 50),
+                "offset": max(0, offset),
+                "orders": "last_updated_desc",
+            }
+
+            search_url = f"{cls.MELI_API_BASE_URL}/users/{seller_id}/items/search"
+            search_res = await client.get(search_url, params=search_params, headers=headers)
+            if search_res.status_code != 200:
+                logger.error("Error buscando items del vendedor MeLi: %d %s", search_res.status_code, search_res.text)
+                raise HTTPException(
+                    status_code=search_res.status_code,
+                    detail=f"Error al consultar publicaciones en Mercado Libre ({search_res.status_code}): {search_res.text}"
+                )
+
+            search_data = search_res.json()
+            item_ids = search_data.get("results") or []
+            paging = search_data.get("paging") or {}
+            total = paging.get("total", len(item_ids))
+
+            if not item_ids:
+                return {
+                    "seller_id": seller_id,
+                    "total": 0,
+                    "items": [],
+                    "paging": paging,
+                }
+
+            detailed_items: List[Dict[str, Any]] = []
+            chunk_size = 20
+            for i in range(0, len(item_ids), chunk_size):
+                chunk = item_ids[i:i + chunk_size]
+                multiget_ids = ",".join(chunk)
+                attrs = "id,title,price,currency_id,available_quantity,sold_quantity,status,sub_status,permalink,thumbnail,pictures,date_created,last_updated,shipping,condition,listing_type_id,category_id"
+                multi_url = f"{cls.MELI_API_BASE_URL}/items?ids={multiget_ids}&attributes={attrs}"
+                multi_res = await client.get(multi_url, headers=headers)
+                if multi_res.status_code == 200:
+                    for entry in multi_res.json():
+                        if entry.get("code") == 200 and entry.get("body"):
+                            b = entry["body"]
+                            shipping_info = b.get("shipping") or {}
+                            detailed_items.append({
+                                "id": b.get("id"),
+                                "title": b.get("title"),
+                                "category_id": b.get("category_id"),
+                                "price": float(b.get("price") or 0.0),
+                                "currency_id": b.get("currency_id", "UYU"),
+                                "available_quantity": int(b.get("available_quantity") or 0),
+                                "sold_quantity": int(b.get("sold_quantity") or 0),
+                                "status": b.get("status", "unknown"),
+                                "sub_status": b.get("sub_status") or [],
+                                "condition": b.get("condition", "new"),
+                                "listing_type_id": b.get("listing_type_id", "gold_special"),
+                                "permalink": b.get("permalink", ""),
+                                "thumbnail": b.get("thumbnail", ""),
+                                "pictures": b.get("pictures") or [],
+                                "free_shipping": bool(shipping_info.get("free_shipping", False)),
+                                "shipping_mode": shipping_info.get("mode", "not_specified"),
+                                "local_pick_up": bool(shipping_info.get("local_pick_up", True)),
+                                "date_created": b.get("date_created"),
+                                "last_updated": b.get("last_updated"),
+                            })
+
+            return {
+                "seller_id": seller_id,
+                "total": total,
+                "items": detailed_items,
+                "paging": paging,
+            }
+
 

@@ -1097,6 +1097,10 @@ class MeliPublishItemRequest(BaseModel):
     image_url: Optional[str] = Field(default=None, description="URL de imagen principal")
     description: Optional[str] = Field(default=None, description="Descripción en texto plano")
     attributes: Optional[List[Dict[str, Any]]] = Field(default=None, description="Atributos opcionales u obligatorios de la categoría")
+    shipping: Optional[Dict[str, Any]] = Field(default=None, description="Configuración de envío (mode, free_shipping, local_pick_up)")
+    enable_me2: Optional[bool] = Field(default=False, description="Habilitar Mercado Envíos (ME2)")
+    free_shipping: Optional[bool] = Field(default=False, description="Envío gratis a cargo del vendedor")
+    local_pick_up: Optional[bool] = Field(default=True, description="Permitir retiro en depósito / persona")
 
 
 class MeliUpdateItemRequest(BaseModel):
@@ -1222,6 +1226,10 @@ async def publish_meli_item(
         "image_url": req.image_url,
         "description": req.description,
         "attributes": req.attributes,
+        "shipping": req.shipping,
+        "enable_me2": req.enable_me2,
+        "free_shipping": req.free_shipping,
+        "local_pick_up": req.local_pick_up,
     }
 
     item_data = await MeliService.publish_item(db=db, tenant_id=user.tenant_id, payload=payload)
@@ -1235,6 +1243,27 @@ async def publish_meli_item(
         "meli_status": item_data.get("status"),
         "raw_response": item_data,
     }
+
+
+@router.get(
+    "/meli/my-items",
+    summary="Obtiene las publicaciones activas, pausadas o cerradas del vendedor en Mercado Libre Uruguay"
+)
+async def get_my_meli_items(
+    status: Optional[str] = Query(default=None, description="Filtrar por estado: active, paused, closed o None para todos"),
+    limit: int = Query(default=50, ge=1, le=50, description="Cantidad máxima de publicaciones a retornar"),
+    offset: int = Query(default=0, ge=0, description="Offset de paginación"),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    items_data = await MeliService.get_seller_items(
+        db=db,
+        tenant_id=user.tenant_id,
+        status_filter=status,
+        limit=limit,
+        offset=offset,
+    )
+    return items_data
 
 
 @router.put(

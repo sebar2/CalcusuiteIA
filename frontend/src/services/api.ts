@@ -157,6 +157,7 @@ import type {
   MeliSyncStockResponse,
   MeliSellerReputationResponse,
   MeliItemAnalyticsResponse,
+  MeliMyItemsResponse,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -1883,6 +1884,11 @@ export const apiService = {
 
   async publishMeliItem(payload: MeliPublishItemPayload): Promise<MeliPublishItemResponse> {
     const res = await apiClient.post<MeliPublishItemResponse>('/api/v1/integrations/meli/items', payload);
+    return res.data;
+  },
+
+  async getMyMeliItems(params?: { status?: string; limit?: number; offset?: number }): Promise<MeliMyItemsResponse> {
+    const res = await apiClient.get<MeliMyItemsResponse>('/api/v1/integrations/meli/my-items', { params });
     return res.data;
   },
 

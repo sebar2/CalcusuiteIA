@@ -15,12 +15,21 @@ import {
   KeyRound,
   Clock,
   Loader2,
+  SlidersHorizontal,
+  PauseCircle,
+  PlayCircle,
+  Edit3,
+  Save,
+  X,
+  Truck,
+  Search,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type {
   MeliReadyProductItem,
   IntegrationChannelConfig,
   MeliSellerReputationResponse,
+  MeliMyItem,
 } from '../../types';
 import { MeliPublishModal } from '../../components/integrations/MeliPublishModal';
 
@@ -30,22 +39,60 @@ interface MercadoLibreViewProps {
   onNavigateToCRM?: () => void;
 }
 
-type MeliTab = 'catalog' | 'stock_pricing' | 'qa_chat' | 'analytics' | 'settings';
+type MeliTab = 'publications' | 'catalog' | 'stock_pricing' | 'qa_chat' | 'analytics' | 'settings';
 
 export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
   currentRole = 'controller_admin',
   onNavigateToChat,
   onNavigateToCRM,
 }) => {
-  const [activeTab, setActiveTab] = useState<MeliTab>('catalog');
+  const [activeTab, setActiveTab] = useState<MeliTab>('publications');
   const [channelConfig, setChannelConfig] = useState<IntegrationChannelConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(true);
   const [reputation, setReputation] = useState<MeliSellerReputationResponse | null>(null);
 
-  // Catálogo y productos
+  // Publicaciones oficiales del vendedor en MeLi (En Vivo)
+  const [myItems, setMyItems] = useState<MeliMyItem[]>([]);
+  const [isLoadingMyItems, setIsLoadingMyItems] = useState<boolean>(false);
+  const [myItemsStatusFilter, setMyItemsStatusFilter] = useState<string>('all');
+  const [myItemsSearch, setMyItemsSearch] = useState<string>('');
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+
+  // Edición rápida inline (precio / stock)
+  const [editingItem, setEditingItem] = useState<{ id: string; price: number; available_quantity: number } | null>(null);
+
+  // Selector de columnas personalizables para Mis Publicaciones
+  const [myItemsColumns, setMyItemsColumns] = useState({
+    image: true,
+    title: true,
+    category: true,
+    price: true,
+    stock: true,
+    sold: true,
+    status: true,
+    shipping: true,
+    dates: false,
+    actions: true,
+  });
+  const [showMyItemsColMenu, setShowMyItemsColMenu] = useState<boolean>(false);
+
+  // Catálogo interno y productos Calcu
   const [products, setProducts] = useState<MeliReadyProductItem[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
   const [searchFilter, setSearchFilter] = useState<string>('');
+
+  // Selector de columnas personalizables para Catálogo Calcu
+  const [catalogColumns, setCatalogColumns] = useState({
+    image: true,
+    product: true,
+    category: true,
+    cost: false,
+    price: true,
+    stock: true,
+    status: true,
+    actions: true,
+  });
+  const [showCatalogColMenu, setShowCatalogColMenu] = useState<boolean>(false);
 
   // Modal de publicación
   const [isPublishModalOpen, setIsPublishModalOpen] = useState<boolean>(false);
@@ -86,7 +133,22 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
     }
   };
 
-  // 2. Cargar productos listos para MeLi
+  // 2. Cargar publicaciones en vivo del vendedor en Mercado Libre
+  const loadMyMeliItems = async (statusFilter?: string) => {
+    setIsLoadingMyItems(true);
+    try {
+      const res = await apiService.getMyMeliItems({
+        status: statusFilter && statusFilter !== 'all' ? statusFilter : undefined,
+      });
+      setMyItems(res.items || []);
+    } catch (err: any) {
+      console.warn('Error cargando publicaciones de MeLi:', err);
+    } finally {
+      setIsLoadingMyItems(false);
+    }
+  };
+
+  // 3. Cargar productos listos para MeLi del inventario interno
   const loadReadyProducts = async () => {
     setIsLoadingProducts(true);
     try {
@@ -102,7 +164,62 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
   useEffect(() => {
     loadIntegrationStatus();
     loadReadyProducts();
+    loadMyMeliItems();
   }, []);
+
+  // Alternar estado activo / pausado en 1 clic
+  const handleToggleStatus = async (item: MeliMyItem) => {
+    const newStatus = item.status === 'active' ? 'paused' : 'active';
+    setUpdatingItemId(item.id);
+    try {
+      await apiService.updateMeliItem(item.id, { status: newStatus });
+      setMyItems((prev) =>
+        prev.map((it) => (it.id === item.id ? { ...it, status: newStatus } : it))
+      );
+      setBannerMsg({
+        type: 'success',
+        text: `Publicación ${item.id} actualizada: estado cambiado a ${newStatus === 'active' ? 'ACTIVA' : 'PAUSADA'}.`,
+      });
+    } catch (err: any) {
+      setBannerMsg({
+        type: 'error',
+        text: err.response?.data?.detail || `Error al cambiar estado de la publicación ${item.id}.`,
+      });
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
+  // Guardar edición rápida inline de precio y stock
+  const handleSaveQuickEdit = async (itemId: string) => {
+    if (!editingItem || editingItem.id !== itemId) return;
+    setUpdatingItemId(itemId);
+    try {
+      await apiService.updateMeliItem(itemId, {
+        price: editingItem.price,
+        available_quantity: editingItem.available_quantity,
+      });
+      setMyItems((prev) =>
+        prev.map((it) =>
+          it.id === itemId
+            ? { ...it, price: editingItem.price, available_quantity: editingItem.available_quantity }
+            : it
+        )
+      );
+      setBannerMsg({
+        type: 'success',
+        text: `Publicación ${itemId} actualizada: Precio UYU $${editingItem.price} | Stock: ${editingItem.available_quantity} un.`,
+      });
+      setEditingItem(null);
+    } catch (err: any) {
+      setBannerMsg({
+        type: 'error',
+        text: err.response?.data?.detail || `Error al actualizar precio/stock de ${itemId}.`,
+      });
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
 
   // Flujo OAuth 2.0 oficial
   const handleConnectOAuth = async () => {
@@ -161,13 +278,28 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
   const contributionMargin = netRevenue - simCost;
   const marginPct = simPrice > 0 ? ((contributionMargin / simPrice) * 100).toFixed(1) : '0';
 
-  // Filtrado de productos
+  // Filtrado de productos del inventario interno
   const filteredProducts = products.filter(
     (p) =>
       p.nombre.toLowerCase().includes(searchFilter.toLowerCase()) ||
       p.sku.toLowerCase().includes(searchFilter.toLowerCase()) ||
       p.categoria.toLowerCase().includes(searchFilter.toLowerCase())
   );
+
+  // Filtrado de publicaciones de Mercado Libre (En Vivo)
+  const filteredMyItems = myItems.filter((it: MeliMyItem) => {
+    const s = myItemsSearch.toLowerCase().trim();
+    const matchesSearch =
+      !s ||
+      (it.title && it.title.toLowerCase().includes(s)) ||
+      (it.id && it.id.toLowerCase().includes(s)) ||
+      (it.category_id && it.category_id.toLowerCase().includes(s));
+
+    const matchesStatus =
+      myItemsStatusFilter === 'all' || it.status === myItemsStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="space-y-6">
@@ -290,6 +422,22 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         <button
           type="button"
+          onClick={() => setActiveTab('publications')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+            activeTab === 'publications'
+              ? 'bg-[#FFE600] text-[#2D3277] shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <ShoppingBag size={14} />
+          <span>1. Mis Publicaciones MeLi (En Vivo)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            {myItems.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('catalog')}
           className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             activeTab === 'catalog'
@@ -298,7 +446,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <Package size={14} />
-          <span>1. Publicaciones &amp; Catálogo</span>
+          <span>2. Catálogo Calcu (Inventario)</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
             {products.length}
           </span>
@@ -314,7 +462,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <RefreshCw size={14} />
-          <span>2. Sincronización de Stock &amp; Pricing</span>
+          <span>3. Sincronización de Stock &amp; Pricing</span>
         </button>
 
         <button
@@ -327,7 +475,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <MessageSquare size={14} />
-          <span>3. Preguntas Pre-Venta &amp; Chat MeLi</span>
+          <span>4. Preguntas Pre-Venta &amp; Chat MeLi</span>
         </button>
 
         <button
@@ -340,7 +488,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <TrendingUp size={14} />
-          <span>4. Métricas, Reputación &amp; Ventas</span>
+          <span>5. Métricas, Reputación &amp; Ventas</span>
         </button>
 
         <button
@@ -353,27 +501,429 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <KeyRound size={14} />
-          <span>5. Bóveda OAuth2 &amp; Webhooks</span>
+          <span>6. Bóveda OAuth2 &amp; Webhooks</span>
         </button>
       </div>
 
       {/* =========================================================================
-          PESTAÑA 1: PUBLICACIONES & CATÁLOGO
+          PESTAÑA 1: MIS PUBLICACIONES MELI (EN VIVO)
+      ========================================================================= */}
+      {activeTab === 'publications' && (
+        <div className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2.5 flex-1">
+              {/* Buscador */}
+              <div className="relative w-full sm:w-72">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={myItemsSearch}
+                  onChange={(e) => setMyItemsSearch(e.target.value)}
+                  placeholder="Buscar por título, ID (MLU...) o categoría..."
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Filtro por Estado */}
+              <select
+                value={myItemsStatusFilter}
+                onChange={(e) => {
+                  setMyItemsStatusFilter(e.target.value);
+                  loadMyMeliItems(e.target.value);
+                }}
+                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-300 font-semibold cursor-pointer"
+              >
+                <option value="all">Todos los estados ({myItems.length})</option>
+                <option value="active">Activas</option>
+                <option value="paused">Pausadas</option>
+                <option value="closed">Cerradas / Finalizadas</option>
+              </select>
+
+              {/* Selector de Columnas Visibles */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowMyItemsColMenu(!showMyItemsColMenu)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>Columnas</span>
+                </button>
+                {showMyItemsColMenu && (
+                  <div className="absolute left-0 mt-1.5 z-30 w-48 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl space-y-1 text-xs">
+                    <span className="font-bold text-[10px] text-slate-400 px-1 uppercase tracking-wider block">
+                      Columnas Visibles
+                    </span>
+                    {Object.entries({
+                      image: 'Foto',
+                      title: 'Título & ID',
+                      category: 'Categoría',
+                      price: 'Precio',
+                      stock: 'Stock MeLi',
+                      sold: 'Ventas',
+                      status: 'Estado',
+                      shipping: 'Envíos',
+                      dates: 'Fechas',
+                      actions: 'Acciones',
+                    }).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(myItemsColumns as any)[key]}
+                          onChange={(e) => setMyItemsColumns((prev) => ({ ...prev, [key]: e.target.checked }))}
+                          className="w-3.5 h-3.5 text-amber-500 rounded border-slate-300"
+                        />
+                        <span className="text-slate-800 dark:text-slate-200">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => loadMyMeliItems(myItemsStatusFilter)}
+                disabled={isLoadingMyItems}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Refrescar publicaciones en vivo"
+              >
+                <RefreshCw size={14} className={isLoadingMyItems ? 'animate-spin' : ''} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedProductForModal(null);
+                  setIsPublishModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] font-bold text-xs shadow-xs cursor-pointer"
+              >
+                <Sparkles size={13} />
+                <span>Nueva Publicación</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabla de Publicaciones MeLi */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100 dark:border-slate-800">
+                  <tr>
+                    {myItemsColumns.image && <th className="py-3 px-3 w-12 text-center">Foto</th>}
+                    {myItemsColumns.title && <th className="py-3 px-4">Publicación MeLi</th>}
+                    {myItemsColumns.category && <th className="py-3 px-3">Categoría</th>}
+                    {myItemsColumns.price && <th className="py-3 px-3 text-right">Precio</th>}
+                    {myItemsColumns.stock && <th className="py-3 px-3 text-right">Stock MeLi</th>}
+                    {myItemsColumns.sold && <th className="py-3 px-3 text-right">Ventas</th>}
+                    {myItemsColumns.status && <th className="py-3 px-3 text-center">Estado</th>}
+                    {myItemsColumns.shipping && <th className="py-3 px-3">Envíos</th>}
+                    {myItemsColumns.dates && <th className="py-3 px-3">Fechas</th>}
+                    {myItemsColumns.actions && <th className="py-3 px-4 text-center">Acciones</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {isLoadingMyItems ? (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400">
+                        <Loader2 size={22} className="animate-spin mx-auto mb-2 text-amber-500" />
+                        <span>Consultando publicaciones en vivo de Mercado Libre...</span>
+                      </td>
+                    </tr>
+                  ) : filteredMyItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-10 text-center text-slate-400">
+                        <ShoppingBag size={28} className="mx-auto mb-2 opacity-40 text-amber-500" />
+                        <span className="block font-semibold">No se encontraron publicaciones oficiales de Mercado Libre.</span>
+                        <span className="text-[11px] text-slate-400">Haga clic en &ldquo;Nueva Publicación&rdquo; o verifique que su cuenta esté vinculada en la pestaña Bóveda.</span>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMyItems.map((item) => {
+                      const isEditing = editingItem?.id === item.id;
+                      const isUpdating = updatingItemId === item.id;
+                      const thumb = item.thumbnail || (item.pictures && item.pictures.length > 0 ? (item.pictures[0].secure_url || item.pictures[0].url) : null);
+
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                          {myItemsColumns.image && (
+                            <td className="py-3 px-3 text-center">
+                              <div className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden flex items-center justify-center shrink-0 mx-auto">
+                                {thumb ? (
+                                  <img src={thumb} alt="" className="w-full h-full object-contain" />
+                                ) : (
+                                  <Package size={16} className="text-slate-400" />
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          {myItemsColumns.title && (
+                            <td className="py-3 px-4">
+                              <div className="max-w-md">
+                                <span className="font-bold text-slate-900 dark:text-white block truncate" title={item.title}>
+                                  {item.title}
+                                </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="font-mono text-[10px] text-slate-400">
+                                    {item.id}
+                                  </span>
+                                  {item.permalink && (
+                                    <a
+                                      href={item.permalink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <ExternalLink size={10} />
+                                      <span>Ver en MeLi</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {myItemsColumns.category && (
+                            <td className="py-3 px-3 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+                              {item.category_id || '-'}
+                            </td>
+                          )}
+
+                          {myItemsColumns.price && (
+                            <td className="py-3 px-3 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingItem.price}
+                                  onChange={(e) => setEditingItem((prev) => prev ? { ...prev, price: parseFloat(e.target.value) || 0 } : null)}
+                                  className="w-20 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-right font-bold text-xs"
+                                />
+                              ) : (
+                                <span className="font-bold text-slate-900 dark:text-white">
+                                  {item.currency_id} ${item.price.toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                          )}
+
+                          {myItemsColumns.stock && (
+                            <td className="py-3 px-3 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editingItem.available_quantity}
+                                  onChange={(e) => setEditingItem((prev) => prev ? { ...prev, available_quantity: parseInt(e.target.value, 10) || 0 } : null)}
+                                  className="w-16 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-1.5 py-0.5 text-right font-bold text-xs"
+                                />
+                              ) : (
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {item.available_quantity} un.
+                                </span>
+                              )}
+                            </td>
+                          )}
+
+                          {myItemsColumns.sold && (
+                            <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-400 font-semibold">
+                              {item.sold_quantity}
+                            </td>
+                          )}
+
+                          {myItemsColumns.status && (
+                            <td className="py-3 px-3 text-center">
+                              {item.status === 'active' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  Activa
+                                </span>
+                              ) : item.status === 'paused' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                  Pausada
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                  {item.status}
+                                </span>
+                              )}
+                            </td>
+                          )}
+
+                          {myItemsColumns.shipping && (
+                            <td className="py-3 px-3">
+                              <div className="flex flex-wrap gap-1">
+                                {item.shipping_mode === 'me2' && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-0.5">
+                                    <Truck size={9} /> ME2
+                                  </span>
+                                )}
+                                {item.free_shipping && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    Envío Gratis
+                                  </span>
+                                )}
+                                {item.local_pick_up && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                    Retiro
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          {myItemsColumns.dates && (
+                            <td className="py-3 px-3 text-[10px] text-slate-400">
+                              <div>Creada: {item.date_created?.slice(0, 10)}</div>
+                              <div>Modif: {item.last_updated?.slice(0, 10)}</div>
+                            </td>
+                          )}
+
+                          {myItemsColumns.actions && (
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdating}
+                                      onClick={() => handleSaveQuickEdit(item.id)}
+                                      className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer"
+                                      title="Guardar cambios"
+                                    >
+                                      <Save size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingItem(null)}
+                                      className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                                      title="Cancelar"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Botón 1-clic Pausar / Reactivar */}
+                                    {item.status === 'active' ? (
+                                      <button
+                                        type="button"
+                                        disabled={isUpdating}
+                                        onClick={() => handleToggleStatus(item)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 text-[11px] font-semibold cursor-pointer"
+                                        title="Pausar publicación en Mercado Libre"
+                                      >
+                                        <PauseCircle size={12} className={isUpdating ? 'animate-spin' : ''} />
+                                        <span>Pausar</span>
+                                      </button>
+                                    ) : item.status === 'paused' ? (
+                                      <button
+                                        type="button"
+                                        disabled={isUpdating}
+                                        onClick={() => handleToggleStatus(item)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-[11px] font-semibold cursor-pointer"
+                                        title="Reactivar publicación en Mercado Libre"
+                                      >
+                                        <PlayCircle size={12} className={isUpdating ? 'animate-spin' : ''} />
+                                        <span>Reactivar</span>
+                                      </button>
+                                    ) : null}
+
+                                    {/* Botón Edición Rápida Inline */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingItem({ id: item.id, price: item.price, available_quantity: item.available_quantity })}
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                      title="Editar precio y stock rápidamente"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          PESTAÑA 2: CATÁLOGO CALCU (INVENTARIO)
       ========================================================================= */}
       {activeTab === 'catalog' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-            <div className="relative w-full sm:w-80">
-              <input
-                type="text"
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Filtrar por SKU, nombre o categoría..."
-                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white"
-              />
+            <div className="flex flex-wrap items-center gap-2.5 flex-1">
+              <div className="relative w-full sm:w-80">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Filtrar por SKU, nombre o categoría..."
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Selector de Columnas Catálogo */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowCatalogColMenu(!showCatalogColMenu)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750 transition-colors cursor-pointer"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>Columnas</span>
+                </button>
+                {showCatalogColMenu && (
+                  <div className="absolute left-0 mt-1.5 z-30 w-48 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl space-y-1 text-xs">
+                    <span className="font-bold text-[10px] text-slate-400 px-1 uppercase tracking-wider block">
+                      Columnas Visibles
+                    </span>
+                    {Object.entries({
+                      image: 'Foto',
+                      product: 'Producto & SKU',
+                      category: 'Categoría',
+                      cost: 'Costo Base',
+                      price: 'Precio Lista',
+                      stock: 'Stock Depósito',
+                      status: 'Estado MeLi',
+                      actions: 'Acciones',
+                    }).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(catalogColumns as any)[key]}
+                          onChange={(e) => setCatalogColumns((prev) => ({ ...prev, [key]: e.target.checked }))}
+                          className="w-3.5 h-3.5 text-amber-500 rounded border-slate-300"
+                        />
+                        <span className="text-slate-800 dark:text-slate-200">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-500">
+              <button
+                type="button"
+                onClick={loadReadyProducts}
+                disabled={isLoadingProducts}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Refrescar catálogo"
+              >
+                <RefreshCw size={14} className={isLoadingProducts ? 'animate-spin' : ''} />
+              </button>
               <span>Mostrando {filteredProducts.length} de {products.length} artículos del inventario</span>
             </div>
           </div>
@@ -383,91 +933,110 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100 dark:border-slate-800">
                   <tr>
-                    <th className="py-3 px-4">Producto &amp; SKU</th>
-                    <th className="py-3 px-4">Categoría</th>
-                    <th className="py-3 px-4 text-right">Precio Lista</th>
-                    <th className="py-3 px-4 text-right">Stock Dep. Central</th>
-                    <th className="py-3 px-4 text-center">Estado MeLi</th>
-                    <th className="py-3 px-4 text-center">Acciones</th>
+                    {catalogColumns.image && <th className="py-3 px-3 w-12 text-center">Foto</th>}
+                    {catalogColumns.product && <th className="py-3 px-4">Producto &amp; SKU</th>}
+                    {catalogColumns.category && <th className="py-3 px-4">Categoría</th>}
+                    {catalogColumns.cost && <th className="py-3 px-4 text-right">Costo Base</th>}
+                    {catalogColumns.price && <th className="py-3 px-4 text-right">Precio Lista</th>}
+                    {catalogColumns.stock && <th className="py-3 px-4 text-right">Stock Dep. Central</th>}
+                    {catalogColumns.status && <th className="py-3 px-4 text-center">Estado MeLi</th>}
+                    {catalogColumns.actions && <th className="py-3 px-4 text-center">Acciones</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {isLoadingProducts ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
                         <Loader2 size={22} className="animate-spin mx-auto mb-2 text-amber-500" />
                         <span>Sincronizando existencias de productos...</span>
                       </td>
                     </tr>
                   ) : filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
                         No se encontraron artículos que coincidan con la búsqueda.
                       </td>
                     </tr>
                   ) : (
                     filteredProducts.map((p) => (
                     <tr key={p.sku} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                      {catalogColumns.image && (
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center shrink-0 mx-auto">
                             {p.image_url ? (
                               <img src={p.image_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <Package size={15} className="text-slate-400" />
                             )}
                           </div>
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-white block">
-                              {p.nombre}
-                            </span>
-                            <span className="font-mono text-[11px] text-slate-400">
-                              SKU: {p.sku}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 font-medium">
-                        {p.categoria || 'General'}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white">
-                        UYU ${Number(p.precio_lista).toFixed(2)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                          {p.deposito_central} un.
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          Listo para Publicar
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedProductForModal(p);
-                              setIsPublishModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] font-bold text-[11px] shadow-xs cursor-pointer"
-                          >
-                            <Sparkles size={12} />
-                            <span>Publicar</span>
-                          </button>
+                        </td>
+                      )}
+                      {catalogColumns.product && (
+                        <td className="py-3.5 px-4">
+                          <span className="font-bold text-slate-900 dark:text-white block">
+                            {p.nombre}
+                          </span>
+                          <span className="font-mono text-[11px] text-slate-400">
+                            SKU: {p.sku}
+                          </span>
+                        </td>
+                      )}
+                      {catalogColumns.category && (
+                        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 font-medium">
+                          {p.categoria || 'General'}
+                        </td>
+                      )}
+                      {catalogColumns.cost && (
+                        <td className="py-3.5 px-4 text-right text-slate-500 dark:text-slate-400">
+                          UYU ${Number(p.costo_base).toFixed(2)}
+                        </td>
+                      )}
+                      {catalogColumns.price && (
+                        <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white">
+                          UYU ${Number(p.precio_lista).toFixed(2)}
+                        </td>
+                      )}
+                      {catalogColumns.stock && (
+                        <td className="py-3.5 px-4 text-right">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {p.deposito_central} un.
+                          </span>
+                        </td>
+                      )}
+                      {catalogColumns.status && (
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            Listo para Publicar
+                          </span>
+                        </td>
+                      )}
+                      {catalogColumns.actions && (
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProductForModal(p);
+                                setIsPublishModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] font-bold text-[11px] shadow-xs cursor-pointer"
+                            >
+                              <Sparkles size={12} />
+                              <span>Publicar</span>
+                            </button>
 
-                          <button
-                            type="button"
-                            disabled={syncingSku === p.sku}
-                            onClick={() => handleSyncStock(p)}
-                            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                            title="Sincronizar existencias de depósito central con MeLi"
-                          >
-                            <RefreshCw size={13} className={syncingSku === p.sku ? 'animate-spin' : ''} />
-                          </button>
-                        </div>
-                      </td>
+                            <button
+                              type="button"
+                              disabled={syncingSku === p.sku}
+                              onClick={() => handleSyncStock(p)}
+                              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="Sincronizar existencias de depósito central con MeLi"
+                            >
+                              <RefreshCw size={13} className={syncingSku === p.sku ? 'animate-spin' : ''} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )))}
                 </tbody>
@@ -845,6 +1414,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           });
           loadReadyProducts();
           loadIntegrationStatus();
+          loadMyMeliItems();
         }}
       />
     </div>

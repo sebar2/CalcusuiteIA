@@ -13,8 +13,10 @@ import {
   X,
   UploadCloud,
   Search,
-  Check,
   Info,
+  Trash2,
+  Star,
+  Truck,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type {
@@ -53,12 +55,16 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
   const [imageUrl, setImageUrl] = useState<string>('');
   const [description, setDescription] = useState<string>('');
 
-  // Subida de imagen a MeLi CDN
-  const [uploadedPictureId, setUploadedPictureId] = useState<string | null>(null);
-  const [uploadedPictureUrl, setUploadedPictureUrl] = useState<string | null>(null);
+  // Subida de múltiples imágenes a MeLi CDN (hasta 12 fotos)
+  const [uploadedPictures, setUploadedPictures] = useState<Array<{ id: string; url: string; name?: string }>>([]);
   const [isUploadingPicture, setIsUploadingPicture] = useState<boolean>(false);
   const [uploadPictureError, setUploadPictureError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Opciones de Envío (Mercado Envíos ME2 NO marcado por defecto)
+  const [enableMe2, setEnableMe2] = useState<boolean>(false);
+  const [freeShipping, setFreeShipping] = useState<boolean>(false);
+  const [localPickUp, setLocalPickUp] = useState<boolean>(true);
 
   // Búsqueda interactiva y predictiva de categorías
   const [categorySearchQuery, setCategorySearchQuery] = useState<string>('');
@@ -163,8 +169,10 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
     setPrice(String(p.precio_lista || 1200));
     setQuantity(String(Math.max(1, p.deposito_central || 5)));
     setImageUrl(p.image_url || '');
-    setUploadedPictureId(null);
-    setUploadedPictureUrl(null);
+    setUploadedPictures([]);
+    setEnableMe2(false);
+    setFreeShipping(false);
+    setLocalPickUp(true);
     setDescription(
       `Producto oficial: ${p.nombre}. SKU: ${p.sku}. Stock verificado en Depósito Central de Calcu con entrega inmediata o envío por Mercado Envíos.`
     );
@@ -205,30 +213,54 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
     loadCategoryAttributes(catId);
   };
 
-  // Subida de imagen nativa a MeLi CDN
+  // Subida de múltiples imágenes nativas a MeLi CDN (hasta 12 fotos)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadPictureError('El archivo excede el tamaño máximo permitido de 10 MB.');
+    if (uploadedPictures.length + files.length > 12) {
+      setUploadPictureError(`Mercado Libre permite hasta 12 fotos por publicación. Actualmente tienes ${uploadedPictures.length}.`);
       return;
     }
 
     setUploadPictureError(null);
     setIsUploadingPicture(true);
     try {
-      const res = await apiService.uploadMeliPicture(file);
-      setUploadedPictureId(res.id);
-      setUploadedPictureUrl(res.secure_url || res.url || URL.createObjectURL(file));
-      setImageUrl(''); // Se prioriza la foto nativa subida a MeLi
+      const newPics: Array<{ id: string; url: string; name?: string }> = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 10 * 1024 * 1024) {
+          throw new Error(`El archivo ${file.name} excede el tamaño máximo permitido de 10 MB.`);
+        }
+        const res = await apiService.uploadMeliPicture(file);
+        newPics.push({
+          id: res.id,
+          url: res.secure_url || res.url || URL.createObjectURL(file),
+          name: file.name,
+        });
+      }
+      setUploadedPictures((prev) => [...prev, ...newPics]);
+      setImageUrl(''); // Se priorizan las fotos nativas subidas a MeLi
     } catch (err: any) {
       setUploadPictureError(
-        err.response?.data?.detail || 'Error al subir imagen directamente a la CDN de Mercado Libre.'
+        err.response?.data?.detail || err.message || 'Error al subir imagen directamente a la CDN de Mercado Libre.'
       );
     } finally {
       setIsUploadingPicture(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const handleRemovePicture = (idxToRemove: number) => {
+    setUploadedPictures((prev) => prev.filter((_, idx) => idx !== idxToRemove));
+  };
+
+  const handleSetCoverPicture = (idxToCover: number) => {
+    setUploadedPictures((prev) => {
+      const item = prev[idxToCover];
+      const rest = prev.filter((_, idx) => idx !== idxToCover);
+      return [item, ...rest];
+    });
   };
 
   // Detección de infracciones anti-penalización en vivo
@@ -288,6 +320,14 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
         value_name: val.trim(),
       }));
 
+    // Mapeo de imágenes múltiples
+    let picturesPayload: any[] = [];
+    if (uploadedPictures.length > 0) {
+      picturesPayload = uploadedPictures.map((pic) => ({ id: pic.id }));
+    } else if (imageUrl.trim()) {
+      picturesPayload = [{ source: imageUrl.trim() }];
+    }
+
     setIsPublishing(true);
     try {
       const res = await apiService.publishMeliItem({
@@ -301,15 +341,19 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
         available_quantity: parseInt(quantity, 10) || 1,
         condition,
         listing_type_id: listingType,
-        picture_id: uploadedPictureId || undefined,
-        pictures: uploadedPictureId
-          ? [{ id: uploadedPictureId }]
-          : imageUrl.trim()
-          ? [{ source: imageUrl.trim() }]
-          : undefined,
+        pictures: picturesPayload.length > 0 ? picturesPayload : undefined,
+        picture_id: uploadedPictures.length > 0 ? uploadedPictures[0].id : undefined,
         image_url: imageUrl.trim() || undefined,
         description: description.trim() || undefined,
         attributes: formattedAttributes.length > 0 ? formattedAttributes : undefined,
+        shipping: {
+          mode: enableMe2 ? 'me2' : 'not_specified',
+          free_shipping: enableMe2 ? freeShipping : false,
+          local_pick_up: localPickUp,
+        },
+        enable_me2: enableMe2,
+        free_shipping: enableMe2 ? freeShipping : false,
+        local_pick_up: localPickUp,
       });
 
       setPublishedItem(res);
@@ -731,94 +775,189 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
               </div>
             </div>
 
-            {/* Imagen: Subida Directa de Archivo a MeLi CDN + Opción URL */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="block font-bold text-slate-700 dark:text-slate-300">
-                  Imagen del Producto (Nativa MeLi CDN o URL) *
+            {/* Fotos del Producto (Hasta 12 imágenes MeLi CDN) + URL opcional */}
+            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 text-xs">
+                  <UploadCloud size={15} className="text-amber-500" />
+                  <span>Fotos del Producto (Hasta 12 fotos oficiales MeLi CDN) *</span>
                 </label>
-                
-                {/* Botón de subida de archivo */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+                <span className="text-[11px] font-mono font-semibold text-slate-500">
+                  {uploadedPictures.length}/12 fotos
+                </span>
+              </div>
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingPicture}
-                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-                  >
-                    {isUploadingPicture ? (
-                      <Loader2 size={15} className="animate-spin text-amber-500" />
-                    ) : (
-                      <UploadCloud size={15} className="text-indigo-500" />
-                    )}
-                    <span>{isUploadingPicture ? 'Subiendo a MeLi...' : 'Subir Archivo (JPG/PNG)'}</span>
-                  </button>
+              {/* Input file oculto */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+              />
 
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingPicture || uploadedPictures.length >= 12}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isUploadingPicture ? (
+                    <Loader2 size={15} className="animate-spin text-amber-500" />
+                  ) : (
+                    <UploadCloud size={15} className="text-indigo-500" />
+                  )}
+                  <span>{isUploadingPicture ? 'Subiendo fotos a MeLi...' : 'Subir Fotos (JPG / PNG)'}</span>
+                </button>
+
+                <div className="flex-1 flex gap-2">
                   <input
                     type="text"
                     value={imageUrl}
                     onChange={(e) => {
                       setImageUrl(e.target.value);
-                      if (e.target.value) {
-                        setUploadedPictureId(null);
-                        setUploadedPictureUrl(null);
-                      }
                     }}
-                    placeholder="o pegar URL externa..."
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-white"
+                    placeholder="o agregar URL externa adicional..."
+                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white"
                   />
                 </div>
+              </div>
 
-                {uploadPictureError && (
-                  <p className="text-[11px] text-rose-500">{uploadPictureError}</p>
-                )}
+              {uploadPictureError && (
+                <p className="text-[11px] text-rose-500">{uploadPictureError}</p>
+              )}
 
-                {/* Previsualización de imagen */}
-                {(uploadedPictureUrl || imageUrl) && (
-                  <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-white shrink-0 border border-slate-200">
-                      <img
-                        src={uploadedPictureUrl || imageUrl}
-                        alt="Preview"
-                        className="object-contain w-full h-full"
-                      />
-                    </div>
-                    <div className="text-[11px] truncate">
-                      {uploadedPictureId ? (
-                        <>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 block flex items-center gap-1">
-                            <Check size={12} /> Alojada en CDN de Mercado Libre
-                          </span>
-                          <span className="text-slate-400 font-mono text-[10px]">ID: {uploadedPictureId}</span>
-                        </>
+              {/* Galería de imágenes cargadas */}
+              {uploadedPictures.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-2">
+                  {uploadedPictures.map((pic, idx) => (
+                    <div
+                      key={pic.id || idx}
+                      className="group relative rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1 flex flex-col items-center overflow-hidden shadow-xs"
+                    >
+                      <div className="w-full h-16 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                        <img src={pic.url} alt={`Foto ${idx + 1}`} className="object-contain w-full h-full" />
+                      </div>
+                      {idx === 0 ? (
+                        <span className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          Portada
+                        </span>
                       ) : (
-                        <span className="text-slate-500 truncate block">URL externa configurada</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSetCoverPicture(idx)}
+                          className="mt-1 text-[9px] text-slate-500 hover:text-amber-500 flex items-center gap-0.5 cursor-pointer"
+                          title="Fijar como foto principal"
+                        >
+                          <Star size={10} /> Portada
+                        </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePicture(idx)}
+                        className="absolute top-1 right-1 p-1 rounded-md bg-rose-600/90 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        title="Eliminar foto"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Si solo hay imagen externa por URL */}
+              {uploadedPictures.length === 0 && imageUrl && (
+                <div className="flex items-center gap-3 p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-white shrink-0 border border-slate-200">
+                    <img src={imageUrl} alt="Preview" className="object-contain w-full h-full" />
+                  </div>
+                  <div className="text-[11px] truncate">
+                    <span className="text-slate-500 truncate block">URL externa configurada como imagen</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Configuración de Envíos & Retiro en Persona */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 text-xs">
+                  <Truck size={15} className="text-indigo-500" />
+                  <span>Logística y Opciones de Entrega</span>
+                </label>
+              </div>
+
+              {/* Checkbox Mercado Envíos (ME2) - Desmarcado por defecto */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={enableMe2}
+                    onChange={(e) => {
+                      setEnableMe2(e.target.checked);
+                      if (!e.target.checked) setFreeShipping(false);
+                    }}
+                    className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-400 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
+                      Habilitar Mercado Envíos (ME2)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                      Permite despachar con etiqueta oficial generada por Mercado Libre a través de agencias asociadas.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Sub-opciones cuando ME2 está activo */}
+                {enableMe2 && (
+                  <div className="ml-6 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 space-y-2 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={freeShipping}
+                        onChange={(e) => setFreeShipping(e.target.checked)}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                      />
+                      <span><b>Envío Gratis</b> a cargo de Calcu (el vendedor asume el costo logístico de la etiqueta)</span>
+                    </label>
                   </div>
                 )}
-              </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Descripción Oficial (/description)
+                {/* Retiro en persona */}
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={localPickUp}
+                    onChange={(e) => setLocalPickUp(e.target.checked)}
+                    className="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-400 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
+                      Permitir Retiro en Depósito Central / En Persona (local_pick_up)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                      El comprador puede retirar directamente en las instalaciones centrales de Calcu.
+                    </span>
+                  </div>
                 </label>
-                <textarea
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detalles técnicos, garantía, compatibilidad..."
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
-                />
               </div>
+            </div>
+
+            {/* Descripción */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 text-xs">
+                Descripción Oficial (/description)
+              </label>
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Detalles técnicos, garantía, compatibilidad..."
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+              />
             </div>
 
             {/* Aviso de Gobernanza de Stock Central vs 3PL */}

@@ -2777,6 +2777,47 @@ export interface MeliPublishItemPayload {
   image_url?: string;
   description?: string;
   attributes?: any[];
+  shipping?: {
+    mode?: string;
+    free_shipping?: boolean;
+    local_pick_up?: boolean;
+  };
+  enable_me2?: boolean;
+  free_shipping?: boolean;
+  local_pick_up?: boolean;
+}
+
+export interface MeliMyItem {
+  id: string;
+  title: string;
+  category_id?: string;
+  price: number;
+  currency_id: string;
+  available_quantity: number;
+  sold_quantity: number;
+  status: 'active' | 'paused' | 'closed' | string;
+  sub_status?: string[];
+  condition: string;
+  listing_type_id: string;
+  permalink: string;
+  thumbnail?: string;
+  pictures?: Array<{ id?: string; url?: string; secure_url?: string; size?: string }>;
+  free_shipping: boolean;
+  shipping_mode: string;
+  local_pick_up: boolean;
+  date_created: string;
+  last_updated: string;
+}
+
+export interface MeliMyItemsResponse {
+  seller_id: string | number;
+  total: number;
+  items: MeliMyItem[];
+  paging?: {
+    total: number;
+    offset: number;
+    limit: number;
+  };
 }
 
 export interface MeliCategorySearchResult {
