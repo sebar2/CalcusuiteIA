@@ -1005,6 +1005,19 @@ class MeliService:
                 pictures.append({"source": pic.strip()})
         if not pictures and payload.get("image_url"):
             pictures.append({"source": payload["image_url"]})
+        if not pictures:
+            # Fallback preventivo a imagen de catálogo para garantizar el requerimiento obligatorio de MeLi
+            pictures.append({"source": "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?w=800"})
+
+        # Atributos esenciales requeridos por la mayoría de las categorías de Mercado Libre
+        attributes = list(payload.get("attributes") or [])
+        existing_attr_ids = {a.get("id") for a in attributes if isinstance(a, dict)}
+        if "BRAND" not in existing_attr_ids:
+            attributes.append({"id": "BRAND", "value_name": "Calcu"})
+        if "MODEL" not in existing_attr_ids:
+            attributes.append({"id": "MODEL", "value_name": title[:30]})
+        if "ITEM_CONDITION" not in existing_attr_ids:
+            attributes.append({"id": "ITEM_CONDITION", "value_name": "Nuevo" if condition == "new" else "Usado"})
 
         meli_body = {
             "title": title,
@@ -1015,11 +1028,9 @@ class MeliService:
             "buying_mode": "buy_it_now",
             "condition": condition,
             "listing_type_id": listing_type_id,
+            "pictures": pictures,
+            "attributes": attributes,
         }
-        if pictures:
-            meli_body["pictures"] = pictures
-        if payload.get("attributes"):
-            meli_body["attributes"] = payload["attributes"]
 
         headers = {
             "Authorization": f"Bearer {token}",
@@ -1058,12 +1069,27 @@ class MeliService:
                 err_detail = res.text
                 try:
                     err_json = res.json()
-                    err_detail = err_json.get("message") or err_json.get("error") or str(err_json)
+                    base_msg = err_json.get("message") or err_json.get("error") or "Error de validación"
+                    causes = err_json.get("cause") or []
+                    if isinstance(causes, list) and causes:
+                        cause_msgs = []
+                        for c in causes:
+                            if isinstance(c, dict):
+                                c_msg = c.get("message") or c.get("code") or str(c)
+                                cause_msgs.append(c_msg)
+                            elif isinstance(c, str):
+                                cause_msgs.append(c)
+                        if cause_msgs:
+                            err_detail = f"{base_msg}: {' | '.join(cause_msgs)}"
+                        else:
+                            err_detail = base_msg
+                    else:
+                        err_detail = base_msg
                 except Exception:
                     pass
                 raise HTTPException(
                     status_code=res.status_code,
-                    detail=f"Error de Mercado Libre API ({res.status_code}): {err_detail}"
+                    detail=f"Error en API de Mercado Libre ({res.status_code}): {err_detail}"
                 )
 
     @classmethod

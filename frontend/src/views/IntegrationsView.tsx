@@ -978,6 +978,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                     </div>
                     <input
                       type={field.type}
+                      autoComplete={field.type === 'password' ? 'current-password' : 'off'}
                       value={credentialsForm[field.key] || ''}
                       onChange={(e) =>
                         setCredentialsForm((prev) => ({ ...prev, [field.key]: e.target.value }))

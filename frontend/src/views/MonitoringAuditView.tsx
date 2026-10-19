@@ -705,8 +705,8 @@ export const MonitoringAuditView: React.FC = () => {
                   <span className="text-[10px] text-slate-400">Volumen &amp; Margen</span>
                 </div>
                 <div className="space-y-2">
-                  {dashboardMetrics.top_productos.map((p) => (
-                    <div key={p.sku} className="text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                  {dashboardMetrics.top_productos.map((p, idx) => (
+                    <div key={`${p.sku}-${idx}`} className="text-xs p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                       <div className="max-w-[65%]">
                         <span className="font-bold text-slate-800 dark:text-slate-100 block truncate">{p.descripcion}</span>
                         <span className="text-[10px] text-slate-400 font-mono">SKU: {p.sku} | {p.unidades_vendidas} un.</span>
