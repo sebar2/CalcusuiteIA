@@ -5,17 +5,89 @@
  * ==========================================================================
  */
 
-// Diccionario de datos para las pestañas de inspección visual
+// Diccionario de datos para las pestañas de inspección visual de capturas reales
 const GALLERY_DATA = {
+  'meli': {
+    image: './screenshots/21_mercadolibre_kanban_5etapas.png',
+    url: 'https://calcu.enterprise.app/ecommerce/mercadolibre',
+    badge: 'Módulo E-Commerce Mercado Libre',
+    title: 'Mercado Libre Uruguay: Tablero Kanban 5 Etapas & Catálogo',
+    desc: 'Sincronización oficial con API de Mercado Libre Uruguay (App Oficial 5376694505612300) mediante Bóveda AES-256. Gestión de publicaciones activas/pausadas, inventario unificado, chat pre y post venta, y métricas de reputación oficial.',
+    bullets: [
+      'Kanban operativo de pedidos: Pendiente, Preparación, Despacho, Entregado y Reclamos',
+      'Sincronización bidireccional automática de precios y stock con Depósito Central',
+      'Atención centralizada de preguntas de prospectos con respuestas sugeridas por IA'
+    ]
+  },
+  'meli_modal': {
+    image: './screenshots/24_meli_publicacion_modal.png',
+    url: 'https://calcu.enterprise.app/ecommerce/mercadolibre/publicar',
+    badge: 'Publicación Asistida MeLi 1-Clic',
+    title: 'Publicación Asistida MeLi con Clasificador IA de Categorías',
+    desc: 'Ventana modal para publicar productos en Mercado Libre Uruguay en un solo clic. Clasificador semántico que predice la categoría oficial MeLi, detecta atributos obligatorios (Marca, Modelo, Rosca) y sincroniza stock de depósito.',
+    bullets: [
+      'Predicción inteligente de categorías MeLi mediante IA local',
+      'Detección y validación dinámica de atributos obligatorios requeridos por categoría',
+      'Selector de tipo de publicación (Clásica/Premium), condición (Nuevo/Usado) y moneda'
+    ]
+  },
+  'omnichannel': {
+    image: './screenshots/23_omnichannel_chat_multimedia.png',
+    url: 'https://calcu.enterprise.app/crm/omnichannel',
+    badge: 'Módulo CRM & Chat Omnicanal IA',
+    title: 'Chat Omnicanal WhatsApp Directo QR con Audio .opus & Portapapeles',
+    desc: 'Consola unificada de comunicación comercial que centraliza WhatsApp Directo QR (sin costos por mensaje), Google Ads, Meta Leads y Web. Soporte nativo de notas de voz en formato .opus con reproductor web integrado y portapapeles multimedia (copiar y pegar imágenes, audios o videos sin adjuntar).',
+    bullets: [
+      'Reproducción y grabación de notas de voz en formato nativo .opus compatible con móviles',
+      'Pegado directo desde el portapapeles (Ctrl+V) de capturas, fotos y videos en el chat',
+      'Clasificador inteligente de leads con scoring comercial y sugerencias de IA local'
+    ]
+  },
+  'integraciones': {
+    image: './screenshots/22_integraciones_whatsapp_qr.png',
+    url: 'https://calcu.enterprise.app/integrations/hub',
+    badge: 'Módulo Hub Integraciones & AdTech',
+    title: 'Hub de Integraciones Multicanal & Atribución ROAS / CAC',
+    desc: 'Centro de conexiones corporativas cifradas con Bóveda AES-256 (CWE-312 / CWE-532 safe). Endpoints directos para webhooks de Google Ads, Meta Lead Ads, WhatsApp Business API, WhatsApp Directo QR, Email Corporativo y Formularios Web.',
+    bullets: [
+      'Atribución de retorno publicitario (ROAS) y costo por lead (CPL/CAC) por canal comercial',
+      'Bóveda de credenciales con cifrado seguro y protección de secretos en logs',
+      'Inyección automática de prospectos en la etapa 1 (Prospección) del Pipeline CRM'
+    ]
+  },
+  'tenants': {
+    image: './screenshots/25_licencias_multitenant_pioneros.png',
+    url: 'https://calcu.enterprise.app/admin/licensing',
+    badge: 'Módulo SaaS Multi-Tenant & Licenciamiento',
+    title: 'Licenciamiento SaaS Multi-Tenant & Aislamiento de Base de Datos',
+    desc: 'Aislamiento de base de datos por cliente (estrategia "Schema-per-Tenant"). Conmutador interactivo de licencias (Starter USD 79, Pro USD 190, Enterprise USD 490), autenticación de dos factores (2FA / TOTP RFC 6238) y aprovisionamiento automatizado vía script CLI.',
+    bullets: [
+      'Base de datos aislada e independiente para cada empresa cliente con backups diarios',
+      'Programa Pioneros: 100% gratis para los primeros 20 clientes con tarifa congelada de por vida',
+      'Modo prueba gratuita de 14 días (ampliable a 1 mes) con acceso a todos los módulos'
+    ]
+  },
+  'mobile': {
+    image: './screenshots/26_mobile_redmi_note_9_pro_menu.png',
+    url: 'https://calcu.enterprise.app/mobile/redmi-note-9-pro',
+    badge: 'Módulo UX Móvil & Android APK',
+    title: 'Experiencia Móvil Xiaomi Redmi Note 9 Pro (Menú Hamburguesa ☰)',
+    desc: 'Interfaz optimizada para pantallas con relación de aspecto 20:9 (393 x 873 px viewport) ejecutando Android 15 / LineageOS 22.2. Menú hamburguesa superior que despliega un panel lateral tipo drawer ergonómico para uso con una sola mano.',
+    bullets: [
+      'Menú hamburguesa ☰ accesible que oculta la barra lateral para maximizar el área de trabajo',
+      'Diseño táctil ergonómico con botones y elementos adaptados al alcance del pulgar',
+      'Cliente móvil Android APK (5.95 MB) con sincronización Offline-First'
+    ]
+  },
   '3pl': {
     image: './screenshots/12_3pl_tracking_gps_mapa.png',
     url: 'https://calcu.enterprise.app/logistics/tracking',
     badge: 'Módulo 3PL Logística & WMS',
-    title: 'Tracking GPS Satelital y Control de Flota',
+    title: 'Tracking GPS Satelital y Control de Flota 3PL',
     desc: 'Visualización geográfica en tiempo real de unidades de reparto en ruta y barcos portacontenedores en alta mar con tiempos estimados de arribo (ETA), estado de carga y cálculo de costos por viaje.',
     bullets: [
-      'Georreferenciación en mapa interactivo con rutas activas',
-      'Integración directa con app móvil de choferes (APK)',
+      'Georreferenciación en mapa interactivo con rutas activas y paradas programadas',
+      'Integración directa con app móvil de choferes (APK) para remitos digitales',
       'Liquidación automática por distancia y tiempo de choferes'
     ]
   },
@@ -50,7 +122,7 @@ const GALLERY_DATA = {
     title: 'Supply Chain Control Room & Landed Costs',
     desc: 'Cálculo algorítmico del Punto de Reorden (ROP), días de inventario disponible (DOH) y descomposición de costos de importación marítima para una fijación de precios con rentabilidad neta asegurada.',
     bullets: [
-      'Detección anticipada de roturas de stock crítico',
+      'Detección anticipada de roturas de stock crítico con alertas tempranas',
       'Catálogo de servicios implícitos (Fletes marítimos, seguros y aduanas)',
       'Simulador de precios mayoristas, distribuidores y retail'
     ]
@@ -69,7 +141,7 @@ const GALLERY_DATA = {
   }
 };
 
-let currentTabKey = '3pl';
+let currentTabKey = 'meli';
 
 /**
  * Cambia la pestaña activa de la galería visual
@@ -156,15 +228,11 @@ function closeScreenshotModal() {
   modal.classList.remove('flex');
 }
 
-// Inicialización de componentes al cargar la ventana
+// Inicializar Lucide Icons y pestaña por defecto al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) {
     window.lucide.createIcons();
   }
+  // Pestaña inicial destacada
+  switchTab('meli');
 });
-
-// Exportar globalmente
-window.switchTab = switchTab;
-window.expandCurrentScreenshot = expandCurrentScreenshot;
-window.openScreenshotModal = openScreenshotModal;
-window.closeScreenshotModal = closeScreenshotModal;

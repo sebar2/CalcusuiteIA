@@ -1,6 +1,7 @@
 import os
 import base64
 import time
+import shutil
 from playwright.sync_api import sync_playwright
 
 WORKSPACE = os.path.abspath(".")
@@ -41,6 +42,12 @@ def main():
         "17": get_base64_image("17_supply_kanban_rop.png"),
         "18": get_base64_image("18_pricing_analitica_canales.png"),
         "19": get_base64_image("19_licitaciones_radar_arce.png"),
+        "21": get_base64_image("21_mercadolibre_kanban_5etapas.png"),
+        "22": get_base64_image("22_integraciones_whatsapp_qr.png"),
+        "23": get_base64_image("23_omnichannel_chat_multimedia.png"),
+        "24": get_base64_image("24_meli_publicacion_modal.png"),
+        "25": get_base64_image("25_licencias_multitenant_pioneros.png"),
+        "26": get_base64_image("26_mobile_redmi_note_9_pro_menu.png"),
     }
 
     html_content = f"""<!DOCTYPE html>
@@ -307,6 +314,12 @@ def main():
             <li><strong>Capítulo 18:</strong> <a href="#pricing">Pricing Dinámico y Multicanal</a></li>
             <li><strong>Capítulo 19:</strong> <a href="#licitaciones">Radar de Licitaciones ARCE / SICE</a></li>
             <li><strong>Capítulo 20:</strong> <a href="#apk">App Móvil Android (APK) y Despliegue</a></li>
+            <li><strong>Capítulo 21:</strong> <a href="#mercadolibre">E-Commerce Mercado Libre Uruguay (Kanban 5 Etapas)</a></li>
+            <li><strong>Capítulo 22:</strong> <a href="#integraciones">Hub de Integraciones Multicanal & Atribución ROAS/CAC</a></li>
+            <li><strong>Capítulo 23:</strong> <a href="#omnichannel">Chat Omnicanal IA, WhatsApp QR (.opus) & Portapapeles Multimedia</a></li>
+            <li><strong>Capítulo 24:</strong> <a href="#publicacion_meli">Publicación Asistida MeLi 1-Clic: Clasificador IA & Atributos</a></li>
+            <li><strong>Capítulo 25:</strong> <a href="#multitenant">Arquitectura SaaS Multi-Tenant & Programa Pioneros</a></li>
+            <li><strong>Capítulo 26:</strong> <a href="#mobile_ux">Experiencia Móvil Xiaomi Redmi Note 9 Pro (Menú Hamburguesa ☰)</a></li>
         </ul>
     </div>
 
@@ -749,9 +762,213 @@ def main():
         </ul>
     </div>
 
+    </div>
+
+    <!-- CAPÍTULO 21 -->
+    <div id="mercadolibre" class="section-header">
+        <div class="section-tag">Capítulo 21</div>
+        <h2>E-Commerce: Mercado Libre Uruguay (Kanban 5 Etapas & Catálogo Oficial)</h2>
+    </div>
+    <p>
+        Calcu Suite incorpora un conector oficial de grado empresarial con la API de <strong>Mercado Libre Uruguay (MLU)</strong> (App Oficial ID <code>5376694505612300</code>), respaldado por una <strong>Bóveda Cifrada AES-256</strong> para la custodia segura de tokens OAuth2 y claves de aplicación.
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['21']}" alt="Mercado Libre Uruguay Kanban 5 Etapas">
+        <div class="screenshot-caption">
+            <span><strong>Figura 21.1:</strong> Tablero Kanban de 5 etapas para Mercado Libre Uruguay con SLA operativo, sincronización de stock de depósito central y catálogo unificado.</span>
+            <span>Módulo: Comercial / Mercado Libre</span>
+        </div>
+    </div>
+    <h3>Arquitectura Operativa del Tablero Kanban de 5 Etapas:</h3>
+    <p>
+        Para resolver la desconexión típica entre las ventas digitales y el personal de depósito físico, el módulo organiza las órdenes de Mercado Libre en un flujo continuo de 5 etapas:
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Etapa Kanban</th>
+                <th>Disparador del Sistema</th>
+                <th>Acción Operativa / SLA</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>1. Pendiente de Pago</strong></td>
+                <td>Webhook de MeLi notifica orden creada con acreditación bancaria pendiente.</td>
+                <td>Reserva preventiva de stock en Depósito Central por 24 horas.</td>
+            </tr>
+            <tr>
+                <td><strong>2. En Preparación</strong></td>
+                <td>Cobro confirmado por Mercado Pago.</td>
+                <td>Emisión automática de remito y orden de picking/embalaje en WMS. SLA máximo: 3 horas.</td>
+            </tr>
+            <tr>
+                <td><strong>3. Despachado</strong></td>
+                <td>Paquete entregado a Mercado Envíos (ME2) o cadetería propia.</td>
+                <td>Inyección del código de seguimiento y notificación automática al comprador.</td>
+            </tr>
+            <tr>
+                <td><strong>4. Entregado</strong></td>
+                <td>Confirmación de recepción final por parte del cliente.</td>
+                <td>Cierre de ciclo operativo e imputación de ingreso contable.</td>
+            </tr>
+            <tr>
+                <td><strong>5. Post-Venta & Reclamos</strong></td>
+                <td>Apertura de caso de mediación o devolución por el comprador.</td>
+                <td>Alerta de máxima prioridad con contador regresivo de SLA para proteger la reputación oficial (Termómetro Verde).</td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="feature-box">
+        <strong>Sincronización Bidireccional de Stock y Precios:</strong> Cuando un SKU se vende en el mostrador físico B2B o se asigna a una orden de flete 3PL, el saldo disponible se descuenta automáticamente en Mercado Libre en menos de 800 milisegundos, erradicando por completo cancelaciones por falta de stock.
+    </div>
+
+    <!-- CAPÍTULO 22 -->
+    <div id="integraciones" class="section-header">
+        <div class="section-tag">Capítulo 22</div>
+        <h2>Hub de Integraciones Multicanal & Atribución AdTech (ROAS / CAC)</h2>
+    </div>
+    <p>
+        El <strong>Hub de Integraciones</strong> centraliza las conexiones con todos los canales de adquisición comercial de la empresa bajo estrictos estándares de seguridad criptográfica contra vulnerabilidades de almacenamiento en texto plano (CWE-312) y exposición en registros de depuración (CWE-532).
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['22']}" alt="Hub de Integraciones Multicanal">
+        <div class="screenshot-caption">
+            <span><strong>Figura 22.1:</strong> Consola del Hub de Integraciones con 7 canales conectados, métricas de ROAS y CPL trazable, y bóveda criptográfica de credenciales.</span>
+            <span>Módulo: Comercial / Hub Integraciones</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Canales Comerciales Interconectados:</strong>
+        <ul>
+            <li><strong>Google Ads:</strong> Inyección instantánea de prospectos desde campañas de búsqueda y formularios de extensión de leads.</li>
+            <li><strong>Facebook & Instagram (Meta Lead Ads):</strong> Sincronización en tiempo real vía Webhook Graph API con asignación automática de vendedor.</li>
+            <li><strong>WhatsApp Business Cloud API & WhatsApp Directo QR:</strong> Canal doble para mensajería masiva oficial y atención directa desde celulares de la empresa.</li>
+            <li><strong>Correo Corporativo (SMTP / IMAP):</strong> Monitoreo de buzón de ventas con parseo inteligente de consultas.</li>
+            <li><strong>Página Web Corporativa (Webhook Directo):</strong> Captura de formularios de contacto externos con inyección automática en la etapa 1 (Prospección) del Pipeline CRM.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 23 -->
+    <div id="omnichannel" class="section-header">
+        <div class="section-tag">Capítulo 23</div>
+        <h2>Chat Omnicanal IA: WhatsApp Directo QR con Audio .opus & Portapapeles Multimedia</h2>
+    </div>
+    <p>
+        La consola de <strong>Chat Omnicanal</strong> unifica todas las conversaciones comerciales en una interfaz de alto rendimiento, diseñada para superar las limitaciones de los sistemas convencionales de chat corporativo.
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['23']}" alt="Chat Omnicanal Multimedia y WhatsApp QR">
+        <div class="screenshot-caption">
+            <span><strong>Figura 23.1:</strong> Consola de Chat Omnicanal con reproductor de notas de voz .opus, pegado multimedia (Ctrl+V) y panel lateral de atribución CRM.</span>
+            <span>Módulo: Comercial / Chat Omnicanal IA</span>
+        </div>
+    </div>
+    <h3>Innovaciones Técnicas del Módulo de Chat:</h3>
+    <div class="feature-box">
+        <strong>1. Notas de Voz en Formato Nativo .opus PTT:</strong><br>
+        A diferencia de plataformas que envían audios genéricos WAV no compatibles, Calcu captura y codifica el audio mediante <code>MediaRecorder API</code> utilizando el códec estándar de WhatsApp (<code>audio/ogg; codecs=opus</code>). Esto permite que tanto el operador en la computadora de escritorio como el cliente en su teléfono celular (Android o iOS) escuchen y reproduzcan las notas de voz con interfaz nativa de mensaje de voz.
+    </div>
+    <div class="feature-box">
+        <strong>2. Portapapeles Multimedia Directo (Ctrl+V sin adjuntar):</strong><br>
+        El cuadro de redacción de texto detecta eventos de pegado del sistema operativo (<code>clipboardData.items</code>). Si el operador copia una captura de pantalla, un archivo de audio o un video corto (MP4/WebM) y presiona <kbd>Ctrl+V</kbd>, el archivo se adjunta y previsualiza de forma instantánea sin necesidad de recurrir al explorador de archivos manual.
+    </div>
+    <div class="tech-box">
+        <strong>3. Copiloto Comercial IA & Clasificación Automática de Prospectos:</strong><br>
+        El panel integra modelos de inteligencia artificial locales (Qwen 2.5:7b vía Ollama) o en la nube (Gemini Pro), capaces de analizar la conversación, evaluar el nivel de interés comercial del prospecto (temperatura HOT, WARM o COLD) y sugerir respuestas técnicas basadas en el inventario real disponible en depósito.
+    </div>
+
+    <!-- CAPÍTULO 24 -->
+    <div id="publicacion_meli" class="section-header">
+        <div class="section-tag">Capítulo 24</div>
+        <h2>Publicación Asistida en Mercado Libre: Clasificador IA de Categorías & Atributos</h2>
+    </div>
+    <p>
+        Para agilizar el alta de productos en el marketplace oficial sin salir de la plataforma, Calcu incluye un <strong>Modal de Publicación Asistida en 1 Clic</strong> con selector inteligente de tres vías.
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['24']}" alt="Modal de Publicación Mercado Libre">
+        <div class="screenshot-caption">
+            <span><strong>Figura 24.1:</strong> Modal de Publicación Asistida en Mercado Libre Uruguay con predicción semántica de categoría y formulario dinámico de atributos obligatorios.</span>
+            <span>Módulo: Comercial / Publicar MeLi</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Flujo de Publicación Automatizada:</strong>
+        <ol>
+            <li><strong>Selección de SKU de Inventario:</strong> El operador selecciona un artículo del catálogo de Calcu (por ejemplo: <code>[SKU-APLIQUE-BIDIR-6W] Aplique Exterior Bidireccional GU10 IP54</code>). El sistema autocompleta el título optimizado para el algoritmo SEO de MeLi (máximo 60 caracteres).</li>
+            <li><strong>Clasificador Semántico de Categorías por IA:</strong> El motor consulta los embeddings de Mercado Libre y sugiere la categoría oficial exacta (ej: <code>Bombitas de Luz (MLU205183)</code> o <code>Para Pared (MLU1586)</code>).</li>
+            <li><strong>Descubrimiento Dinámico de Atributos Obligatorios:</strong> La interfaz consulta la API de metadatos de MeLi y genera en pantalla los campos obligatorios para esa categoría (Marca, Modelo, Rosca, Forma, Conectividad Wi-Fi), bloqueando la publicación hasta que los campos mandatorios estén satisfechos para garantizar un 100% de tasa de aprobación.</li>
+            <li><strong>Configuración Comercial:</strong> Se definen moneda (UYU o USD), precio de venta, stock a comprometer desde el Depósito Central y tipo de exposición (Clásica o Premium con cálculo automático de comisión).</li>
+        </ol>
+    </div>
+
+    <!-- CAPÍTULO 25 -->
+    <div id="multitenant" class="section-header">
+        <div class="section-tag">Capítulo 25</div>
+        <h2>Arquitectura SaaS Multi-Tenant, Aislamiento de Base de Datos & Programa Pioneros</h2>
+    </div>
+    <p>
+        Para permitir el despliegue de múltiples empresas clientes sobre una infraestructura centralizada con máxima confidencialidad, Calcu implementa una arquitectura <strong>Multi-Tenant con Aislamiento Criptográfico de Base de Datos ('Schema-per-Tenant')</strong>.
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['25']}" alt="Gestión de Licencias Multi-Tenant y Panel Super-Admin">
+        <div class="screenshot-caption">
+            <span><strong>Figura 25.1:</strong> Panel Super-Admin de Licenciamiento SaaS con simulador de planes en modo prueba, aprovisionamiento automatizado y seguridad 2FA TOTP.</span>
+            <span>Módulo: Monitoreo & Ciberseguridad / Licencias & Tenants</span>
+        </div>
+    </div>
+    <h3>Garantía de Aislamiento de Datos & Copias de Respaldo:</h3>
+    <p>
+        Cada empresa contratante opera en un esquema de base de datos estrictamente segregado (<code>tenant_slug</code>). Ninguna consulta SQL puede acceder a datos cruzados entre clientes. Asimismo, cada tenant cuenta con rutinas automáticas de respaldo diario independiente.
+    </p>
+    <div class="feature-box">
+        <strong>Programa Pioneros (Primeros 20 Clientes Estratégicos):</strong><br>
+        Como parte del lanzamiento comercial de Calcu Suite 2026, los primeros 20 clientes disfrutan de beneficios institucionales únicos:
+        <ul>
+            <li><strong>100% Gratuito durante el Desarrollo:</strong> Acceso completo y sin costo a todos los módulos actuales y futuros hasta finalizar la programación del ecosistema.</li>
+            <li><strong>Tarifa Especial Bonificada de por Vida:</strong> Precio preferencial congelado a perpetuidad una vez culminada la fase de desarrollo.</li>
+            <li><strong>Base de Datos Aislada y Respaldada:</strong> Infraestructura privada y segura desde el primer día.</li>
+            <li><strong>Co-Diseño con el Autor:</strong> Canal directo para solicitar herramientas y adaptaciones específicas para el flujo de trabajo de su empresa.</li>
+        </ul>
+    </div>
+    <div class="tech-box">
+        <strong>Modelo Comercial para el Cliente 21 en Adelante:</strong><br>
+        A partir del cliente número 21, se activa el esquema de <strong>Demo Gratuita de 14 Días (ampliable hasta 1 mes)</strong> con acompañamiento técnico completo. Posteriormente, la empresa suscribe licencias modulares según las herramientas activadas:
+        <ul>
+            <li><strong>Starter (PYME - USD 79/mes):</strong> Hasta 3 usuarios. Incluye CRM, Webhook Web y WhatsApp Omnicanal básico.</li>
+            <li><strong>Pro (Growth & AdTech - USD 190/mes):</strong> Hasta 10 usuarios. Habilita los 7 canales AdTech, Copiloto IA y Facturación Electrónica B2B.</li>
+            <li><strong>Enterprise & 3PL (Suite Completa - USD 490/mes):</strong> Usuarios ilimitados. Habilita 3PL Logística satelital, WMS móvil, Mercado Libre oficial, Licitaciones SICE y Auditoría perimetral ISO 27001.</li>
+        </ul>
+    </div>
+
+    <!-- CAPÍTULO 26 -->
+    <div id="mobile_ux" class="section-header">
+        <div class="section-tag">Capítulo 26</div>
+        <h2>Experiencia Móvil Optimizada: Xiaomi Redmi Note 9 Pro, LineageOS 22.2 & Menú Hamburguesa ☰</h2>
+    </div>
+    <p>
+        Para garantizar una operatividad ergonómica en almacenes y cabinas de camiones de reparto, la interfaz web y la aplicación móvil Android han sido refinadas específicamente para dispositivos de formato panorámico 20:9 (resolución nativa 1080 x 2400 px, ~393 x 873 px CSS viewport) ejecutando <strong>Android 15 / LineageOS 22.2</strong> sobre hardware tipo <strong>Xiaomi Redmi Note 9 Pro</strong>.
+    </p>
+    <div class="screenshot-card">
+        <img src="{images['26']}" alt="Vista Móvil Xiaomi Redmi Note 9 Pro">
+        <div class="screenshot-caption">
+            <span><strong>Figura 26.1:</strong> Menú hamburguesa (☰) y panel deslizable lateral (drawer) optimizado para uso ergonómico con una sola mano en Xiaomi Redmi Note 9 Pro.</span>
+            <span>Módulo: UX Móvil / Drawer Navegación</span>
+        </div>
+    </div>
+    <div class="tech-box">
+        <strong>Patrones de Diseño y Usabilidad en Movilidad:</strong>
+        <ul>
+            <li><strong>Menú Hamburguesa (☰) Ocultable:</strong> En pantallas de smartphones, la barra lateral permanente se repliega por completo para liberar el 100% del ancho visual a las tablas de picking, mapas de ruteo y remitos digitales. Un botón táctil ubicado en la barra superior despliega un drawer animado con acceso instantáneo a todos los módulos.</li>
+            <li><strong>Área de Toque Ergonómica (44 x 44 px mínimo):</strong> Todos los elementos interactivos, botones de acción, casillas de verificación y pestañas están calibrados para ser operados con el pulgar sin riesgo de pulsaciones erróneas.</li>
+            <li><strong>Rendimiento Fluido en LineageOS 22.2:</strong> Compatibilidad validada con el motor WebView moderno de Android 15, garantizando transiciones a 60 cuadros por segundo y bajo consumo de batería durante jornadas operativas continuas de 12 horas.</li>
+        </ul>
+    </div>
+
     <div class="footer-note">
         <strong>Calcu Suite Enterprise © 2026</strong> | Todos los derechos reservados.<br>
-        Documento preparado para presentación ejecutiva a socios comerciales e inversores estratégicos.
+        Documento técnico maestro preparado para homologación corporativa, auditoría de ciberseguridad y presentación ejecutiva.
     </div>
 
 </body>
@@ -765,12 +982,13 @@ def main():
 
     # Generar PDF oficial mediante Playwright Headless
     pdf_path = os.path.join(DOCS_DIR, "MANUAL_COMPLETO_CALCU_2026.pdf")
+    root_pdf_path = os.path.join(WORKSPACE, "MANUAL_COMPLETO_CALCU_2026.pdf")
     print("  Renderizando PDF con Playwright...")
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page()
         page.goto(f"file:///{html_path.replace(os.sep, '/')}")
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(3000)
         page.pdf(
             path=pdf_path,
             format="A4",
@@ -778,7 +996,12 @@ def main():
             margin={"top": "1.5cm", "bottom": "1.5cm", "left": "1.2cm", "right": "1.2cm"}
         )
         browser.close()
-    print(f"  [OK] PDF generado con exito: {pdf_path}")
+    print(f"  [OK] PDF generado con exito en docs: {pdf_path}")
+
+    # Copiar a la raiz del proyecto para acceso directo
+    shutil.copyfile(pdf_path, root_pdf_path)
+    print(f"  [OK] PDF copiado a la raiz: {root_pdf_path}")
 
 if __name__ == '__main__':
     main()
+

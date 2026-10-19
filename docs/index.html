@@ -2,9 +2,9 @@
 <html lang="es" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calcu Suite 2026 | ERP Logístico 3PL, Supply Chain & Contabilidad B2B</title>
-  <meta name="description" content="Plataforma empresarial moderna para logística 3PL, control de inventario ROP, facturación B2B, cobranzas automatizadas y liquidación fiscal DGI/BPS con IA.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Calcu Suite 2026 | ERP Logístico 3PL, E-Commerce MeLi, Chat Omnicanal & Contabilidad B2B</title>
+  <meta name="description" content="Plataforma empresarial moderna para logística 3PL, Mercado Libre Uruguay, Chat Omnicanal WhatsApp QR, facturación B2B, cobranzas automatizadas y liquidación DGI/BPS con IA.">
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
@@ -61,7 +61,7 @@
   </div>
 
   <!-- Header / Navigation Bar -->
-  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
+  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
       
       <!-- Brand Logo -->
@@ -79,18 +79,18 @@
       </a>
 
       <!-- Desktop Navigation Menu -->
-      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+      <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
         <a href="#modulos" class="hover:text-blue-400 transition-colors">Módulos</a>
-        <a href="#galeria" class="hover:text-blue-400 transition-colors">Capturas</a>
+        <a href="#galeria" class="hover:text-blue-400 transition-colors">Capturas Reales</a>
         <a href="#pioneros" class="hover:text-blue-400 transition-colors">Planes & Pioneros</a>
         <a href="#descargas" class="hover:text-blue-400 transition-colors">Descargas (APK/PDF)</a>
         <a href="#demo" class="hover:text-blue-400 transition-colors">Solicitar Demo</a>
         <a href="#contacto" class="hover:text-blue-400 transition-colors">Contacto</a>
       </nav>
 
-      <!-- CTA Buttons & Contact -->
+      <!-- CTA Buttons & Mobile Hamburger Menu -->
       <div class="flex items-center gap-3">
-        <!-- WhatsApp Direct Pill -->
+        <!-- WhatsApp Direct Pill (Desktop/Tablet) -->
         <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20estoy%20interesado%20en%20probar%20la%20demo%20de%20Calcu%20Suite%202026" 
            target="_blank" 
            rel="noopener noreferrer"
@@ -101,9 +101,57 @@
 
         <!-- Main Demo Button -->
         <a href="#demo" 
-           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs tracking-wide shadow-md shadow-blue-600/30 hover:shadow-blue-600/50 transition-all hover:scale-[1.02] active:scale-[0.98]">
+           class="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs tracking-wide shadow-md shadow-blue-600/30 hover:shadow-blue-600/50 transition-all hover:scale-[1.02] active:scale-[0.98]">
           <span>Probar Demo</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+
+        <!-- Botón Menú Hamburguesa ☰ para Móvil (Redmi Note 9 Pro / LineageOS 22.2) -->
+        <button id="mobileNavToggle" 
+                onclick="toggleMobileDrawer()" 
+                aria-label="Abrir menú de navegación móvil"
+                class="md:hidden p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <i data-lucide="menu" class="w-6 h-6" id="mobileMenuIcon"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Menú Desplegable / Drawer Móvil -->
+    <div id="mobileDrawer" class="hidden md:hidden border-t border-slate-800/80 bg-slate-950/95 px-4 pt-4 pb-6 space-y-3 transition-all">
+      <a href="#modulos" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="layout-grid" class="w-4 h-4 text-blue-400"></i>
+        <span>Módulos de la Suite</span>
+      </a>
+      <a href="#galeria" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="image" class="w-4 h-4 text-purple-400"></i>
+        <span>Galería de Capturas Reales</span>
+      </a>
+      <a href="#pioneros" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
+        <span>Planes & Programa Pioneros</span>
+      </a>
+      <a href="#descargas" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="download" class="w-4 h-4 text-amber-400"></i>
+        <span>Descargar APK Móvil & Manual PDF</span>
+      </a>
+      <a href="#demo" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="send" class="w-4 h-4 text-cyan-400"></i>
+        <span>Solicitar Demo 14 Días</span>
+      </a>
+      <a href="#contacto" onclick="toggleMobileDrawer()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
+        <i data-lucide="phone" class="w-4 h-4 text-emerald-400"></i>
+        <span>Contacto Directo</span>
+      </a>
+      <div class="pt-2 border-t border-slate-800 flex gap-2">
+        <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20estoy%20interesado%20en%20probar%20la%20demo%20de%20Calcu%20Suite%202026" 
+           target="_blank" 
+           class="flex-1 py-2.5 px-3 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-2">
+          <i data-lucide="message-circle" class="w-4 h-4 text-emerald-400"></i>
+          <span>WhatsApp</span>
+        </a>
+        <a href="#demo" onclick="toggleMobileDrawer()" class="flex-1 py-2.5 px-3 rounded-lg bg-blue-600 text-white text-xs font-semibold flex items-center justify-center gap-1">
+          <span>Demo</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </a>
       </div>
     </div>
@@ -113,22 +161,22 @@
   <main class="flex-1">
 
     <!-- HERO SECTION -->
-    <section id="inicio" class="relative pt-16 pb-20 md:pt-24 md:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+    <section id="inicio" class="relative pt-16 pb-20 md:pt-24 md:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center hero-container">
       
       <!-- Status Badge -->
       <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-blue-900/40 border border-blue-500/40 text-blue-300 text-xs font-semibold mb-8 animate-pulse">
         <span class="w-2 h-2 rounded-full bg-blue-400"></span>
-        <span>VERSIÓN EN PRODUCCIÓN & DEMO INTERACTIVA ACTIVA 2026</span>
+        <span>VERSIÓN EN PRODUCCIÓN 2026 • CAPTURAS REALES VERIFICADAS</span>
       </div>
 
       <!-- Main Title -->
       <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-5xl mx-auto leading-[1.12]">
-        Control Total de <span class="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">Logística 3PL</span>, Inventario ROP y Finanzas B2B
+        Control Total de <span class="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">Logística 3PL</span>, E-Commerce MeLi y Finanzas B2B
       </h1>
 
       <!-- Subtitle -->
       <p class="mt-6 text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed">
-        Plataforma unificada para empresas de distribución, almacenamiento y comercio B2B. Conecta en tiempo real la flota GPS, gestión WMS con escaneo móvil, facturación electrónica, cobranzas en 5 etapas y liquidación fiscal DGI/BPS con inteligencia artificial.
+        Plataforma unificada para empresas de distribución, almacenamiento y comercio B2B. Conecta en tiempo real la flota GPS, gestión WMS con escaneo móvil, sincronización oficial con Mercado Libre Uruguay (Kanban 5 etapas), Chat Omnicanal WhatsApp QR con audio .opus y portapapeles multimedia, facturación electrónica y liquidación fiscal DGI/BPS con inteligencia artificial.
       </p>
 
       <!-- Action Buttons -->
@@ -162,21 +210,21 @@
       <div class="mt-14 pt-8 border-t border-slate-800/80 grid grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-4xl mx-auto">
         <div class="flex items-center gap-3">
           <div class="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-            <i data-lucide="shield-check" class="w-5 h-5"></i>
+            <i data-lucide="shopping-bag" class="w-5 h-5"></i>
           </div>
           <div>
-            <div class="text-xs text-slate-400">Ciberseguridad</div>
-            <div class="text-sm font-semibold text-slate-200">ISO 27001 Auditada</div>
+            <div class="text-xs text-slate-400">E-Commerce</div>
+            <div class="text-sm font-semibold text-slate-200">MeLi Kanban 5 Etapas</div>
           </div>
         </div>
 
         <div class="flex items-center gap-3">
           <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-            <i data-lucide="truck" class="w-5 h-5"></i>
+            <i data-lucide="message-square" class="w-5 h-5"></i>
           </div>
           <div>
-            <div class="text-xs text-slate-400">Operaciones</div>
-            <div class="text-sm font-semibold text-slate-200">WMS & Flota 3PL Móvil</div>
+            <div class="text-xs text-slate-400">Omnicanalidad</div>
+            <div class="text-sm font-semibold text-slate-200">WhatsApp QR .opus PTT</div>
           </div>
         </div>
 
@@ -192,31 +240,181 @@
 
         <div class="flex items-center gap-3">
           <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-            <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+            <i data-lucide="database" class="w-5 h-5"></i>
           </div>
           <div>
-            <div class="text-xs text-slate-400">Inteligencia Artificial</div>
-            <div class="text-sm font-semibold text-slate-200">Agente Gemini AI FP&A</div>
+            <div class="text-xs text-slate-400">Arquitectura SaaS</div>
+            <div class="text-sm font-semibold text-slate-200">Multi-Tenant Aislado</div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- INTERACTIVE SHOWCASE SECTION -->
+    <!-- INTERACTIVE SHOWCASE / MODULES GRID -->
     <section id="modulos" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
       
       <div class="text-center max-w-3xl mx-auto mb-16">
-        <h2 class="text-xs font-bold tracking-widest text-blue-400 uppercase">Arquitectura Funcional</h2>
-        <p class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">5 Módulos Estratégicos en una Sola Suite</p>
+        <h2 class="text-xs font-bold tracking-widest text-blue-400 uppercase">Arquitectura Funcional Verificada</h2>
+        <p class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">Módulos Especializados en una Sola Plataforma</p>
         <p class="mt-4 text-slate-400 text-sm sm:text-base">
-          Diseñado para erradicar planillas dispersas y conectar almacén, transporte, cuentas corrientes, ventas mayoristas y reportes en una experiencia unificada.
+          Conexión integral entre canales digitales de venta, depósito, transporte satelital, finanzas corporativas y cumplimiento tributario.
         </p>
       </div>
 
-      <!-- Feature Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <!-- Feature Grid (10 Módulos Clave) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         
-        <!-- Card 1: 3PL & WMS -->
+        <!-- CARD 1: MERCADO LIBRE URUGUAY (KANBAN 5 ETAPAS) -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6">
+              <i data-lucide="shopping-bag" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Mercado Libre Uruguay</h3>
+              <span class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold uppercase">Oficial MLU</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Integración oficial con API Mercado Libre Uruguay (App ID 5376694505612300) y Bóveda AES-256. Tablero Kanban de 5 etapas (Pendiente, En Preparación, Despachado, Entregado y Reclamos) con SLAs visuales.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Sincronización bidireccional automática de stock y precios</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Centralización de preguntas pre-venta y mensajería post-venta</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Monitoreo de reputación oficial y métricas de despacho</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/21_mercadolibre_kanban_5etapas.png', 'Mercado Libre Uruguay: Tablero Kanban 5 Etapas & Catálogo')" class="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 group">
+            <span>Ver captura real del Kanban MeLi</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 2: PUBLICACIÓN ASISTIDA EN MERCADO LIBRE (1-CLIC & IA) -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center mb-6">
+              <i data-lucide="sparkles" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Publicación Asistida MeLi</h3>
+              <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30 font-bold uppercase">1-Clic IA</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Modal inteligente para publicar artículos del inventario en MeLi en un solo clic. Clasificador semántico con IA local que predice la categoría oficial, exige atributos requeridos y vincula el stock del depósito central.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Predicción de categoría con sugerencias automáticas (MLUxxxxx)</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Formulario dinámico de atributos obligatorios (Marca, Modelo, Rosca)</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Selector de exposición Clásica/Premium y cálculo de comisión</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/24_meli_publicacion_modal.png', 'Modal de Publicación Asistida MeLi con Clasificador IA')" class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 group">
+            <span>Ver captura del modal de publicación</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 3: CHAT OMNICANAL & WHATSAPP DIRECTO QR MULTIMEDIA -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-6">
+              <i data-lucide="message-square" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Chat Omnicanal & WhatsApp</h3>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold uppercase">PTT .opus & Portapapeles</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Consola unificada con WhatsApp Directo QR sin costos por mensaje, Google Ads, Meta Leads y Web. Soporte nativo de notas de voz en formato .opus con reproductor web integrado y pegado directo desde portapapeles (Ctrl+V) de imágenes, audios o videos.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Grabación y reproducción de audio PTT .opus audible en celulares</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Copia y pega multimedia directo en el cuadro de texto sin adjuntar</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Clasificación automática y scoring de leads con IA local</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/23_omnichannel_chat_multimedia.png', 'Consola de Chat Omnicanal IA con WhatsApp Directo QR Multimedia')" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 group">
+            <span>Ver consola de chat omnicanal</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 4: HUB DE INTEGRACIONES MULTICANAL & ADTECH -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-6">
+              <i data-lucide="share-2" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Hub Integraciones & AdTech</h3>
+              <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-bold uppercase">ROAS & CAC Trazable</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Conexión directa de 7 canales comerciales protegidos por Bóveda Cifrada AES-256 (CWE-312 / CWE-532 safe): Google Ads, Meta Leads, WhatsApp Cloud API, WhatsApp QR, Email Corporativo, Webhook Web y MeLi.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Cálculo en tiempo real de ROAS estimado y CPL por canal</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Enmascaramiento estricto de secretos y tokens OAuth2</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Inyección automática en Etapa 1 (Prospección) del Pipeline CRM</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/22_integraciones_whatsapp_qr.png', 'Hub de Integraciones Multicanal con Métricas ROAS y CAC')" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 group">
+            <span>Ver Hub de Integraciones</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 5: LICENCIAMIENTO SAAS MULTI-TENANT & PROGRAMA PIONEROS -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-6">
+              <i data-lucide="building" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Licencias SaaS Multi-Tenant</h3>
+              <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30 font-bold uppercase">DB Aislada</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Aislamiento total de base de datos por cliente ('Schema-per-Tenant') con copias de respaldo automáticas diarias. Panel Super-Admin con conmutador de planes (Starter, Pro, Enterprise) y autenticación 2FA TOTP (RFC 6238).
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Programa Pioneros: 100% gratis para los primeros 20 clientes</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Tarifa especial congelada de por vida una vez finalizado el desarrollo</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Aprovisionamiento automatizado de nuevos tenants vía CLI</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/25_licencias_multitenant_pioneros.png', 'Gestión de Licencias Multi-Tenant y Aislamiento de Base de Datos')" class="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 group">
+            <span>Ver panel de licencias y tenants</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 6: EXPERIENCIA MÓVIL XIAOMI REDMI NOTE 9 PRO / LINEAGEOS 22.2 -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-6">
+              <i data-lucide="smartphone" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Móvil & Menú Hamburguesa</h3>
+              <span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/30 font-bold uppercase">Redmi Note 9 Pro</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Diseño responsive especializado para smartphones con formato panorámico 20:9 (393 x 873 px viewport) ejecutando Android 15 / LineageOS 22.2. Menú hamburguesa (☰) que repliega la barra lateral en un drawer táctil.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Navegación ergonómica optimizada para operar con una sola mano</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Escaneo de códigos de barra, remitos y firma táctil en pantalla</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Modo Offline-First con sincronización en segundo plano</li>
+            </ul>
+          </div>
+          <button onclick="openScreenshotModal('./screenshots/26_mobile_redmi_note_9_pro_menu.png', 'Menú Hamburguesa y Drawer Móvil en Xiaomi Redmi Note 9 Pro')" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 group">
+            <span>Ver vista móvil Redmi Note 9 Pro</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- CARD 7: LOGÍSTICA 3PL & WMS MÓVIL -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center mb-6">
@@ -233,12 +431,12 @@
             </ul>
           </div>
           <button onclick="openScreenshotModal('./screenshots/12_3pl_tracking_gps_mapa.png', 'Mapeo Satelital GPS 3PL & Flota')" class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 group">
-            <span>Ver captura del mapa satelital</span>
+            <span>Ver mapa satelital GPS</span>
             <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
           </button>
         </div>
 
-        <!-- Card 2: Cobranzas 5 Etapas -->
+        <!-- CARD 8: COBRANZAS AUTOMATIZADAS 5 ETAPAS -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6">
@@ -255,12 +453,12 @@
             </ul>
           </div>
           <button onclick="openScreenshotModal('./screenshots/05_cobranzas_kanban_5etapas.png', 'Kanban de Cobranzas en 5 Etapas')" class="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 group">
-            <span>Ver captura del Kanban de Cobranzas</span>
+            <span>Ver Kanban de Cobranzas</span>
             <i data-lucide="external-link" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
           </button>
         </div>
 
-        <!-- Card 3: Contabilidad DGI & BPS -->
+        <!-- CARD 9: CONTABILIDAD DGI & BPS -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-6">
@@ -268,7 +466,7 @@
             </div>
             <h3 class="text-xl font-bold text-white mb-2">Contabilidad & DGI/BPS</h3>
             <p class="text-sm text-slate-400 leading-relaxed mb-4">
-              Libro Diario con partida doble inmutable, Libro Mayor en cuentas 'T' y módulo de liquidación tributaria preconfigurado para Uruguay: Formulario 2178 DGI (IVA compras/ventas, IRAE) y aportes BPS patronal y personal.
+              Libro Diario con partida doble inmutable, Libro Mayor en cuentas 'T' y liquidación tributaria preconfigurada para Uruguay: Formulario 2178 DGI (IVA compras/ventas, IRAE) y aportes BPS patronal y personal.
             </p>
             <ul class="text-xs text-slate-300 space-y-2 mb-6">
               <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Asientos contables automáticos por factura y cobro</li>
@@ -282,7 +480,7 @@
           </button>
         </div>
 
-        <!-- Card 4: Supply Chain ROP & Landed Costs -->
+        <!-- CARD 10: SUPPLY CHAIN ROP & LANDED COSTS -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-6">
@@ -290,7 +488,7 @@
             </div>
             <h3 class="text-xl font-bold text-white mb-2">Supply Chain ROP & Control Room</h3>
             <p class="text-sm text-slate-400 leading-relaxed mb-4">
-              Algoritmo matemático de punto de reorden (ROP) y DOH (Days on Hand). Incorporación del costo puesto en depósito (Landed Costs) con fletes marítimos, seguros y despacho aduanero para calcular márgenes brutos y netos reales.
+              Algoritmo matemático de punto de reorden (ROP) y DOH (Days on Hand). Incorporación del costo puesto en depósito (Landed Costs) con fletes marítimos, seguros y despacho aduanero para calcular márgenes reales.
             </p>
             <ul class="text-xs text-slate-300 space-y-2 mb-6">
               <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Alerta temprana de quiebre de stock por SKU</li>
@@ -304,7 +502,7 @@
           </button>
         </div>
 
-        <!-- Card 5: Monitoreo RBAC & ISO 27001 -->
+        <!-- CARD 11: MONITOREO RBAC & AUDITORÍA ISO 27001 -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center mb-6">
@@ -312,7 +510,7 @@
             </div>
             <h3 class="text-xl font-bold text-white mb-2">Monitoreo & Auditoría ISO 27001</h3>
             <p class="text-sm text-slate-400 leading-relaxed mb-4">
-              Registro append-only de cada evento con usuario, rol, fecha, hora, IP y geolocalización. Panel de administración de usuarios con presets corporativos y bloqueo granular de módulos para choferes o vendedores.
+              Registro append-only de cada evento con usuario, rol, fecha, hora, IP y geolocalización. Panel de administración con presets corporativos y bloqueo granular de módulos para choferes o vendedores.
             </p>
             <ul class="text-xs text-slate-300 space-y-2 mb-6">
               <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> Escáner perimetral de puertos y servicios activos</li>
@@ -326,7 +524,7 @@
           </button>
         </div>
 
-        <!-- Card 6: Licitaciones Radar ARCE & IA -->
+        <!-- CARD 12: LICITACIONES RADAR ARCE / SICE & IA -->
         <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-6">
@@ -356,20 +554,26 @@
       
       <div class="flex flex-col md:flex-row md:items-end justify-between mb-10">
         <div>
-          <span class="text-xs font-bold tracking-widest text-blue-400 uppercase">Inspección Visual del Sistema</span>
+          <span class="text-xs font-bold tracking-widest text-blue-400 uppercase">Inspección Visual del Sistema en Vivo</span>
           <h2 class="mt-2 text-3xl font-extrabold text-white">Galería Interactiva de Capturas Reales</h2>
           <p class="mt-2 text-slate-400 text-sm max-w-xl">
-            Haz clic en cualquier pestaña para examinar las pantallas reales del software en funcionamiento.
+            Haz clic en cualquier pestaña para examinar en detalle las pantallas reales del software en funcionamiento.
           </p>
         </div>
         
-        <!-- Tab selector buttons -->
+        <!-- Tab selector buttons (Deslizable en móvil) -->
         <div class="mt-6 md:mt-0 flex flex-wrap gap-2" id="galleryTabs">
-          <button onclick="switchTab('3pl')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white transition-all shadow-md" data-tab="3pl">Logística 3PL</button>
-          <button onclick="switchTab('cobranzas')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="cobranzas">Cobranzas & Facturación</button>
-          <button onclick="switchTab('contabilidad')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="contabilidad">Contabilidad DGI/BPS</button>
-          <button onclick="switchTab('supply')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="supply">Supply & Control Room</button>
-          <button onclick="switchTab('monitoreo')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" data-tab="monitoreo">Monitoreo & Auditoría</button>
+          <button onclick="switchTab('meli')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md" data-tab="meli">Mercado Libre Kanban</button>
+          <button onclick="switchTab('meli_modal')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="meli_modal">Publicación 1-Clic MeLi</button>
+          <button onclick="switchTab('omnichannel')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="omnichannel">Chat WhatsApp .opus</button>
+          <button onclick="switchTab('integraciones')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="integraciones">Hub Integraciones</button>
+          <button onclick="switchTab('tenants')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="tenants">Licencias Multi-Tenant</button>
+          <button onclick="switchTab('mobile')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="mobile">Móvil Redmi Note 9 Pro</button>
+          <button onclick="switchTab('3pl')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="3pl">Logística 3PL & GPS</button>
+          <button onclick="switchTab('cobranzas')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="cobranzas">Cobranzas 5 Etapas</button>
+          <button onclick="switchTab('contabilidad')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="contabilidad">DGI & BPS</button>
+          <button onclick="switchTab('supply')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="supply">Supply & ROP</button>
+          <button onclick="switchTab('monitoreo')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="monitoreo">Auditoría ISO 27001</button>
         </div>
       </div>
 
@@ -382,7 +586,7 @@
             <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
             <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
             <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
-            <span class="ml-3 text-xs font-mono text-slate-400" id="showcaseUrl">https://calcu.enterprise.app/logistics/tracking</span>
+            <span class="ml-3 text-xs font-mono text-slate-400" id="showcaseUrl">https://calcu.enterprise.app/ecommerce/mercadolibre</span>
           </div>
           <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1.5">
             <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
@@ -394,7 +598,7 @@
         <div class="p-4 sm:p-6 flex flex-col lg:flex-row gap-6 items-center">
           
           <div class="w-full lg:w-2/3 cursor-pointer group relative overflow-hidden rounded-xl border border-slate-800" onclick="expandCurrentScreenshot()">
-            <img id="showcaseImage" src="./screenshots/12_3pl_tracking_gps_mapa.png" alt="Captura Calcu" class="w-full h-auto object-cover rounded-xl transition-transform duration-500 group-hover:scale-[1.02]">
+            <img id="showcaseImage" src="./screenshots/21_mercadolibre_kanban_5etapas.png" alt="Captura Calcu" class="w-full h-auto object-cover rounded-xl transition-transform duration-500 group-hover:scale-[1.02]">
             <div class="absolute inset-0 bg-blue-600/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <span class="px-4 py-2 rounded-lg bg-slate-950/80 text-white text-xs font-semibold shadow-lg flex items-center gap-2">
                 <i data-lucide="maximize-2" class="w-4 h-4"></i>
@@ -405,15 +609,15 @@
 
           <!-- Feature Description Panel -->
           <div class="w-full lg:w-1/3 flex flex-col justify-center text-left">
-            <div class="inline-block px-3 py-1 rounded-md text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 w-fit mb-3" id="showcaseBadge">Módulo 3PL Logística</div>
-            <h3 class="text-2xl font-bold text-white mb-3" id="showcaseTitle">Tracking GPS Satelital y Control de Flota</h3>
+            <div class="inline-block px-3 py-1 rounded-md text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 w-fit mb-3" id="showcaseBadge">Módulo E-Commerce Mercado Libre</div>
+            <h3 class="text-2xl font-bold text-white mb-3" id="showcaseTitle">Mercado Libre Uruguay: Tablero Kanban 5 Etapas & Catálogo</h3>
             <p class="text-sm text-slate-300 leading-relaxed mb-6" id="showcaseDesc">
-              Visualización geográfica en tiempo real de unidades de reparto en ruta y barcos portacontenedores en alta mar con tiempos estimados de arribo (ETA), estado de carga y cálculo de costos por viaje.
+              Sincronización oficial con API de Mercado Libre Uruguay (App Oficial 5376694505612300) mediante Bóveda AES-256. Gestión de publicaciones activas/pausadas, inventario unificado, chat pre y post venta, y métricas de reputación oficial.
             </p>
             <div class="space-y-3" id="showcaseBullets">
-              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Georreferenciación en mapa interactivo</span></div>
-              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Integración directa con app móvil de choferes</span></div>
-              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Liquidación automática por distancia y tiempo</span></div>
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Kanban operativo de pedidos: Pendiente, Preparación, Despacho, Entregado y Reclamos</span></div>
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Sincronización bidireccional automática de precios y stock con Depósito Central</span></div>
+              <div class="flex items-center gap-2 text-xs text-slate-300"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i><span>Atención centralizada de preguntas de prospectos con respuestas sugeridas por IA</span></div>
             </div>
           </div>
 
@@ -432,7 +636,7 @@
         </div>
         <h2 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">Modelo de Licenciamiento & Programa Pioneros</h2>
         <p class="mt-4 text-slate-300 text-sm sm:text-base leading-relaxed">
-          Diseñado para crecer junto a tu empresa. Cada licencia cuenta con una base de datos 100% aislada, cifrada y con respaldos automáticos diarios.
+          Diseñado para crecer juntos con nuestros primeros socios. Cada licencia cuenta con una base de datos 100% aislada, cifrada y respaldada diariamente.
         </p>
       </div>
 
@@ -455,7 +659,7 @@
 
             <h3 class="text-2xl sm:text-3xl font-extrabold text-white mb-2">Programa Pioneros</h3>
             <p class="text-xs sm:text-sm text-slate-300 mb-6">
-              Para empresas visionarias que deseen acelerar su operativa logística y comercial, acompañando el lanzamiento de cada módulo.
+              Para empresas que deseen sumarse al desarrollo y acelerar su operativa comercial y logística junto al autor de la plataforma.
             </p>
 
             <div class="p-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 mb-8">
@@ -464,26 +668,26 @@
                 <span class="text-4xl sm:text-5xl font-black text-white">100% GRATIS</span>
               </div>
               <p class="mt-2 text-xs text-emerald-200/90 leading-relaxed font-medium">
-                Sin costo alguno hasta finalizar la programación de todos los módulos del ecosistema.
+                Sin costo mensual hasta finalizar la programación y despliegue de todos los módulos del ecosistema.
               </p>
               <div class="mt-4 pt-4 border-t border-emerald-500/20 text-xs text-slate-300 flex items-center gap-2">
                 <i data-lucide="award" class="w-4 h-4 text-emerald-400 shrink-0"></i>
-                <span><strong>Precio especial bonificado de por vida:</strong> Mantén tu tarifa preferencial congelada de por vida una vez concluida la etapa de desarrollo.</span>
+                <span><strong>Precio especial de por vida:</strong> Tarifa preferencial congelada de por vida una vez concluida la etapa de desarrollo.</span>
               </div>
             </div>
 
             <div class="space-y-3.5 text-xs sm:text-sm text-slate-200 mb-8">
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
-                <span><strong>Base de datos aislada y respaldada:</strong> Esquema privado y exclusivo con copias diarias automáticas.</span>
+                <span><strong>Base de datos aislada y respaldada:</strong> Esquema privado e independiente con copias de seguridad diarias.</span>
               </div>
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
-                <span><strong>Acceso irrestricto a todos los módulos:</strong> 3PL, WMS, MeLi, WhatsApp QR Omnicanal, B2B y DGI.</span>
+                <span><strong>Acceso irrestricto a todos los módulos:</strong> 3PL, WMS, MeLi, WhatsApp QR Omnicanal con audio .opus, B2B y DGI/BPS.</span>
               </div>
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
-                <span><strong>Canal directo con el desarrollador:</strong> Soporte prioritario y adaptación a tus flujos operativos.</span>
+                <span><strong>Canal directo con el desarrollador:</strong> Feedback prioritario para modelar herramientas a medida de tu negocio.</span>
               </div>
             </div>
           </div>
@@ -522,21 +726,21 @@
               <div class="text-xs text-blue-400 uppercase font-bold tracking-wider mb-1">Período de Evaluación:</div>
               <div class="flex items-baseline gap-2">
                 <span class="text-3xl sm:text-4xl font-extrabold text-white">Demo 14 Días</span>
-                <span class="text-xs text-slate-400 font-medium">(Ampliable a 1 mes)</span>
+                <span class="text-xs text-slate-400 font-medium">(Ampliable hasta 1 mes)</span>
               </div>
               <p class="mt-2 text-xs text-slate-400 leading-relaxed">
                 Prueba guiada completa con tus propios datos o en sandbox para verificar el retorno de inversión antes de contratar.
               </p>
               <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-300 flex items-center gap-2">
                 <i data-lucide="layers" class="w-4 h-4 text-blue-400 shrink-0"></i>
-                <span><strong>Pago por módulo activado:</strong> Configuración a medida sin sobrecostos por funciones que no utilices.</span>
+                <span><strong>Pago por módulo y usuarios:</strong> Starter (USD 79), Pro (USD 190) o Enterprise (USD 490) con herramientas a medida.</span>
               </div>
             </div>
 
             <div class="space-y-3.5 text-xs sm:text-sm text-slate-300 mb-8">
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
-                <span><strong>Base de datos multi-tenant aislada:</strong> Separación criptográfica total y backups periódicos.</span>
+                <span><strong>Base de datos multi-tenant aislada:</strong> Separación total y backups periódicos sin mezclar información.</span>
               </div>
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
@@ -544,7 +748,7 @@
               </div>
               <div class="flex items-start gap-2.5">
                 <i data-lucide="check" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
-                <span><strong>Escalabilidad por usuarios:</strong> Crece en choferes, cajeros o analistas con licencias por puesto.</span>
+                <span><strong>Soporte y actualizaciones continuas:</strong> Mantenimiento preventivo, parches y mejoras mensuales.</span>
               </div>
             </div>
           </div>
@@ -593,7 +797,7 @@
             
             <h3 class="text-2xl font-bold text-white mb-3">Calcu 3PL Mobile App (APK)</h3>
             <p class="text-sm text-slate-300 leading-relaxed mb-6">
-              Aplicación nativa para conductores, personal de depósito y supervisores logísticos. Permite escaneo de códigos de barra/QR de bultos, firma de remito en pantalla, captura fotográfica de entrega y sincronización sin conexión (Offline-First). Incluye nueva barra de navegación móvil con menú hamburguesa (☰) y panel deslizable (drawer), optimizada especialmente para dispositivos con pantalla 20:9 como Xiaomi Redmi Note 9 Pro bajo LineageOS 22.2 (Android 15).
+              Aplicación nativa para conductores, personal de depósito y supervisores logísticos. Permite escaneo de códigos de barra/QR de bultos, firma de remito en pantalla, captura fotográfica de entrega y sincronización sin conexión (Offline-First). Incluye barra de navegación móvil con menú hamburguesa (☰) y panel deslizable (drawer), optimizada para smartphones con pantalla panorámica 20:9 como Xiaomi Redmi Note 9 Pro bajo LineageOS 22.2 (Android 15).
             </p>
 
             <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
@@ -627,7 +831,7 @@
               <div class="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
                 <i data-lucide="book-open" class="w-7 h-7"></i>
               </div>
-              <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40">26 Capítulos • 4.65 MB</span>
+              <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40">26 Capítulos Oficiales</span>
             </div>
             
             <h3 class="text-2xl font-bold text-white mb-3">Manual Completo Calcu 2026</h3>
@@ -636,7 +840,7 @@
             </p>
 
             <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
-              <div class="flex justify-between"><span>Formato:</span><span class="text-white font-medium">PDF Vectorial con 24 Capturas Reales</span></div>
+              <div class="flex justify-between"><span>Formato:</span><span class="text-white font-medium">PDF Vectorial con 26 Capturas Reales</span></div>
               <div class="flex justify-between"><span>Versión Web:</span><span class="text-white font-medium">HTML Interactivo (26 Capítulos)</span></div>
               <div class="flex justify-between"><span>Archivo:</span><span class="text-blue-400 font-mono">MANUAL_COMPLETO_CALCU_2026.pdf</span></div>
             </div>
@@ -673,7 +877,7 @@
           </p>
           <div class="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-500/30 text-xs text-cyan-300">
             <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-            <span>Evaluación Inmediata Sandbox: Usuario: <code class="font-mono font-bold text-white">demo</code> &bull; Clave: <code class="font-mono font-bold text-white">demo123</code></span>
+            <span>Evaluación Inmediata Sandbox: Usuario: <code class="font-mono font-bold text-white">admin</code> &bull; Clave: <code class="font-mono font-bold text-white">admin123</code></span>
           </div>
         </div>
 
@@ -750,10 +954,10 @@
               </div>
               <select id="interes" name="interes" 
                       class="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none">
-                <option value="Programa Pioneros (Primeros 20 Cupos)">🚀 Programa Pioneros (Primeros 20 Cupos - 100% Gratis)</option>
+                <option value="Programa Pioneros (Primeros 20 Cupos)">🚀 Programa Pioneros (Primeros 20 Cupos - 100% Gratis de por vida)</option>
                 <option value="Demo Integral Enterprise">Demo Integral Enterprise (Todos los módulos)</option>
-                <option value="Mercado Libre & WhatsApp Omnicanal">E-Commerce MeLi (Kanban 5 Etapas) & WhatsApp QR</option>
-                <option value="Logística 3PL & WMS Móvil">Logística 3PL, WMS y Flota Móvil (APK)</option>
+                <option value="Mercado Libre & WhatsApp Omnicanal">E-Commerce MeLi (Kanban 5 Etapas) & WhatsApp QR (.opus)</option>
+                <option value="Logística 3PL & WMS Móvil">Logística 3PL, WMS y Flota Móvil (APK Android)</option>
                 <option value="Facturación B2B & Cobranzas 5 Etapas">Facturación B2B & Cobranzas Automatizadas</option>
                 <option value="Contabilidad & Liquidación DGI/BPS">Contabilidad DGI (Form 2178) y BPS Uruguay</option>
                 <option value="Supply Chain ROP & Landed Costs">Supply Chain ROP, Control Room & Landed Costs</option>
@@ -846,26 +1050,10 @@
         </div>
       </div>
 
-      <!-- Social Media Links -->
-      <div class="flex items-center gap-4 text-slate-400">
-        <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-white hover:bg-slate-900 transition-colors" title="GitHub Repository">
-          <i data-lucide="github" class="w-5 h-5"></i>
-        </a>
-        <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-blue-400 hover:bg-slate-900 transition-colors" title="LinkedIn Profile">
-          <i data-lucide="linkedin" class="w-5 h-5"></i>
-        </a>
-        <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-sky-400 hover:bg-slate-900 transition-colors" title="X / Twitter">
-          <i data-lucide="twitter" class="w-5 h-5"></i>
-        </a>
-        <a href="https://wa.me/59894858791" target="_blank" rel="noopener noreferrer" class="p-2 rounded-lg hover:text-emerald-400 hover:bg-slate-900 transition-colors" title="Chat WhatsApp">
-          <i data-lucide="phone" class="w-5 h-5"></i>
-        </a>
-      </div>
-
       <!-- Version & Status -->
       <div class="text-xs text-slate-500 font-mono flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <span>FastAPI v1.0 • React Vite • ISO 27001 Ready</span>
+        <span>FastAPI v1.0 • React Vite • ISO 27001 Ready • Multi-Tenant DB</span>
       </div>
 
     </div>
@@ -901,7 +1089,7 @@
         <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl text-slate-200 max-w-[85%] leading-relaxed shadow">
           👋 ¡Hola! Bienvenido a <strong>Calcu Suite Enterprise</strong>. ¿En qué podemos ayudarte hoy?
         </div>
-        <div class="text-[10px] text-slate-500 text-right">Hoy 10:20</div>
+        <div class="text-[10px] text-slate-500 text-right">Hoy en línea</div>
 
         <!-- Quick reply suggestion pills -->
         <div class="pt-2 space-y-1.5">
@@ -910,13 +1098,17 @@
                   class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
             🚀 Solicitar credencial demo
           </button>
+          <button onclick="sendQuickWa('Hola Sebastián, quiero postular para los primeros 20 clientes del Programa Pioneros.')" 
+                  class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
+            ⭐ Postular a Programa Pioneros (Gratis)
+          </button>
           <button onclick="sendQuickWa('Hola, me gustaría consultar por la APK de choferes y logística 3PL.')" 
                   class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
             📱 Consultar por App Móvil 3PL
           </button>
-          <button onclick="sendQuickWa('Hola, necesito información sobre el módulo de cobranzas en 5 etapas y facturación.')" 
+          <button onclick="sendQuickWa('Hola, necesito información sobre el módulo de Mercado Libre y WhatsApp QR con audio .opus.')" 
                   class="w-full text-left p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-colors">
-            💼 Cobranzas en 5 etapas & DGI
+            🛒 Mercado Libre & WhatsApp .opus
           </button>
         </div>
       </div>
@@ -946,16 +1138,27 @@
   <div id="imageModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-4 sm:p-6" onclick="closeScreenshotModal()">
     <div class="relative max-w-6xl w-full bg-slate-900 rounded-2xl border border-slate-800 p-2 shadow-2xl flex flex-col" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between p-3 border-b border-slate-800">
-        <h4 id="modalTitle" class="text-sm font-bold text-white">Previsualización de Pantalla</h4>
+        <h4 id="modalTitle" class="text-sm font-bold text-white">Previsualización de Pantalla Real</h4>
         <button onclick="closeScreenshotModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <div class="p-2 overflow-auto max-h-[80vh] flex items-center justify-center">
+      <div class="p-2 overflow-auto max-h-[82vh] flex items-center justify-center">
         <img id="modalImg" src="" alt="Captura ampliada" class="max-w-full h-auto rounded-lg shadow-lg">
       </div>
     </div>
   </div>
+
+  <!-- Helper Scripts -->
+  <script>
+    function toggleMobileDrawer() {
+      const drawer = document.getElementById('mobileDrawer');
+      if (drawer) {
+        drawer.classList.toggle('hidden');
+      }
+    }
+  </script>
+
   <!-- MODULAR JAVASCRIPT ARCHITECTURE -->
   <script src="./js/whatsapp-widget.js"></script>
   <script src="./js/leads.js"></script>
