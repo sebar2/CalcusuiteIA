@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import List, Optional, Dict, Any, Tuple
 from urllib.parse import urlparse, urlencode
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -1582,5 +1582,420 @@ class MeliService:
                 "items": detailed_items,
                 "paging": paging,
             }
+
+    @classmethod
+    async def get_seller_orders(
+        cls,
+        db: Session,
+        tenant_id: str = "tenant_calcu_corp",
+        days: int = 30,
+        limit: int = 50,
+        stage: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Obtiene las órdenes oficiales de Mercado Libre Uruguay (MLU) de los últimos `days` días.
+        Mapea a las 5 Etapas del Kanban Operativo:
+          1. por_preparar: '1. Por Preparar / Pendiente de Despacho' (SLA countdown reloj)
+          2. en_transito:  '2. En Tránsito / Despachado' (con tracking ME2)
+          3. entregado:    '3. Entregado / Concluido' (con fecha liberación Mercado Pago)
+          4. reclamos:     '4. Reclamos & Devoluciones' (con alerta y botón mediación)
+          5. cancelado:    '5. Cancelado / Reembolsado' (con reversión automática a deposito_central)
+        Sincroniza en paralelo con CommercialDeal (CRM Pipeline) y consolida métricas FP&A.
+        """
+        cls._enforce_rate_limit()
+        from app.models.multitenant_entities import IntegrationConfig
+        from app.models.entities import CommercialDeal, CommercialDealItem, Product, Inventory
+        from app.core.vault import decrypt_vault_payload
+
+        cfg = db.query(IntegrationConfig).filter(
+            IntegrationConfig.channel == "MERCADO_LIBRE",
+            IntegrationConfig.tenant_id == tenant_id
+        ).first()
+
+        if not cfg or not cfg.encrypted_credentials:
+            raise HTTPException(status_code=400, detail="Canal Mercado Libre no conectado en la Bóveda.")
+
+        creds = decrypt_vault_payload(cfg.encrypted_credentials)
+        seller_id = creds.get("seller_id")
+        token = cls.get_valid_seller_token(db, tenant_id)
+        if not token:
+            raise HTTPException(status_code=400, detail="Token de vendedor no disponible en la Bóveda.")
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "CalcuApp/1.0",
+            "Accept": "application/json",
+        }
+
+        from_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00.000-00:00")
+
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            search_params = {
+                "seller": seller_id,
+                "order.date_created.from": from_date,
+                "sort": "date_desc",
+                "limit": min(limit, 50),
+            }
+            orders_url = f"{cls.MELI_API_BASE_URL}/orders/search"
+            orders_res = await client.get(orders_url, params=search_params, headers=headers)
+            if orders_res.status_code != 200:
+                logger.error("Error consultando órdenes MeLi: %d %s", orders_res.status_code, orders_res.text)
+                raise HTTPException(
+                    status_code=orders_res.status_code,
+                    detail=f"Error al consultar órdenes en Mercado Libre ({orders_res.status_code}): {orders_res.text}"
+                )
+
+            orders_data = orders_res.json()
+            raw_orders = orders_data.get("results") or []
+            paging = orders_data.get("paging") or {}
+
+            # Consultar reclamos abiertos para asignar a etapa 'reclamos'
+            claims_by_order: Dict[str, Dict[str, Any]] = {}
+            try:
+                claims_res = await client.get(
+                    f"{cls.MELI_API_BASE_URL}/v1/claims/search?stage=dispute,claim&status=opened",
+                    headers=headers
+                )
+                if claims_res.status_code == 200:
+                    cdata = claims_res.json()
+                    for c_entry in cdata.get("data", cdata.get("results", [])):
+                        rid = str(c_entry.get("resource_id") or "")
+                        claims_by_order[rid] = {
+                            "claim_id": c_entry.get("id"),
+                            "stage": c_entry.get("stage"),
+                            "type": c_entry.get("type"),
+                            "reason": c_entry.get("reason_id") or c_entry.get("detail", {}).get("description"),
+                            "date_created": c_entry.get("date_created"),
+                        }
+            except Exception as e_claim:
+                logger.warning("Aviso no crítico al consultar claims MeLi: %s", e_claim)
+
+            processed_orders: List[Dict[str, Any]] = []
+            now_utc = datetime.now(timezone.utc)
+
+            for ord_entry in raw_orders:
+                order_id = str(ord_entry.get("id"))
+                order_status = ord_entry.get("status", "unknown")
+                date_created = ord_entry.get("date_created")
+                currency = ord_entry.get("currency_id", "UYU")
+                total_amount = float(ord_entry.get("total_amount") or 0.0)
+                paid_amount = float(ord_entry.get("paid_amount") or 0.0)
+
+                # Comprador
+                buyer = ord_entry.get("buyer") or {}
+                buyer_nick = buyer.get("nickname") or f"Comprador #{buyer.get('id', 'MeLi')}"
+                first_name = buyer.get("first_name") or ""
+                last_name = buyer.get("last_name") or ""
+                buyer_full_name = f"{first_name} {last_name}".strip() or buyer_nick
+                buyer_phone = buyer.get("phone", {}).get("number") if isinstance(buyer.get("phone"), dict) else None
+                buyer_city = ""
+
+                # Envíos y Logística
+                shipping = ord_entry.get("shipping") or {}
+                shipment_id = shipping.get("id")
+                shipping_status = shipping.get("status") or "to_be_agreed"
+                shipping_substatus = shipping.get("substatus") or ""
+                shipping_mode = shipping.get("mode") or "custom"
+                shipping_cost = float(shipping.get("cost") or 0.0)
+                tracking_number = shipping.get("tracking_number")
+                tracking_url = f"https://www.mercadolibre.com.uy/envios/seguimiento/{tracking_number}" if tracking_number else None
+                label_url = f"https://api.mercadolibre.com/shipment_labels?shipment_ids={shipment_id}&response_type=pdf" if shipment_id else None
+
+                receiver_address = shipping.get("receiver_address") or {}
+                if receiver_address:
+                    buyer_city = receiver_address.get("city", {}).get("name") or receiver_address.get("state", {}).get("name") or ""
+                    street_name = receiver_address.get("street_name") or ""
+                    street_number = receiver_address.get("street_number") or ""
+                    dest_address = f"{street_name} {street_number}, {buyer_city}".strip(", ")
+                else:
+                    dest_address = "Retiro en local / A convenir"
+
+                estimated_handling_limit = None
+                sla_status = "ON_TIME"
+                sla_hours_remaining = None
+
+                # Si hay shipment_id y falta tracking o handling limit, consultar shipment individual
+                if shipment_id and (not tracking_number or shipping_status in ["to_be_agreed", "pending", "handling", "ready_to_ship"]):
+                    try:
+                        ship_res = await client.get(f"{cls.MELI_API_BASE_URL}/shipments/{shipment_id}", headers=headers)
+                        if ship_res.status_code == 200:
+                            s_data = ship_res.json()
+                            if not tracking_number and s_data.get("tracking_number"):
+                                tracking_number = s_data.get("tracking_number")
+                                tracking_url = f"https://www.mercadolibre.com.uy/envios/seguimiento/{tracking_number}"
+                            opt = s_data.get("shipping_option") or {}
+                            limit_date_str = opt.get("estimated_handling_limit", {}).get("date")
+                            if limit_date_str:
+                                estimated_handling_limit = limit_date_str
+                            rec_addr = s_data.get("receiver_address") or {}
+                            if rec_addr:
+                                buyer_city = rec_addr.get("city", {}).get("name") or rec_addr.get("state", {}).get("name") or buyer_city
+                                s_name = rec_addr.get("street_name") or ""
+                                s_num = rec_addr.get("street_number") or ""
+                                if s_name:
+                                    dest_address = f"{s_name} {s_num}, {buyer_city}".strip(", ")
+                    except Exception as e_ship:
+                        logger.warning("Consulta auxiliar de shipment %s: %s", shipment_id, e_ship)
+
+                # Calcular SLA de despacho
+                if estimated_handling_limit and shipping_status in ["to_be_agreed", "pending", "handling", "ready_to_ship"]:
+                    try:
+                        clean_dt = estimated_handling_limit.replace("Z", "+00:00")
+                        hl_dt = datetime.fromisoformat(clean_dt)
+                        diff_sec = (hl_dt - now_utc).total_seconds()
+                        sla_hours_remaining = round(diff_sec / 3600.0, 1)
+                        if sla_hours_remaining < 0:
+                            sla_status = "DELAYED"
+                        elif sla_hours_remaining <= 4:
+                            sla_status = "WARNING_LIMIT"
+                        else:
+                            sla_status = "ON_TIME"
+                    except Exception:
+                        sla_status = "ON_TIME"
+
+                # Pagos y liberación en Mercado Pago
+                payments = ord_entry.get("payments") or []
+                payout_release_date = None
+                payout_status = "pending"
+                for p in payments:
+                    if p.get("date_released"):
+                        payout_release_date = p.get("date_released")
+                    if p.get("status") == "approved":
+                        payout_status = "released" if p.get("date_released") else "approved"
+
+                # Ítems, Comisiones y COGS
+                order_items = ord_entry.get("order_items") or []
+                processed_items: List[Dict[str, Any]] = []
+                total_sale_fee = 0.0
+                total_cogs = 0.0
+
+                for oi in order_items:
+                    item_obj = oi.get("item") or {}
+                    qty = int(oi.get("quantity") or 1)
+                    u_price = float(oi.get("unit_price") or 0.0)
+                    sale_fee = float(oi.get("sale_fee") or 0.0)
+                    total_sale_fee += sale_fee
+                    seller_sku = item_obj.get("seller_sku") or item_obj.get("id") or ""
+                    title = item_obj.get("title") or "Artículo de MeLi"
+
+                    # Cruce con Productos de Calcu para COGS
+                    costo_base = 0.0
+                    prod = None
+                    if seller_sku:
+                        prod = db.query(Product).filter(
+                            (Product.sku == seller_sku) | (Product.codigo_barra == seller_sku)
+                        ).first()
+                    if not prod and title:
+                        prod = db.query(Product).filter(Product.descripcion.ilike(f"%{title[:30]}%")).first()
+
+                    if prod and prod.costo_base:
+                        costo_base = float(prod.costo_base)
+
+                    cogs_line = round(costo_base * qty, 2)
+                    total_cogs += cogs_line
+
+                    processed_items.append({
+                        "item_id": item_obj.get("id"),
+                        "title": title,
+                        "sku": seller_sku,
+                        "quantity": qty,
+                        "unit_price": u_price,
+                        "sale_fee": sale_fee,
+                        "costo_base": costo_base,
+                        "cogs": cogs_line,
+                    })
+
+                # Verificación de Reclamos
+                claim_data = claims_by_order.get(order_id) or (claims_by_order.get(str(shipment_id)) if shipment_id else None)
+                has_claim = bool(
+                    claim_data or
+                    "claim" in (ord_entry.get("tags") or []) or
+                    "dispute" in (ord_entry.get("tags") or []) or
+                    shipping_substatus in ["claimed", "damaged", "lost"]
+                )
+
+                # Mapeo a las 5 Etapas del Kanban Operativo
+                if has_claim:
+                    kanban_stage = "reclamos"
+                    kanban_stage_name = "4. Reclamos & Devoluciones"
+                elif order_status == "cancelled":
+                    kanban_stage = "cancelado"
+                    kanban_stage_name = "5. Cancelado / Reembolsado"
+                elif shipping_status in ["delivered"] or (order_status in ["paid", "closed"] and shipping_status in ["delivered", "completed"]):
+                    kanban_stage = "entregado"
+                    kanban_stage_name = "3. Entregado / Concluido"
+                elif shipping_status in ["shipped", "in_transit"]:
+                    kanban_stage = "en_transito"
+                    kanban_stage_name = "2. En Tránsito / Despachado"
+                else:
+                    kanban_stage = "por_preparar"
+                    kanban_stage_name = "1. Por Preparar / Pendiente de Despacho"
+
+                # Rentabilidad FP&A
+                comision_meli = round(total_sale_fee if total_sale_fee > 0 else (total_amount * 0.14), 2)
+                ingreso_neto = round(total_amount - comision_meli - shipping_cost - total_cogs, 2)
+                margen_pct = round((ingreso_neto / total_amount * 100), 2) if total_amount > 0 else 0.0
+
+                # Sincronización en CRM CommercialDeal
+                deal_id = f"deal-mlu-ord-{order_id[:8]}"
+                ext_lead = f"meli_ord_{order_id}"
+                existing_deal = db.query(CommercialDeal).filter(
+                    (CommercialDeal.id == deal_id) | (CommercialDeal.external_lead_id == ext_lead)
+                ).first()
+
+                crm_etapa = "ganada" if kanban_stage in ["por_preparar", "en_transito", "entregado"] else ("perdida" if kanban_stage == "cancelado" else "negociacion")
+
+                if not existing_deal:
+                    new_deal = CommercialDeal(
+                        id=deal_id,
+                        proyecto_nombre=f"[MLU Venta] Orden #{order_id}",
+                        cliente=buyer_full_name,
+                        vendedor=cfg.default_seller or "Martín Gómez",
+                        monto_total=Decimal(str(total_amount)),
+                        moneda=currency,
+                        etapa=crm_etapa,
+                        observaciones=f"Venta en MeLi Uruguay. Orden #{order_id}. Envío: {shipping_status}",
+                        canal_origen="MERCADO_LIBRE",
+                        utm_source="mercadolibre_uy",
+                        utm_medium="marketplace_order",
+                        utm_campaign=f"order_{order_id}",
+                        external_lead_id=ext_lead,
+                        costo_adquisicion_estimado=cfg.cost_per_lead_usd if cfg else Decimal("0.80"),
+                        ai_score=95,
+                        ai_classification="HOT",
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    db.add(new_deal)
+                    for p_item in processed_items:
+                        if p_item.get("sku"):
+                            p_sku = p_item["sku"]
+                            chk_p = db.query(Product).filter(Product.sku == p_sku).first()
+                            if chk_p:
+                                db.add(CommercialDealItem(
+                                    deal_id=deal_id,
+                                    sku=p_sku,
+                                    cantidad=p_item.get("quantity", 1),
+                                    precio_unitario=Decimal(str(p_item.get("unit_price", 0.0))),
+                                ))
+                    db.commit()
+                else:
+                    if existing_deal.etapa != crm_etapa:
+                        existing_deal.etapa = crm_etapa
+                        db.commit()
+
+                # Reversión automática de existencias al Depósito Central si cancelada
+                if kanban_stage == "cancelado":
+                    deal_to_check = existing_deal or db.query(CommercialDeal).filter(CommercialDeal.id == deal_id).first()
+                    if deal_to_check and "[Stock Revertido]" not in (deal_to_check.observaciones or ""):
+                        for p_item in processed_items:
+                            p_sku = p_item.get("sku")
+                            p_qty = p_item.get("quantity", 1)
+                            if p_sku:
+                                prod_obj = db.query(Product).filter((Product.sku == p_sku) | (Product.codigo_barra == p_sku)).first()
+                                if prod_obj:
+                                    inv = db.query(Inventory).filter(Inventory.producto_id == prod_obj.id).first()
+                                    if inv:
+                                        inv.deposito_central += p_qty
+                        deal_to_check.observaciones = f"{(deal_to_check.observaciones or '')} [Stock Revertido]"
+                        db.commit()
+
+                processed_orders.append({
+                    "id": order_id,
+                    "date_created": date_created,
+                    "status": order_status,
+                    "currency_id": currency,
+                    "monto_bruto": total_amount,
+                    "paid_amount": paid_amount,
+                    "buyer_id": str(buyer.get("id") or ""),
+                    "buyer_nickname": buyer_nick,
+                    "buyer_name": buyer_full_name,
+                    "buyer_phone": buyer_phone,
+                    "buyer_city": buyer_city,
+                    "shipping_address": dest_address,
+                    "items": processed_items,
+                    "items_count": sum(it.get("quantity", 1) for it in processed_items),
+                    "primary_item_title": processed_items[0]["title"] if processed_items else "Sin productos",
+                    "primary_sku": processed_items[0]["sku"] if processed_items else "-",
+                    # Logistics & Shipping
+                    "shipping_id": shipment_id,
+                    "shipping_status": shipping_status,
+                    "shipping_substatus": shipping_substatus,
+                    "shipping_mode": shipping_mode,
+                    "tracking_number": tracking_number,
+                    "tracking_url": tracking_url,
+                    "label_url": label_url,
+                    "estimated_handling_limit": estimated_handling_limit,
+                    "sla_status": sla_status,
+                    "sla_hours_remaining": sla_hours_remaining,
+                    # Payout
+                    "payout_status": payout_status,
+                    "payout_release_date": payout_release_date,
+                    # Claims
+                    "has_claim": has_claim,
+                    "claim_details": claim_data,
+                    # Kanban Stage
+                    "kanban_stage": kanban_stage,
+                    "kanban_stage_name": kanban_stage_name,
+                    # FP&A Financials
+                    "comision_meli": comision_meli,
+                    "costo_envio": shipping_cost,
+                    "cogs": total_cogs,
+                    "ingreso_neto": ingreso_neto,
+                    "margen_pct": margen_pct,
+                    # CRM Cross-link
+                    "deal_id": deal_id,
+                })
+
+            filtered_orders = processed_orders
+            if stage:
+                filtered_orders = [o for o in processed_orders if o["kanban_stage"] == stage]
+
+            stages_count = {
+                "por_preparar": len([o for o in processed_orders if o["kanban_stage"] == "por_preparar"]),
+                "en_transito": len([o for o in processed_orders if o["kanban_stage"] == "en_transito"]),
+                "entregado": len([o for o in processed_orders if o["kanban_stage"] == "entregado"]),
+                "reclamos": len([o for o in processed_orders if o["kanban_stage"] == "reclamos"]),
+                "cancelado": len([o for o in processed_orders if o["kanban_stage"] == "cancelado"]),
+            }
+
+            total_count = len(processed_orders)
+            total_bruto = sum(o["monto_bruto"] for o in processed_orders)
+            total_comisiones = sum(o["comision_meli"] for o in processed_orders)
+            total_envios = sum(o["costo_envio"] for o in processed_orders)
+            total_cogs_sum = sum(o["cogs"] for o in processed_orders)
+            total_neto = sum(o["ingreso_neto"] for o in processed_orders)
+            avg_margin = (total_neto / total_bruto * 100) if total_bruto > 0 else 0.0
+
+            orders_with_sla = [o for o in processed_orders if o["sla_status"] in ["ON_TIME", "WARNING_LIMIT", "DELAYED"]]
+            sla_on_time = len([o for o in orders_with_sla if o["sla_status"] != "DELAYED"])
+            sla_pct = (sla_on_time / len(orders_with_sla) * 100) if orders_with_sla else 100.0
+
+            claims_count = stages_count["reclamos"]
+            claims_pct = (claims_count / total_count * 100) if total_count > 0 else 0.0
+
+            fpa_metrics = {
+                "total_ordenes": total_count,
+                "total_ventas_brutas": round(total_bruto, 2),
+                "total_comisiones_meli": round(total_comisiones, 2),
+                "total_costo_envios": round(total_envios, 2),
+                "total_cogs": round(total_cogs_sum, 2),
+                "total_ingreso_neto": round(total_neto, 2),
+                "margen_neto_promedio_pct": round(avg_margin, 2),
+                "ordenes_a_tiempo_pct": round(sla_pct, 1),
+                "tasa_reclamos_pct": round(claims_pct, 2),
+                "reputacion_objetivo_verde": claims_pct < 1.0,
+            }
+
+            return {
+                "seller_id": seller_id,
+                "days": days,
+                "total": len(filtered_orders),
+                "total_unfiltered": total_count,
+                "orders": filtered_orders,
+                "stages_count": stages_count,
+                "fpa_metrics": fpa_metrics,
+                "paging": paging,
+            }
+
 
 

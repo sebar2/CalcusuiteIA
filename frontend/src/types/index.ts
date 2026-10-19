@@ -2900,6 +2900,104 @@ export interface MeliItemAnalyticsResponse {
   thumbnail?: string;
 }
 
+// =========================================================================
+// MÓDULO OPERATIVO MERCADO LIBRE: VENTAS, ENVÍOS, RECLAMOS & FP&A
+// =========================================================================
+
+export type MeliKanbanStage = 'por_preparar' | 'en_transito' | 'entregado' | 'reclamos' | 'cancelado';
+export type MeliSlaStatus = 'ON_TIME' | 'WARNING_LIMIT' | 'DELAYED';
+
+export interface MeliOrderItem {
+  item_id: string;
+  title: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+  sale_fee: number;
+  costo_base: number;
+  cogs: number;
+}
+
+export interface MeliClaimDetails {
+  claim_id?: number | string;
+  stage?: string;
+  type?: string;
+  reason?: string;
+  date_created?: string;
+}
+
+export interface MeliOrder {
+  id: string;
+  date_created: string;
+  status: string;
+  currency_id: string;
+  monto_bruto: number;
+  paid_amount: number;
+  buyer_id: string;
+  buyer_nickname: string;
+  buyer_name: string;
+  buyer_phone?: string | null;
+  buyer_city?: string;
+  shipping_address?: string;
+  items: MeliOrderItem[];
+  items_count: number;
+  primary_item_title: string;
+  primary_sku: string;
+  // Shipping & Logistics
+  shipping_id?: number | string | null;
+  shipping_status: string;
+  shipping_substatus?: string;
+  shipping_mode?: string;
+  tracking_number?: string | null;
+  tracking_url?: string | null;
+  label_url?: string | null;
+  estimated_handling_limit?: string | null;
+  sla_status: MeliSlaStatus;
+  sla_hours_remaining?: number | null;
+  // Payout
+  payout_status: string;
+  payout_release_date?: string | null;
+  // Claims
+  has_claim: boolean;
+  claim_details?: MeliClaimDetails | null;
+  // Kanban Stage
+  kanban_stage: MeliKanbanStage;
+  kanban_stage_name: string;
+  // FP&A Financials
+  comision_meli: number;
+  costo_envio: number;
+  cogs: number;
+  ingreso_neto: number;
+  margen_pct: number;
+  // CRM Cross-link
+  deal_id?: string;
+}
+
+export interface MeliFpaMetrics {
+  total_ordenes: number;
+  total_ventas_brutas: number;
+  total_comisiones_meli: number;
+  total_costo_envios: number;
+  total_cogs: number;
+  total_ingreso_neto: number;
+  margen_neto_promedio_pct: number;
+  ordenes_a_tiempo_pct: number;
+  tasa_reclamos_pct: number;
+  reputacion_objetivo_verde: boolean;
+}
+
+export interface MeliOrdersResponse {
+  seller_id: number | string;
+  days: number;
+  total: number;
+  total_unfiltered: number;
+  orders: MeliOrder[];
+  stages_count: Record<MeliKanbanStage, number>;
+  fpa_metrics: MeliFpaMetrics;
+  paging?: Record<string, any>;
+}
+
+
 
 
 

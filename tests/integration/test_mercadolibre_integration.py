@@ -635,3 +635,305 @@ def test_meli_get_my_items_and_shipping_configuration():
         assert res_pub.json()["item_id"] == "MLU12345678"
 
 
+def test_meli_orders_endpoint_authentication_and_roles():
+    """Valida control de acceso ISO 27001 en endpoint de órdenes MeLi."""
+    # Sin autenticación -> 401
+    res_no_auth = client.get("/api/v1/integrations/meli/orders")
+    assert res_no_auth.status_code == 401
+
+    # Con analista comercial o controller_admin -> 200 o mock
+    with patch("app.services.meli_service.MeliService.get_seller_orders", new_callable=AsyncMock) as m_orders:
+        m_orders.return_value = {
+            "seller_id": "94100539",
+            "days": 30,
+            "total": 0,
+            "total_unfiltered": 0,
+            "orders": [],
+            "stages_count": {
+                "por_preparar": 0,
+                "en_transito": 0,
+                "entregado": 0,
+                "reclamos": 0,
+                "cancelado": 0,
+            },
+            "fpa_metrics": {
+                "total_ordenes": 0,
+                "total_ventas_brutas": 0.0,
+                "total_comisiones_meli": 0.0,
+                "total_costo_envios": 0.0,
+                "total_cogs": 0.0,
+                "total_ingreso_neto": 0.0,
+                "margen_neto_promedio_pct": 0.0,
+                "ordenes_a_tiempo_pct": 100.0,
+                "tasa_reclamos_pct": 0.0,
+                "reputacion_objetivo_verde": True,
+            },
+        }
+        res_com = client.get("/api/v1/integrations/meli/orders?days=30", headers=_comercial_headers())
+        assert res_com.status_code == 200
+        data = res_com.json()
+        assert data["seller_id"] == "94100539"
+        assert "stages_count" in data
+        assert "fpa_metrics" in data
+
+
+def test_meli_orders_5_stages_kanban_and_fpa_metrics_calculation():
+    """
+    Verifica que las órdenes de MeLi se clasifiquen rigurosamente en las 5 etapas Kanban:
+    1. por_preparar (paid, handling limit)
+    2. en_transito (shipped, tracking)
+    3. entregado (delivered, date_released)
+    4. reclamos (open claim/dispute)
+    5. cancelado (cancelled, stock reversal)
+    """
+    sample_orders = [
+        {
+            "id": "200000001",
+            "date_created": "2026-10-18T10:00:00.000Z",
+            "status": "paid",
+            "currency_id": "UYU",
+            "monto_bruto": 4500.0,
+            "paid_amount": 4500.0,
+            "buyer_id": "111",
+            "buyer_nickname": "COMPRADOR_UY1",
+            "buyer_name": "Juan Pérez",
+            "buyer_phone": "099123456",
+            "buyer_city": "Montevideo",
+            "shipping_address": "Av. 18 de Julio 1234, Montevideo",
+            "items": [{"item_id": "MLU1", "title": "Batería Litio", "sku": "BAT-LIT-01", "quantity": 1, "unit_price": 4500.0, "sale_fee": 630.0, "costo_base": 2800.0, "cogs": 2800.0}],
+            "items_count": 1,
+            "primary_item_title": "Batería Litio",
+            "primary_sku": "BAT-LIT-01",
+            "shipping_id": 901,
+            "shipping_status": "handling",
+            "shipping_substatus": "",
+            "shipping_mode": "me2",
+            "tracking_number": None,
+            "tracking_url": None,
+            "label_url": "https://api.mercadolibre.com/shipment_labels?shipment_ids=901",
+            "estimated_handling_limit": "2026-10-20T18:00:00.000Z",
+            "sla_status": "ON_TIME",
+            "sla_hours_remaining": 28.5,
+            "payout_status": "pending",
+            "payout_release_date": None,
+            "has_claim": False,
+            "claim_details": None,
+            "kanban_stage": "por_preparar",
+            "kanban_stage_name": "1. Por Preparar / Pendiente de Despacho",
+            "comision_meli": 630.0,
+            "costo_envio": 0.0,
+            "cogs": 2800.0,
+            "ingreso_neto": 1070.0,
+            "margen_pct": 23.8,
+            "deal_id": "deal-mlu-ord-20000000",
+        },
+        {
+            "id": "200000002",
+            "date_created": "2026-10-17T09:00:00.000Z",
+            "status": "paid",
+            "currency_id": "UYU",
+            "monto_bruto": 2200.0,
+            "paid_amount": 2200.0,
+            "buyer_id": "222",
+            "buyer_nickname": "COMPRADOR_UY2",
+            "buyer_name": "María Silva",
+            "buyer_phone": "098765432",
+            "buyer_city": "Maldonado",
+            "shipping_address": "Rbla. Costanera 456, Maldonado",
+            "items": [{"item_id": "MLU2", "title": "Reflector LED", "sku": "REF-LED-50", "quantity": 1, "unit_price": 2200.0, "sale_fee": 308.0, "costo_base": 1200.0, "cogs": 1200.0}],
+            "items_count": 1,
+            "primary_item_title": "Reflector LED",
+            "primary_sku": "REF-LED-50",
+            "shipping_id": 902,
+            "shipping_status": "shipped",
+            "shipping_substatus": "",
+            "shipping_mode": "me2",
+            "tracking_number": "MLU9876543210",
+            "tracking_url": "https://www.mercadolibre.com.uy/envios/seguimiento/MLU9876543210",
+            "label_url": None,
+            "estimated_handling_limit": None,
+            "sla_status": "ON_TIME",
+            "sla_hours_remaining": None,
+            "payout_status": "pending",
+            "payout_release_date": None,
+            "has_claim": False,
+            "claim_details": None,
+            "kanban_stage": "en_transito",
+            "kanban_stage_name": "2. En Tránsito / Despachado",
+            "comision_meli": 308.0,
+            "costo_envio": 0.0,
+            "cogs": 1200.0,
+            "ingreso_neto": 692.0,
+            "margen_pct": 31.5,
+            "deal_id": "deal-mlu-ord-20000000",
+        },
+        {
+            "id": "200000003",
+            "date_created": "2026-10-15T14:00:00.000Z",
+            "status": "closed",
+            "currency_id": "UYU",
+            "monto_bruto": 6000.0,
+            "paid_amount": 6000.0,
+            "buyer_id": "333",
+            "buyer_nickname": "COMPRADOR_UY3",
+            "buyer_name": "Carlos Rodríguez",
+            "buyer_phone": "091234567",
+            "buyer_city": "Canelones",
+            "shipping_address": "Giannattasio km 22, Canelones",
+            "items": [{"item_id": "MLU3", "title": "Inversor Onda Pura", "sku": "INV-1000", "quantity": 1, "unit_price": 6000.0, "sale_fee": 840.0, "costo_base": 3900.0, "cogs": 3900.0}],
+            "items_count": 1,
+            "primary_item_title": "Inversor Onda Pura",
+            "primary_sku": "INV-1000",
+            "shipping_id": 903,
+            "shipping_status": "delivered",
+            "shipping_substatus": "",
+            "shipping_mode": "me2",
+            "tracking_number": "MLU1234987654",
+            "tracking_url": "https://www.mercadolibre.com.uy/envios/seguimiento/MLU1234987654",
+            "label_url": None,
+            "estimated_handling_limit": None,
+            "sla_status": "ON_TIME",
+            "sla_hours_remaining": None,
+            "payout_status": "released",
+            "payout_release_date": "2026-10-17T18:00:00.000Z",
+            "has_claim": False,
+            "claim_details": None,
+            "kanban_stage": "entregado",
+            "kanban_stage_name": "3. Entregado / Concluido",
+            "comision_meli": 840.0,
+            "costo_envio": 0.0,
+            "cogs": 3900.0,
+            "ingreso_neto": 1260.0,
+            "margen_pct": 21.0,
+            "deal_id": "deal-mlu-ord-20000000",
+        },
+        {
+            "id": "200000004",
+            "date_created": "2026-10-16T11:00:00.000Z",
+            "status": "paid",
+            "currency_id": "UYU",
+            "monto_bruto": 3000.0,
+            "paid_amount": 3000.0,
+            "buyer_id": "444",
+            "buyer_nickname": "COMPRADOR_UY4",
+            "buyer_name": "Ana Gómez",
+            "buyer_phone": "094567890",
+            "buyer_city": "Montevideo",
+            "shipping_address": "Bvar. Artigas 789, Montevideo",
+            "items": [{"item_id": "MLU4", "title": "Cargador Rápido", "sku": "CARG-01", "quantity": 1, "unit_price": 3000.0, "sale_fee": 420.0, "costo_base": 1800.0, "cogs": 1800.0}],
+            "items_count": 1,
+            "primary_item_title": "Cargador Rápido",
+            "primary_sku": "CARG-01",
+            "shipping_id": 904,
+            "shipping_status": "delivered",
+            "shipping_substatus": "claimed",
+            "shipping_mode": "me2",
+            "tracking_number": "MLU4444555566",
+            "tracking_url": None,
+            "label_url": None,
+            "estimated_handling_limit": None,
+            "sla_status": "ON_TIME",
+            "sla_hours_remaining": None,
+            "payout_status": "pending",
+            "payout_release_date": None,
+            "has_claim": True,
+            "claim_details": {"claim_id": 505505, "stage": "dispute", "reason": "Producto con empaque golpeado"},
+            "kanban_stage": "reclamos",
+            "kanban_stage_name": "4. Reclamos & Devoluciones",
+            "comision_meli": 420.0,
+            "costo_envio": 0.0,
+            "cogs": 1800.0,
+            "ingreso_neto": 780.0,
+            "margen_pct": 26.0,
+            "deal_id": "deal-mlu-ord-20000000",
+        },
+        {
+            "id": "200000005",
+            "date_created": "2026-10-14T16:00:00.000Z",
+            "status": "cancelled",
+            "currency_id": "UYU",
+            "monto_bruto": 1500.0,
+            "paid_amount": 0.0,
+            "buyer_id": "555",
+            "buyer_nickname": "COMPRADOR_UY5",
+            "buyer_name": "Luis Pintos",
+            "buyer_phone": "092345678",
+            "buyer_city": "Salto",
+            "shipping_address": "Uruguay 321, Salto",
+            "items": [{"item_id": "MLU5", "title": "Cable Solar 6mm", "sku": "CAB-SOL-06", "quantity": 10, "unit_price": 150.0, "sale_fee": 0.0, "costo_base": 90.0, "cogs": 900.0}],
+            "items_count": 10,
+            "primary_item_title": "Cable Solar 6mm",
+            "primary_sku": "CAB-SOL-06",
+            "shipping_id": 905,
+            "shipping_status": "cancelled",
+            "shipping_substatus": "",
+            "shipping_mode": "me2",
+            "tracking_number": None,
+            "tracking_url": None,
+            "label_url": None,
+            "estimated_handling_limit": None,
+            "sla_status": "ON_TIME",
+            "sla_hours_remaining": None,
+            "payout_status": "pending",
+            "payout_release_date": None,
+            "has_claim": False,
+            "claim_details": None,
+            "kanban_stage": "cancelado",
+            "kanban_stage_name": "5. Cancelado / Reembolsado",
+            "comision_meli": 0.0,
+            "costo_envio": 0.0,
+            "cogs": 900.0,
+            "ingreso_neto": 600.0,
+            "margen_pct": 40.0,
+            "deal_id": "deal-mlu-ord-20000000",
+        },
+    ]
+
+    mock_resp = {
+        "seller_id": "94100539",
+        "days": 30,
+        "total": 5,
+        "total_unfiltered": 5,
+        "orders": sample_orders,
+        "stages_count": {
+            "por_preparar": 1,
+            "en_transito": 1,
+            "entregado": 1,
+            "reclamos": 1,
+            "cancelado": 1,
+        },
+        "fpa_metrics": {
+            "total_ordenes": 5,
+            "total_ventas_brutas": 17200.0,
+            "total_comisiones_meli": 2198.0,
+            "total_costo_envios": 0.0,
+            "total_cogs": 10600.0,
+            "total_ingreso_neto": 4402.0,
+            "margen_neto_promedio_pct": 25.6,
+            "ordenes_a_tiempo_pct": 100.0,
+            "tasa_reclamos_pct": 20.0,
+            "reputacion_objetivo_verde": False,
+        },
+    }
+
+    with patch("app.services.meli_service.MeliService.get_seller_orders", new_callable=AsyncMock) as m_orders:
+        m_orders.return_value = mock_resp
+        res = client.get("/api/v1/integrations/meli/orders?days=30", headers=_admin_headers())
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] == 5
+        assert data["stages_count"]["por_preparar"] == 1
+        assert data["stages_count"]["en_transito"] == 1
+        assert data["stages_count"]["entregado"] == 1
+        assert data["stages_count"]["reclamos"] == 1
+        assert data["stages_count"]["cancelado"] == 1
+
+        # Verificar métricas FP&A
+        fpa = data["fpa_metrics"]
+        assert fpa["total_ventas_brutas"] == 17200.0
+        assert fpa["total_comisiones_meli"] == 2198.0
+        assert fpa["total_ingreso_neto"] == 4402.0
+        assert fpa["margen_neto_promedio_pct"] == 25.6
+
+
+

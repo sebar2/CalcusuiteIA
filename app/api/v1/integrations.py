@@ -1341,3 +1341,25 @@ async def get_meli_item_analytics(
     analytics = await MeliService.get_item_analytics(db=db, tenant_id=user.tenant_id, item_id=item_id)
     return analytics
 
+
+@router.get(
+    "/meli/orders",
+    summary="Obtiene las órdenes oficiales de Mercado Libre clasificadas en las 5 Etapas del Kanban Operativo y métricas FP&A"
+)
+async def get_meli_orders(
+    days: int = Query(30, ge=1, le=180, description="Días de historial a consultar (predeterminado 30)"),
+    stage: Optional[str] = Query(None, description="Filtro opcional por etapa Kanban: por_preparar, en_transito, entregado, reclamos, cancelado"),
+    limit: int = Query(50, ge=1, le=100, description="Cantidad máxima de órdenes a consultar"),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    orders_data = await MeliService.get_seller_orders(
+        db=db,
+        tenant_id=user.tenant_id,
+        days=days,
+        limit=limit,
+        stage=stage,
+    )
+    return orders_data
+
+

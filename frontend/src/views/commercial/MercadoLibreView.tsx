@@ -23,6 +23,16 @@ import {
   X,
   Truck,
   Search,
+  Printer,
+  Download,
+  LayoutGrid,
+  List,
+  DollarSign,
+  Calendar,
+  MapPin,
+  CheckSquare,
+  FileText,
+  ArrowUpRight,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type {
@@ -30,6 +40,9 @@ import type {
   IntegrationChannelConfig,
   MeliSellerReputationResponse,
   MeliMyItem,
+  MeliOrder,
+  MeliFpaMetrics,
+  MeliKanbanStage,
 } from '../../types';
 import { MeliPublishModal } from '../../components/integrations/MeliPublishModal';
 
@@ -39,7 +52,7 @@ interface MercadoLibreViewProps {
   onNavigateToCRM?: () => void;
 }
 
-type MeliTab = 'publications' | 'catalog' | 'stock_pricing' | 'qa_chat' | 'analytics' | 'settings';
+type MeliTab = 'publications' | 'catalog' | 'orders' | 'stock_pricing' | 'qa_chat' | 'analytics' | 'settings';
 
 export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
   currentRole = 'controller_admin',
@@ -107,6 +120,46 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
   const [simCost, setSimCost] = useState<number>(850);
   const [simListingType, setSimListingType] = useState<'gold_special' | 'gold_pro'>('gold_special');
 
+  // Órdenes Operativas, Kanban y FP&A
+  const [orders, setOrders] = useState<MeliOrder[]>([]);
+  const [fpaMetrics, setFpaMetrics] = useState<MeliFpaMetrics | null>(null);
+  const [stagesCount, setStagesCount] = useState<Record<MeliKanbanStage, number>>({
+    por_preparar: 0,
+    en_transito: 0,
+    entregado: 0,
+    reclamos: 0,
+    cancelado: 0,
+  });
+  const [isLoadingOrders, setIsLoadingOrders] = useState<boolean>(false);
+  const [ordersDays, setOrdersDays] = useState<number>(30);
+  const [ordersViewMode, setOrdersViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [ordersSearch, setOrdersSearch] = useState<string>('');
+  const [ordersStageFilter, setOrdersStageFilter] = useState<string>('all');
+  const [ordersSortBy, setOrdersSortBy] = useState<string>('date_desc');
+  const [selectedOrderForRemito, setSelectedOrderForRemito] = useState<MeliOrder | null>(null);
+
+  // Columnas personalizables para Tabla de Órdenes
+  const [ordersColumns, setOrdersColumns] = useState({
+    order_id: true,
+    date: true,
+    buyer: true,
+    city: true,
+    products: true,
+    quantity: true,
+    shipping_status: true,
+    tracking: true,
+    sla: true,
+    monto_bruto: true,
+    comision_meli: true,
+    costo_envio: false,
+    cogs: false,
+    ingreso_neto: true,
+    margen_pct: true,
+    crm_deal: true,
+    actions: true,
+  });
+  const [showOrdersColMenu, setShowOrdersColMenu] = useState<boolean>(false);
+
   const isAdmin = currentRole === 'controller_admin';
 
   // 1. Cargar estado de la integración y reputación
@@ -161,10 +214,31 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
     }
   };
 
+  // 4. Cargar órdenes de venta oficiales de MeLi
+  const loadOrders = async (days: number = ordersDays, stage?: string) => {
+    setIsLoadingOrders(true);
+    try {
+      const res = await apiService.getMeliOrders({
+        days,
+        stage: stage && stage !== 'all' ? stage : undefined,
+      });
+      setOrders(res.orders || []);
+      setFpaMetrics(res.fpa_metrics || null);
+      if (res.stages_count) {
+        setStagesCount(res.stages_count);
+      }
+    } catch (err: any) {
+      console.warn('Error cargando órdenes de MeLi:', err);
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
   useEffect(() => {
     loadIntegrationStatus();
     loadReadyProducts();
     loadMyMeliItems();
+    loadOrders();
   }, []);
 
   // Alternar estado activo / pausado en 1 clic
@@ -301,6 +375,103 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
     return matchesSearch && matchesStatus;
   });
 
+  // Filtrado y ordenamiento de órdenes operativas MeLi
+  const filteredOrders = orders
+    .filter((o) => {
+      const s = ordersSearch.toLowerCase().trim();
+      const matchesSearch =
+        !s ||
+        o.id.toLowerCase().includes(s) ||
+        o.buyer_name.toLowerCase().includes(s) ||
+        o.buyer_nickname.toLowerCase().includes(s) ||
+        o.primary_sku.toLowerCase().includes(s) ||
+        o.primary_item_title.toLowerCase().includes(s) ||
+        (o.tracking_number && o.tracking_number.toLowerCase().includes(s));
+
+      const matchesStage =
+        ordersStageFilter === 'all' || o.kanban_stage === ordersStageFilter;
+
+      return matchesSearch && matchesStage;
+    })
+    .sort((a, b) => {
+      if (ordersSortBy === 'date_desc') {
+        return new Date(b.date_created || 0).getTime() - new Date(a.date_created || 0).getTime();
+      }
+      if (ordersSortBy === 'date_asc') {
+        return new Date(a.date_created || 0).getTime() - new Date(b.date_created || 0).getTime();
+      }
+      if (ordersSortBy === 'amount_desc') {
+        return b.monto_bruto - a.monto_bruto;
+      }
+      if (ordersSortBy === 'margin_desc') {
+        return b.margen_pct - a.margen_pct;
+      }
+      return 0;
+    });
+
+  // Exportar reporte de órdenes a Excel/CSV con BOM UTF-8
+  const handleExportOrdersCsv = () => {
+    if (!filteredOrders.length) return;
+    const headers = [
+      'ID Orden',
+      'Fecha Venta',
+      'Etapa Kanban',
+      'Estado Envio',
+      'Tracking',
+      'SLA Despacho',
+      'Comprador',
+      'Ciudad',
+      'Direccion',
+      'SKU Principal',
+      'Producto',
+      'Cantidad Total',
+      'Monto Bruto UYU',
+      'Comision MeLi',
+      'Costo Envio',
+      'Costo Calcu COGS',
+      'Ingreso Neto',
+      'Margen %',
+      'Estado Payout',
+      'Tiene Reclamo',
+      'ID Trato CRM'
+    ];
+
+    const rows = filteredOrders.map((o) => [
+      `"${o.id}"`,
+      `"${o.date_created ? new Date(o.date_created).toLocaleString() : ''}"`,
+      `"${o.kanban_stage_name}"`,
+      `"${o.shipping_status}"`,
+      `"${o.tracking_number || ''}"`,
+      `"${o.sla_status === 'DELAYED' ? 'VENCIDO' : (o.sla_hours_remaining != null ? `${o.sla_hours_remaining}h` : 'OK')}"`,
+      `"${(o.buyer_name || o.buyer_nickname).replace(/"/g, '""')}"`,
+      `"${(o.buyer_city || '').replace(/"/g, '""')}"`,
+      `"${(o.shipping_address || '').replace(/"/g, '""')}"`,
+      `"${o.primary_sku || ''}"`,
+      `"${(o.primary_item_title || '').replace(/"/g, '""')}"`,
+      o.items_count,
+      o.monto_bruto.toFixed(2),
+      o.comision_meli.toFixed(2),
+      o.costo_envio.toFixed(2),
+      o.cogs.toFixed(2),
+      o.ingreso_neto.toFixed(2),
+      `${o.margen_pct.toFixed(1)}%`,
+      `"${o.payout_status}"`,
+      o.has_claim ? 'SI' : 'NO',
+      `"${o.deal_id || ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `MeLi_Ordenes_Calcu_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Cabecera Principal de Mercado Libre Uruguay */}
@@ -365,11 +536,13 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
             onClick={() => {
               loadIntegrationStatus();
               loadReadyProducts();
+              loadMyMeliItems();
+              loadOrders();
             }}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Recargar estado"
+            title="Recargar estado general"
           >
-            <RefreshCw size={15} className={isLoadingConfig || isLoadingProducts ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={isLoadingConfig || isLoadingProducts || isLoadingOrders || isLoadingMyItems ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -454,6 +627,30 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
 
         <button
           type="button"
+          onClick={() => {
+            setActiveTab('orders');
+            loadOrders();
+          }}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+            activeTab === 'orders'
+              ? 'bg-[#FFE600] text-[#2D3277] shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Truck size={14} />
+          <span>3. Ventas, Envíos &amp; Reclamos (Kanban / Tabla)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            {orders.length}
+          </span>
+          {stagesCount.reclamos > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-extrabold animate-pulse">
+              {stagesCount.reclamos} Reclamo{stagesCount.reclamos > 1 ? 's' : ''}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('stock_pricing')}
           className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
             activeTab === 'stock_pricing'
@@ -462,7 +659,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <RefreshCw size={14} />
-          <span>3. Sincronización de Stock &amp; Pricing</span>
+          <span>4. Sincronización de Stock &amp; Pricing</span>
         </button>
 
         <button
@@ -475,7 +672,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <MessageSquare size={14} />
-          <span>4. Preguntas Pre-Venta &amp; Chat MeLi</span>
+          <span>5. Preguntas Pre-Venta &amp; Chat MeLi</span>
         </button>
 
         <button
@@ -488,7 +685,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <TrendingUp size={14} />
-          <span>5. Métricas, Reputación &amp; Ventas</span>
+          <span>6. Métricas, Reputación &amp; Ventas</span>
         </button>
 
         <button
@@ -501,7 +698,7 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           }`}
         >
           <KeyRound size={14} />
-          <span>6. Bóveda OAuth2 &amp; Webhooks</span>
+          <span>7. Bóveda OAuth2 &amp; Webhooks</span>
         </button>
       </div>
 
@@ -1047,7 +1244,1198 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
       )}
 
       {/* =========================================================================
-          PESTAÑA 2: SINCRONIZACIÓN DE STOCK & PRICING
+          PESTAÑA 3: VENTAS, ENVÍOS, RECLAMOS & RENTABILIDAD FP&A (KANBAN / TABLA)
+      ========================================================================= */}
+      {activeTab === 'orders' && (
+        <div className="space-y-6">
+          {/* Tarjetas Ejecutivas de Rentabilidad FP&A y Reputación */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">Ventas Brutas MeLi</span>
+                <DollarSign size={14} className="text-amber-500" />
+              </div>
+              <div className="text-lg font-black text-slate-900 dark:text-white">
+                ${fpaMetrics ? fpaMetrics.total_ventas_brutas.toLocaleString() : '0'}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                {orders.length} órdenes ({ordersDays}d)
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">Comisión MeLi</span>
+                <Percent size={14} className="text-sky-500" />
+              </div>
+              <div className="text-lg font-black text-slate-900 dark:text-white">
+                ${fpaMetrics ? fpaMetrics.total_comisiones_meli.toLocaleString() : '0'}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                Retención ~{fpaMetrics && fpaMetrics.total_ventas_brutas > 0 ? ((fpaMetrics.total_comisiones_meli / fpaMetrics.total_ventas_brutas) * 100).toFixed(1) : '14.0'}%
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">Costo COGS Calcu</span>
+                <Package size={14} className="text-purple-500" />
+              </div>
+              <div className="text-lg font-black text-slate-900 dark:text-white">
+                ${fpaMetrics ? fpaMetrics.total_cogs.toLocaleString() : '0'}
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                Costo base inventario
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">Ingreso Neto Real</span>
+                <TrendingUp size={14} className="text-emerald-500" />
+              </div>
+              <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                ${fpaMetrics ? fpaMetrics.total_ingreso_neto.toLocaleString() : '0'}
+              </div>
+              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-bold mt-1">
+                Margen {fpaMetrics ? fpaMetrics.margen_neto_promedio_pct : 0}%
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 shadow-xs">
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">SLA Logístico</span>
+                <Truck size={14} className="text-blue-500" />
+              </div>
+              <div className="text-lg font-black text-slate-900 dark:text-white">
+                {fpaMetrics ? fpaMetrics.ordenes_a_tiempo_pct : 100}%
+              </div>
+              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                Despacho en tiempo
+              </div>
+            </div>
+
+            <div className={`rounded-2xl p-3.5 shadow-xs border ${
+              fpaMetrics?.reputacion_objetivo_verde
+                ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+                : 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60'
+            }`}>
+              <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs mb-1.5">
+                <span className="font-medium">Tasa Reclamos</span>
+                <ShieldCheck size={14} className={fpaMetrics?.reputacion_objetivo_verde ? 'text-emerald-500' : 'text-rose-500'} />
+              </div>
+              <div className={`text-lg font-black ${
+                fpaMetrics?.reputacion_objetivo_verde ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+              }`}>
+                {fpaMetrics ? fpaMetrics.tasa_reclamos_pct : 0}%
+              </div>
+              <div className="text-[10px] font-bold mt-1">
+                {fpaMetrics?.reputacion_objetivo_verde ? (
+                  <span className="text-emerald-700 dark:text-emerald-300">✓ Objetivo verde &lt;1%</span>
+                ) : (
+                  <span className="text-rose-700 dark:text-rose-300">⚠️ Supera 1% límite</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Barra de Filtros, Conmutador Kanban/Tabla y Acciones */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Conmutador Tablero Kanban / Vista Tabla */}
+              <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setOrdersViewMode('kanban')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ordersViewMode === 'kanban'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid size={13} />
+                  <span>Tablero Kanban</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrdersViewMode('table')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    ordersViewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <List size={13} />
+                  <span>Vista Lista / Tabla</span>
+                </button>
+              </div>
+
+              {/* Selector de Rango de Días */}
+              <div className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-800/60 px-2 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/70 text-xs">
+                <Calendar size={13} className="text-slate-400" />
+                <span className="text-[11px] text-slate-500 font-medium mr-1">Historial:</span>
+                {[7, 15, 30, 60].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      setOrdersDays(d);
+                      loadOrders(d, ordersStageFilter);
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer transition-colors ${
+                      ordersDays === d
+                        ? 'bg-[#FFE600] text-[#2D3277]'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+
+              {/* Buscador de Órdenes */}
+              <div className="relative w-48 sm:w-60">
+                <Search size={13} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={ordersSearch}
+                  onChange={(e) => setOrdersSearch(e.target.value)}
+                  placeholder="Buscar orden, comprador, SKU..."
+                  className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+                {ordersSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setOrdersSearch('')}
+                    className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Filtro por Etapa si está en vista Tabla */}
+              {ordersViewMode === 'table' && (
+                <>
+                  <select
+                    value={ordersStageFilter}
+                    onChange={(e) => {
+                      setOrdersStageFilter(e.target.value);
+                      loadOrders(ordersDays, e.target.value);
+                    }}
+                    className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Todas las Etapas ({orders.length})</option>
+                    <option value="por_preparar">1. Por Preparar ({stagesCount.por_preparar})</option>
+                    <option value="en_transito">2. En Tránsito ({stagesCount.en_transito})</option>
+                    <option value="entregado">3. Entregado ({stagesCount.entregado})</option>
+                    <option value="reclamos">4. Reclamos ({stagesCount.reclamos})</option>
+                    <option value="cancelado">5. Cancelado ({stagesCount.cancelado})</option>
+                  </select>
+
+                  <select
+                    value={ordersSortBy}
+                    onChange={(e) => setOrdersSortBy(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none cursor-pointer"
+                    title="Criterio de ordenamiento"
+                  >
+                    <option value="date_desc">Más recientes primero</option>
+                    <option value="date_asc">Más antiguas primero</option>
+                    <option value="amount_desc">Mayor monto bruto</option>
+                    <option value="margin_desc">Mayor margen neto %</option>
+                  </select>
+                </>
+              )}
+
+              {/* Selector de Columnas Visibles (para Vista Tabla) */}
+              {ordersViewMode === 'table' && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowOrdersColMenu(!showOrdersColMenu)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    <SlidersHorizontal size={13} />
+                    <span>Columnas</span>
+                  </button>
+
+                  {showOrdersColMenu && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-3 z-30 space-y-2 text-xs">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800 font-bold text-slate-900 dark:text-white">
+                        <span>Columnas Visibles</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowOrdersColMenu(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Operativas</div>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.order_id}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, order_id: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Nº de Orden MeLi</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.date}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, date: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Fecha de Venta</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.buyer}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, buyer: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Comprador</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.city}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, city: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Ciudad / Destino</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.products}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, products: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Producto / SKU</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.quantity}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, quantity: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Cantidad</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.shipping_status}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, shipping_status: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Estado Envío</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.tracking}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, tracking: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Tracking ME2</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.sla}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, sla: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>SLA Despacho</span>
+                      </label>
+
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-1 border-t border-slate-100 dark:border-slate-800">Financieras</div>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.monto_bruto}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, monto_bruto: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Monto Bruto</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.comision_meli}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, comision_meli: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Comisión MeLi</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.costo_envio}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, costo_envio: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Costo Envío Asumido</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.cogs}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, cogs: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Costo COGS Calcu</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.ingreso_neto}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, ingreso_neto: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Ingreso Neto Real</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.margen_pct}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, margen_pct: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Margen Neto %</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-slate-700 dark:text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={ordersColumns.crm_deal}
+                          onChange={(e) => setOrdersColumns({ ...ordersColumns, crm_deal: e.target.checked })}
+                          className="rounded text-amber-500"
+                        />
+                        <span>Trato CRM</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Botón Exportar CSV / Excel */}
+              <button
+                type="button"
+                onClick={handleExportOrdersCsv}
+                disabled={!filteredOrders.length}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-40"
+                title="Exportar órdenes filtradas a Excel/CSV con BOM UTF-8"
+              >
+                <Download size={13} />
+                <span>Exportar CSV</span>
+              </button>
+
+              {/* Botón Refrescar */}
+              <button
+                type="button"
+                onClick={() => loadOrders(ordersDays, ordersStageFilter)}
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                title="Recargar órdenes de MeLi"
+              >
+                <RefreshCw size={14} className={isLoadingOrders ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          </div>
+
+          {/* ESTADO DE CARGA DE ÓRDENES */}
+          {isLoadingOrders ? (
+            <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center gap-3">
+              <Loader2 size={32} className="animate-spin text-amber-500" />
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Sincronizando órdenes oficiales de Mercado Libre Uruguay (últimos {ordersDays} días)...
+              </p>
+              <p className="text-xs text-slate-400">
+                Calculando comisiones, SLAs de despacho y márgenes FP&A en tiempo real.
+              </p>
+            </div>
+          ) : ordersViewMode === 'kanban' ? (
+            /* ===================================================================
+               VISTA 1: TABLERO KANBAN DE 5 ETAPAS OPERATIVAS
+            =================================================================== */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+              {/* ETAPA 1: POR PREPARAR / PENDIENTE DE DESPACHO */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-amber-300/40 dark:border-amber-700/40 p-3 flex flex-col gap-3 min-h-[420px]">
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200/40 dark:border-amber-700/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                    <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                      1. Por Preparar
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                    {stagesCount.por_preparar}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Esperando empaque en Depósito Central
+                </div>
+
+                <div className="space-y-3">
+                  {filteredOrders
+                    .filter((o) => o.kanban_stage === 'por_preparar')
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-amber-400 transition-all space-y-2.5"
+                      >
+                        {/* Cabecera Tarjeta: Orden + SLA Clock */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-extrabold text-slate-900 dark:text-white">
+                            #{o.id}
+                          </span>
+                          {/* SLA Clock Badge */}
+                          {o.sla_status === 'DELAYED' ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 flex items-center gap-1">
+                              <Clock size={10} />
+                              <span>VENCIDO</span>
+                            </span>
+                          ) : o.sla_status === 'WARNING_LIMIT' ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 flex items-center gap-1 animate-pulse">
+                              <Clock size={10} />
+                              <span>{o.sla_hours_remaining != null ? `${o.sla_hours_remaining}h rest.` : 'Límite'}</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 flex items-center gap-1">
+                              <Clock size={10} />
+                              <span>{o.sla_hours_remaining != null ? `${o.sla_hours_remaining}h` : 'En plazo'}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Comprador y Destino */}
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {o.buyer_name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate flex items-center gap-1">
+                            <MapPin size={10} className="shrink-0" />
+                            <span>{o.buyer_city || 'Montevideo'}</span>
+                          </div>
+                        </div>
+
+                        {/* Producto y SKU */}
+                        <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg text-xs space-y-1 border border-slate-100 dark:border-slate-800">
+                          <div className="font-semibold text-slate-900 dark:text-white line-clamp-1">
+                            {o.primary_item_title}
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="font-mono text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.2 rounded">
+                              {o.primary_sku}
+                            </span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              x{o.items_count} un.
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Montos y Margen */}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Total Bruto</span>
+                            <span className="font-black text-slate-900 dark:text-white">
+                              ${o.monto_bruto.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block">Neto Real</span>
+                            <span className="font-black text-emerald-600 dark:text-emerald-400">
+                              ${o.ingreso_neto.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Botones Operativos: Remito, Etiqueta y CRM */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrderForRemito(o)}
+                            className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] font-bold text-[11px] shadow-xs cursor-pointer transition-colors"
+                            title="Imprimir o visualizar Remito Interno de Despacho Calcu"
+                          >
+                            <Printer size={11} />
+                            <span>Remito</span>
+                          </button>
+                          {o.label_url && (
+                            <a
+                              href={o.label_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                              title="Descargar etiqueta oficial de Mercado Envíos"
+                            >
+                              <FileText size={12} />
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onNavigateToCRM) {
+                                onNavigateToCRM();
+                              } else {
+                                alert(`Orden vinculada al trato comercial ID: ${o.deal_id}`);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="Ver en Pipeline Comercial CRM"
+                          >
+                            <ArrowUpRight size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  {filteredOrders.filter((o) => o.kanban_stage === 'por_preparar').length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      Sin órdenes por preparar
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ETAPA 2: EN TRÁNSITO / DESPACHADO */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-sky-300/40 dark:border-sky-700/40 p-3 flex flex-col gap-3 min-h-[420px]">
+                <div className="flex items-center justify-between pb-2 border-b border-sky-200/40 dark:border-sky-700/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                    <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                      2. En Tránsito
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700">
+                    {stagesCount.en_transito}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  En correo o colecta de Mercado Envíos
+                </div>
+
+                <div className="space-y-3">
+                  {filteredOrders
+                    .filter((o) => o.kanban_stage === 'en_transito')
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-400 transition-all space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-slate-900 dark:text-white">
+                            #{o.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200">
+                            Despachado
+                          </span>
+                        </div>
+
+                        {/* Tracking Badge Oficial MeLi */}
+                        {o.tracking_number ? (
+                          <a
+                            href={o.tracking_url || `https://www.mercadolibre.com.uy/envios/seguimiento/${o.tracking_number}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-[11px] font-mono hover:underline cursor-pointer"
+                            title="Abrir tracking oficial en Mercado Libre"
+                          >
+                            <Truck size={11} />
+                            <span>{o.tracking_number}</span>
+                            <ExternalLink size={9} />
+                          </a>
+                        ) : (
+                          <div className="text-[10px] text-slate-400 italic">Tracking en generación</div>
+                        )}
+
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {o.buyer_name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {o.shipping_address}
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg text-xs space-y-1">
+                          <div className="font-semibold text-slate-900 dark:text-white line-clamp-1">
+                            {o.primary_item_title}
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="font-mono text-[10px]">{o.primary_sku}</span>
+                            <span>x{o.items_count} un.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-slate-400 text-[10px]">Total:</span>
+                          <span className="font-black text-slate-900 dark:text-white">
+                            ${o.monto_bruto.toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrderForRemito(o)}
+                            className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] cursor-pointer"
+                          >
+                            <Printer size={11} />
+                            <span>Remito</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToCRM ? onNavigateToCRM() : alert(`Trato CRM: ${o.deal_id}`)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="Ver en CRM Pipeline"
+                          >
+                            <ArrowUpRight size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  {filteredOrders.filter((o) => o.kanban_stage === 'en_transito').length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      Sin órdenes en tránsito
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ETAPA 3: ENTREGADO / CONCLUIDO */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-emerald-300/40 dark:border-emerald-700/40 p-3 flex flex-col gap-3 min-h-[420px]">
+                <div className="flex items-center justify-between pb-2 border-b border-emerald-200/40 dark:border-emerald-700/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                      3. Entregado / Concluido
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                    {stagesCount.entregado}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Paquete recibido satisfactoriamente
+                </div>
+
+                <div className="space-y-3">
+                  {filteredOrders
+                    .filter((o) => o.kanban_stage === 'entregado')
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-400 transition-all space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-slate-900 dark:text-white">
+                            #{o.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 flex items-center gap-1">
+                            <CheckCircle2 size={10} />
+                            <span>Entregado</span>
+                          </span>
+                        </div>
+
+                        {/* Estado de Liquidación en Mercado Pago */}
+                        <div className="text-[11px] bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 p-2 rounded-lg text-emerald-800 dark:text-emerald-300">
+                          {o.payout_status === 'released' ? (
+                            <span className="font-bold">✓ Fondos liberados en Mercado Pago</span>
+                          ) : (
+                            <span>
+                              Liberación estimada:{' '}
+                              <strong>
+                                {o.payout_release_date ? new Date(o.payout_release_date).toLocaleDateString() : 'En proceso'}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {o.buyer_name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {o.primary_item_title} (x{o.items_count})
+                          </div>
+                        </div>
+
+                        {/* Margen y Ganancia Neta */}
+                        <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Ingreso Neto</span>
+                            <span className="font-black text-emerald-600 dark:text-emerald-400">
+                              ${o.ingreso_neto.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block">Margen FP&A</span>
+                            <span className="font-extrabold text-emerald-700 dark:text-emerald-300">
+                              {o.margen_pct}%
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrderForRemito(o)}
+                            className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-[11px] cursor-pointer"
+                          >
+                            <Printer size={11} />
+                            <span>Remito</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToCRM ? onNavigateToCRM() : alert(`Trato CRM: ${o.deal_id}`)}
+                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="Ver en CRM Pipeline"
+                          >
+                            <ArrowUpRight size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  {filteredOrders.filter((o) => o.kanban_stage === 'entregado').length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      Sin órdenes entregadas aún
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ETAPA 4: RECLAMOS & DEVOLUCIONES */}
+              <div className="bg-rose-50/40 dark:bg-rose-950/20 rounded-2xl border border-rose-300/60 dark:border-rose-700/60 p-3 flex flex-col gap-3 min-h-[420px]">
+                <div className="flex items-center justify-between pb-2 border-b border-rose-200 dark:border-rose-800/40">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                    <h3 className="font-bold text-xs text-rose-900 dark:text-rose-200">
+                      4. Reclamos &amp; Devoluciones
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-100 border border-rose-400">
+                    {stagesCount.reclamos}
+                  </span>
+                </div>
+                <div className="text-[10px] text-rose-700 dark:text-rose-300 font-medium">
+                  Atención prioritaria para no afectar reputación
+                </div>
+
+                <div className="space-y-3">
+                  {filteredOrders
+                    .filter((o) => o.kanban_stage === 'reclamos')
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border-2 border-rose-400 dark:border-rose-700 shadow-md space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-rose-700 dark:text-rose-300">
+                            #{o.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 flex items-center gap-1">
+                            <AlertTriangle size={10} />
+                            <span>Reclamo Abierto</span>
+                          </span>
+                        </div>
+
+                        {/* Detalle o Razón de Reclamo */}
+                        <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-xs text-rose-900 dark:text-rose-200">
+                          <span className="font-bold block text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                            Motivo / Mediación:
+                          </span>
+                          <span>{o.claim_details?.reason || o.shipping_substatus || 'Mediación post-venta iniciada por el comprador'}</span>
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {o.buyer_name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {o.primary_item_title}
+                          </div>
+                        </div>
+
+                        {/* Acciones de Mediación */}
+                        <div className="space-y-1.5 pt-1">
+                          <a
+                            href={
+                              o.claim_details?.claim_id
+                                ? `https://www.mercadolibre.com.uy/claims/detail/${o.claim_details.claim_id}`
+                                : 'https://www.mercadolibre.com.uy/resumen'
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                          >
+                            <span>Responder Mediación en MeLi</span>
+                            <ExternalLink size={12} />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onNavigateToChat) {
+                                onNavigateToChat(o.deal_id);
+                              } else {
+                                alert(`Iniciar chat con comprador de orden #${o.id}`);
+                              }
+                            }}
+                            className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer"
+                          >
+                            <MessageSquare size={12} />
+                            <span>Contactar Comprador</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  {filteredOrders.filter((o) => o.kanban_stage === 'reclamos').length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400 flex flex-col items-center gap-1.5">
+                      <ShieldCheck size={20} className="text-emerald-500" />
+                      <span>Sin reclamos abiertos. Reputación 100% protegida.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ETAPA 5: CANCELADO / REEMBOLSADO */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-300/40 dark:border-slate-700/40 p-3 flex flex-col gap-3 min-h-[420px]">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                    <h3 className="font-bold text-xs text-slate-700 dark:text-slate-300">
+                      5. Cancelado / Reembolsado
+                    </h3>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {stagesCount.cancelado}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Reversión automática al Depósito Central
+                </div>
+
+                <div className="space-y-3">
+                  {filteredOrders
+                    .filter((o) => o.kanban_stage === 'cancelado')
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 opacity-80"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-500">
+                            #{o.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200">
+                            Cancelada
+                          </span>
+                        </div>
+
+                        {/* Reversión de existencias */}
+                        <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-[10px] text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1">
+                          <Warehouse size={12} className="text-amber-500" />
+                          <span>Stock revertido a Depósito Central</span>
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {o.buyer_name}
+                          </div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {o.primary_item_title} (x{o.items_count})
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <span className="text-slate-400 text-[10px]">Monto anulado:</span>
+                          <span className="font-bold line-through text-slate-500">
+                            ${o.monto_bruto.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  {filteredOrders.filter((o) => o.kanban_stage === 'cancelado').length === 0 && (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      Sin órdenes canceladas
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ===================================================================
+               VISTA 2: LISTA / TABLA CON FILTROS Y COLUMNAS EDITABLES
+            =================================================================== */
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 select-none">
+                    <tr>
+                      {ordersColumns.order_id && (
+                        <th className="py-3 px-3.5 font-bold">ID Orden</th>
+                      )}
+                      {ordersColumns.date && (
+                        <th className="py-3 px-3.5 font-bold">Fecha</th>
+                      )}
+                      {ordersColumns.buyer && (
+                        <th className="py-3 px-3.5 font-bold">Comprador</th>
+                      )}
+                      {ordersColumns.city && (
+                        <th className="py-3 px-3.5 font-bold">Destino</th>
+                      )}
+                      {ordersColumns.products && (
+                        <th className="py-3 px-3.5 font-bold">Producto / SKU</th>
+                      )}
+                      {ordersColumns.quantity && (
+                        <th className="py-3 px-3.5 font-bold text-center">Cant.</th>
+                      )}
+                      {ordersColumns.shipping_status && (
+                        <th className="py-3 px-3.5 font-bold">Estado Envío</th>
+                      )}
+                      {ordersColumns.tracking && (
+                        <th className="py-3 px-3.5 font-bold">Tracking ME2</th>
+                      )}
+                      {ordersColumns.sla && (
+                        <th className="py-3 px-3.5 font-bold">SLA Despacho</th>
+                      )}
+                      {ordersColumns.monto_bruto && (
+                        <th className="py-3 px-3.5 font-bold text-right">Monto Bruto</th>
+                      )}
+                      {ordersColumns.comision_meli && (
+                        <th className="py-3 px-3.5 font-bold text-right">Comisión MeLi</th>
+                      )}
+                      {ordersColumns.costo_envio && (
+                        <th className="py-3 px-3.5 font-bold text-right">Costo Envío</th>
+                      )}
+                      {ordersColumns.cogs && (
+                        <th className="py-3 px-3.5 font-bold text-right">COGS Calcu</th>
+                      )}
+                      {ordersColumns.ingreso_neto && (
+                        <th className="py-3 px-3.5 font-bold text-right">Ingreso Neto</th>
+                      )}
+                      {ordersColumns.margen_pct && (
+                        <th className="py-3 px-3.5 font-bold text-right">Margen %</th>
+                      )}
+                      {ordersColumns.crm_deal && (
+                        <th className="py-3 px-3.5 font-bold text-center">Trato CRM</th>
+                      )}
+                      {ordersColumns.actions && (
+                        <th className="py-3 px-3.5 font-bold text-center">Acciones</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={15} className="py-12 text-center text-slate-400">
+                          No se encontraron órdenes con los filtros seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((o) => (
+                        <tr
+                          key={o.id}
+                          className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                        >
+                          {ordersColumns.order_id && (
+                            <td className="py-3 px-3.5 font-mono font-bold text-slate-900 dark:text-white">
+                              #{o.id}
+                            </td>
+                          )}
+
+                          {ordersColumns.date && (
+                            <td className="py-3 px-3.5 text-slate-500 whitespace-nowrap">
+                              {o.date_created ? new Date(o.date_created).toLocaleDateString() : '-'}
+                            </td>
+                          )}
+
+                          {ordersColumns.buyer && (
+                            <td className="py-3 px-3.5">
+                              <div className="font-bold text-slate-900 dark:text-white truncate max-w-[140px]">
+                                {o.buyer_name}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                @{o.buyer_nickname}
+                              </div>
+                            </td>
+                          )}
+
+                          {ordersColumns.city && (
+                            <td className="py-3 px-3.5 text-slate-600 dark:text-slate-300">
+                              {o.buyer_city || 'Montevideo'}
+                            </td>
+                          )}
+
+                          {ordersColumns.products && (
+                            <td className="py-3 px-3.5">
+                              <div className="font-semibold text-slate-900 dark:text-white line-clamp-1 max-w-[200px]">
+                                {o.primary_item_title}
+                              </div>
+                              <div className="text-[10px] font-mono text-slate-400">
+                                SKU: {o.primary_sku}
+                              </div>
+                            </td>
+                          )}
+
+                          {ordersColumns.quantity && (
+                            <td className="py-3 px-3.5 text-center font-bold text-slate-800 dark:text-slate-200">
+                              {o.items_count}
+                            </td>
+                          )}
+
+                          {ordersColumns.shipping_status && (
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                o.kanban_stage === 'por_preparar'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                  : o.kanban_stage === 'en_transito'
+                                  ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
+                                  : o.kanban_stage === 'entregado'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                  : o.kanban_stage === 'reclamos'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
+                              }`}>
+                                {o.kanban_stage_name}
+                              </span>
+                            </td>
+                          )}
+
+                          {ordersColumns.tracking && (
+                            <td className="py-3 px-3.5 font-mono text-[11px]">
+                              {o.tracking_number ? (
+                                <a
+                                  href={o.tracking_url || `https://www.mercadolibre.com.uy/envios/seguimiento/${o.tracking_number}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1"
+                                >
+                                  <span>{o.tracking_number}</span>
+                                  <ExternalLink size={10} />
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 italic">-</span>
+                              )}
+                            </td>
+                          )}
+
+                          {ordersColumns.sla && (
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              {o.sla_status === 'DELAYED' ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 flex items-center gap-1">
+                                  <Clock size={10} />
+                                  <span>VENCIDO</span>
+                                </span>
+                              ) : o.sla_status === 'WARNING_LIMIT' ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center gap-1 animate-pulse">
+                                  <Clock size={10} />
+                                  <span>{o.sla_hours_remaining != null ? `${o.sla_hours_remaining}h` : 'Límite'}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                  <Clock size={10} />
+                                  <span>{o.sla_hours_remaining != null ? `${o.sla_hours_remaining}h` : 'OK'}</span>
+                                </span>
+                              )}
+                            </td>
+                          )}
+
+                          {ordersColumns.monto_bruto && (
+                            <td className="py-3 px-3.5 text-right font-black text-slate-900 dark:text-white">
+                              ${o.monto_bruto.toLocaleString()}
+                            </td>
+                          )}
+
+                          {ordersColumns.comision_meli && (
+                            <td className="py-3 px-3.5 text-right font-mono text-slate-600 dark:text-slate-400">
+                              -${o.comision_meli.toLocaleString()}
+                            </td>
+                          )}
+
+                          {ordersColumns.costo_envio && (
+                            <td className="py-3 px-3.5 text-right font-mono text-slate-600 dark:text-slate-400">
+                              -${o.costo_envio.toLocaleString()}
+                            </td>
+                          )}
+
+                          {ordersColumns.cogs && (
+                            <td className="py-3 px-3.5 text-right font-mono text-purple-600 dark:text-purple-400">
+                              -${o.cogs.toLocaleString()}
+                            </td>
+                          )}
+
+                          {ordersColumns.ingreso_neto && (
+                            <td className="py-3 px-3.5 text-right font-black text-emerald-600 dark:text-emerald-400">
+                              ${o.ingreso_neto.toLocaleString()}
+                            </td>
+                          )}
+
+                          {ordersColumns.margen_pct && (
+                            <td className="py-3 px-3.5 text-right">
+                              <span className="font-extrabold text-emerald-700 dark:text-emerald-300">
+                                {o.margen_pct}%
+                              </span>
+                            </td>
+                          )}
+
+                          {ordersColumns.crm_deal && (
+                            <td className="py-3 px-3.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToCRM ? onNavigateToCRM() : alert(`Trato CRM: ${o.deal_id}`)}
+                                className="px-2 py-1 rounded-md text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer inline-flex items-center gap-1"
+                                title="Abrir en CRM Comercial"
+                              >
+                                <span>CRM</span>
+                                <ArrowUpRight size={10} />
+                              </button>
+                            </td>
+                          )}
+
+                          {ordersColumns.actions && (
+                            <td className="py-3 px-3.5 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedOrderForRemito(o)}
+                                  className="p-1.5 rounded-lg bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] cursor-pointer"
+                                  title="Imprimir Remito Interno de Despacho"
+                                >
+                                  <Printer size={13} />
+                                </button>
+                                {o.label_url && (
+                                  <a
+                                    href={o.label_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                    title="Descargar etiqueta oficial de Mercado Envíos"
+                                  >
+                                    <FileText size={13} />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          PESTAÑA 4: SINCRONIZACIÓN DE STOCK & PRICING
       ========================================================================= */}
       {activeTab === 'stock_pricing' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1417,6 +2805,195 @@ export const MercadoLibreView: React.FC<MercadoLibreViewProps> = ({
           loadMyMeliItems();
         }}
       />
+
+      {/* Modal de Remito Interno de Despacho Calcu */}
+      {selectedOrderForRemito && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-6 my-8 text-slate-900 dark:text-slate-100 print:m-0 print:p-4 print:border-none print:shadow-none print:w-full print:max-w-none">
+            {/* Cabecera del Remito */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFE600] text-[#2D3277] flex items-center justify-center font-black text-xl shadow-xs">
+                  C
+                </div>
+                <div>
+                  <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white uppercase">
+                    Calcu S.A. · Logística &amp; Expedición
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    R.U.T. 219999990019 · Depósito Central Montevideo · Uruguay
+                  </p>
+                  <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                    REMITO INTERNO DE DESPACHO Y CONTROL DE CALIDAD E-COMMERCE
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="font-mono font-bold text-sm bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
+                  REM-MLU-{selectedOrderForRemito.id}
+                </span>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  Emisión: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString().slice(0, 5)}
+                </div>
+              </div>
+            </div>
+
+            {/* Datos de la Venta y Envío */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800">
+              <div className="space-y-1.5">
+                <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                  Datos de la Venta (Mercado Libre)
+                </div>
+                <div>
+                  <span className="text-slate-500">Nº de Orden MeLi: </span>
+                  <strong className="font-mono">#{selectedOrderForRemito.id}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Fecha de Venta: </span>
+                  <strong>{selectedOrderForRemito.date_created ? new Date(selectedOrderForRemito.date_created).toLocaleString() : '-'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Comprador: </span>
+                  <strong>{selectedOrderForRemito.buyer_name}</strong> (@{selectedOrderForRemito.buyer_nickname})
+                </div>
+                <div>
+                  <span className="text-slate-500">Teléfono: </span>
+                  <strong>{selectedOrderForRemito.buyer_phone || 'Registrado en perfil MeLi'}</strong>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                  Destino &amp; Logística
+                </div>
+                <div>
+                  <span className="text-slate-500">Dirección de Entrega: </span>
+                  <strong>{selectedOrderForRemito.shipping_address || 'Retiro en Depósito Central'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Ciudad / Depto: </span>
+                  <strong>{selectedOrderForRemito.buyer_city || 'Montevideo'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Método de Envío: </span>
+                  <strong>{selectedOrderForRemito.shipping_mode === 'me2' ? 'Mercado Envíos Colecta' : 'A Convenir / Retiro'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Código de Seguimiento (Tracking): </span>
+                  <strong className="font-mono text-sky-600 dark:text-sky-400">
+                    {selectedOrderForRemito.tracking_number || 'Pendiente de emisión'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Detalle de Artículos a Despachar */}
+            <div className="space-y-2">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">
+                Mercadería a Preparar y Embalar
+              </h3>
+              <table className="w-full text-xs text-left border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  <tr>
+                    <th className="py-2.5 px-3 font-bold">SKU</th>
+                    <th className="py-2.5 px-3 font-bold">Descripción del Artículo</th>
+                    <th className="py-2.5 px-3 font-bold text-center">Cant.</th>
+                    <th className="py-2.5 px-3 font-bold">Ubicación Picking</th>
+                    <th className="py-2.5 px-3 font-bold text-center">Control Físico</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {selectedOrderForRemito.items.map((it, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2 px-3 font-mono font-bold">{it.sku || '-'}</td>
+                      <td className="py-2 px-3 font-medium">{it.title}</td>
+                      <td className="py-2 px-3 text-center font-bold text-base">{it.quantity} un.</td>
+                      <td className="py-2 px-3 text-slate-500">Depósito Central (Rack A-01)</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className="inline-block w-4 h-4 rounded border-2 border-slate-400" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Protocolo de Control de Calidad y Embalaje */}
+            <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 text-xs space-y-2">
+              <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5 text-[11px] uppercase tracking-wide">
+                <ShieldCheck size={14} className="text-amber-600" />
+                <span>Protocolo de Aseguramiento Operativo (ISO 27001 / Control Calcu)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px] text-slate-700 dark:text-slate-300">
+                <div className="flex items-start gap-1.5">
+                  <CheckSquare size={13} className="text-emerald-600 mt-0.5 shrink-0" />
+                  <span>1. Verificación física sin golpes ni fallas cosméticas.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <CheckSquare size={13} className="text-emerald-600 mt-0.5 shrink-0" />
+                  <span>2. Validación unívoca de SKU y código de barras.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <CheckSquare size={13} className="text-emerald-600 mt-0.5 shrink-0" />
+                  <span>3. Embalaje protegido y etiqueta MeLi visible y legible.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Firmas de Expedición y Transportista */}
+            <div className="grid grid-cols-2 gap-8 pt-6 border-t border-slate-200 dark:border-slate-800 text-xs text-center">
+              <div>
+                <div className="border-b border-slate-400 dark:border-slate-600 h-10 mb-2" />
+                <span className="font-bold block text-slate-800 dark:text-slate-200">
+                  Responsable de Expedición Calcu
+                </span>
+                <span className="text-[10px] text-slate-400">Firma, Aclaración y Hora de Despacho</span>
+              </div>
+
+              <div>
+                <div className="border-b border-slate-400 dark:border-slate-600 h-10 mb-2" />
+                <span className="font-bold block text-slate-800 dark:text-slate-200">
+                  Transportista / Colecta Mercado Envíos
+                </span>
+                <span className="text-[10px] text-slate-400">Firma, Aclaración de Retiro y Nº Matrícula</span>
+              </div>
+            </div>
+
+            {/* Acciones del Modal (Ocultas al Imprimir) */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800 print:hidden">
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForRemito(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cerrar
+              </button>
+
+              {selectedOrderForRemito.label_url && (
+                <a
+                  href={selectedOrderForRemito.label_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/60 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 cursor-pointer"
+                >
+                  <FileText size={13} />
+                  <span>Etiqueta Oficial MeLi</span>
+                  <ExternalLink size={11} />
+                </a>
+              )}
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] font-bold text-xs shadow-md shadow-amber-500/20 cursor-pointer transition-all"
+              >
+                <Printer size={14} />
+                <span>Imprimir Remito</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

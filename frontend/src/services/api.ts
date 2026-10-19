@@ -158,6 +158,7 @@ import type {
   MeliSellerReputationResponse,
   MeliItemAnalyticsResponse,
   MeliMyItemsResponse,
+  MeliOrdersResponse,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -1912,6 +1913,11 @@ export const apiService = {
 
   async getMeliItemAnalytics(itemId: string): Promise<MeliItemAnalyticsResponse> {
     const res = await apiClient.get<MeliItemAnalyticsResponse>(`/api/v1/integrations/meli/items/${itemId}/analytics`);
+    return res.data;
+  },
+
+  async getMeliOrders(params?: { days?: number; stage?: string; limit?: number }): Promise<MeliOrdersResponse> {
+    const res = await apiClient.get<MeliOrdersResponse>('/api/v1/integrations/meli/orders', { params });
     return res.data;
   },
 
