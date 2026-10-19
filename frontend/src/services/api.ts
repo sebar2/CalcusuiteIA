@@ -148,6 +148,9 @@ import type {
   TenantAccountItem,
   MeliReadyProductItem,
   MeliCategoryPrediction,
+  MeliCategorySearchResult,
+  MeliCategoryAttribute,
+  MeliPictureUploadResponse,
   MeliPublishItemPayload,
   MeliPublishItemResponse,
   MeliUpdateItemPayload,
@@ -1847,6 +1850,35 @@ export const apiService = {
       site_id: siteId,
     });
     return res.data.predictions || [];
+  },
+
+  async searchMeliCategories(q: string): Promise<MeliCategorySearchResult[]> {
+    const res = await apiClient.get<{ results: MeliCategorySearchResult[] }>('/api/v1/integrations/meli/categories/search', {
+      params: { q },
+    });
+    return res.data.results || [];
+  },
+
+  async getMeliCategoryAttributes(categoryId: string): Promise<MeliCategoryAttribute[]> {
+    const res = await apiClient.get<{ attributes: MeliCategoryAttribute[] }>(
+      `/api/v1/integrations/meli/categories/${categoryId}/attributes`
+    );
+    return res.data.attributes || [];
+  },
+
+  async uploadMeliPicture(file: File): Promise<MeliPictureUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post<MeliPictureUploadResponse>(
+      '/api/v1/integrations/meli/pictures/upload',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return res.data;
   },
 
   async publishMeliItem(payload: MeliPublishItemPayload): Promise<MeliPublishItemResponse> {

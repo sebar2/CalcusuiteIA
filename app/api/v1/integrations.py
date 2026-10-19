@@ -6,7 +6,7 @@ import time
 import logging
 import uuid
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks, File, UploadFile, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -1085,16 +1085,18 @@ class MeliPublishItemRequest(BaseModel):
     product_id: Optional[int] = Field(default=None, description="ID de producto interno en Calcu")
     sku: Optional[str] = Field(default=None, description="SKU interno para vincular y sincronizar existencias")
     title: str = Field(..., min_length=3, max_length=60, description="Título oficial en MeLi (máximo 60 caracteres)")
+    family_name: Optional[str] = Field(default=None, description="Nombre de la familia de producto para cuentas User Products")
     category_id: str = Field(..., description="ID de categoría en MeLi (ej. MLU1055)")
     price: Decimal = Field(..., gt=0, description="Precio de venta")
     currency_id: str = Field(default="UYU", description="Moneda: UYU o USD")
     available_quantity: int = Field(default=1, ge=1, description="Stock inicial disponible")
     condition: str = Field(default="new", description="Condición del artículo (new, used)")
     listing_type_id: str = Field(default="gold_special", description="Tipo de publicación: gold_special (Clásica), gold_pro (Premium), bronze")
-    pictures: List[str] = Field(default_factory=list, description="Lista de URLs de imágenes del producto")
+    pictures: List[Any] = Field(default_factory=list, description="Lista de URLs o identificadores de imágenes del producto")
+    picture_id: Optional[str] = Field(default=None, description="ID de imagen oficial en MeLi CDN")
     image_url: Optional[str] = Field(default=None, description="URL de imagen principal")
     description: Optional[str] = Field(default=None, description="Descripción en texto plano")
-    attributes: Optional[List[Dict[str, Any]]] = Field(default=None, description="Atributos opcionales de la categoría")
+    attributes: Optional[List[Dict[str, Any]]] = Field(default=None, description="Atributos opcionales u obligatorios de la categoría")
 
 
 class MeliUpdateItemRequest(BaseModel):
@@ -1146,6 +1148,57 @@ async def predict_meli_category(
     return {"predictions": preds}
 
 
+@router.get(
+    "/meli/categories/search",
+    summary="Busca categorías de Mercado Libre por código (MLU...) o por texto (3+ letras)"
+)
+async def search_meli_categories(
+    q: str = Query(..., min_length=1, description="Texto o código de categoría a buscar"),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    results = await MeliService.search_categories(query=q)
+    return {"results": results}
+
+
+@router.get(
+    "/meli/categories/{category_id}/attributes",
+    summary="Obtiene los atributos requeridos y de catálogo para una categoría de Mercado Libre"
+)
+async def get_meli_category_attributes(
+    category_id: str,
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    attrs = await MeliService.get_category_attributes(category_id=category_id)
+    return {"attributes": attrs}
+
+
+@router.post(
+    "/meli/pictures/upload",
+    summary="Sube un archivo de imagen directamente a la CDN oficial de Mercado Libre"
+)
+async def upload_meli_picture(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El archivo de imagen excede el límite de 10 MB.")
+    
+    content_type = file.content_type or "image/jpeg"
+    if content_type not in ("image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg"):
+        raise HTTPException(status_code=400, detail="Formato no soportado. Debe ser JPG, PNG o WebP.")
+
+    res = await MeliService.upload_picture(
+        db=db,
+        tenant_id=user.tenant_id,
+        file_bytes=contents,
+        filename=file.filename or "imagen.jpg",
+        content_type=content_type,
+    )
+    return res
+
+
 @router.post(
     "/meli/items",
     summary="Publica un producto en Mercado Libre Uruguay (MLU)"
@@ -1157,6 +1210,7 @@ async def publish_meli_item(
 ):
     payload = {
         "title": req.title,
+        "family_name": req.family_name,
         "category_id": req.category_id,
         "price": float(req.price),
         "currency_id": req.currency_id,
@@ -1164,6 +1218,7 @@ async def publish_meli_item(
         "condition": req.condition,
         "listing_type_id": req.listing_type_id,
         "pictures": req.pictures,
+        "picture_id": req.picture_id,
         "image_url": req.image_url,
         "description": req.description,
         "attributes": req.attributes,
@@ -1173,7 +1228,7 @@ async def publish_meli_item(
     return {
         "status": "published",
         "item_id": item_data.get("id"),
-        "title": item_data.get("title"),
+        "title": item_data.get("title") or item_data.get("family_name"),
         "permalink": item_data.get("permalink"),
         "price": item_data.get("price"),
         "available_quantity": item_data.get("available_quantity"),

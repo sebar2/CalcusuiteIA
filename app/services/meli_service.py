@@ -917,9 +917,22 @@ class MeliService:
         """
         Consulta Domain Discovery en Mercado Libre para predecir la categoría adecuada según el título.
         """
+        return await cls.search_categories(query=title, site_id=site_id, limit=6)
+
+    @classmethod
+    async def search_categories(
+        cls,
+        query: str,
+        site_id: str = "MLU",
+        limit: int = 15,
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca categorías de Mercado Libre por código exacto (ej. MLU1590, MLU435323) o por texto
+        (a partir de 2 o 3 caracteres) usando domain_discovery y el árbol de categorías de MeLi.
+        """
         cls._enforce_rate_limit()
-        clean_title = (title or "").strip()
-        if not clean_title:
+        clean_q = (query or "").strip()
+        if not clean_q:
             return []
 
         token = await cls.get_access_token()
@@ -927,29 +940,125 @@ class MeliService:
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        url = f"{cls.MELI_API_BASE_URL}/sites/{site_id}/domain_discovery/search"
-        params = {"q": clean_title, "limit": 5}
+        results: List[Dict[str, Any]] = []
+        seen_ids = set()
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # 1. Búsqueda por código directo (ej. 'MLU1590' o '1590')
+            upper_q = clean_q.upper()
+            if upper_q.startswith("MLU") or clean_q.isdigit():
+                cat_id = upper_q if upper_q.startswith("MLU") else f"MLU{clean_q}"
+                try:
+                    r_direct = await client.get(f"{cls.MELI_API_BASE_URL}/categories/{cat_id}", headers=headers)
+                    if r_direct.status_code == 200:
+                        c_data = r_direct.json()
+                        path_str = " > ".join([p.get("name") for p in c_data.get("path_from_root", [])])
+                        results.append({
+                            "category_id": c_data.get("id"),
+                            "category_name": c_data.get("name"),
+                            "domain_name": path_str or c_data.get("name"),
+                            "path_from_root": path_str,
+                        })
+                        seen_ids.add(c_data.get("id"))
+                except Exception as ex_direct:
+                    logger.debug("Búsqueda directa categoría %s no encontrada: %s", cat_id, ex_direct)
+
+            # 2. Búsqueda semántica por texto en domain_discovery
+            try:
+                url = f"{cls.MELI_API_BASE_URL}/sites/{site_id}/domain_discovery/search"
+                r_dom = await client.get(url, params={"q": clean_q, "limit": limit}, headers=headers)
+                if r_dom.status_code == 200:
+                    for item in r_dom.json():
+                        cid = item.get("category_id")
+                        if cid and cid not in seen_ids:
+                            seen_ids.add(cid)
+                            results.append({
+                                "category_id": cid,
+                                "category_name": item.get("category_name"),
+                                "domain_name": item.get("domain_name") or item.get("category_name"),
+                                "path_from_root": item.get("domain_name") or item.get("category_name"),
+                            })
+            except Exception as e:
+                logger.warning("Error en domain_discovery MeLi search: %s", e)
+
+        return results
+
+    @classmethod
+    async def get_category_attributes(cls, category_id: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene los atributos requeridos y de catálogo de una categoría de Mercado Libre.
+        """
+        clean_id = (category_id or "").strip().upper()
+        if not clean_id:
+            return []
+
+        url = f"{cls.MELI_API_BASE_URL}/categories/{clean_id}/attributes"
+        headers = {"User-Agent": "CalcuApp/1.0"}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.get(url, params=params, headers=headers)
-                if res.status_code == 200:
-                    data = res.json()
-                    preds = []
-                    for item in data:
-                        preds.append({
-                            "category_id": item.get("category_id"),
-                            "category_name": item.get("category_name"),
-                            "domain_id": item.get("domain_id"),
-                            "domain_name": item.get("domain_name"),
-                            "attributes": item.get("attributes", []),
-                        })
-                    return preds
-                else:
-                    logger.warning("Domain discovery MeLi retornó status %d: %s", res.status_code, res.text)
+                res = await client.get(url, headers=headers)
+                if res.status_code != 200:
                     return []
+                data = res.json()
+                req_attrs = []
+                for a in data:
+                    tags = a.get("tags", {})
+                    is_req = bool(tags.get("required") or tags.get("catalog_required") or a.get("id") in ("BRAND", "MODEL"))
+                    if is_req:
+                        values = [{"id": v.get("id"), "name": v.get("name")} for v in a.get("values", [])]
+                        req_attrs.append({
+                            "id": a.get("id"),
+                            "name": a.get("name"),
+                            "value_type": a.get("value_type", "string"),
+                            "required": True,
+                            "values": values[:25],
+                            "hint": a.get("hint") or a.get("tooltip"),
+                        })
+                return req_attrs
         except Exception as e:
-            logger.error("Excepción en domain discovery MeLi: %s", e)
+            logger.error("Error obteniendo atributos de categoría %s: %s", clean_id, e)
             return []
+
+    @classmethod
+    async def upload_picture(
+        cls,
+        db: Session,
+        tenant_id: str,
+        file_bytes: bytes,
+        filename: str = "image.jpg",
+        content_type: str = "image/jpeg",
+    ) -> Dict[str, Any]:
+        """
+        Sube una imagen local directamente a la CDN oficial de Mercado Libre vía POST /pictures/items/upload.
+        Retorna el identificador 'id' y URLs seguras de la imagen generada en MeLi.
+        """
+        cls._enforce_rate_limit()
+        token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No existe un token activo de vendedor de Mercado Libre en la Bóveda AES-256. Vincule la cuenta vía OAuth2 primero."
+            )
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "CalcuApp/1.0",
+        }
+        files = {"file": (filename, file_bytes, content_type)}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.post(
+                f"{cls.MELI_API_BASE_URL}/pictures/items/upload",
+                headers=headers,
+                files=files,
+            )
+            if res.status_code in (200, 201):
+                return res.json()
+            else:
+                logger.error("Error subiendo foto a MeLi CDN: %d %s", res.status_code, res.text)
+                raise HTTPException(
+                    status_code=res.status_code,
+                    detail=f"Error al subir imagen a Mercado Libre ({res.status_code}): {res.text}"
+                )
 
     @classmethod
     async def publish_item(
@@ -960,7 +1069,8 @@ class MeliService:
     ) -> Dict[str, Any]:
         """
         Publica un producto del inventario en Mercado Libre Uruguay (MLU) vía POST /items.
-        Valida límites de título (<= 60 caracteres), linter anti-penalización y subrecurso /description.
+        Detecta cuentas 'user_product_seller' para enviar 'family_name' en lugar de 'title',
+        soporta fotos subidas a CDN MeLi, y realiza autorrecuperación en caso de rechazo de formato.
         """
         cls._enforce_rate_limit()
         token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
@@ -970,7 +1080,7 @@ class MeliService:
                 detail="No existe un token activo de vendedor de Mercado Libre en la Bóveda AES-256. Vincule la cuenta vía OAuth2 primero."
             )
 
-        title = str(payload.get("title") or "").strip()
+        title = str(payload.get("title") or payload.get("family_name") or "").strip()
         if not title:
             raise HTTPException(status_code=400, detail="El título de la publicación es obligatorio.")
         if len(title) > 60:
@@ -996,20 +1106,31 @@ class MeliService:
         condition = payload.get("condition") or "new"
         listing_type_id = payload.get("listing_type_id") or "gold_special"
 
+        # Procesamiento de imágenes (IDs de MeLi subidas o URLs externas con fallback)
+        pictures: List[Dict[str, Any]] = []
         raw_pictures = payload.get("pictures") or []
-        pictures = []
         for pic in raw_pictures:
-            if isinstance(pic, dict) and "source" in pic:
-                pictures.append(pic)
-            elif isinstance(pic, str) and pic.strip().startswith("http"):
-                pictures.append({"source": pic.strip()})
+            if isinstance(pic, dict):
+                if "id" in pic:
+                    pictures.append({"id": pic["id"]})
+                elif "source" in pic:
+                    pictures.append({"source": pic["source"]})
+            elif isinstance(pic, str) and pic.strip():
+                s = pic.strip()
+                if s.startswith("http"):
+                    pictures.append({"source": s})
+                else:
+                    pictures.append({"id": s})
+
+        if not pictures and payload.get("picture_id"):
+            pictures.append({"id": payload["picture_id"]})
         if not pictures and payload.get("image_url"):
             pictures.append({"source": payload["image_url"]})
         if not pictures:
-            # Fallback preventivo a imagen de catálogo para garantizar el requerimiento obligatorio de MeLi
+            # Fallback a imagen de catálogo si no se proporcionó ninguna
             pictures.append({"source": "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?w=800"})
 
-        # Atributos esenciales requeridos por la mayoría de las categorías de Mercado Libre
+        # Atributos esenciales y específicos de la categoría
         attributes = list(payload.get("attributes") or [])
         existing_attr_ids = {a.get("id") for a in attributes if isinstance(a, dict)}
         if "BRAND" not in existing_attr_ids:
@@ -1019,8 +1140,24 @@ class MeliService:
         if "ITEM_CONDITION" not in existing_attr_ids:
             attributes.append({"id": "ITEM_CONDITION", "value_name": "Nuevo" if condition == "new" else "Usado"})
 
-        meli_body = {
-            "title": title,
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "CalcuApp/1.0"
+        }
+
+        # Determinación de modelo: User Products (family_name) vs Tradicional (title)
+        is_user_product_account = True
+        try:
+            seller_prof = await cls.get_seller_profile(db, tenant_id=tenant_id)
+            tags = seller_prof.get("tags") or []
+            if "user_product_seller" in tags:
+                is_user_product_account = True
+        except Exception:
+            pass
+
+        base_body: Dict[str, Any] = {
             "category_id": category_id,
             "price": price,
             "currency_id": currency_id,
@@ -1030,21 +1167,39 @@ class MeliService:
             "listing_type_id": listing_type_id,
             "pictures": pictures,
             "attributes": attributes,
+            "shipping": {
+                "mode": "not_specified",
+                "local_pick_up": True,
+                "free_shipping": False,
+            },
         }
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "CalcuApp/1.0"
-        }
+        async with httpx.AsyncClient(timeout=18.0) as client:
+            # Intento 1: según detección de modelo
+            meli_body = dict(base_body)
+            if is_user_product_account:
+                meli_body["family_name"] = title
+            else:
+                meli_body["title"] = title
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
             res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=meli_body, headers=headers)
             if res.status_code == 429:
                 retry_after = int(res.headers.get("Retry-After", 2))
                 time.sleep(retry_after)
                 res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=meli_body, headers=headers)
+
+            # Intento 2 (Autorrecuperación si MeLi exige el modelo opuesto de título vs family_name)
+            if res.status_code == 400 and ("family_name" in res.text or "title" in res.text):
+                retry_body = dict(base_body)
+                if "family_name" in res.text:
+                    retry_body["family_name"] = title
+                    retry_body.pop("title", None)
+                else:
+                    retry_body["title"] = title
+                    retry_body.pop("family_name", None)
+
+                logger.info("Autorrecuperación MeLi: reenviando publicación con campo de nombre adaptado...")
+                res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=retry_body, headers=headers)
 
             if res.status_code in (200, 201):
                 item_data = res.json()

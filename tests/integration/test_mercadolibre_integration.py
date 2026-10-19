@@ -470,3 +470,79 @@ def test_meli_seller_reputation_and_analytics():
         assert res_ana.status_code == 200
         assert res_ana.json()["conversion_rate_pct"] == 5.0
         assert res_ana.json()["sold_quantity"] == 45
+
+
+def test_meli_category_search_and_attributes():
+    """Valida los endpoints de búsqueda en vivo de categorías y consulta de atributos requeridos."""
+    mock_search = [
+        {"category_id": "MLU1590", "category_name": "Otros", "domain_name": "Artículos de iluminación para el hogar"},
+        {"category_id": "MLU205183", "category_name": "Bombitas de Luz", "domain_name": "Bombitas de luz"},
+    ]
+    mock_attrs = [
+        {"id": "BRAND", "name": "Marca", "value_type": "string", "required": True, "values": []},
+        {"id": "MODEL", "name": "Modelo", "value_type": "string", "required": True, "values": []},
+        {"id": "APPLICATION", "name": "Aplicación", "value_type": "list", "required": True, "values": [{"id": "IND", "name": "Industrial"}]},
+    ]
+
+    with patch("app.services.meli_service.MeliService.search_categories", new_callable=AsyncMock) as m_search:
+        m_search.return_value = mock_search
+        res = client.get("/api/v1/integrations/meli/categories/search", params={"q": "tubo"}, headers=_admin_headers())
+        assert res.status_code == 200
+        assert len(res.json()["results"]) == 2
+        assert res.json()["results"][0]["category_id"] == "MLU1590"
+
+    with patch("app.services.meli_service.MeliService.get_category_attributes", new_callable=AsyncMock) as m_attrs:
+        m_attrs.return_value = mock_attrs
+        res = client.get("/api/v1/integrations/meli/categories/MLU1590/attributes", headers=_admin_headers())
+        assert res.status_code == 200
+        assert len(res.json()["attributes"]) == 3
+        assert res.json()["attributes"][0]["id"] == "BRAND"
+
+
+def test_meli_picture_upload_and_family_name_publishing():
+    """Valida la subida directa de archivos a MeLi CDN y la publicación compatible con family_name de User Products."""
+    mock_upload = {
+        "id": "767380-MLU118130314086_102026",
+        "url": "http://http2.mlstatic.com/D_NQ_NP_767380-MLU118130314086_102026-F.jpg",
+        "secure_url": "https://http2.mlstatic.com/D_NQ_NP_767380-MLU118130314086_102026-F.jpg",
+        "status": "ACTIVE",
+    }
+    mock_published = {
+        "id": "MLU99887766",
+        "title": "Tubo LED T8 Vidrio 60cm 9W",
+        "family_name": "Tubo LED T8 Vidrio 60cm 9W",
+        "category_id": "MLU1590",
+        "price": 450.0,
+        "available_quantity": 20,
+        "permalink": "https://articulo.mercadolibre.com.uy/MLU-99887766.html",
+        "status": "active",
+    }
+
+    with patch("app.services.meli_service.MeliService.upload_picture", new_callable=AsyncMock) as m_up:
+        m_up.return_value = mock_upload
+        files = {"file": ("test.jpg", b"dummy_jpeg_bytes_content_here", "image/jpeg")}
+        res = client.post("/api/v1/integrations/meli/pictures/upload", files=files, headers=_admin_headers())
+        assert res.status_code == 200
+        assert res.json()["id"] == "767380-MLU118130314086_102026"
+
+    with patch("app.services.meli_service.MeliService.publish_item", new_callable=AsyncMock) as m_pub:
+        m_pub.return_value = mock_published
+        payload = {
+            "title": "Tubo LED T8 Vidrio 60cm 9W",
+            "family_name": "Tubo LED T8 Vidrio 60cm 9W",
+            "category_id": "MLU1590",
+            "price": 450.0,
+            "currency_id": "UYU",
+            "available_quantity": 20,
+            "picture_id": "767380-MLU118130314086_102026",
+            "attributes": [
+                {"id": "BRAND", "value_name": "Calcu"},
+                {"id": "MODEL", "value_name": "T8 Vidrio"},
+                {"id": "APPLICATION", "value_name": "Industrial"},
+            ],
+        }
+        res_pub = client.post("/api/v1/integrations/meli/items", json=payload, headers=_admin_headers())
+        assert res_pub.status_code == 200
+        assert res_pub.json()["item_id"] == "MLU99887766"
+        assert res_pub.json()["status"] == "published"
+

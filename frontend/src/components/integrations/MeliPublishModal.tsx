@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingBag,
   Sparkles,
@@ -8,15 +8,20 @@ import {
   Loader2,
   Package,
   Layers,
-  ShieldAlert,
   Percent,
   Warehouse,
   X,
+  UploadCloud,
+  Search,
+  Check,
+  Info,
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import type {
   MeliReadyProductItem,
   MeliCategoryPrediction,
+  MeliCategorySearchResult,
+  MeliCategoryAttribute,
   MeliPublishItemResponse,
 } from '../../types';
 
@@ -40,7 +45,6 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
   // Formulario de publicación
   const [title, setTitle] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
-  const [categoryName, setCategoryName] = useState<string>('');
   const [price, setPrice] = useState<string>('1200');
   const [currency, setCurrency] = useState<'UYU' | 'USD'>('UYU');
   const [quantity, setQuantity] = useState<string>('10');
@@ -49,9 +53,25 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
   const [imageUrl, setImageUrl] = useState<string>('');
   const [description, setDescription] = useState<string>('');
 
-  // Predicciones de categoría
+  // Subida de imagen a MeLi CDN
+  const [uploadedPictureId, setUploadedPictureId] = useState<string | null>(null);
+  const [uploadedPictureUrl, setUploadedPictureUrl] = useState<string | null>(null);
+  const [isUploadingPicture, setIsUploadingPicture] = useState<boolean>(false);
+  const [uploadPictureError, setUploadPictureError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Búsqueda interactiva y predictiva de categorías
+  const [categorySearchQuery, setCategorySearchQuery] = useState<string>('');
+  const [categorySearchResults, setCategorySearchResults] = useState<MeliCategorySearchResult[]>([]);
+  const [isSearchingCategory, setIsSearchingCategory] = useState<boolean>(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState<boolean>(false);
   const [predictions, setPredictions] = useState<MeliCategoryPrediction[]>([]);
   const [isPredicting, setIsPredicting] = useState<boolean>(false);
+
+  // Atributos dinámicos requeridos por la categoría
+  const [categoryAttributes, setCategoryAttributes] = useState<MeliCategoryAttribute[]>([]);
+  const [attributeValues, setAttributeValues] = useState<Record<string, string>>({});
+  const [isLoadingAttributes, setIsLoadingAttributes] = useState<boolean>(false);
 
   // Estados de acción
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
@@ -85,6 +105,57 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
       });
   }, [isOpen, preselectedProduct]);
 
+  // Búsqueda en vivo de categorías con debounce al escribir 3 o más caracteres
+  useEffect(() => {
+    if (!categorySearchQuery || categorySearchQuery.trim().length < 2) {
+      setCategorySearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsSearchingCategory(true);
+      apiService
+        .searchMeliCategories(categorySearchQuery.trim())
+        .then((res) => {
+          setCategorySearchResults(res);
+          setShowCategoryDropdown(true);
+        })
+        .catch((err) => {
+          console.warn('Error buscando categorías MeLi:', err);
+        })
+        .finally(() => {
+          setIsSearchingCategory(false);
+        });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [categorySearchQuery]);
+
+  // Cargar atributos obligatorios cuando cambia la categoría seleccionada
+  const loadCategoryAttributes = async (catId: string) => {
+    if (!catId) return;
+    setIsLoadingAttributes(true);
+    try {
+      const attrs = await apiService.getMeliCategoryAttributes(catId);
+      setCategoryAttributes(attrs);
+      // Pre-cargar valores por defecto
+      const initial: Record<string, string> = {};
+      attrs.forEach((a) => {
+        if (a.id === 'BRAND') initial['BRAND'] = 'Calcu';
+        if (a.id === 'MODEL') initial['MODEL'] = title.slice(0, 30) || 'Estándar';
+        if (a.id === 'ITEM_CONDITION') initial['ITEM_CONDITION'] = condition === 'new' ? 'Nuevo' : 'Usado';
+        if (a.values && a.values.length > 0 && !initial[a.id]) {
+          initial[a.id] = a.values[0].name;
+        }
+      });
+      setAttributeValues((prev) => ({ ...initial, ...prev }));
+    } catch (err) {
+      console.warn('No se pudieron cargar los atributos de categoría:', err);
+    } finally {
+      setIsLoadingAttributes(false);
+    }
+  };
+
   const handleSelectProduct = (p: MeliReadyProductItem) => {
     setSelectedProduct(p);
     const safeTitle = (p.nombre || '').slice(0, 60);
@@ -92,12 +163,16 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
     setPrice(String(p.precio_lista || 1200));
     setQuantity(String(Math.max(1, p.deposito_central || 5)));
     setImageUrl(p.image_url || '');
+    setUploadedPictureId(null);
+    setUploadedPictureUrl(null);
     setDescription(
       `Producto oficial: ${p.nombre}. SKU: ${p.sku}. Stock verificado en Depósito Central de Calcu con entrega inmediata o envío por Mercado Envíos.`
     );
     setPredictions([]);
     setCategoryId('');
-    setCategoryName('');
+    setCategorySearchQuery('');
+    setCategoryAttributes([]);
+    setAttributeValues({});
     setPublishedItem(null);
     setErrorMsg(null);
 
@@ -114,13 +189,45 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
       const preds = await apiService.predictMeliCategory(textToPredict.trim());
       setPredictions(preds);
       if (preds.length > 0) {
-        setCategoryId(preds[0].category_id);
-        setCategoryName(preds[0].category_name || preds[0].domain_name || preds[0].category_id);
+        handleCategorySelect(preds[0].category_id, preds[0].category_name || preds[0].domain_name || preds[0].category_id);
       }
     } catch (err) {
       console.warn('No se pudo predecir categoría de MeLi:', err);
     } finally {
       setIsPredicting(false);
+    }
+  };
+
+  const handleCategorySelect = (catId: string, name: string) => {
+    setCategoryId(catId);
+    setCategorySearchQuery(`${name} (${catId})`);
+    setShowCategoryDropdown(false);
+    loadCategoryAttributes(catId);
+  };
+
+  // Subida de imagen nativa a MeLi CDN
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadPictureError('El archivo excede el tamaño máximo permitido de 10 MB.');
+      return;
+    }
+
+    setUploadPictureError(null);
+    setIsUploadingPicture(true);
+    try {
+      const res = await apiService.uploadMeliPicture(file);
+      setUploadedPictureId(res.id);
+      setUploadedPictureUrl(res.secure_url || res.url || URL.createObjectURL(file));
+      setImageUrl(''); // Se prioriza la foto nativa subida a MeLi
+    } catch (err: any) {
+      setUploadPictureError(
+        err.response?.data?.detail || 'Error al subir imagen directamente a la CDN de Mercado Libre.'
+      );
+    } finally {
+      setIsUploadingPicture(false);
     }
   };
 
@@ -165,7 +272,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
       return;
     }
     if (!categoryId.trim()) {
-      setErrorMsg('Debe seleccionar o predecir una categoría oficial de Mercado Libre.');
+      setErrorMsg('Debe seleccionar o buscar una categoría oficial de Mercado Libre.');
       return;
     }
     if (activeViolation) {
@@ -173,20 +280,36 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
       return;
     }
 
+    // Mapeo de atributos a enviar
+    const formattedAttributes = Object.entries(attributeValues)
+      .filter(([_, val]) => val && val.trim().length > 0)
+      .map(([attrId, val]) => ({
+        id: attrId,
+        value_name: val.trim(),
+      }));
+
     setIsPublishing(true);
     try {
       const res = await apiService.publishMeliItem({
         product_id: selectedProduct?.id,
         sku: selectedProduct?.sku,
         title: title.trim(),
+        family_name: title.trim(),
         category_id: categoryId.trim(),
         price: numPrice,
         currency_id: currency,
         available_quantity: parseInt(quantity, 10) || 1,
         condition,
         listing_type_id: listingType,
+        picture_id: uploadedPictureId || undefined,
+        pictures: uploadedPictureId
+          ? [{ id: uploadedPictureId }]
+          : imageUrl.trim()
+          ? [{ source: imageUrl.trim() }]
+          : undefined,
         image_url: imageUrl.trim() || undefined,
         description: description.trim() || undefined,
+        attributes: formattedAttributes.length > 0 ? formattedAttributes : undefined,
       });
 
       setPublishedItem(res);
@@ -223,7 +346,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Sincronización 1-clic desde el inventario central hacia Mercado Libre con linter anti-penalización.
+                Sincronización 1-clic con soporte nativo de User Products, subida directa de fotos y categorías oficiales.
               </p>
             </div>
           </div>
@@ -259,7 +382,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Título:</span>
+                <span className="text-slate-500">Título / Familia:</span>
                 <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[250px]">
                   {publishedItem.title}
                 </span>
@@ -298,49 +421,48 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
             {/* Alerta de Infracción Anti-Penalización en Vivo */}
             {activeViolation && (
               <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 flex items-start gap-2.5">
-                <ShieldAlert size={18} className="shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold block">Infracción Detectada por Linter MeLi</span>
-                  <p className="mt-0.5">{activeViolation}</p>
+                  <h4 className="font-bold">Alerta de Seguridad &amp; Políticas MeLi</h4>
+                  <p className="mt-0.5 leading-relaxed">{activeViolation}</p>
                 </div>
               </div>
             )}
 
-            {/* Error General */}
+            {/* Error retornado por la API */}
             {errorMsg && (
               <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
-                <AlertTriangle size={18} className="shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold block">Error al procesar publicación</span>
-                  <p className="mt-0.5">{errorMsg}</p>
+                  <h4 className="font-bold">Error al procesar publicación</h4>
+                  <p className="mt-0.5 leading-relaxed">{errorMsg}</p>
                 </div>
               </div>
             )}
 
-            {/* Selector de Producto de Inventario Interno */}
+            {/* Selector de Producto de Inventario */}
             <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <Package size={14} className="text-indigo-500" />
+                  <Package size={14} className="text-amber-500" />
                   <span>Seleccionar Producto de Inventario Calcu</span>
                 </span>
                 {isLoadingProducts && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <Loader2 size={11} className="animate-spin" /> Cargando catálogo...
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1 font-normal">
+                    <Loader2 size={12} className="animate-spin" /> Cargando catálogo...
                   </span>
                 )}
               </label>
-
               <select
-                value={selectedProduct?.sku || ''}
+                value={selectedProduct?.id || ''}
                 onChange={(e) => {
-                  const found = products.find((p) => p.sku === e.target.value);
-                  if (found) handleSelectProduct(found);
+                  const p = products.find((item) => item.id === parseInt(e.target.value, 10));
+                  if (p) handleSelectProduct(p);
                 }}
-                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-400 outline-hidden"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-400 outline-hidden"
               >
                 {products.map((p) => (
-                  <option key={p.sku} value={p.sku}>
+                  <option key={p.id} value={p.id}>
                     [{p.sku}] {p.nombre} — Stock Depósito Central: {p.deposito_central} un. — ${p.precio_lista}
                   </option>
                 ))}
@@ -370,7 +492,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 maxLength={70}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="ej. Panel LED 60x60 48W Blanco Frío Alta Eficiencia"
+                placeholder="ej. Tubo LED T8 Vidrio 60cm 9W 6500K"
                 className={`w-full bg-slate-50 dark:bg-slate-800 border rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-white font-medium outline-hidden ${
                   title.length > 60
                     ? 'border-rose-400 focus:ring-2 focus:ring-rose-400'
@@ -378,12 +500,12 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 }`}
               />
               <p className="text-[10px] text-slate-400 mt-1">
-                Consejo SEO MeLi: Incluye producto, modelo y característica principal. Evita signos de exclamación o palabras como &ldquo;OFERTA&rdquo;.
+                Consejo SEO MeLi: En cuentas User Products se utiliza como identificador de familia de producto (family_name).
               </p>
             </div>
 
-            {/* Categoría Oficial con Domain Discovery */}
-            <div className="space-y-2">
+            {/* Categoría Oficial con Búsqueda en Vivo (3+ letras o código MLU) */}
+            <div className="space-y-2 relative">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Layers size={14} className="text-amber-500" />
@@ -400,23 +522,56 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 </button>
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  placeholder="ej. MLU1055"
-                  className="w-1/3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 font-mono font-bold text-slate-900 dark:text-white"
-                />
-                <input
-                  type="text"
-                  value={categoryName}
-                  onChange={(e) => setCategoryName(e.target.value)}
-                  placeholder="Nombre de Categoría (ej. Paneles LED)"
-                  className="w-2/3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-slate-900 dark:text-white"
-                />
+              {/* Input con Autocomplete */}
+              <div className="relative">
+                <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                  <Search size={14} className="text-slate-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    value={categorySearchQuery}
+                    onChange={(e) => {
+                      setCategorySearchQuery(e.target.value);
+                      setShowCategoryDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (categorySearchResults.length > 0) setShowCategoryDropdown(true);
+                    }}
+                    placeholder="Escriba 3 letras para buscar (ej. 'tubo', 'led', 'ilum') o código (ej. 'MLU1590')..."
+                    className="w-full bg-transparent text-slate-900 dark:text-white font-medium outline-hidden"
+                  />
+                  {isSearchingCategory && <Loader2 size={14} className="animate-spin text-amber-500 ml-2" />}
+                </div>
+
+                {/* Dropdown de Resultados de Búsqueda */}
+                {showCategoryDropdown && categorySearchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-1.5 space-y-1">
+                    {categorySearchResults.map((cat) => (
+                      <button
+                        key={cat.category_id}
+                        type="button"
+                        onClick={() => handleCategorySelect(cat.category_id, cat.category_name)}
+                        className={`w-full text-left p-2.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors flex items-center justify-between cursor-pointer ${
+                          categoryId === cat.category_id ? 'bg-amber-50 dark:bg-amber-950/60 font-bold' : ''
+                        }`}
+                      >
+                        <div className="max-w-[85%]">
+                          <span className="font-semibold text-slate-800 dark:text-slate-100 block truncate">
+                            {cat.category_name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block truncate">
+                            {cat.path_from_root || cat.domain_name}
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-mono text-[10px] text-slate-500">
+                          {cat.category_id}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Píldoras de sugerencias rápidas */}
               {predictions.length > 0 && (
                 <div className="pt-1 flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] text-slate-400">Sugerencias IA:</span>
@@ -424,10 +579,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                     <button
                       key={pred.category_id}
                       type="button"
-                      onClick={() => {
-                        setCategoryId(pred.category_id);
-                        setCategoryName(pred.category_name || pred.domain_name || pred.category_id);
-                      }}
+                      onClick={() => handleCategorySelect(pred.category_id, pred.category_name || pred.domain_name || pred.category_id)}
                       className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
                         categoryId === pred.category_id
                           ? 'bg-amber-100 dark:bg-amber-950/80 border-amber-400 text-amber-900 dark:text-amber-200'
@@ -440,6 +592,51 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Atributos Obligatorios Requeridos por la Categoría MeLi */}
+            {categoryAttributes.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Info size={14} className="text-indigo-500" />
+                    <span>Atributos Requeridos por Mercado Libre para esta Categoría</span>
+                  </label>
+                  {isLoadingAttributes && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {categoryAttributes.map((attr) => (
+                    <div key={attr.id}>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        {attr.name} ({attr.id}) <span className="text-rose-500">*</span>
+                      </label>
+                      {attr.values && attr.values.length > 0 ? (
+                        <select
+                          value={attributeValues[attr.id] || ''}
+                          onChange={(e) => setAttributeValues((prev) => ({ ...prev, [attr.id]: e.target.value }))}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-white"
+                        >
+                          <option value="">Seleccione {attr.name}...</option>
+                          {attr.values.map((v) => (
+                            <option key={v.id || v.name} value={v.name}>
+                              {v.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={attributeValues[attr.id] || ''}
+                          onChange={(e) => setAttributeValues((prev) => ({ ...prev, [attr.id]: e.target.value }))}
+                          placeholder={attr.hint || `Ingrese ${attr.name}`}
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-white"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Precio, Moneda, Stock & Tipo de Publicación */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
@@ -534,22 +731,78 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
               </div>
             </div>
 
-            {/* URL de Imagen y Descripción */}
+            {/* Imagen: Subida Directa de Archivo a MeLi CDN + Opción URL */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  URL de Imagen Principal (Fondo blanco recomendado)
+              <div className="space-y-2">
+                <label className="block font-bold text-slate-700 dark:text-slate-300">
+                  Imagen del Producto (Nativa MeLi CDN o URL) *
                 </label>
+                
+                {/* Botón de subida de archivo */}
                 <input
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white"
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleFileUpload}
+                  className="hidden"
                 />
-                {imageUrl && (
-                  <div className="mt-2 w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white flex items-center justify-center">
-                    <img src={imageUrl} alt="Preview" className="object-contain w-full h-full" />
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPicture}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                  >
+                    {isUploadingPicture ? (
+                      <Loader2 size={15} className="animate-spin text-amber-500" />
+                    ) : (
+                      <UploadCloud size={15} className="text-indigo-500" />
+                    )}
+                    <span>{isUploadingPicture ? 'Subiendo a MeLi...' : 'Subir Archivo (JPG/PNG)'}</span>
+                  </button>
+
+                  <input
+                    type="text"
+                    value={imageUrl}
+                    onChange={(e) => {
+                      setImageUrl(e.target.value);
+                      if (e.target.value) {
+                        setUploadedPictureId(null);
+                        setUploadedPictureUrl(null);
+                      }
+                    }}
+                    placeholder="o pegar URL externa..."
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {uploadPictureError && (
+                  <p className="text-[11px] text-rose-500">{uploadPictureError}</p>
+                )}
+
+                {/* Previsualización de imagen */}
+                {(uploadedPictureUrl || imageUrl) && (
+                  <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="w-14 h-14 rounded-lg overflow-hidden bg-white shrink-0 border border-slate-200">
+                      <img
+                        src={uploadedPictureUrl || imageUrl}
+                        alt="Preview"
+                        className="object-contain w-full h-full"
+                      />
+                    </div>
+                    <div className="text-[11px] truncate">
+                      {uploadedPictureId ? (
+                        <>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 block flex items-center gap-1">
+                            <Check size={12} /> Alojada en CDN de Mercado Libre
+                          </span>
+                          <span className="text-slate-400 font-mono text-[10px]">ID: {uploadedPictureId}</span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500 truncate block">URL externa configurada</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -559,7 +812,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                   Descripción Oficial (/description)
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Detalles técnicos, garantía, compatibilidad..."

@@ -2765,16 +2765,41 @@ export interface MeliPublishItemPayload {
   product_id?: number;
   sku?: string;
   title: string;
+  family_name?: string;
   category_id: string;
   price: number;
   currency_id?: string;
   available_quantity: number;
   condition?: string;
   listing_type_id?: string;
-  pictures?: string[];
+  pictures?: any[];
+  picture_id?: string;
   image_url?: string;
   description?: string;
   attributes?: any[];
+}
+
+export interface MeliCategorySearchResult {
+  category_id: string;
+  category_name: string;
+  domain_name?: string;
+  path_from_root?: string;
+}
+
+export interface MeliCategoryAttribute {
+  id: string;
+  name: string;
+  value_type: string;
+  required: boolean;
+  values?: Array<{ id: string | null; name: string }>;
+  hint?: string;
+}
+
+export interface MeliPictureUploadResponse {
+  id: string;
+  url?: string;
+  secure_url?: string;
+  max_size?: string;
 }
 
 export interface MeliPublishItemResponse {
