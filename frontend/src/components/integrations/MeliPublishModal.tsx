@@ -61,9 +61,11 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
   const [uploadPictureError, setUploadPictureError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Opciones de Envío (Mercado Envíos ME2 NO marcado por defecto)
-  const [enableMe2, setEnableMe2] = useState<boolean>(false);
+  // Opciones de Envío (Mercado Envíos ME2, Costos Propios/Personalizados o A Convenir)
+  const [shippingMode, setShippingMode] = useState<'me2' | 'custom' | 'not_specified'>('not_specified');
   const [freeShipping, setFreeShipping] = useState<boolean>(false);
+  const [customCostMvd, setCustomCostMvd] = useState<string>('180');
+  const [customCostInterior, setCustomCostInterior] = useState<string>('250');
   const [localPickUp, setLocalPickUp] = useState<boolean>(true);
 
   // Búsqueda interactiva y predictiva de categorías
@@ -170,7 +172,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
     setQuantity(String(Math.max(1, p.deposito_central || 5)));
     setImageUrl(p.image_url || '');
     setUploadedPictures([]);
-    setEnableMe2(false);
+    setShippingMode('not_specified');
     setFreeShipping(false);
     setLocalPickUp(true);
     setDescription(
@@ -347,12 +349,35 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
         description: description.trim() || undefined,
         attributes: formattedAttributes.length > 0 ? formattedAttributes : undefined,
         shipping: {
-          mode: enableMe2 ? 'me2' : 'not_specified',
-          free_shipping: enableMe2 ? freeShipping : false,
+          mode: shippingMode,
+          free_shipping: shippingMode === 'me2' ? freeShipping : false,
           local_pick_up: localPickUp,
+          costs:
+            shippingMode === 'custom'
+              ? [
+                  ...(parseFloat(customCostMvd) >= 0
+                    ? [{ description: 'Montevideo / Área Metropolitana', cost: parseFloat(customCostMvd) || 0 }]
+                    : []),
+                  ...(parseFloat(customCostInterior) >= 0
+                    ? [{ description: 'Interior del País', cost: parseFloat(customCostInterior) || 0 }]
+                    : []),
+                ]
+              : undefined,
         },
-        enable_me2: enableMe2,
-        free_shipping: enableMe2 ? freeShipping : false,
+        shipping_mode: shippingMode,
+        shipping_costs:
+          shippingMode === 'custom'
+            ? [
+                ...(parseFloat(customCostMvd) >= 0
+                  ? [{ description: 'Montevideo / Área Metropolitana', cost: parseFloat(customCostMvd) || 0 }]
+                  : []),
+                ...(parseFloat(customCostInterior) >= 0
+                  ? [{ description: 'Interior del País', cost: parseFloat(customCostInterior) || 0 }]
+                  : []),
+              ]
+            : undefined,
+        enable_me2: shippingMode === 'me2',
+        free_shipping: shippingMode === 'me2' ? freeShipping : false,
         local_pick_up: localPickUp,
       });
 
@@ -372,10 +397,10 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden my-6">
-        {/* Cabecera del Modal */}
-        <div className="p-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-indigo-500/10 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden my-auto">
+        {/* Cabecera del Modal (Fija) */}
+        <div className="shrink-0 p-5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-indigo-500/10 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-[#FFE600] text-[#2D3277] flex items-center justify-center font-bold shadow-md shadow-amber-500/10">
               <ShoppingBag size={22} />
@@ -405,7 +430,7 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
 
         {/* Notificación de éxito post-publicación */}
         {publishedItem ? (
-          <div className="p-8 text-center space-y-5">
+          <div className="flex-1 overflow-y-auto p-8 text-center space-y-5">
             <div className="w-16 h-16 rounded-3xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10 border border-emerald-200 dark:border-emerald-800">
               <CheckCircle2 size={36} />
             </div>
@@ -461,7 +486,8 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handlePublishSubmit} className="p-6 space-y-5 text-xs">
+          <form onSubmit={handlePublishSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-xs flex flex-col justify-between">
+            <div className="space-y-4 flex-1">
             {/* Alerta de Infracción Anti-Penalización en Vivo */}
             {activeViolation && (
               <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 flex items-start gap-2.5">
@@ -885,65 +911,167 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 text-xs">
                   <Truck size={15} className="text-indigo-500" />
-                  <span>Logística y Opciones de Entrega</span>
+                  <span>Logística, Métodos y Costos de Entrega</span>
                 </label>
               </div>
 
-              {/* Checkbox Mercado Envíos (ME2) - Desmarcado por defecto */}
-              <div className="space-y-2">
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={enableMe2}
-                    onChange={(e) => {
-                      setEnableMe2(e.target.checked);
-                      if (!e.target.checked) setFreeShipping(false);
-                    }}
-                    className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-400 cursor-pointer"
-                  />
+              {/* Selector de Modalidad de Envío */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {/* 1. Mercado Envíos (ME2) */}
+                <button
+                  type="button"
+                  onClick={() => setShippingMode('me2')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    shippingMode === 'me2'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-900 dark:text-amber-200 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                  }`}
+                >
                   <div>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
-                      Habilitar Mercado Envíos (ME2)
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                      Permite despachar con etiqueta oficial generada por Mercado Libre a través de agencias asociadas.
+                    <span className="font-bold text-xs block">Mercado Envíos (ME2)</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Etiqueta oficial y logística integrada de MeLi.
                     </span>
                   </div>
-                </label>
+                  <span className={`text-[10px] font-bold mt-2 inline-block ${shippingMode === 'me2' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                    {shippingMode === 'me2' ? '● Seleccionado' : '○ Seleccionar'}
+                  </span>
+                </button>
 
-                {/* Sub-opciones cuando ME2 está activo */}
-                {enableMe2 && (
-                  <div className="ml-6 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 space-y-2 pt-1">
-                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={freeShipping}
-                        onChange={(e) => setFreeShipping(e.target.checked)}
-                        className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                      />
-                      <span><b>Envío Gratis</b> a cargo de Calcu (el vendedor asume el costo logístico de la etiqueta)</span>
-                    </label>
-                  </div>
-                )}
-
-                {/* Retiro en persona */}
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={localPickUp}
-                    onChange={(e) => setLocalPickUp(e.target.checked)}
-                    className="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-400 cursor-pointer"
-                  />
+                {/* 2. Costos Personalizados (custom) */}
+                <button
+                  type="button"
+                  onClick={() => setShippingMode('custom')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    shippingMode === 'custom'
+                      ? 'bg-indigo-500/10 border-indigo-500 text-indigo-900 dark:text-indigo-200 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                  }`}
+                >
                   <div>
-                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
-                      Permitir Retiro en Depósito Central / En Persona (local_pick_up)
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                      El comprador puede retirar directamente en las instalaciones centrales de Calcu.
+                    <span className="font-bold text-xs block">Costos Personalizados</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Flete propio o agencia con costo fijo al comprador.
                     </span>
                   </div>
-                </label>
+                  <span className={`text-[10px] font-bold mt-2 inline-block ${shippingMode === 'custom' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+                    {shippingMode === 'custom' ? '● Seleccionado' : '○ Seleccionar'}
+                  </span>
+                </button>
+
+                {/* 3. A Convenir (not_specified) */}
+                <button
+                  type="button"
+                  onClick={() => setShippingMode('not_specified')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    shippingMode === 'not_specified'
+                      ? 'bg-slate-200/70 dark:bg-slate-700/60 border-slate-400 text-slate-900 dark:text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <span className="font-bold text-xs block">A Convenir</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                      Coordinar entrega y flete con el cliente por chat.
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-bold mt-2 inline-block ${shippingMode === 'not_specified' ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
+                    {shippingMode === 'not_specified' ? '● Seleccionado' : '○ Seleccionar'}
+                  </span>
+                </button>
               </div>
+
+              {/* Contenido condicional según la modalidad seleccionada */}
+              {shippingMode === 'me2' && (
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-amber-200/60 dark:border-amber-900/40 space-y-2.5">
+                  <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={freeShipping}
+                      onChange={(e) => setFreeShipping(e.target.checked)}
+                      className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-400 cursor-pointer"
+                    />
+                    <span className="font-semibold">Ofrecer <b>Envío Gratis</b> a cargo de Calcu (el vendedor asume el costo de la etiqueta)</span>
+                  </label>
+                  {!freeShipping && (
+                    <div className="text-[11px] p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 flex items-start gap-1.5 border border-amber-200/50">
+                      <Info size={14} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                      <span>
+                        <b>Costo a cargo del comprador:</b> Mercado Libre calculará automáticamente el costo de flete en tiempo real según el código postal del comprador y se lo sumará al total en el checkout.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {shippingMode === 'custom' && (
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200/60 dark:border-indigo-900/40 space-y-3">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-start gap-1.5">
+                    <Info size={14} className="shrink-0 mt-0.5 text-indigo-500" />
+                    <span>
+                      Define las tarifas de flete que el comprador podrá seleccionar y abonar directamente al comprar:
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Costo Montevideo / Local ({currency}) *
+                      </label>
+                      <div className="flex items-center">
+                        <span className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l-lg text-slate-500 font-bold text-xs">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={customCostMvd}
+                          onChange={(e) => setCustomCostMvd(e.target.value)}
+                          placeholder="180"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-r-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Costo Interior del País ({currency}) *
+                      </label>
+                      <div className="flex items-center">
+                        <span className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-700 border border-r-0 border-slate-200 dark:border-slate-600 rounded-l-lg text-slate-500 font-bold text-xs">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={customCostInterior}
+                          onChange={(e) => setCustomCostInterior(e.target.value)}
+                          placeholder="250"
+                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-r-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Retiro en persona */}
+              <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={localPickUp}
+                  onChange={(e) => setLocalPickUp(e.target.checked)}
+                  className="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-400 cursor-pointer"
+                />
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-xs block">
+                    Permitir Retiro en Depósito Central / En Persona (local_pick_up)
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                    El comprador puede retirar directamente en las instalaciones centrales de Calcu.
+                  </span>
+                </div>
+              </label>
             </div>
 
             {/* Descripción */}
@@ -967,9 +1095,10 @@ export const MeliPublishModal: React.FC<MeliPublishModalProps> = ({
                 <b>Aislamiento de Inventario:</b> Las ventas en Mercado Libre descuentan únicamente existencias de <code>deposito_central</code>. Los depósitos aduaneros y depósitos logísticos 3PL de terceros permanecen protegidos e inmutables.
               </span>
             </div>
+            </div>
 
-            {/* Botón de Publicación Oficial */}
-            <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+            {/* Botón de Publicación Oficial (Fijo al pie del modal) */}
+            <div className="shrink-0 pt-3 pb-1 mt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 sticky bottom-0 bg-white dark:bg-slate-900 z-10">
               <button
                 type="button"
                 onClick={onClose}

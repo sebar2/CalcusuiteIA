@@ -265,7 +265,22 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
+
+      let preferredMime = 'audio/webm; codecs=opus';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')) {
+          preferredMime = 'audio/ogg; codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/webm; codecs=opus')) {
+          preferredMime = 'audio/webm; codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          preferredMime = 'audio/mp4';
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(
+        stream,
+        preferredMime ? { mimeType: preferredMime } : undefined
+      );
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -275,8 +290,13 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
-        const audioFile = new File([audioBlob], `nota_voz_${Date.now()}.ogg`, { type: 'audio/ogg' });
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: preferredMime || 'audio/ogg; codecs=opus',
+        });
+        // Generar archivo nativo .oga para compatibilidad total con WhatsApp en smartphones
+        const audioFile = new File([audioBlob], `nota_voz_${Date.now()}.oga`, {
+          type: preferredMime || 'audio/ogg',
+        });
         setAttachedFile(audioFile);
         setAttachedType('AUDIO');
         setAttachedPreview(URL.createObjectURL(audioBlob));

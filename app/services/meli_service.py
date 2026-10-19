@@ -1157,23 +1157,41 @@ class MeliService:
         except Exception:
             pass
 
-        # Configuración opcional de envíos: Mercado Envíos (me2) o a convenir (not_specified)
-        shipping_cfg = payload.get("shipping")
-        if isinstance(shipping_cfg, dict) and "mode" in shipping_cfg:
-            shipping_dict = {
-                "mode": str(shipping_cfg.get("mode") or "not_specified"),
-                "local_pick_up": bool(shipping_cfg.get("local_pick_up", True)),
-                "free_shipping": bool(shipping_cfg.get("free_shipping", False)),
-            }
-        else:
-            enable_me2 = bool(payload.get("enable_me2", False))
-            free_shipping = bool(payload.get("free_shipping", False))
-            local_pick_up = bool(payload.get("local_pick_up", True))
-            shipping_dict = {
-                "mode": "me2" if enable_me2 else "not_specified",
-                "local_pick_up": local_pick_up,
-                "free_shipping": free_shipping,
-            }
+        # Configuración opcional de envíos: Mercado Envíos (me2), costos personalizados (custom) o a convenir (not_specified)
+        shipping_cfg = payload.get("shipping") if isinstance(payload.get("shipping"), dict) else {}
+        explicit_mode = payload.get("shipping_mode") or shipping_cfg.get("mode")
+        explicit_costs = payload.get("shipping_costs") or shipping_cfg.get("costs")
+
+        mode = "not_specified"
+        if explicit_mode:
+            mode = str(explicit_mode).strip().lower()
+        elif payload.get("enable_me2"):
+            mode = "me2"
+        elif explicit_costs:
+            mode = "custom"
+
+        free_shipping = bool(shipping_cfg.get("free_shipping", payload.get("free_shipping", False)))
+        local_pick_up = bool(shipping_cfg.get("local_pick_up", payload.get("local_pick_up", True)))
+
+        shipping_dict: Dict[str, Any] = {
+            "mode": mode,
+            "local_pick_up": local_pick_up,
+            "free_shipping": free_shipping if mode == "me2" else False,
+        }
+
+        if mode == "custom" and explicit_costs:
+            clean_costs = []
+            for c in explicit_costs:
+                if isinstance(c, dict):
+                    desc = str(c.get("description") or "Envío Estándar").strip()
+                    try:
+                        cost_val = float(c.get("cost", 0))
+                        if cost_val >= 0:
+                            clean_costs.append({"description": desc, "cost": cost_val})
+                    except (ValueError, TypeError):
+                        pass
+            if clean_costs:
+                shipping_dict["costs"] = clean_costs
 
         base_body: Dict[str, Any] = {
             "category_id": category_id,
@@ -1214,6 +1232,17 @@ class MeliService:
 
                 logger.info("Autorrecuperación MeLi: reenviando publicación con campo de nombre adaptado...")
                 res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=retry_body, headers=headers)
+
+            # Intento 3 (Autorrecuperación si la categoría no admite custom shipping)
+            if res.status_code == 400 and "shipping" in res.text and shipping_dict.get("mode") == "custom":
+                logger.info("Autorrecuperación MeLi: categoría no admite envíos personalizados, intentando con 'not_specified'...")
+                retry_shipping_body = dict(meli_body)
+                retry_shipping_body["shipping"] = {
+                    "mode": "not_specified",
+                    "local_pick_up": shipping_dict.get("local_pick_up", True),
+                    "free_shipping": False,
+                }
+                res = await client.post(f"{cls.MELI_API_BASE_URL}/items", json=retry_shipping_body, headers=headers)
 
             if res.status_code in (200, 201):
                 item_data = res.json()

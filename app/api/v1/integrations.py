@@ -1116,7 +1116,9 @@ class MeliPublishItemRequest(BaseModel):
     image_url: Optional[str] = Field(default=None, description="URL de imagen principal")
     description: Optional[str] = Field(default=None, description="Descripción en texto plano")
     attributes: Optional[List[Dict[str, Any]]] = Field(default=None, description="Atributos opcionales u obligatorios de la categoría")
-    shipping: Optional[Dict[str, Any]] = Field(default=None, description="Configuración de envío (mode, free_shipping, local_pick_up)")
+    shipping: Optional[Dict[str, Any]] = Field(default=None, description="Configuración de envío (mode, free_shipping, local_pick_up, costs)")
+    shipping_mode: Optional[str] = Field(default=None, description="Modo de envío: me2, custom, not_specified")
+    shipping_costs: Optional[List[Dict[str, Any]]] = Field(default=None, description="Tabla de costos fijos para mode=custom")
     enable_me2: Optional[bool] = Field(default=False, description="Habilitar Mercado Envíos (ME2)")
     free_shipping: Optional[bool] = Field(default=False, description="Envío gratis a cargo del vendedor")
     local_pick_up: Optional[bool] = Field(default=True, description="Permitir retiro en depósito / persona")
@@ -1246,6 +1248,8 @@ async def publish_meli_item(
         "description": req.description,
         "attributes": req.attributes,
         "shipping": req.shipping,
+        "shipping_mode": req.shipping_mode,
+        "shipping_costs": req.shipping_costs,
         "enable_me2": req.enable_me2,
         "free_shipping": req.free_shipping,
         "local_pick_up": req.local_pick_up,

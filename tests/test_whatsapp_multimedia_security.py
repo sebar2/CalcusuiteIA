@@ -167,5 +167,88 @@ def test_omnichannel_message_media_storage():
     finally:
         db.close()
 
+def test_media_upload_oga_audio():
+    """Valida que los audios .oga (Ogg Opus) se reconozcan y guarden correctamente para WhatsApp PTT."""
+    token = get_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Archivo .oga con firma OggS
+    valid_oga = io.BytesIO(b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00OpusHead\x01\x02\x00\x00\x80\xbb")
+    resp_oga = client.post(
+        "/api/v1/omnichannel/upload-media",
+        files={"file": ("nota_voz_123.oga", valid_oga, "audio/ogg")},
+        headers=headers,
+    )
+    assert resp_oga.status_code == 200
+    data = resp_oga.json()
+    assert data["media_type"] == "AUDIO"
+    assert data["media_url"].endswith(".oga")
+
+    # 2. Archivo .oga grabado en navegador con contenedor EBML
+    valid_ebml_oga = io.BytesIO(b"\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\xf7\x81\x01")
+    resp_ebml_oga = client.post(
+        "/api/v1/omnichannel/upload-media",
+        files={"file": ("nota_voz_browser.oga", valid_ebml_oga, "audio/webm; codecs=opus")},
+        headers=headers,
+    )
+    assert resp_ebml_oga.status_code == 200
+    assert resp_ebml_oga.json()["media_type"] == "AUDIO"
+    assert resp_ebml_oga.json()["media_url"].endswith(".oga")
+
+def test_meli_custom_shipping_payload_validation():
+    """Verifica que el schema de publicación de MeLi valide y acepte costos de envío personalizados."""
+    from app.api.v1.integrations import MeliPublishItemRequest
+    from decimal import Decimal
+
+    # Payload válido con costos personalizados
+    req = MeliPublishItemRequest(
+        title="Escritorio Ergonómico Calcu Office",
+        category_id="MLU1055",
+        price=Decimal("4500.00"),
+        available_quantity=5,
+        shipping_mode="custom",
+        shipping_costs=[
+            {"description": "Montevideo / Área Metropolitana", "cost": 180.0},
+            {"description": "Interior del País", "cost": 250.0},
+        ],
+        local_pick_up=True,
+    )
+    assert req.shipping_mode == "custom"
+    assert len(req.shipping_costs) == 2
+    assert req.shipping_costs[0]["cost"] == 180.0
+
+def test_security_rbac_and_sqli_defense():
+    """Auditoría de Ciberseguridad: Prevención de Inyecciones SQL (CWE-89) y Control de Acceso RBAC."""
+    token = get_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Intento de Inyección SQL en parámetros de consulta
+    sqli_payloads = [
+        "' OR '1'='1",
+        "'; DROP TABLE omnichannel_messages; --",
+        "admin'--",
+    ]
+    for sqli in sqli_payloads:
+        resp = client.get(
+            f"/api/v1/omnichannel/conversations?search={sqli}",
+            headers=headers
+        )
+        # La consulta ORM debe responder exitosamente (200 o lista vacía) sin filtrar datos no autorizados ni lanzar 500
+        assert resp.status_code == 200
+
+    # 2. Verificación de Roles RBAC: un rol no autorizado debe ser rechazado
+    from app.core.security import create_access_token
+    unauthorized_token = create_access_token({
+        "sub": "chofer_invalido",
+        "role": "conductor_3pl",
+        "tenant_id": "tenant_calcu_corp"
+    })
+    resp_forbidden = client.post(
+        "/api/v1/integrations/meli/items",
+        json={"title": "Test Hack", "category_id": "MLU1055", "price": 100},
+        headers={"Authorization": f"Bearer {unauthorized_token}"}
+    )
+    assert resp_forbidden.status_code in (401, 403)
+
 if __name__ == "__main__":
     pytest.main(["-v", "test_whatsapp_multimedia_security.py"])

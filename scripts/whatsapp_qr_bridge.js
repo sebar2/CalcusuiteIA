@@ -359,7 +359,7 @@ async function startWhatsAppSocket(forceNew = false) {
               { reuploadRequest: sock.updateMediaMessage }
             );
             const mime = msg.message.audioMessage?.mimetype || "audio/ogg";
-            let ext = ".ogg";
+            let ext = ".oga";
             if (mime.includes("mp4") || mime.includes("m4a")) ext = ".m4a";
             else if (mime.includes("mpeg") || mime.includes("mp3")) ext = ".mp3";
             const filename = `wa_audio_${Date.now()}_${msg.key.id}${ext}`;
@@ -543,20 +543,29 @@ const server = http.createServer(async (req, res) => {
           }
         } else if (reqMediaType === "AUDIO" && reqMediaUrl) {
           let audBuf = null;
-          let mimetype = "audio/mp4";
+          let mimetype = "audio/ogg; codecs=opus";
           if (reqMediaUrl.startsWith("data:audio")) {
             const parts = reqMediaUrl.split(",");
-            if (parts[0].includes("ogg")) mimetype = "audio/ogg; codecs=opus";
-            else if (parts[0].includes("mpeg") || parts[0].includes("mp3")) mimetype = "audio/mpeg";
+            if (parts[0].includes("ogg") || parts[0].includes("opus") || parts[0].includes("oga")) {
+              mimetype = "audio/ogg; codecs=opus";
+            } else if (parts[0].includes("mpeg") || parts[0].includes("mp3")) {
+              mimetype = "audio/mpeg";
+            } else if (parts[0].includes("mp4") || parts[0].includes("m4a")) {
+              mimetype = "audio/mp4";
+            }
             audBuf = Buffer.from(parts[1], "base64");
           } else {
             const cleanRelative = reqMediaUrl.replace(/^\/+/, "");
             const localPath = path.join(__dirname, "..", "app", cleanRelative);
             if (fs.existsSync(localPath)) {
               audBuf = fs.readFileSync(localPath);
-              if (localPath.endsWith(".ogg")) mimetype = "audio/ogg; codecs=opus";
-              else if (localPath.endsWith(".mp3")) mimetype = "audio/mpeg";
-              else if (localPath.endsWith(".m4a")) mimetype = "audio/mp4";
+              if (localPath.endsWith(".oga") || localPath.endsWith(".ogg") || localPath.endsWith(".weba")) {
+                mimetype = "audio/ogg; codecs=opus";
+              } else if (localPath.endsWith(".mp3")) {
+                mimetype = "audio/mpeg";
+              } else if (localPath.endsWith(".m4a")) {
+                mimetype = "audio/mp4";
+              }
             }
           }
           if (audBuf) {

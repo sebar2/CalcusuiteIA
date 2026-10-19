@@ -300,6 +300,7 @@ async def upload_omnichannel_media(
     ext = None
     content_type = (file.content_type or "").lower()
 
+    orig_name = (file.filename or "").lower()
     if content.startswith(b"\xff\xd8\xff"):
         media_type = "IMAGE"
         ext = ".jpg"
@@ -311,14 +312,14 @@ async def upload_omnichannel_media(
         ext = ".webp"
     elif content.startswith(b"OggS"):
         media_type = "AUDIO"
-        ext = ".ogg"
+        ext = ".oga"
     elif content.startswith(b"ID3") or (len(content) > 2 and content[0] == 0xff and (content[1] & 0xe0) == 0xe0):
         media_type = "AUDIO"
         ext = ".mp3"
     elif content.startswith(b"\x1a\x45\xdf\xa3"):
         # Contenedor EBML (WebM / Matroska)
-        if "audio" in content_type:
-            media_type, ext = "AUDIO", ".weba"
+        if "audio" in content_type or orig_name.endswith((".oga", ".ogg", ".weba")):
+            media_type, ext = "AUDIO", ".oga" if orig_name.endswith(".oga") else ".weba"
         else:
             media_type, ext = "VIDEO", ".webm"
     elif len(content) > 12 and (content[4:8] == b"ftyp" or b"ftyp" in content[:24]):
@@ -332,7 +333,9 @@ async def upload_omnichannel_media(
             ext = ".mp4"
     else:
         # Fallback a MIME verificado si coincide con formatos autorizados
-        if "video/mp4" in content_type or "video/quicktime" in content_type:
+        if "audio/ogg" in content_type or "audio/opus" in content_type or orig_name.endswith((".oga", ".ogg")):
+            media_type, ext = "AUDIO", ".oga"
+        elif "video/mp4" in content_type or "video/quicktime" in content_type:
             media_type, ext = "VIDEO", ".mp4"
         elif "video/webm" in content_type:
             media_type, ext = "VIDEO", ".webm"
@@ -342,16 +345,16 @@ async def upload_omnichannel_media(
             media_type, ext = "IMAGE", ".png"
         elif "image/webp" in content_type:
             media_type, ext = "IMAGE", ".webp"
-        elif "audio/ogg" in content_type:
-            media_type, ext = "AUDIO", ".ogg"
         elif "audio/mpeg" in content_type or "audio/mp3" in content_type:
             media_type, ext = "AUDIO", ".mp3"
-        elif "audio/mp4" in content_type or "audio/m4a" in content_type or "audio/webm" in content_type:
+        elif "audio/mp4" in content_type or "audio/m4a" in content_type:
             media_type, ext = "AUDIO", ".m4a"
+        elif "audio/webm" in content_type:
+            media_type, ext = "AUDIO", ".oga" if orig_name.endswith(".oga") else ".weba"
         else:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Formato de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, WebP), audios (OGG, MP3, M4A) y videos (MP4, WebM, MOV)."
+                detail="Formato de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, WebP), audios (OGA, OGG, MP3, M4A) y videos (MP4, WebM, MOV)."
             )
 
     media_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uploads", "omnichannel_media")

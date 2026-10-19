@@ -2783,7 +2783,10 @@ export interface MeliPublishItemPayload {
     mode?: string;
     free_shipping?: boolean;
     local_pick_up?: boolean;
+    costs?: Array<{ description: string; cost: number }>;
   };
+  shipping_mode?: string;
+  shipping_costs?: Array<{ description: string; cost: number }>;
   enable_me2?: boolean;
   free_shipping?: boolean;
   local_pick_up?: boolean;
