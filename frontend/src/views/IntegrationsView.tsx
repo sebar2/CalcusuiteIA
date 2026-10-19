@@ -788,22 +788,30 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                 ) : qrSession ? (
                   <>
                     <div className="mb-2">
-                      {qrSession.bridge_online ? (
+                      {qrSession.bridge_online && qrSession.qr_svg ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-300 dark:border-emerald-700">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          QR Oficial WhatsApp Web en Vivo (Auto-Refresco)
+                          QR Oficial WhatsApp Web (Handshake en Vivo)
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-bold border border-amber-300 dark:border-amber-700">
-                          QR Estándar ISO-18004 (Modo Simulación Local)
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 text-[10px] font-bold border border-sky-300 dark:border-sky-700">
+                          <RefreshCw size={11} className="animate-spin text-sky-500" />
+                          Iniciando enlace WhatsApp Web...
                         </span>
                       )}
                     </div>
-                    <img
-                      src={qrSession.qr_svg}
-                      alt="Código QR de vinculación WhatsApp"
-                      className="w-56 h-56 rounded-xl shadow-sm border border-slate-200 bg-white p-1.5"
-                    />
+                    {qrSession.qr_svg ? (
+                      <img
+                        src={qrSession.qr_svg}
+                        alt="Código QR de vinculación WhatsApp"
+                        className="w-56 h-56 rounded-xl shadow-sm border border-slate-200 bg-white p-1.5"
+                      />
+                    ) : (
+                      <div className="w-56 h-56 flex flex-col items-center justify-center text-xs text-slate-400 gap-2 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+                        <RefreshCw size={24} className="animate-spin text-teal-500" />
+                        <span>Generando QR Multi-Dispositivo...</span>
+                      </div>
+                    )}
                     <div className="mt-2.5 flex items-center gap-2">
                       <span className="px-2.5 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 font-mono text-[11px] font-bold border border-teal-200 dark:border-teal-800">
                         Código: {qrSession.pairing_code}
@@ -818,7 +826,7 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-rose-500">No se pudo cargar el QR.</p>
+                  <p className="text-xs text-rose-500">Iniciando servicio de enlace...</p>
                 )}
               </div>
 

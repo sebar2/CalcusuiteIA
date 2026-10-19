@@ -21,8 +21,12 @@ import {
   Zap,
   ShoppingBag,
   ShieldAlert,
+  Paperclip,
+  Mic,
+  Square,
+  X,
 } from 'lucide-react';
-import { apiService, getStoredUser } from '../services/api';
+import { apiService, getStoredUser, getApiBaseUrl } from '../services/api';
 import type {
   OmnichannelConversationSummary,
   OmnichannelMessageItem,
@@ -112,6 +116,17 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
   const [isEditingPhone, setIsEditingPhone] = useState<boolean>(false);
   const [editablePhone, setEditablePhone] = useState<string>('');
   const [isSavingPhone, setIsSavingPhone] = useState<boolean>(false);
+
+  // Adjuntos Multimedia (Imágenes y Audios / Notas de Voz)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
+  const [attachedType, setAttachedType] = useState<'IMAGE' | 'AUDIO' | null>(null);
+  const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -214,21 +229,108 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
     };
   }, [selectedDealId]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      alert('El archivo no puede superar los 25 MB.');
+      return;
+    }
+    const isImg = file.type.startsWith('image/');
+    const isAud = file.type.startsWith('audio/');
+    if (!isImg && !isAud) {
+      alert('Solo se admiten archivos de imagen (JPG, PNG, WebP) o audio (OGG, MP3, M4A).');
+      return;
+    }
+    setAttachedFile(file);
+    setAttachedType(isImg ? 'IMAGE' : 'AUDIO');
+    setAttachedPreview(URL.createObjectURL(file));
+  };
+
+  const handleClearAttachment = () => {
+    if (attachedPreview) {
+      URL.revokeObjectURL(attachedPreview);
+    }
+    setAttachedFile(null);
+    setAttachedPreview(null);
+    setAttachedType(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg; codecs=opus' });
+        const audioFile = new File([audioBlob], `nota_voz_${Date.now()}.ogg`, { type: 'audio/ogg' });
+        setAttachedFile(audioFile);
+        setAttachedType('AUDIO');
+        setAttachedPreview(URL.createObjectURL(audioBlob));
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecordingAudio(false);
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      };
+
+      mediaRecorder.start(200);
+      setIsRecordingAudio(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      alert('No se pudo acceder al micrófono. Verifique los permisos del navegador.');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecordingAudio) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent, overrideText?: string, aiFlag = false) => {
     if (e) e.preventDefault();
     const bodyToSend = (overrideText !== undefined ? overrideText : messageText).trim();
-    if (!selectedDealId || !bodyToSend) return;
+    if (!selectedDealId || (!bodyToSend && !attachedFile)) return;
 
     setIsSending(true);
     try {
+      let mediaUrlToSend: string | null = null;
+      let mediaTypeToSend: string | null = null;
+
+      if (attachedFile) {
+        const uploadRes = await apiService.uploadOmnichannelMedia(attachedFile);
+        mediaUrlToSend = uploadRes.media_url;
+        mediaTypeToSend = uploadRes.media_type;
+      }
+
+      const defaultText =
+        bodyToSend ||
+        (attachedType === 'IMAGE' ? '📷 Imagen adjunta enviada' : '🎙️ Nota de voz enviada');
+
       const res = await apiService.sendOmnichannelMessage(selectedDealId, {
         channel: replyChannel,
-        message_text: bodyToSend,
+        message_text: defaultText,
         is_ai_generated: aiFlag,
+        media_url: mediaUrlToSend,
+        media_type: mediaTypeToSend,
       });
       setMessages((prev) => [...prev, res.message]);
       if (overrideText === undefined) {
         setMessageText('');
+        handleClearAttachment();
       }
       setDeliveryFeedback({
         status: res.delivery_status,
@@ -589,6 +691,32 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                               </span>
                             )}
                           </div>
+                          {msg.media_url && (
+                            <div className="mb-2">
+                              {msg.media_type === 'IMAGE' ? (
+                                <a
+                                  href={msg.media_url.startsWith('http') ? msg.media_url : `${getApiBaseUrl()}${msg.media_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block overflow-hidden rounded-xl border border-black/10 dark:border-white/10"
+                                >
+                                  <img
+                                    src={msg.media_url.startsWith('http') ? msg.media_url : `${getApiBaseUrl()}${msg.media_url}`}
+                                    alt="Imagen adjunta"
+                                    className="max-w-[240px] max-h-52 rounded-xl object-cover hover:scale-102 transition-transform duration-200"
+                                  />
+                                </a>
+                              ) : msg.media_type === 'AUDIO' ? (
+                                <div className="p-1.5 rounded-xl bg-black/10 dark:bg-black/25">
+                                  <audio
+                                    controls
+                                    src={msg.media_url.startsWith('http') ? msg.media_url : `${getApiBaseUrl()}${msg.media_url}`}
+                                    className="w-full max-w-[240px] h-8"
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
                           <p className="whitespace-pre-line leading-relaxed">{msg.message_text}</p>
                         </div>
 
@@ -756,7 +884,87 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                   </div>
                 )}
 
+                {attachedFile && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      {attachedType === 'IMAGE' ? (
+                        <img
+                          src={attachedPreview || ''}
+                          alt="Preview"
+                          className="w-10 h-10 object-cover rounded-lg border border-slate-300 dark:border-slate-600 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                          <Mic size={18} />
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                          {attachedFile.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {(attachedFile.size / 1024).toFixed(1)} KB · {attachedType === 'IMAGE' ? 'Imagen' : 'Audio / Nota de voz'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearAttachment}
+                      className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      title="Eliminar adjunto"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {isRecordingAudio && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 animate-pulse">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                      <span className="font-bold">Grabando nota de voz ({recordingSeconds}s)...</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleStopRecording}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer"
+                    >
+                      <Square size={12} />
+                      <span>Detener y Adjuntar</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-end gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept="image/*,audio/*"
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="Adjuntar Imagen o Audio"
+                    >
+                      <Paperclip size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={isRecordingAudio ? handleStopRecording : handleStartRecording}
+                      className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                        isRecordingAudio
+                          ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                      title={isRecordingAudio ? 'Detener grabación' : 'Grabar nota de voz'}
+                    >
+                      {isRecordingAudio ? <Square size={18} className="animate-spin text-rose-600" /> : <Mic size={18} />}
+                    </button>
+                  </div>
                   <textarea
                     rows={2}
                     value={messageText}
@@ -766,11 +974,11 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                   />
                   <button
                     type="submit"
-                    disabled={isSending || !messageText.trim() || Boolean((replyChannel === 'MERCADO_LIBRE' || selectedConversation?.canal_origen === 'MERCADO_LIBRE') && checkMeliAntiPenaltyViolation(messageText))}
+                    disabled={isSending || (!messageText.trim() && !attachedFile) || Boolean((replyChannel === 'MERCADO_LIBRE' || selectedConversation?.canal_origen === 'MERCADO_LIBRE') && checkMeliAntiPenaltyViolation(messageText))}
                     className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
                   >
                     <Send size={14} />
-                    <span>Enviar</span>
+                    <span>{isSending ? 'Enviando...' : 'Enviar'}</span>
                   </button>
                 </div>
               </form>

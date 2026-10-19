@@ -1936,7 +1936,13 @@ export const apiService = {
 
   async sendOmnichannelMessage(
     dealId: string,
-    payload: { channel: string; message_text: string; is_ai_generated?: boolean }
+    payload: {
+      channel: string;
+      message_text: string;
+      is_ai_generated?: boolean;
+      media_url?: string | null;
+      media_type?: string | null;
+    }
   ): Promise<{
     message: OmnichannelMessageItem;
     channel_connected: boolean;
@@ -1945,6 +1951,20 @@ export const apiService = {
     status_notice: string;
   }> {
     const res = await apiClient.post(`/api/v1/omnichannel/messages/${dealId}`, payload);
+    return res.data;
+  },
+
+  async uploadOmnichannelMedia(file: File): Promise<{
+    media_url: string;
+    media_type: 'IMAGE' | 'AUDIO';
+    filename: string;
+    size_bytes: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post('/api/v1/omnichannel/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   },
 

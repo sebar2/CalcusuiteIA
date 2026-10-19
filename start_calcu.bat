@@ -133,10 +133,14 @@ start "Calcu Backend (:8000)" cmd /k "color 0A & cd /d %~dp0 & set DATABASE_URL=
 echo [*] Abriendo Frontend React Vite (:5173)...
 start "Calcu Frontend (:5173)" cmd /k "color 0E & cd /d %~dp0frontend & npm run dev"
 
+echo [*] Abriendo Puente WhatsApp Web Multi-Dispositivo (:3010)...
+start "Calcu WhatsApp Bridge (:3010)" cmd /k "color 0B & cd /d %~dp0 & node scripts/whatsapp_qr_bridge.js"
+
 echo.
-echo [OK] Ambos servicios iniciados en terminales independientes.
-echo     - Backend:  http://localhost:8000 (Docs: /docs)
-echo     - Frontend: http://localhost:5173
+echo [OK] Servicios iniciados:
+echo     - Backend:         http://localhost:8000 (Docs: /docs)
+echo     - Frontend:        http://localhost:5173
+echo     - WhatsApp Bridge: http://127.0.0.1:3010 (Loopback ISO 27001)
 echo.
 pause
 goto MENU

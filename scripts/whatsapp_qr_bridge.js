@@ -21,6 +21,8 @@ module.paths.unshift(bridgeNodeModules);
 const PORT = parseInt(process.env.WA_BRIDGE_PORT || "3010", 10);
 const CALCU_BASE_URL = process.env.CALCU_BASE_URL || "http://127.0.0.1:8000";
 const AUTH_DIR = path.join(__dirname, "..", "tenants_data", "wa_qr_auth_info");
+const MEDIA_DIR = path.join(__dirname, "..", "app", "static", "uploads", "omnichannel_media");
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
 let currentState = {
   bridge_online: true,
@@ -194,7 +196,7 @@ async function startWhatsAppSocket(forceNew = false) {
     const pino = require("pino");
 
     const makeWASocket = baileys.default?.default || baileys.default || baileys.makeWASocket;
-    const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys;
+    const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = baileys;
 
     fs.mkdirSync(AUTH_DIR, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -319,11 +321,69 @@ async function startWhatsAppSocket(forceNew = false) {
 
         const phoneToReport = resolved.phoneDisplay || `+${resolved.phoneDigits}`;
         const pushName = msg.pushName || `Contacto WhatsApp ${phoneToReport}`;
-        const text =
+
+        let mediaUrl = null;
+        let mediaType = null;
+        let durationSeconds = 0;
+
+        const isImage = !!(msg.message.imageMessage);
+        const isAudio = !!(msg.message.audioMessage);
+
+        if (isImage) {
+          try {
+            const buffer = await downloadMediaMessage(
+              msg,
+              "buffer",
+              {},
+              { reuploadRequest: sock.updateMediaMessage }
+            );
+            const mime = msg.message.imageMessage?.mimetype || "image/jpeg";
+            let ext = ".jpg";
+            if (mime.includes("png")) ext = ".png";
+            else if (mime.includes("webp")) ext = ".webp";
+            const filename = `wa_img_${Date.now()}_${msg.key.id}${ext}`;
+            fs.writeFileSync(path.join(MEDIA_DIR, filename), buffer);
+            mediaUrl = `/static/uploads/omnichannel_media/${filename}`;
+            mediaType = "IMAGE";
+          } catch (err) {
+            console.error("[WA-QR] Error descargando imagen:", err.message);
+          }
+        } else if (isAudio) {
+          try {
+            durationSeconds = msg.message.audioMessage?.seconds || 0;
+            const buffer = await downloadMediaMessage(
+              msg,
+              "buffer",
+              {},
+              { reuploadRequest: sock.updateMediaMessage }
+            );
+            const mime = msg.message.audioMessage?.mimetype || "audio/ogg";
+            let ext = ".ogg";
+            if (mime.includes("mp4") || mime.includes("m4a")) ext = ".m4a";
+            else if (mime.includes("mpeg") || mime.includes("mp3")) ext = ".mp3";
+            const filename = `wa_audio_${Date.now()}_${msg.key.id}${ext}`;
+            fs.writeFileSync(path.join(MEDIA_DIR, filename), buffer);
+            mediaUrl = `/static/uploads/omnichannel_media/${filename}`;
+            mediaType = "AUDIO";
+          } catch (err) {
+            console.error("[WA-QR] Error descargando audio:", err.message);
+          }
+        }
+
+        let text =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
-          msg.message.imageMessage?.caption ||
-          "Mensaje recibido por WhatsApp Directo (QR)";
+          msg.message.imageMessage?.caption;
+
+        if (!text) {
+          if (isAudio) {
+            text = `🎙️ Nota de voz recibida (${durationSeconds || "audio"}s)`;
+          } else if (isImage) {
+            text = "📷 Imagen adjunta recibida";
+          } else {
+            text = "Mensaje recibido por WhatsApp Directo (QR)";
+          }
+        }
 
         try {
           await fetch(`${CALCU_BASE_URL}/api/v1/integrations/webhooks/WHATSAPP_QR`, {
@@ -340,10 +400,13 @@ async function startWhatsAppSocket(forceNew = false) {
               utm_medium: "qr_multidevice",
               utm_campaign: "WhatsApp_Directo_QR",
               external_lead_id: `waqr_${msg.key.id}`,
+              media_url: mediaUrl,
+              media_type: mediaType,
+              duration_seconds: durationSeconds,
             }),
           });
           console.log(
-            `[WA-QR -> Calcu] Mensaje entrante de ${pushName} (Tel Real: ${phoneToReport} | JID: ${remoteJid}): ${text}`
+            `[WA-QR -> Calcu] Mensaje entrante de ${pushName} (Tel Real: ${phoneToReport} | Media: ${mediaType || 'Texto'}): ${text}`
           );
         } catch (err) {
           console.error("[WA-QR] Error enviando webhook a Calcu:", err.message);
@@ -431,11 +494,64 @@ const server = http.createServer(async (req, res) => {
 
         const resolved = resolveIdentity(digits);
         const textToSend = String(data.message || "");
+        const reqMediaType = data.media_type ? String(data.media_type).toUpperCase() : null;
+        const reqMediaUrl = data.media_url ? String(data.media_url) : null;
+
+        let msgPayload = null;
+
+        if (reqMediaType === "IMAGE" && reqMediaUrl) {
+          let imgBuf = null;
+          if (reqMediaUrl.startsWith("data:image")) {
+            const b64 = reqMediaUrl.split(",")[1];
+            imgBuf = Buffer.from(b64, "base64");
+          } else {
+            const cleanRelative = reqMediaUrl.replace(/^\/+/, "");
+            const localPath = path.join(__dirname, "..", "app", cleanRelative);
+            if (fs.existsSync(localPath)) {
+              imgBuf = fs.readFileSync(localPath);
+            }
+          }
+          if (imgBuf) {
+            msgPayload = {
+              image: imgBuf,
+              caption: textToSend || undefined,
+            };
+          }
+        } else if (reqMediaType === "AUDIO" && reqMediaUrl) {
+          let audBuf = null;
+          let mimetype = "audio/mp4";
+          if (reqMediaUrl.startsWith("data:audio")) {
+            const parts = reqMediaUrl.split(",");
+            if (parts[0].includes("ogg")) mimetype = "audio/ogg; codecs=opus";
+            else if (parts[0].includes("mpeg") || parts[0].includes("mp3")) mimetype = "audio/mpeg";
+            audBuf = Buffer.from(parts[1], "base64");
+          } else {
+            const cleanRelative = reqMediaUrl.replace(/^\/+/, "");
+            const localPath = path.join(__dirname, "..", "app", cleanRelative);
+            if (fs.existsSync(localPath)) {
+              audBuf = fs.readFileSync(localPath);
+              if (localPath.endsWith(".ogg")) mimetype = "audio/ogg; codecs=opus";
+              else if (localPath.endsWith(".mp3")) mimetype = "audio/mpeg";
+              else if (localPath.endsWith(".m4a")) mimetype = "audio/mp4";
+            }
+          }
+          if (audBuf) {
+            msgPayload = {
+              audio: audBuf,
+              mimetype: mimetype,
+              ptt: true, // Renderizar como nota de voz oficial en WhatsApp
+            };
+          }
+        }
+
+        if (!msgPayload) {
+          msgPayload = { text: textToSend };
+        }
 
         // Intentar enviar primero al JID preferido (LID si tiene sesión activa o @s.whatsapp.net)
         let targetJid = resolved.preferredJid;
         try {
-          await activeSock.sendMessage(targetJid, { text: textToSend });
+          await activeSock.sendMessage(targetJid, msgPayload);
         } catch (firstErr) {
           // Fallback: si falló por @lid, intentar por @s.whatsapp.net con el número real (o viceversa)
           const fallbackJid = targetJid.endsWith("@lid")
@@ -445,7 +561,7 @@ const server = http.createServer(async (req, res) => {
             : `${ resolved.phoneDigits }@s.whatsapp.net`;
           if (fallbackJid !== targetJid) {
             targetJid = fallbackJid;
-            await activeSock.sendMessage(targetJid, { text: textToSend });
+            await activeSock.sendMessage(targetJid, msgPayload);
           } else {
             throw firstErr;
           }

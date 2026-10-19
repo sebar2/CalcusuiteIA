@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import urllib.parse
 import json
 import os
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -35,6 +35,8 @@ class OmnichannelMessageResponse(BaseModel):
     delivery_status: str
     is_ai_generated: bool
     created_at: str
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
 
 
 class ConversationSummaryResponse(BaseModel):
@@ -61,6 +63,8 @@ class SendMessageRequest(BaseModel):
     channel: str = Field(..., description="Canal por el que se desea responder: WHATSAPP, EMAIL, META_ADS, GOOGLE_ADS, WEB_FORM")
     message_text: str = Field(..., min_length=1, max_length=4000)
     is_ai_generated: bool = False
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
 
 
 class AISuggestionRequest(BaseModel):
@@ -266,9 +270,89 @@ def get_deal_messages(
             delivery_status=m.delivery_status,
             is_ai_generated=m.is_ai_generated,
             created_at=m.created_at.strftime("%Y-%m-%d %H:%M:%S") if m.created_at else "",
+            media_url=m.metadata_json.get("media_url") if isinstance(m.metadata_json, dict) else None,
+            media_type=m.metadata_json.get("media_type") if isinstance(m.metadata_json, dict) else None,
         )
         for m in msgs
     ]
+
+
+@router.post(
+    "/upload-media",
+    summary="Sube un archivo de imagen o audio para el Chat Omnicanal (Validación MIME & Magic Bytes ISO 27001)"
+)
+async def upload_omnichannel_media(
+    file: UploadFile = File(...),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
+):
+    import uuid
+    # Límite estricto 25MB (Prevención DoS)
+    MAX_SIZE = 25 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="El archivo excede el tamaño máximo permitido de 25 MB."
+        )
+
+    # Detección y validación por Magic Bytes (Prevención RCE & CWE-434)
+    media_type = None
+    ext = None
+
+    if content.startswith(b"\xff\xd8\xff"):
+        media_type = "IMAGE"
+        ext = ".jpg"
+    elif content.startswith(b"\x89PNG\r\n\x1a\n"):
+        media_type = "IMAGE"
+        ext = ".png"
+    elif len(content) > 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        media_type = "IMAGE"
+        ext = ".webp"
+    elif content.startswith(b"OggS"):
+        media_type = "AUDIO"
+        ext = ".ogg"
+    elif content.startswith(b"ID3") or (len(content) > 2 and content[0] == 0xff and (content[1] & 0xe0) == 0xe0):
+        media_type = "AUDIO"
+        ext = ".mp3"
+    elif len(content) > 12 and content[4:8] == b"ftyp":
+        media_type = "AUDIO"
+        ext = ".m4a"
+    else:
+        # Fallback a MIME si coincide con audio o imagen
+        content_type = (file.content_type or "").lower()
+        if "image/jpeg" in content_type:
+            media_type, ext = "IMAGE", ".jpg"
+        elif "image/png" in content_type:
+            media_type, ext = "IMAGE", ".png"
+        elif "image/webp" in content_type:
+            media_type, ext = "IMAGE", ".webp"
+        elif "audio/ogg" in content_type:
+            media_type, ext = "AUDIO", ".ogg"
+        elif "audio/mpeg" in content_type or "audio/mp3" in content_type:
+            media_type, ext = "AUDIO", ".mp3"
+        elif "audio/mp4" in content_type or "audio/m4a" in content_type or "audio/webm" in content_type:
+            media_type, ext = "AUDIO", ".m4a"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Formato de archivo no permitido. Solo se aceptan imágenes (JPG, PNG, WebP) y audios (OGG, MP3, M4A, WebM)."
+            )
+
+    media_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static", "uploads", "omnichannel_media")
+    os.makedirs(media_dir, exist_ok=True)
+
+    filename = f"chat_{media_type.lower()}_{uuid.uuid4().hex[:12]}_{int(datetime.now(timezone.utc).timestamp())}{ext}"
+    target_path = os.path.join(media_dir, filename)
+
+    with open(target_path, "wb") as f:
+        f.write(content)
+
+    return {
+        "media_url": f"/static/uploads/omnichannel_media/{filename}",
+        "media_type": media_type,
+        "filename": filename,
+        "size_bytes": len(content),
+    }
 
 
 @router.post(
@@ -319,7 +403,6 @@ async def send_omnichannel_message(
                 meli_dispatched = True
                 has_real_creds = True
             except Exception as e:
-                # Si la API falla (ej. pregunta ya respondida o error MeLi), registrar sin interrumpir flujo
                 pass
 
     # Si el canal es WHATSAPP_QR (o WHATSAPP sin API Cloud pero con QR Bridge conectado), despachar en vivo por Baileys
@@ -328,17 +411,22 @@ async def send_omnichannel_message(
         try:
             import urllib.request as _ureq
             bridge_url = os.getenv("WA_QR_BRIDGE_URL", "http://127.0.0.1:3010").rstrip("/")
-            req_data = json.dumps({
+            req_body = {
                 "phone": deal.phone,
                 "message": payload.message_text.strip(),
-            }).encode("utf-8")
+            }
+            if payload.media_url:
+                req_body["media_url"] = payload.media_url
+                req_body["media_type"] = payload.media_type or "IMAGE"
+
+            req_data = json.dumps(req_body).encode("utf-8")
             req = _ureq.Request(
                 f"{bridge_url}/send",
                 data=req_data,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with _ureq.urlopen(req, timeout=4.5) as resp:
+            with _ureq.urlopen(req, timeout=5.0) as resp:
                 if resp.status == 200:
                     resp_body = json.loads(resp.read().decode("utf-8"))
                     if resp_body.get("sent"):
@@ -361,6 +449,11 @@ async def send_omnichannel_message(
         )
     )
 
+    out_media_meta = {}
+    if payload.media_url:
+        out_media_meta["media_url"] = payload.media_url
+        out_media_meta["media_type"] = payload.media_type or "IMAGE"
+
     new_msg = OmnichannelMessage(
         tenant_id=user.tenant_id,
         deal_id=deal.id,
@@ -371,6 +464,7 @@ async def send_omnichannel_message(
         message_text=payload.message_text.strip(),
         delivery_status=delivery_status,
         is_ai_generated=payload.is_ai_generated,
+        metadata_json=out_media_meta if out_media_meta else None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(new_msg)

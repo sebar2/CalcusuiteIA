@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "static", "uploads")
 os.makedirs(os.path.join(UPLOAD_DIR, "products"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "omnichannel_media"), exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,8 +47,19 @@ async def lifespan(app: FastAPI):
         security_agent.run_perimeter_audit()
     except Exception:
         pass
+    # Iniciar micro-servidor local de WhatsApp Web (Baileys) en 127.0.0.1:3010
+    try:
+        from app.services.whatsapp_bridge_supervisor import whatsapp_bridge_supervisor
+        whatsapp_bridge_supervisor.ensure_bridge_running()
+    except Exception:
+        pass
     yield
-    # Shutdown
+    # Shutdown: Detener procesos hijos
+    try:
+        from app.services.whatsapp_bridge_supervisor import whatsapp_bridge_supervisor
+        whatsapp_bridge_supervisor.stop_bridge()
+    except Exception:
+        pass
 
 app = FastAPI(
     title="Calcu - SupplyFinance Core API",

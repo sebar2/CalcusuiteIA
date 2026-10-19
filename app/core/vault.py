@@ -261,51 +261,28 @@ def generate_whatsapp_qr_challenge(tenant_id: str) -> Dict[str, Any]:
     token_raw = f"{clean_tid}:{expires_at}:{nonce}:{pairing_code}:{sig}"
     qr_token = base64.urlsafe_b64encode(token_raw.encode("utf-8")).decode("ascii")
 
-    # 1. Consultar si el puente oficial de WhatsApp Web Multi-Dispositivo (Baileys) está activo en 127.0.0.1:3010
-    bridge_url = os.getenv("WHATSAPP_QR_BRIDGE_URL", "http://127.0.0.1:3010")
+    # 1. Supervisar y consultar el puente oficial de WhatsApp Web Multi-Dispositivo (Baileys) en 127.0.0.1:3010
     bridge_online = False
-    bridge_connection = "offline"
+    bridge_connection = "initializing"
     bridge_linked_phone = None
     bridge_device_label = None
     live_qr_svg = None
 
     try:
-        req = urllib.request.Request(f"{bridge_url}/status", method="GET")
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            if resp.status == 200:
-                bdata = json.loads(resp.read().decode("utf-8"))
-                bridge_online = True
-                bridge_connection = bdata.get("connection", "initializing")
-                bridge_linked_phone = bdata.get("linked_phone")
-                bridge_device_label = bdata.get("device_label")
-                if bdata.get("qr_svg"):
-                    live_qr_svg = bdata["qr_svg"]
+        from app.services.whatsapp_bridge_supervisor import whatsapp_bridge_supervisor
+        bdata = whatsapp_bridge_supervisor.ensure_bridge_running(wait_seconds=2.0)
+        if bdata:
+            bridge_online = bool(bdata.get("bridge_online"))
+            bridge_connection = bdata.get("connection", "initializing")
+            bridge_linked_phone = bdata.get("linked_phone")
+            bridge_device_label = bdata.get("device_label")
+            live_qr_svg = bdata.get("qr_svg")
     except Exception:
         pass
 
-    if live_qr_svg:
-        qr_svg_b64 = live_qr_svg
-    else:
-        # 2. Respaldo ISO/IEC 18004 Reed-Solomon real (escaneable con cualquier lector QR) usando Segno
-        qr_URI = f"https://wa.me/59894858791?text=Vincular%20Calcu%20CRM%20Codigo%20{pairing_code}"
-        try:
-            import segno
-            qr_obj = segno.make(qr_URI, error="m")
-            buff = io.BytesIO()
-            qr_obj.save(buff, kind="svg", scale=6, border=2, dark="#0f172a", light="#ffffff")
-            qr_svg_b64 = "data:image/svg+xml;base64," + base64.b64encode(buff.getvalue()).decode("ascii")
-        except Exception:
-            svg_fallback = (
-                '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220" viewBox="0 0 220 220">'
-                '<rect width="220" height="220" fill="#ffffff"/>'
-                '<rect x="20" y="20" width="50" height="50" fill="#0f172a"/>'
-                '</svg>'
-            )
-            qr_svg_b64 = "data:image/svg+xml;base64," + base64.b64encode(svg_fallback.encode("utf-8")).decode("ascii")
-
     return {
         "qr_token": qr_token,
-        "qr_svg": qr_svg_b64,
+        "qr_svg": live_qr_svg,
         "pairing_code": pairing_code,
         "expires_in_seconds": 120,
         "bridge_online": bridge_online,

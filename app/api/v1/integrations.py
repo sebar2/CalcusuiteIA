@@ -151,6 +151,9 @@ class WebhookLeadIngestPayload(BaseModel):
         default=None,
         description="Opcional: AMIGOS_FAMILIA para contactos personales o COMERCIAL_B2B",
     )
+    media_url: Optional[str] = None
+    media_type: Optional[str] = None
+    duration_seconds: Optional[int] = 0
 
 
 def _compute_ai_lead_score(mensaje: str, monto: Decimal, channel: str, categoria_contacto: Optional[str] = None) -> tuple[int, str]:
@@ -790,6 +793,13 @@ def ingest_webhook_lead(
                 payload.mensaje_inicial
                 or f"Mensaje recibido de {payload.nombre_contacto}."
             )
+            media_meta = {}
+            if payload.media_url:
+                media_meta["media_url"] = payload.media_url
+                media_meta["media_type"] = payload.media_type or "IMAGE"
+                if payload.duration_seconds:
+                    media_meta["duration_seconds"] = payload.duration_seconds
+
             appended_msg = OmnichannelMessage(
                 tenant_id=cfg.tenant_id if cfg else "tenant_calcu_corp",
                 deal_id=matched_deal.id,
@@ -800,6 +810,7 @@ def ingest_webhook_lead(
                 message_text=msg_text,
                 delivery_status="RECEIVED",
                 is_ai_generated=False,
+                metadata_json=media_meta if media_meta else None,
                 created_at=datetime.now(timezone.utc),
             )
             db.add(appended_msg)
@@ -879,6 +890,13 @@ def ingest_webhook_lead(
         payload.mensaje_inicial
         or f"Hola, soy {payload.nombre_contacto}."
     )
+    initial_media_meta = {}
+    if payload.media_url:
+        initial_media_meta["media_url"] = payload.media_url
+        initial_media_meta["media_type"] = payload.media_type or "IMAGE"
+        if payload.duration_seconds:
+            initial_media_meta["duration_seconds"] = payload.duration_seconds
+
     chat_msg = OmnichannelMessage(
         tenant_id=cfg.tenant_id if cfg else "tenant_calcu_corp",
         deal_id=deal_id,
@@ -889,6 +907,7 @@ def ingest_webhook_lead(
         message_text=initial_text,
         delivery_status="RECEIVED",
         is_ai_generated=False,
+        metadata_json=initial_media_meta if initial_media_meta else None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(chat_msg)
