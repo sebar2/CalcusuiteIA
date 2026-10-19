@@ -44,6 +44,7 @@ const MonitoringAuditView = lazy(() => import('./views/MonitoringAuditView').the
 const IntegrationsView = lazy(() => import('./views/IntegrationsView').then(m => ({ default: m.IntegrationsView })));
 const OmnichannelChatView = lazy(() => import('./views/OmnichannelChatView').then(m => ({ default: m.OmnichannelChatView })));
 const MasterAdminTenantsView = lazy(() => import('./views/MasterAdminTenantsView').then(m => ({ default: m.MasterAdminTenantsView })));
+const MercadoLibreView = lazy(() => import('./views/commercial/MercadoLibreView').then(m => ({ default: m.MercadoLibreView })));
 
 import { Lock } from 'lucide-react';
 
@@ -495,6 +496,19 @@ export function AppContent() {
                   initialDealId={selectedDealForChatId}
                   onNavigateToIntegrations={() => setActiveTab('integrations')}
                   onNavigateToCRM={() => setActiveTab('crm')}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'mercadolibre' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Mercado Libre Uruguay">
+                <MercadoLibreView
+                  currentRole={currentRole}
+                  onNavigateToCRM={() => setActiveTab('crm')}
+                  onNavigateToChat={(dealId) => {
+                    if (dealId) setSelectedDealForChatId(dealId);
+                    setActiveTab('omnichannel_chat');
+                  }}
                 />
               </ErrorBoundary>
             )}

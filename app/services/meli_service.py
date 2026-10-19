@@ -585,12 +585,12 @@ class MeliService:
 
         clean_text = text.lower()
 
-        # 1. Teléfonos uruguayos (09X XXX XXX, 09XXXXXXX, +598 9X...)
+        # 1. Teléfonos uruguayos (09X XXX XXX, 09XXXXXXX, +598 9X XXX XXX...)
         phone_patterns = [
-            r"\b09[1-9]\d{6}\b",
-            r"\b09[1-9][\s.-]?\d{3}[\s.-]?\d{3}\b",
-            r"\+?598[\s.-]?9[1-9][\s.-]?\d{6}\b",
-            r"\b2\d{7}\b",  # Teléfonos fijos Montevideo (ej. 2400 1234)
+            r"\+?598[\s.-]?9[1-9](?:[\s.-]?\d){6}\b",
+            r"\b09[1-9](?:[\s.-]?\d){6}\b",
+            r"\b[24]\d{3}[\s.-]?\d{4}\b",
+            r"\b[24]\d{7}\b",
         ]
         for pat in phone_patterns:
             if re.search(pat, text):

@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Plug,
   Crown,
+  ShoppingBag,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -40,6 +41,7 @@ export type ActiveTab =
   | 'crm'
   | 'omnichannel_chat'
   | 'integrations'
+  | 'mercadolibre'
   | 'tenants_admin'
   | 'clients'
   | 'invoices'
@@ -290,6 +292,13 @@ export const Sidebar = ({
           label: 'Hub Integraciones Multicanal',
           shortLabel: 'Hub Integraciones',
           icon: Plug,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'mercadolibre',
+          label: 'Mercado Libre Uruguay',
+          shortLabel: 'Mercado Libre',
+          icon: ShoppingBag,
           roles: ['controller_admin', 'comercial', 'analista_comercial'],
         },
         {

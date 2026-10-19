@@ -276,8 +276,13 @@ def update_integration_channel(
         if merged_creds:
             cfg.encrypted_credentials = encrypt_vault_payload(merged_creds)
             cfg.masked_summary = sanitize_credentials_for_response(merged_creds)
-            cfg.status = "CONNECTED" if payload.is_enabled else "DISCONNECTED"
-            cfg.is_enabled = payload.is_enabled
+            if clean_ch == "MERCADO_LIBRE":
+                has_oauth_token = bool(merged_creds.get("access_token"))
+                cfg.status = "CONNECTED" if (payload.is_enabled and has_oauth_token) else "PENDING_CREDENTIALS"
+                cfg.is_enabled = bool(payload.is_enabled and has_oauth_token)
+            else:
+                cfg.status = "CONNECTED" if payload.is_enabled else "DISCONNECTED"
+                cfg.is_enabled = payload.is_enabled
         else:
             # Cero Falsos Positivos: sin credenciales reales, jamás se marca como CONNECTED
             cfg.encrypted_credentials = None
@@ -285,12 +290,16 @@ def update_integration_channel(
             cfg.status = "PENDING_CREDENTIALS"
             cfg.is_enabled = False
     else:
-        has_real_creds = bool(decrypt_vault_payload(cfg.encrypted_credentials))
+        dec = decrypt_vault_payload(cfg.encrypted_credentials)
+        if clean_ch == "MERCADO_LIBRE":
+            has_real_creds = bool(dec and dec.get("access_token"))
+        else:
+            has_real_creds = bool(dec)
         if payload.is_enabled and not has_real_creds:
             cfg.status = "PENDING_CREDENTIALS"
             cfg.is_enabled = False
         else:
-            cfg.is_enabled = payload.is_enabled
+            cfg.is_enabled = payload.is_enabled and has_real_creds
             cfg.status = "CONNECTED" if (payload.is_enabled and has_real_creds) else (
                 "DISCONNECTED" if has_real_creds else "PENDING_CREDENTIALS"
             )
