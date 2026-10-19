@@ -1736,6 +1736,18 @@ export const apiService = {
     return res.data;
   },
 
+  async getMeliAuthUrl(redirectUri?: string): Promise<{
+    auth_url: string;
+    client_id: string;
+    redirect_uri: string;
+    state: string;
+  }> {
+    const res = await apiClient.get('/api/v1/integrations/meli/authorize', {
+      params: redirectUri ? { redirect_uri: redirectUri } : undefined,
+    });
+    return res.data;
+  },
+
   async generateWhatsAppQR(): Promise<{
     channel: string;
     tenant_id: string;

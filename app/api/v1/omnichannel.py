@@ -19,6 +19,7 @@ from app.core.security import (
     ROLE_CONTROLLER_ADMIN,
     ROLE_ANALISTA_COMERCIAL,
 )
+from app.services.meli_service import MeliService
 
 router = APIRouter(prefix="/api/v1/omnichannel", tags=["Chat Omnicanal Unificado & Copiloto IA"])
 
@@ -290,8 +291,36 @@ async def send_omnichannel_message(
             deal.phone = resolved_p
 
     clean_ch = payload.channel.strip().upper()
+
+    # Validación Anti-Penalización de Mercado Libre Uruguay
+    if clean_ch == "MERCADO_LIBRE":
+        is_valid, violation = MeliService.validate_anti_penalty(payload.message_text)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Políticas de Mercado Libre: {violation}",
+            )
+
     cfg = db.query(IntegrationConfig).filter(IntegrationConfig.channel == clean_ch).first()
     has_real_creds = bool(cfg and cfg.is_enabled and decrypt_vault_payload(cfg.encrypted_credentials))
+
+    # Despacho en vivo para Mercado Libre si existen credenciales válidas y es una pregunta pre-venta
+    meli_dispatched = False
+    if clean_ch == "MERCADO_LIBRE":
+        meli_token = MeliService.get_valid_seller_token(db, tenant_id=user.tenant_id)
+        if meli_token and deal.external_lead_id and deal.external_lead_id.startswith("meli_q_"):
+            q_id = deal.external_lead_id.replace("meli_q_", "")
+            try:
+                await MeliService.answer_question(
+                    question_id=q_id,
+                    text=payload.message_text.strip(),
+                    access_token=meli_token
+                )
+                meli_dispatched = True
+                has_real_creds = True
+            except Exception as e:
+                # Si la API falla (ej. pregunta ya respondida o error MeLi), registrar sin interrumpir flujo
+                pass
 
     # Si el canal es WHATSAPP_QR (o WHATSAPP sin API Cloud pero con QR Bridge conectado), despachar en vivo por Baileys
     bridge_dispatched = False
@@ -323,9 +352,13 @@ async def send_omnichannel_message(
 
     # Cero Falsos Positivos: informar con total transparencia si el canal externo no tiene llaves reales
     delivery_status = (
-        "DELIVERED_WHATSAPP_QR_BRIDGE"
-        if bridge_dispatched
-        else ("DELIVERED_API" if has_real_creds else "LOGGED_PENDING_CHANNEL_CREDENTIALS")
+        "DELIVERED_MELI_API"
+        if meli_dispatched
+        else (
+            "DELIVERED_WHATSAPP_QR_BRIDGE"
+            if bridge_dispatched
+            else ("DELIVERED_API" if has_real_creds else "LOGGED_PENDING_CHANNEL_CREDENTIALS")
+        )
     )
 
     new_msg = OmnichannelMessage(
@@ -354,6 +387,8 @@ async def send_omnichannel_message(
         subj = urllib.parse.quote(f"Propuesta Comercial Calcu - {deal.proyecto_nombre}")
         body = urllib.parse.quote(payload.message_text.strip())
         direct_action_url = f"mailto:{deal.email}?subject={subj}&body={body}"
+    elif clean_ch == "MERCADO_LIBRE":
+        direct_action_url = "https://www.mercadolibre.com.uy/preguntas"
 
     msg_Out = {
         "id": new_msg.id,

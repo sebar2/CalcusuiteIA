@@ -21,6 +21,7 @@ import {
   QrCode,
   Smartphone,
   Unplug,
+  ShoppingBag,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { IntegrationChannelConfig, WhatsAppQRSessionResponse } from '../types';
@@ -66,6 +67,12 @@ const CHANNEL_FIELDS_SCHEMA: Record<
   WEB_FORM: [
     { key: 'webhook_secret', label: 'Secreto de Firma HMAC para Formulario Web *', placeholder: 'whsec_calcu_998877...', type: 'password' },
     { key: 'allowed_origin', label: 'Dominio Web Autorizado (CORS)', placeholder: 'https://www.miempresa.com.uy', type: 'text' },
+  ],
+  MERCADO_LIBRE: [
+    { key: 'app_id', label: 'Mercado Libre App ID (Oficial Developer Center) *', placeholder: '5376694505612300', type: 'text' },
+    { key: 'client_secret', label: 'Client Secret Oficial (Developers MeLi) *', placeholder: 't9hBq41DBS8d8Z1...', type: 'password' },
+    { key: 'seller_id', label: 'ID de Cuenta / Vendedor MeLi (Opcional)', placeholder: '182736452', type: 'text' },
+    { key: 'site_id', label: 'Site Marketplace', placeholder: 'MLU (Uruguay)', type: 'text' },
   ],
 };
 
@@ -142,6 +149,8 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
         return <QrCode className="text-teal-600 dark:text-teal-400" size={22} />;
       case 'EMAIL':
         return <Mail className="text-purple-600 dark:text-purple-400" size={22} />;
+      case 'MERCADO_LIBRE':
+        return <ShoppingBag className="text-amber-500 dark:text-yellow-400" size={22} />;
       default:
         return <Globe className="text-cyan-600 dark:text-cyan-400" size={22} />;
     }
@@ -255,6 +264,37 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
       setBannerMsg({
         type: 'error',
         text: err.response?.data?.detail || 'No se pudo desvincular la sesión de WhatsApp QR.',
+      });
+    }
+  };
+
+  const handleConnectMeliOAuth = async () => {
+    if (!isAdmin) {
+      setBannerMsg({
+        type: 'warning',
+        text: 'Control RBAC ISO 27001: Solo el rol controller_admin puede autorizar la vinculación OAuth 2.0 con Mercado Libre.',
+      });
+      return;
+    }
+    try {
+      const res = await apiService.getMeliAuthUrl();
+      if (res && res.auth_url) {
+        const popup = window.open(
+          res.auth_url,
+          'MeliOAuthWindow',
+          'width=650,height=750,scrollbars=yes,status=yes'
+        );
+        const timer = setInterval(() => {
+          if (!popup || popup.closed) {
+            clearInterval(timer);
+            loadChannels();
+          }
+        }, 1500);
+      }
+    } catch (err: any) {
+      setBannerMsg({
+        type: 'error',
+        text: err.response?.data?.detail || 'No se pudo generar la URL de autorización de Mercado Libre.',
       });
     }
   };
@@ -614,6 +654,16 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {ch.channel === 'MERCADO_LIBRE' && !isConnected && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <span className="font-bold block">Vinculación OAuth2 Requerida</span>
+                      <span>Autoriza Calcu-Benchmarking (App ID 5376694505612300) para recibir preguntas en 1. Prospección y responder desde el Chat Omnicanal.</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Botonera Inferior */}
@@ -628,6 +678,26 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                       <QrCode size={13} />
                       <span>{isConnected ? 'Gestionar QR' : 'Vincular con QR'}</span>
                     </button>
+                  ) : ch.channel === 'MERCADO_LIBRE' ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleConnectMeliOAuth}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FFE600] hover:bg-[#ffe100] text-[#2D3277] shadow-xs transition-colors cursor-pointer"
+                        title="Iniciar flujo oficial OAuth 2.0 con Mercado Libre Developers"
+                      >
+                        <ShoppingBag size={13} />
+                        <span>{isConnected ? 'Reconectar MeLi' : 'Vincular MeLi'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenConfigModal(ch)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Ver credenciales enmascaradas o configurar llaves"
+                      >
+                        <KeyRound size={13} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       type="button"

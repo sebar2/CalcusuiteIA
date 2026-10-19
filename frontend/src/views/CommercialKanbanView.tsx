@@ -625,6 +625,7 @@ export const CommercialKanbanView = ({
               <option value="META_ADS">Meta / Facebook</option>
               <option value="WHATSAPP">WhatsApp Business API</option>
               <option value="WHATSAPP_QR">WhatsApp Directo (QR)</option>
+              <option value="MERCADO_LIBRE">🛍️ Mercado Libre Uruguay</option>
               <option value="EMAIL">Email Corporativo</option>
               <option value="WEB_FORM">Página Web (Webhook)</option>
               <option value="MANUAL">CRM Directo</option>

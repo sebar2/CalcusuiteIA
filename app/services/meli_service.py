@@ -3,9 +3,12 @@ import re
 import time
 import logging
 from decimal import Decimal
-from typing import List, Optional, Dict, Any
-from urllib.parse import urlparse
+from typing import List, Optional, Dict, Any, Tuple
+from urllib.parse import urlparse, urlencode
+import secrets
+from datetime import datetime, timezone
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import MELI_CLIENT_ID, MELI_CLIENT_SECRET
 from app.domain.schemas import CompetitorItemResponse
@@ -374,3 +377,519 @@ class MeliService:
             logger.info("Rastreo web en Mercado Libre omitido o sin resultados: %s", exc)
 
         return results
+
+    # =========================================================================
+    # INTEGRACIÓN OFICIAL MERCADO LIBRE URUGUAY (MLU) - SELLER OAUTH & WEBHOOKS
+    # =========================================================================
+
+    MELI_AUTH_BASE_URL = "https://auth.mercadolibre.com.uy/authorization"
+    MELI_API_BASE_URL = "https://api.mercadolibre.com"
+    DEFAULT_REDIRECT_URI = "https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+
+    @classmethod
+    def get_client_credentials(cls) -> Tuple[str, str]:
+        """Obtiene client_id y client_secret de entorno con fallback al App ID oficial."""
+        client_id = (os.getenv("MELI_CLIENT_ID") or MELI_CLIENT_ID or "5376694505612300").strip()
+        client_secret = (os.getenv("MELI_CLIENT_SECRET") or MELI_CLIENT_SECRET or "").strip()
+        return client_id, client_secret
+
+    @classmethod
+    def build_authorization_url(
+        cls,
+        tenant_id: str = "tenant_calcu_corp",
+        redirect_uri: Optional[str] = None,
+        state: Optional[str] = None
+    ) -> Dict[str, str]:
+        """
+        Construye la URL oficial de autorización OAuth 2.0 para Mercado Libre Uruguay.
+        App ID: 5376694505612300 (Calcu-Benchmarking)
+        """
+        client_id, _ = cls.get_client_credentials()
+        r_uri = redirect_uri or cls.DEFAULT_REDIRECT_URI
+        st = state or f"st_{tenant_id}_{secrets.token_hex(8)}"
+        params = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": r_uri,
+            "state": st,
+        }
+        auth_url = f"{cls.MELI_AUTH_BASE_URL}?{urlencode(params)}"
+        return {
+            "auth_url": auth_url,
+            "client_id": client_id,
+            "redirect_uri": r_uri,
+            "state": st,
+        }
+
+    @classmethod
+    async def exchange_authorization_code(
+        cls,
+        code: str,
+        redirect_uri: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Intercambia el authorization_code por tokens definitivos de vendedor contra MeLi.
+        """
+        client_id, client_secret = cls.get_client_credentials()
+        if not client_secret:
+            raise ValueError("MELI_CLIENT_SECRET no configurado en entorno (.env).")
+
+        r_uri = redirect_uri or cls.DEFAULT_REDIRECT_URI
+        url = f"{cls.MELI_API_BASE_URL}/oauth/token"
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": r_uri,
+        }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, data=payload, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()
+            else:
+                logger.error("Error intercambiando code de MeLi: %d %s", resp.status_code, resp.text)
+                raise RuntimeError(f"Error MeLi OAuth ({resp.status_code}): {resp.text}")
+
+    @classmethod
+    async def refresh_seller_token(
+        cls,
+        refresh_token: str
+    ) -> Dict[str, Any]:
+        """
+        Renueva el access_token utilizando el refresh_token de un solo uso de Mercado Libre.
+        """
+        client_id, client_secret = cls.get_client_credentials()
+        if not client_secret:
+            raise ValueError("MELI_CLIENT_SECRET no configurado en entorno (.env).")
+
+        url = f"{cls.MELI_API_BASE_URL}/oauth/token"
+        payload = {
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, data=payload, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()
+            else:
+                logger.error("Error renovando refresh_token de MeLi: %d %s", resp.status_code, resp.text)
+                raise RuntimeError(f"Error renovación MeLi ({resp.status_code}): {resp.text}")
+
+    @classmethod
+    def get_valid_seller_token(
+        cls,
+        db: Session,
+        tenant_id: str = "tenant_calcu_corp"
+    ) -> Optional[str]:
+        """
+        Garantía ISO 27001: Obtiene el token de vendedor descifrándolo de la bóveda AES-256.
+        Si está próximo a expirar (<30 min) y tiene refresh_token, lo renueva automáticamente.
+        """
+        from app.models.multitenant_entities import IntegrationConfig
+        from app.core.vault import decrypt_vault_payload, encrypt_vault_payload, sanitize_credentials_for_response
+
+        cfg = db.query(IntegrationConfig).filter(
+            IntegrationConfig.channel == "MERCADO_LIBRE",
+            IntegrationConfig.tenant_id == tenant_id
+        ).first()
+
+        if not cfg or not cfg.encrypted_credentials:
+            return None
+
+        creds = decrypt_vault_payload(cfg.encrypted_credentials)
+        if not creds:
+            return None
+
+        access_token = creds.get("access_token")
+        refresh_token = creds.get("refresh_token")
+        expires_at = creds.get("expires_at", 0)
+
+        # Si aún tiene más de 30 minutos de validez, retornarlo directamente
+        now_ts = time.time()
+        if access_token and (expires_at - now_ts > 1800):
+            return access_token
+
+        # Si tiene refresh token, renovar preventivamente
+        if refresh_token:
+            try:
+                client_id, client_secret = cls.get_client_credentials()
+                if client_secret:
+                    with httpx.Client(timeout=10.0) as c:
+                        resp = c.post(
+                            f"{cls.MELI_API_BASE_URL}/oauth/token",
+                            data={
+                                "grant_type": "refresh_token",
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "refresh_token": refresh_token,
+                            },
+                            headers={"Content-Type": "application/x-www-form-urlencoded"}
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            new_access = data.get("access_token")
+                            new_refresh = data.get("refresh_token") or refresh_token
+                            exp_in = float(data.get("expires_in", 21600))
+                            creds.update({
+                                "access_token": new_access,
+                                "refresh_token": new_refresh,
+                                "expires_at": time.time() + exp_in,
+                                "updated_at": datetime.now(timezone.utc).isoformat(),
+                            })
+                            cfg.encrypted_credentials = encrypt_vault_payload(creds)
+                            cfg.masked_summary = sanitize_credentials_for_response(creds)
+                            cfg.status = "CONNECTED"
+                            db.commit()
+                            return new_access
+            except Exception as e:
+                logger.error("Error en renovación preventiva de token MeLi: %s", e)
+                return access_token
+
+        return access_token
+
+    @classmethod
+    def validate_anti_penalty(cls, text: str) -> Tuple[bool, Optional[str]]:
+        """
+        Linter Anti-Penalización de Mercado Libre:
+        Detecta y bloquea datos de contacto externos (teléfonos uruguayos, correos, enlaces web y menciones)
+        para proteger la reputación y evitar suspensión de la cuenta en preguntas pre-venta.
+        """
+        if not text:
+            return True, None
+
+        clean_text = text.lower()
+
+        # 1. Teléfonos uruguayos (09X XXX XXX, 09XXXXXXX, +598 9X...)
+        phone_patterns = [
+            r"\b09[1-9]\d{6}\b",
+            r"\b09[1-9][\s.-]?\d{3}[\s.-]?\d{3}\b",
+            r"\+?598[\s.-]?9[1-9][\s.-]?\d{6}\b",
+            r"\b2\d{7}\b",  # Teléfonos fijos Montevideo (ej. 2400 1234)
+        ]
+        for pat in phone_patterns:
+            if re.search(pat, text):
+                return False, "Se detectó un número telefónico uruguayo. MeLi penaliza severamente el envío de números en preguntas pre-venta."
+
+        # 2. Correos electrónicos
+        email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+        if re.search(email_pattern, text):
+            return False, "Se detectó una dirección de correo electrónico. MeLi prohíbe el intercambio de emails en preguntas pre-venta."
+
+        # 3. Enlaces web, dominios y URLs
+        url_patterns = [
+            r"https?://\S+",
+            r"www\.\S+",
+            r"\b[a-zA-Z0-9-]+\.(com|uy|com\.uy|org|net|io|me|ar|cl|br)\b",
+        ]
+        for pat in url_patterns:
+            if re.search(pat, text, re.IGNORECASE):
+                return False, "Se detectó una URL o dominio web externo. MeLi prohíbe enlaces externos en preguntas pre-venta."
+
+        # 4. Palabras clave de contacto externo o pago por fuera
+        forbidden_keywords = [
+            ("whatsapp", "WhatsApp"),
+            ("wpp", "WhatsApp"),
+            ("whats", "WhatsApp"),
+            ("celular", "contacto telefónico"),
+            ("telefono", "contacto telefónico"),
+            ("teléfono", "contacto telefónico"),
+            ("por fuera", "transacción externa"),
+            ("transferencia bancaria", "pago por fuera de Mercado Pago"),
+            ("instagram", "red social externa"),
+            ("facebook", "red social externa"),
+        ]
+        for kw, desc in forbidden_keywords:
+            if re.search(rf"\b{kw}\b", clean_text):
+                return False, f"Se detectó mención a '{kw}' ({desc}). MeLi prohíbe coordinar contactos o pagos externos."
+
+        return True, None
+
+    @classmethod
+    async def fetch_meli_resource(
+        cls,
+        resource_path: str,
+        access_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Consulta un recurso oficial de MeLi (/questions/..., /items/..., /orders/...).
+        """
+        clean_path = resource_path if resource_path.startswith("/") else f"/{resource_path}"
+        url = f"{cls.MELI_API_BASE_URL}{clean_path}"
+        headers = {"Accept": "application/json"}
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning("Recurso MeLi %s retornó %d: %s", clean_path, resp.status_code, resp.text)
+            return {}
+
+    @classmethod
+    async def answer_question(
+        cls,
+        question_id: int | str,
+        text: str,
+        access_token: str
+    ) -> Dict[str, Any]:
+        """
+        Envía una respuesta a una pregunta pre-venta en MeLi verificando linter anti-penalización.
+        """
+        is_valid, violation = cls.validate_anti_penalty(text)
+        if not is_valid:
+            raise ValueError(f"Violación de políticas de Mercado Libre: {violation}")
+
+        url = f"{cls.MELI_API_BASE_URL}/answers"
+        payload = {
+            "question_id": int(question_id),
+            "text": text.strip()
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code in (200, 201):
+                return resp.json()
+            raise RuntimeError(f"Error al responder pregunta en MeLi ({resp.status_code}): {resp.text}")
+
+    @classmethod
+    def process_meli_webhook_sync(
+        cls,
+        db: Session,
+        resource: str,
+        topic: str,
+        user_id: Optional[int | str] = None,
+        tenant_id: str = "tenant_calcu_corp"
+    ) -> Dict[str, Any]:
+        """
+        Procesa de forma idempotente las notificaciones de Webhooks de Mercado Libre Uruguay:
+        - topic == 'questions' -> Ingesta de pregunta en '1. Prospección' con canal MERCADO_LIBRE.
+        - topic == 'orders' -> Actualización/Cierre de venta y cruce de stock en módulo de Inventario.
+        """
+        from app.models.entities import CommercialDeal, Product, Inventory
+        from app.models.multitenant_entities import IntegrationConfig, OmnichannelMessage
+
+        cfg = db.query(IntegrationConfig).filter(
+            IntegrationConfig.channel == "MERCADO_LIBRE"
+        ).first()
+        default_seller = cfg.default_seller if cfg and cfg.default_seller else "Martín Gómez"
+
+        clean_res = resource.strip()
+        
+        # 1. CASO PREGUNTAS PRE-VENTA (/questions/XXXXX)
+        if topic == "questions" or clean_res.startswith("/questions/"):
+            q_id_match = re.search(r"/questions/(\d+)", clean_res)
+            question_id = q_id_match.group(1) if q_id_match else secrets.token_hex(6)
+            external_lead_id = f"meli_q_{question_id}"
+
+            existing_deal = db.query(CommercialDeal).filter(
+                CommercialDeal.external_lead_id == external_lead_id
+            ).first()
+            if existing_deal:
+                return {
+                    "status": "duplicate_ignored",
+                    "deal_id": existing_deal.id,
+                    "topic": topic,
+                    "message": f"Pregunta de MeLi #{question_id} ya indexada en Prospección.",
+                }
+
+            token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+            q_data: Dict[str, Any] = {}
+            item_data: Dict[str, Any] = {}
+            if token:
+                try:
+                    with httpx.Client(timeout=6.0) as c:
+                        qr = c.get(f"{cls.MELI_API_BASE_URL}{clean_res}", headers={"Authorization": f"Bearer {token}"})
+                        if qr.status_code == 200:
+                            q_data = qr.json()
+                            item_id = q_data.get("item_id")
+                            if item_id:
+                                ir = c.get(f"{cls.MELI_API_BASE_URL}/items/{item_id}", headers={"Authorization": f"Bearer {token}"})
+                                if ir.status_code == 200:
+                                    item_data = ir.json()
+                except Exception as ex:
+                    logger.warning("Consulta a MeLi API en webhook question tuvo excepción: %s", ex)
+
+            q_text = q_data.get("text") or f"Consulta sobre publicación de Mercado Libre ({clean_res})"
+            buyer_id = q_data.get("from", {}).get("id") or user_id or "comprador_anonimo"
+            buyer_name = f"Comprador MeLi #{buyer_id}"
+            item_title = item_data.get("title") or "Publicación Mercado Libre Uruguay"
+            item_price = Decimal(str(item_data.get("price") or "0.00"))
+            item_curr = item_data.get("currency_id") or "USD"
+            permalink = item_data.get("permalink") or f"https://articulo.mercadolibre.com.uy/{clean_res}"
+
+            deal_id = f"deal-mlu-{question_id[:8]}"
+            obs_text = f"Pregunta en MeLi:\n\"{q_text}\"\n\nPublicación: {item_title}\nEnlace: {permalink}"
+
+            new_deal = CommercialDeal(
+                id=deal_id,
+                proyecto_nombre=f"[MLU] {item_title[:150]}",
+                cliente=buyer_name,
+                rut=None,
+                vendedor=default_seller,
+                monto_total=item_price,
+                moneda=item_curr,
+                etapa="prospeccion",  # Columna '1. Prospección' obligatoria
+                observaciones=obs_text,
+                canal_origen="MERCADO_LIBRE",
+                utm_source="mercadolibre_uy",
+                utm_medium="organic_question",
+                utm_campaign=f"item_{q_data.get('item_id', 'general')}",
+                external_lead_id=external_lead_id,
+                costo_adquisicion_estimado=cfg.cost_per_lead_usd if cfg else Decimal("0.80"),
+                ai_score=85,
+                ai_classification="WARM",
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(new_deal)
+
+            msg = OmnichannelMessage(
+                tenant_id=tenant_id,
+                deal_id=deal_id,
+                channel="MERCADO_LIBRE",
+                direction="INBOUND",
+                sender_name=buyer_name,
+                sender_address=f"meli_buyer_{buyer_id}",
+                message_text=q_text,
+                delivery_status="RECEIVED",
+                is_ai_generated=False,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(msg)
+
+            if cfg:
+                cfg.leads_captured_count = (cfg.leads_captured_count or 0) + 1
+                cfg.updated_at = datetime.now(timezone.utc)
+
+            db.commit()
+            return {
+                "status": "ingested_prospeccion",
+                "deal_id": deal_id,
+                "topic": "questions",
+                "question_id": question_id,
+                "cliente": buyer_name,
+                "etapa": "prospeccion",
+                "message": "Pregunta de MeLi inyectada exitosamente en '1. Prospección'.",
+            }
+
+        # 2. CASO ÓRDENES DE VENTA POST-VENTA (/orders/XXXXX)
+        elif topic == "orders" or clean_res.startswith("/orders/"):
+            ord_id_match = re.search(r"/orders/(\d+)", clean_res)
+            order_id = ord_id_match.group(1) if ord_id_match else secrets.token_hex(6)
+            external_lead_id = f"meli_ord_{order_id}"
+
+            existing_deal = db.query(CommercialDeal).filter(
+                CommercialDeal.external_lead_id == external_lead_id
+            ).first()
+            if existing_deal:
+                return {
+                    "status": "duplicate_ignored",
+                    "deal_id": existing_deal.id,
+                    "topic": topic,
+                    "message": f"Orden de MeLi #{order_id} ya procesada previamente.",
+                }
+
+            token = cls.get_valid_seller_token(db, tenant_id=tenant_id)
+            ord_data: Dict[str, Any] = {}
+            if token:
+                try:
+                    with httpx.Client(timeout=6.0) as c:
+                        or_res = c.get(f"{cls.MELI_API_BASE_URL}{clean_res}", headers={"Authorization": f"Bearer {token}"})
+                        if or_res.status_code == 200:
+                            ord_data = or_res.json()
+                except Exception as ex:
+                    logger.warning("Consulta MeLi /orders tuvo excepción: %s", ex)
+
+            total_amount = Decimal(str(ord_data.get("total_amount") or "0.00"))
+            currency = ord_data.get("currency_id") or "USD"
+            buyer_info = ord_data.get("buyer", {})
+            buyer_name = buyer_info.get("nickname") or f"Comprador MeLi #{buyer_info.get('id', user_id or 'orden')}"
+            
+            deal_id = f"deal-mlu-ord-{order_id[:8]}"
+            deal = CommercialDeal(
+                id=deal_id,
+                proyecto_nombre=f"[MLU Venta] Orden #{order_id}",
+                cliente=buyer_name,
+                rut=None,
+                vendedor=default_seller,
+                monto_total=total_amount,
+                moneda=currency,
+                etapa="ganada",  # Orden cerrada ganada
+                observaciones=f"Venta concretada en Mercado Libre Uruguay. Orden #{order_id}",
+                canal_origen="MERCADO_LIBRE",
+                utm_source="mercadolibre_uy",
+                utm_medium="marketplace_order",
+                utm_campaign=f"order_{order_id}",
+                external_lead_id=external_lead_id,
+                costo_adquisicion_estimado=cfg.cost_per_lead_usd if cfg else Decimal("0.80"),
+                ai_score=100,
+                ai_classification="HOT",
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(deal)
+
+            # Cruce de Stock en Módulo de Inventario (deposito_central) - NO en módulo 3PL
+            order_items = ord_data.get("order_items", [])
+            for oi in order_items:
+                item_obj = oi.get("item", {})
+                qty = int(oi.get("quantity") or 1)
+                seller_sku = item_obj.get("seller_sku") or item_obj.get("id")
+                prod = db.query(Product).filter(
+                    (Product.sku == seller_sku) | (Product.codigo_barra == seller_sku)
+                ).first()
+                if prod and prod.id:
+                    inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+                    if inv:
+                        inv.deposito_central = max(0, inv.deposito_central - qty)
+
+            msg = OmnichannelMessage(
+                tenant_id=tenant_id,
+                deal_id=deal_id,
+                channel="MERCADO_LIBRE",
+                direction="INBOUND",
+                sender_name=buyer_name,
+                sender_address=f"meli_order_{order_id}",
+                message_text=f"¡Nueva compra en Mercado Libre Uruguay! Orden #{order_id} por {currency} {total_amount}.",
+                delivery_status="RECEIVED",
+                is_ai_generated=False,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(msg)
+
+            if cfg:
+                cfg.leads_captured_count = (cfg.leads_captured_count or 0) + 1
+                cfg.updated_at = datetime.now(timezone.utc)
+
+            db.commit()
+            return {
+                "status": "ingested_order",
+                "deal_id": deal_id,
+                "topic": "orders",
+                "order_id": order_id,
+                "monto": float(total_amount),
+                "etapa": "ganada",
+                "message": "Orden MeLi procesada, trato ganado y stock de inventario actualizado.",
+            }
+
+        return {
+            "status": "ignored",
+            "topic": topic,
+            "resource": resource,
+            "message": "Topic no relevante para prospección u órdenes."
+        }
+

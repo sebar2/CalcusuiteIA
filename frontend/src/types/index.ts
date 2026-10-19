@@ -916,7 +916,7 @@ export interface DealItem {
   image_url?: string | null;
 }
 
-export type LeadSourceChannel = 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | 'MANUAL' | string;
+export type LeadSourceChannel = 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | 'MERCADO_LIBRE' | 'MANUAL' | string;
 
 export interface CommercialDeal {
   id: string;
@@ -2610,7 +2610,7 @@ export interface DashboardMetricsResponse {
 export interface IntegrationChannelConfig {
   id: number;
   tenant_id: string;
-  channel: 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | string;
+  channel: 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | 'MERCADO_LIBRE' | string;
   display_name: string;
   is_enabled: boolean;
   status: 'CONNECTED' | 'DISCONNECTED' | 'PENDING_CREDENTIALS' | 'AUTH_ERROR' | string;

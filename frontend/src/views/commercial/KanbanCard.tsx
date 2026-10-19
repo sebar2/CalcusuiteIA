@@ -12,7 +12,8 @@ import {
   Globe,
   Mail,
   Megaphone,
-  QrCode
+  QrCode,
+  ShoppingBag,
 } from 'lucide-react';
 import type { CommercialDeal, DealStage } from '../../types';
 import { ProductThumbnail } from '../../components/common/ProductThumbnail';
@@ -64,6 +65,12 @@ export const getOriginBadgeConfig = (canal?: string) => {
         label: 'Página Web',
         className: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
         icon: Globe,
+      };
+    case 'MERCADO_LIBRE':
+      return {
+        label: 'Mercado Libre',
+        className: 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold',
+        icon: ShoppingBag,
       };
     default:
       return {

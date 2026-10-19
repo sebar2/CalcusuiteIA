@@ -19,6 +19,8 @@ import {
   Target,
   ArrowRight,
   Zap,
+  ShoppingBag,
+  ShieldAlert,
 } from 'lucide-react';
 import { apiService, getStoredUser } from '../services/api';
 import type {
@@ -42,6 +44,7 @@ const CHANNEL_OPTIONS = [
   { key: 'META_ADS', label: 'Meta / Messenger' },
   { key: 'GOOGLE_ADS', label: 'Google Ads Lead' },
   { key: 'WEB_FORM', label: 'Chat / Webhook Web' },
+  { key: 'MERCADO_LIBRE', label: 'Mercado Libre Uruguay (MLU)' },
 ];
 
 const STAGES_LABELS: { key: DealStage; label: string }[] = [
@@ -52,6 +55,29 @@ const STAGES_LABELS: { key: DealStage; label: string }[] = [
   { key: 'ganada', label: '5. Ganada (Cierre)' },
   { key: 'perdida', label: '6. Perdida' },
 ];
+
+export const checkMeliAntiPenaltyViolation = (text: string): string | null => {
+  if (!text) return null;
+  const clean = text.toLowerCase();
+  if (
+    /\b09[1-9]\d{6}\b/.test(text) ||
+    /\b09[1-9][\s.-]?\d{3}[\s.-]?\d{3}\b/.test(text) ||
+    /\+?598[\s.-]?9[1-9]/.test(text) ||
+    /\b2\d{7}\b/.test(text)
+  ) {
+    return 'Alerta Anti-Penalización MeLi: Se detectó un número telefónico. Mercado Libre prohíbe y sanciona el intercambio de números en preguntas pre-venta.';
+  }
+  if (/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/.test(text)) {
+    return 'Alerta Anti-Penalización MeLi: Se detectó un correo electrónico. MeLi prohíbe el envío de emails en preguntas pre-venta.';
+  }
+  if (/https?:\/\/\S+/i.test(text) || /www\.\S+/i.test(text) || /\b[a-zA-Z0-9-]+\.(com|uy|org|net)\b/i.test(text)) {
+    return 'Alerta Anti-Penalización MeLi: Se detectó un enlace web. MeLi prohíbe enlaces externos en preguntas pre-venta.';
+  }
+  if (/\b(whatsapp|wpp|whats|celular|telefono|teléfono|por fuera|transferencia bancaria|instagram|facebook)\b/i.test(clean)) {
+    return 'Alerta Anti-Penalización MeLi: Se detectó mención a contacto externo (WhatsApp, redes o transferencias). MeLi sanciona esta práctica.';
+  }
+  return null;
+};
 
 export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
   initialDealId,
@@ -329,6 +355,8 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
         return <MessageSquare size={11} className="text-emerald-500" />;
       case 'EMAIL':
         return <Mail size={11} className="text-purple-500" />;
+      case 'MERCADO_LIBRE':
+        return <ShoppingBag size={11} className="text-amber-500" />;
       default:
         return <Globe size={11} className="text-cyan-500" />;
     }
@@ -623,9 +651,14 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                         className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/80 dark:border-purple-800/80 flex items-start justify-between gap-2 text-xs"
                       >
                         <div className="space-y-0.5">
-                          <span className="inline-block text-[10px] font-bold uppercase text-purple-600 dark:text-purple-400">
-                            {sug.title} ({sug.channel_recommended})
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-block text-[10px] font-bold uppercase text-purple-600 dark:text-purple-400">
+                              {sug.title} ({sug.channel_recommended})
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                              Aprobación Humana Requerida
+                            </span>
+                          </div>
                           <p className="text-slate-700 dark:text-slate-200 text-[11px] leading-snug">
                             {sug.text}
                           </p>
@@ -713,6 +746,16 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                   </div>
                 </div>
 
+                {((replyChannel === 'MERCADO_LIBRE' || selectedConversation?.canal_origen === 'MERCADO_LIBRE') && checkMeliAntiPenaltyViolation(messageText)) && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-200 text-[11px] flex items-start gap-2">
+                    <ShieldAlert size={16} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <div>
+                      <span className="font-bold block">⚠️ Alerta Anti-Penalización Mercado Libre</span>
+                      <span>{checkMeliAntiPenaltyViolation(messageText)} Modifica el texto antes de enviar para evitar sanciones en tu cuenta oficial de MeLi.</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-end gap-2">
                   <textarea
                     rows={2}
@@ -723,8 +766,8 @@ export const OmnichannelChatView: React.FC<OmnichannelChatViewProps> = ({
                   />
                   <button
                     type="submit"
-                    disabled={isSending || !messageText.trim()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] disabled:opacity-50 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+                    disabled={isSending || !messageText.trim() || Boolean((replyChannel === 'MERCADO_LIBRE' || selectedConversation?.canal_origen === 'MERCADO_LIBRE') && checkMeliAntiPenaltyViolation(messageText))}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
                   >
                     <Send size={14} />
                     <span>Enviar</span>

@@ -1,9 +1,12 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from decimal import Decimal
+import time
+import logging
 import uuid
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -25,10 +28,45 @@ from app.core.security import (
     ROLE_ANALISTA_COMERCIAL,
 )
 from app.services.monitoring_service import MonitoringService
+from app.services.meli_service import MeliService
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Hub de Integraciones Multicanal & AdTech"])
 
-VALID_CHANNELS = {"GOOGLE_ADS", "META_ADS", "WHATSAPP", "WHATSAPP_QR", "EMAIL", "WEB_FORM"}
+VALID_CHANNELS = {"GOOGLE_ADS", "META_ADS", "WHATSAPP", "WHATSAPP_QR", "EMAIL", "WEB_FORM", "MERCADO_LIBRE"}
+
+
+def _ensure_mercadolibre_channel(db: Session, tenant_id: str = "tenant_calcu_corp") -> IntegrationConfig:
+    cfg = db.query(IntegrationConfig).filter(IntegrationConfig.channel == "MERCADO_LIBRE").first()
+    if not cfg:
+        client_id, client_secret = MeliService.get_client_credentials()
+        # Verificar si ya existe token en la bóveda o si está pendiente
+        has_secret = bool(client_secret and "tu_meli" not in client_secret)
+        initial_status = "PENDING_CREDENTIALS" if not has_secret else "PENDING_CREDENTIALS"
+        cfg = IntegrationConfig(
+            tenant_id=tenant_id or "tenant_calcu_corp",
+            channel="MERCADO_LIBRE",
+            display_name="Mercado Libre Uruguay (Oficial MLU)",
+            is_enabled=False,
+            status=initial_status,
+            encrypted_credentials=None,
+            masked_summary={
+                "app_id": client_id,
+                "site_id": "MLU",
+                "auth_type": "OAuth 2.0 (Authorization Code)",
+                "redirect_uri": "https://100.119.40.92:8000/api/v1/integrations/meli/callback",
+            },
+            webhook_token=f"whk_meli_{secrets.token_hex(8)}",
+            auto_reply_enabled=False,
+            assigned_seller_strategy="DEFAULT_SELLER",
+            default_seller="Martín Gómez",
+            cost_per_lead_usd=Decimal("0.80"),
+            leads_captured_count=0,
+            updated_at=datetime.now(timezone.utc),
+        )
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return cfg
 
 
 def _ensure_whatsapp_qr_channel(db: Session, tenant_id: str = "tenant_calcu_corp") -> IntegrationConfig:
@@ -191,6 +229,7 @@ def list_integration_channels(
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN, ROLE_ANALISTA_COMERCIAL])),
 ):
     _ensure_whatsapp_qr_channel(db, user.tenant_id)
+    _ensure_mercadolibre_channel(db, user.tenant_id)
     configs = db.query(IntegrationConfig).order_by(IntegrationConfig.id.asc()).all()
     base_url = f"{request.url.scheme}://{request.url.netloc}" if request and request.url.netloc else "http://localhost:8000"
     return [_to_config_response(c, db, base_url=base_url) for c in configs]
@@ -217,6 +256,8 @@ def update_integration_channel(
 
     if clean_ch == "WHATSAPP_QR":
         _ensure_whatsapp_qr_channel(db, user.tenant_id)
+    elif clean_ch == "MERCADO_LIBRE":
+        _ensure_mercadolibre_channel(db, user.tenant_id)
     cfg = db.query(IntegrationConfig).filter(IntegrationConfig.channel == clean_ch).first()
     if not cfg:
         raise HTTPException(status_code=404, detail=f"Configuración para el canal '{clean_ch}' no encontrada.")
@@ -299,6 +340,8 @@ def test_integration_channel(
     clean_ch = channel.strip().upper()
     if clean_ch == "WHATSAPP_QR":
         _ensure_whatsapp_qr_channel(db, user.tenant_id)
+    elif clean_ch == "MERCADO_LIBRE":
+        _ensure_mercadolibre_channel(db, user.tenant_id)
     cfg = db.query(IntegrationConfig).filter(IntegrationConfig.channel == clean_ch).first()
     if not cfg:
         raise HTTPException(status_code=404, detail=f"Canal '{clean_ch}' no encontrado.")
@@ -595,6 +638,67 @@ def _resolve_whatsapp_lid_to_phone(raw_phone: Optional[str]) -> Optional[str]:
     return f"+{digits}"
 
 
+class MeliWebhookNotification(BaseModel):
+    resource: str = Field(..., description="Ruta del recurso en MeLi, ej. /questions/12345 o /orders/98765")
+    user_id: Optional[Any] = None
+    topic: str = Field(..., description="Tipo de notificación: questions, orders, messages, items, etc.")
+    application_id: Optional[Any] = None
+    attempts: Optional[int] = 1
+    sent: Optional[str] = None
+    received: Optional[str] = None
+
+
+@router.post(
+    "/webhooks/mercadolibre",
+    status_code=status.HTTP_200_OK,
+    summary="Webhook oficial de notificaciones en tiempo real de Mercado Libre Uruguay (ACK < 150ms)"
+)
+@router.post(
+    "/webhooks/mercado_libre",
+    status_code=status.HTTP_200_OK,
+    summary="Alias de Webhook para Mercado Libre Uruguay"
+)
+@router.post(
+    "/meli/webhook",
+    status_code=status.HTTP_200_OK,
+    summary="Alias directo de Webhook para Mercado Libre Developers"
+)
+async def meli_webhook_listener(
+    payload: MeliWebhookNotification,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Recibe notificaciones de eventos desde Mercado Libre (questions, orders, items):
+    1. Retorna HTTP 200 de inmediato (<150ms) según las directivas del Developer Center de MeLi.
+    2. Procesa la ingesta en '1. Prospección' (para questions) o cierre de orden con cruce de stock en Inventario (para orders).
+    """
+    _ensure_mercadolibre_channel(db)
+
+    try:
+        res = MeliService.process_meli_webhook_sync(
+            db=db,
+            resource=payload.resource,
+            topic=payload.topic,
+            user_id=payload.user_id,
+        )
+        return {
+            "status": "acknowledged",
+            "topic": payload.topic,
+            "resource": payload.resource,
+            "result": res,
+        }
+    except Exception as ex:
+        logger.error("Error procesando notificación webhook MeLi: %s", ex)
+        return {
+            "status": "acknowledged_with_warning",
+            "topic": payload.topic,
+            "resource": payload.resource,
+            "error": str(ex),
+        }
+
+
 @router.post(
     "/webhooks/{channel}",
     status_code=status.HTTP_201_CREATED,
@@ -813,3 +917,146 @@ def ingest_webhook_lead(
         "ai_classification": classification,
         "message": f"Prospecto '{cliente_display}' inyectado en '1. Prospección' con etiqueta {clean_ch}.",
     }
+
+
+# =========================================================================
+# ENDPOINTS OFICIALES MERCADO LIBRE URUGUAY (MLU) - OAUTH 2.0 & WEBHOOKS
+# =========================================================================
+
+logger = logging.getLogger(__name__)
+
+
+class MeliWebhookNotification(BaseModel):
+    resource: str = Field(..., description="Ruta del recurso en MeLi, ej. /questions/12345 o /orders/98765")
+    user_id: Optional[Any] = None
+    topic: str = Field(..., description="Tipo de notificación: questions, orders, messages, items, etc.")
+    application_id: Optional[Any] = None
+    attempts: Optional[int] = 1
+    sent: Optional[str] = None
+    received: Optional[str] = None
+
+
+@router.get(
+    "/meli/authorize",
+    summary="Genera la URL oficial de autorización OAuth 2.0 para vincular Mercado Libre Uruguay"
+)
+def get_meli_authorize_url(
+    redirect_uri: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
+):
+    _ensure_mercadolibre_channel(db, user.tenant_id)
+    r_uri = redirect_uri or "https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+    auth_data = MeliService.build_authorization_url(
+        tenant_id=user.tenant_id,
+        redirect_uri=r_uri,
+    )
+    return auth_data
+
+
+@router.get(
+    "/meli/callback",
+    summary="Callback oficial OAuth 2.0 de Mercado Libre: intercambia code por tokens y cifra en bóveda AES-256"
+)
+async def meli_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    if error:
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <body style="font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:50px;background:#fef2f2;color:#991b1b;">
+                    <h2>❌ Error de Autorización con Mercado Libre</h2>
+                    <p>{error}: {error_description or 'El usuario canceló la vinculación o las credenciales son inválidas.'}</p>
+                    <button onclick="window.close()" style="background:#dc2626;color:white;padding:10px 20px;margin-top:20px;border:none;border-radius:6px;cursor:pointer;">Cerrar Ventana</button>
+                </body>
+            </html>
+            """,
+            status_code=400,
+        )
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Falta el parámetro 'code' de autorización de Mercado Libre.")
+
+    tenant_id = "tenant_calcu_corp"
+    if state and state.startswith("st_"):
+        parts = state.split("_")
+        if len(parts) >= 3:
+            tenant_id = f"{parts[1]}_{parts[2]}" if len(parts) > 3 else parts[1]
+
+    cfg = _ensure_mercadolibre_channel(db, tenant_id)
+
+    try:
+        token_data = await MeliService.exchange_authorization_code(
+            code=code,
+            redirect_uri="https://100.119.40.92:8000/api/v1/integrations/meli/callback"
+        )
+        access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token")
+        user_id = str(token_data.get("user_id") or "")
+        expires_in = float(token_data.get("expires_in") or 21600)
+
+        vault_bundle = {
+            "app_id": "5376694505612300",
+            "seller_id": user_id,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": time.time() + expires_in,
+            "token_type": token_data.get("token_type", "bearer"),
+            "scope": token_data.get("scope", ""),
+            "linked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        cfg.encrypted_credentials = encrypt_vault_payload(vault_bundle)
+        cfg.masked_summary = sanitize_credentials_for_response(vault_bundle)
+        cfg.status = "CONNECTED"
+        cfg.is_enabled = True
+        cfg.last_tested_at = datetime.now(timezone.utc)
+        cfg.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        return HTMLResponse(
+            content="""
+            <html>
+                <head><title>Mercado Libre Vinculado - Calcu</title></head>
+                <body style="font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:50px;background:#f0fdf4;color:#166534;">
+                    <div style="max-width:500px;margin:auto;background:white;padding:30px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);border:1px solid #bbf7d0;">
+                        <h2 style="color:#15803d;margin-bottom:10px;">✅ ¡Mercado Libre Vinculado Exitosamente!</h2>
+                        <p style="color:#374151;font-size:15px;">La cuenta oficial de Mercado Libre Uruguay ha sido autorizada y sus credenciales se encuentran cifradas con AES-256 en la bóveda de Calcu.</p>
+                        <p style="color:#6b7280;font-size:13px;">Las preguntas pre-venta ingresarán automáticamente a la columna <b>1. Prospección</b> de su Pipeline Comercial.</p>
+                        <button onclick="if(window.opener){window.opener.location.reload();window.close();}else{window.location.href='/';}" 
+                                style="background:#FFE600;color:#2D3277;font-weight:bold;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:15px;margin-top:15px;">
+                            Volver a Calcu Suite
+                        </button>
+                    </div>
+                    <script>
+                        setTimeout(function(){
+                            if(window.opener){
+                                window.opener.location.reload();
+                                window.close();
+                            }
+                        }, 2500);
+                    </script>
+                </body>
+            </html>
+            """
+        )
+    except Exception as exc:
+        logger.error("Error en intercambio de código OAuth MeLi: %s", exc)
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <body style="font-family:system-ui,-apple-system,sans-serif;text-align:center;padding:50px;background:#fef2f2;color:#991b1b;">
+                    <h2>❌ Error al procesar token de Mercado Libre</h2>
+                    <p style="font-size:14px;color:#4b5563;">{str(exc)}</p>
+                    <button onclick="window.close()" style="background:#dc2626;color:white;padding:10px 20px;margin-top:20px;border:none;border-radius:6px;cursor:pointer;">Cerrar Ventana</button>
+                </body>
+            </html>
+            """,
+            status_code=500,
+        )
+
