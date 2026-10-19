@@ -16,6 +16,7 @@ AUDIT_LOG_FILE = os.path.join(LOGS_DIR, "security_audit.jsonl")
 AUTHORIZED_APP_PORTS = {
     8000: "FastAPI Core (SupplyFinance & 3PL Backend)",
     5173: "Vite React 19 Frontend Web",
+    443: "Tailscale Funnel HTTPS Ingress Gateway (Mercado Libre Webhooks & OAuth2)",
 }
 
 # Motores y servicios internos autorizados de Calcu (estrictamente en Loopback/Localhost)
