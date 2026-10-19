@@ -19,8 +19,12 @@ from app.api.v1.invoices import router as invoices_router
 from app.api.v1.accounting import router as accounting_router
 from app.api.v1.monitoring import router as monitoring_router
 from app.api.v1.leads import router as leads_router
+from app.api.v1.integrations import router as integrations_router
+from app.api.v1.omnichannel import router as omnichannel_router
+from app.api.v1.tenants import router as tenants_router
 from app.services.security_agent import security_agent
 from starlette.middleware.gzip import GZipMiddleware
+
 import os
 from fastapi.staticfiles import StaticFiles
 
@@ -167,6 +171,10 @@ app.include_router(invoices_router, prefix="/api/v1")
 app.include_router(accounting_router, prefix="/api/v1")
 app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(leads_router, prefix="/api/v1")
+app.include_router(integrations_router)
+app.include_router(omnichannel_router)
+app.include_router(tenants_router)
+
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

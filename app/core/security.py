@@ -37,10 +37,17 @@ security_bearer = HTTPBearer(auto_error=False)
 
 
 class UserContext:
-    def __init__(self, user_id: str, role: str, driver_id: Optional[int] = None):
+    def __init__(
+        self,
+        user_id: str,
+        role: str,
+        driver_id: Optional[int] = None,
+        tenant_id: str = "tenant_calcu_corp",
+    ):
         self.user_id = user_id
         self.role = role
         self.driver_id = driver_id
+        self.tenant_id = tenant_id or "tenant_calcu_corp"
 
     def is_admin(self) -> bool:
         return self.role in {ROLE_CONTROLLER_ADMIN, ROLE_3PL_ADMIN}
@@ -57,7 +64,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None
 ) -> str:
     """
-    Genera un token JWT criptográficamente firmado con claims de identidad y rol RBAC.
+    Genera un token JWT criptográficamente firmado con claims de identidad, tenant_id y rol RBAC.
     """
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
@@ -83,6 +90,7 @@ def decode_access_token(token: str) -> UserContext:
         user_id: Optional[str] = payload.get("sub")
         role: Optional[str] = payload.get("role")
         driver_id: Optional[int] = payload.get("driver_id")
+        tenant_id: str = str(payload.get("tenant_id") or "tenant_calcu_corp")
         if not user_id or not role:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -95,7 +103,8 @@ def decode_access_token(token: str) -> UserContext:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Rol no autorizado '{clean_role}'. Roles válidos: {list(VALID_ROLES)}"
             )
-        return UserContext(user_id=str(user_id), role=clean_role, driver_id=driver_id)
+        return UserContext(user_id=str(user_id), role=clean_role, driver_id=driver_id, tenant_id=tenant_id)
+
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

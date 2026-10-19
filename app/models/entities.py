@@ -398,9 +398,18 @@ class CommercialDeal(Base):
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    canal_origen: Mapped[Optional[str]] = mapped_column(String(50), default="MANUAL", nullable=True, index=True)
+    utm_source: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    utm_medium: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    utm_campaign: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    external_lead_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    costo_adquisicion_estimado: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=True)
+    ai_score: Mapped[Optional[int]] = mapped_column(Integer, default=75, nullable=True)
+    ai_classification: Mapped[Optional[str]] = mapped_column(String(50), default="WARM", nullable=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     items: Mapped[List["CommercialDealItem"]] = relationship(back_populates="deal", cascade="all, delete-orphan")
+
 
 
 class CommercialDealItem(Base):
@@ -532,7 +541,7 @@ class Client(Base):
     documento: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     tipo_documento: Mapped[str] = mapped_column(String(20), default="RUT", nullable=False)
     es_consumidor_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    limite_credito: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=False)
+    limite_credito: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('200.00'), nullable=False)
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

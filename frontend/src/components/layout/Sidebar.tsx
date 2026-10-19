@@ -27,6 +27,9 @@ import {
   ClipboardList,
   Scale,
   ShieldAlert,
+  MessageSquare,
+  Plug,
+  Crown,
 } from 'lucide-react';
 
 export type ActiveTab = 
@@ -35,6 +38,9 @@ export type ActiveTab =
   | 'stock_trace'
   | 'pricing' 
   | 'crm'
+  | 'omnichannel_chat'
+  | 'integrations'
+  | 'tenants_admin'
   | 'clients'
   | 'invoices'
   | 'suppliers'
@@ -273,6 +279,20 @@ export const Sidebar = ({
           roles: ['controller_admin', 'comercial', 'analista_comercial'],
         },
         {
+          id: 'omnichannel_chat',
+          label: 'Chat Omnicanal & Copiloto IA',
+          shortLabel: 'Chat Omnicanal IA',
+          icon: MessageSquare,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
+          id: 'integrations',
+          label: 'Hub Integraciones Multicanal',
+          shortLabel: 'Hub Integraciones',
+          icon: Plug,
+          roles: ['controller_admin', 'comercial', 'analista_comercial'],
+        },
+        {
           id: 'pricing',
           label: 'Analítica Comercial & Canales',
           shortLabel: 'Pricing & Canales',
@@ -315,6 +335,13 @@ export const Sidebar = ({
           label: 'Auditoría & Control Usuarios',
           shortLabel: 'Monitoreo',
           icon: ShieldAlert,
+          roles: ['controller_admin'],
+        },
+        {
+          id: 'tenants_admin',
+          label: 'Licencias SaaS & Multi-Tenant',
+          shortLabel: 'Licencias & Tenants',
+          icon: Crown,
           roles: ['controller_admin'],
         },
       ],

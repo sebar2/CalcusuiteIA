@@ -37,10 +37,13 @@ const LogisticsTrackingView = lazy(() => import('./views/logistics/LogisticsTrac
 const LogisticsOrdersView = lazy(() => import('./views/logistics/LogisticsOrdersView').then(m => ({ default: m.LogisticsOrdersView })));
 const LogisticsFinanceView = lazy(() => import('./views/logistics/LogisticsFinanceView').then(m => ({ default: m.LogisticsFinanceView })));
 
-// NUEVOS MÓDULOS: FACTURACIÓN B2B, GASTOS & CONTABILIDAD, MONITOREO
+// NUEVOS MÓDULOS: FACTURACIÓN B2B, GASTOS & CONTABILIDAD, MONITOREO, OMNICANAL & MULTI-TENANT
 const InvoicesB2BView = lazy(() => import('./views/InvoicesB2BView').then(m => ({ default: m.InvoicesB2BView })));
 const AccountingLedgerView = lazy(() => import('./views/AccountingLedgerView').then(m => ({ default: m.AccountingLedgerView })));
 const MonitoringAuditView = lazy(() => import('./views/MonitoringAuditView').then(m => ({ default: m.MonitoringAuditView })));
+const IntegrationsView = lazy(() => import('./views/IntegrationsView').then(m => ({ default: m.IntegrationsView })));
+const OmnichannelChatView = lazy(() => import('./views/OmnichannelChatView').then(m => ({ default: m.OmnichannelChatView })));
+const MasterAdminTenantsView = lazy(() => import('./views/MasterAdminTenantsView').then(m => ({ default: m.MasterAdminTenantsView })));
 
 import { Lock } from 'lucide-react';
 
@@ -55,7 +58,8 @@ import type {
   MarginSummaryItem, 
   UserPreferences,
   UserRole,
-  EngineMode
+  EngineMode,
+  TenantAccountItem,
 } from './types';
 
 export function AppContent() {
@@ -68,18 +72,27 @@ export function AppContent() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('auto');
   const [selectedSupplierForCatalogId, setSelectedSupplierForCatalogId] = useState<number | null>(null);
+  const [selectedDealForChatId, setSelectedDealForChatId] = useState<string | null>(null);
   const [restrictedModules, setRestrictedModules] = useState<string[]>([]);
 
-  useEffect(() => {
-    apiService.getSystemUsers().then((users) => {
+  const syncRestrictions = useCallback(async () => {
+    try {
+      const [users, tenant] = await Promise.all([
+        apiService.getSystemUsers().catch(() => []),
+        apiService.getCurrentTenant().catch(() => null),
+      ]);
       const u = users.find(x => x.username === currentUser?.user_id || x.role === currentRole);
-      if (u && u.restricted_modules) {
-        setRestrictedModules(u.restricted_modules);
-      } else {
-        setRestrictedModules([]);
-      }
-    }).catch(() => {});
+      const userRestricted = u?.restricted_modules || [];
+      const licenseRestricted = tenant?.capabilities?.restricted_modules || [];
+      setRestrictedModules(Array.from(new Set([...userRestricted, ...licenseRestricted])));
+    } catch {
+      // ignore
+    }
   }, [currentUser, currentRole]);
+
+  useEffect(() => {
+    syncRestrictions();
+  }, [syncRestrictions]);
 
   useEffect(() => {
     const handleLoginEvent = (e: Event) => {
@@ -92,13 +105,23 @@ export function AppContent() {
     const handleLogoutEvent = () => {
       setCurrentUser(null);
     };
+    const handleLicenseChangeEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<TenantAccountItem>;
+      if (customEvent.detail?.capabilities?.restricted_modules) {
+        setRestrictedModules(customEvent.detail.capabilities.restricted_modules);
+      } else {
+        syncRestrictions();
+      }
+    };
     window.addEventListener('calcu:auth:login', handleLoginEvent);
     window.addEventListener('calcu:auth:logout', handleLogoutEvent);
+    window.addEventListener('calcu:license:changed', handleLicenseChangeEvent);
     return () => {
       window.removeEventListener('calcu:auth:login', handleLoginEvent);
       window.removeEventListener('calcu:auth:logout', handleLogoutEvent);
+      window.removeEventListener('calcu:license:changed', handleLicenseChangeEvent);
     };
-  }, []);
+  }, [syncRestrictions]);
 
   const handleRoleChange = (role: string) => {
     setCurrentRole(role as UserRole);
@@ -444,6 +467,42 @@ export function AppContent() {
               <ErrorBoundary fallbackTitle="Error al cargar Pipeline Comercial (CRM)">
                 <CommercialKanbanView 
                   onNavigateToTenders={() => setActiveTab('tenders')}
+                  onNavigateToIntegrations={() => setActiveTab('integrations')}
+                  onNavigateToOmnichannelChat={(dealId) => {
+                    if (dealId) setSelectedDealForChatId(dealId);
+                    setActiveTab('omnichannel_chat');
+                  }}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'integrations' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Hub de Integraciones Multicanal">
+                <IntegrationsView
+                  currentRole={currentRole}
+                  onNavigateToCRM={() => setActiveTab('crm')}
+                  onNavigateToChat={(dealId) => {
+                    if (dealId) setSelectedDealForChatId(dealId);
+                    setActiveTab('omnichannel_chat');
+                  }}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'omnichannel_chat' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Chat Omnicanal Unificado">
+                <OmnichannelChatView
+                  initialDealId={selectedDealForChatId}
+                  onNavigateToIntegrations={() => setActiveTab('integrations')}
+                  onNavigateToCRM={() => setActiveTab('crm')}
+                />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tenants_admin' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Licencias SaaS & Multi-Tenant">
+                <MasterAdminTenantsView
+                  onLicenseChanged={() => syncRestrictions()}
                 />
               </ErrorBoundary>
             )}

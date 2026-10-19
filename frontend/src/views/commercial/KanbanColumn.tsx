@@ -18,6 +18,7 @@ interface KanbanColumnProps {
   onMoveStage: (dealId: string, newStage: DealStage) => void;
   onDragStart: (e: React.DragEvent, dealId: string) => void;
   onDropDeal: (targetStage: DealStage) => void;
+  onOpenChat?: (deal: CommercialDeal) => void;
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -28,6 +29,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onMoveStage,
   onDragStart,
   onDropDeal,
+  onOpenChat,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -93,6 +95,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               onSelectDeal={onSelectDeal}
               onMoveStage={onMoveStage}
               onDragStart={onDragStart}
+              onOpenChat={onOpenChat}
             />
           ))
         )}

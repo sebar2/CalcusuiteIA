@@ -42,6 +42,7 @@ class ClientBase(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    limite_credito: Optional[Decimal] = Field(default=Decimal('200.00'), ge=0)
 
 class ClientCreate(ClientBase):
     pass
@@ -53,6 +54,7 @@ class ClientUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    limite_credito: Optional[Decimal] = Field(default=None, ge=0)
 
 class ClientDealItemSummary(BaseModel):
     id: Optional[str] = None
@@ -69,6 +71,7 @@ class ClientDealItemSummary(BaseModel):
 
 class ClientResponse(ClientBase):
     id: int
+    limite_credito: Decimal = Decimal('200.00')
     deals_count: int = 0
     total_pipeline: Decimal = Decimal('0.00')
     pipeline_activo: Optional[float] = 0.0
@@ -1637,6 +1640,14 @@ class CommercialDealCreate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    canal_origen: Optional[str] = Field(default="MANUAL", max_length=50)
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    external_lead_id: Optional[str] = None
+    costo_adquisicion_estimado: Optional[Decimal] = Field(default=Decimal('0.00'), ge=0)
+    ai_score: Optional[int] = Field(default=75)
+    ai_classification: Optional[str] = Field(default="WARM")
     items: List[DealItemCreate] = Field(default_factory=list)
 
     @field_validator("proyecto_nombre", "cliente", "vendedor")
@@ -1658,6 +1669,14 @@ class CommercialDealUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    canal_origen: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    external_lead_id: Optional[str] = None
+    costo_adquisicion_estimado: Optional[Decimal] = None
+    ai_score: Optional[int] = None
+    ai_classification: Optional[str] = None
     items: Optional[List[DealItemCreate]] = None
 
 
@@ -1681,10 +1700,19 @@ class CommercialDealResponse(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    canal_origen: Optional[str] = "MANUAL"
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    external_lead_id: Optional[str] = None
+    costo_adquisicion_estimado: Optional[Decimal] = Decimal('0.00')
+    ai_score: Optional[int] = 75
+    ai_classification: Optional[str] = "WARM"
     created_at: Optional[datetime] = None
     items: List[DealItemResponse] = Field(default_factory=list)
     total_items_count: int = 0
     stock_reservation_warning: Optional[str] = None
+
 
 
 # --- Sales Orders (Órdenes de Venta Formales - OV) ---

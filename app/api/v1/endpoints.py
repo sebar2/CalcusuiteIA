@@ -4470,6 +4470,7 @@ def list_clients(
         ]
 
         pipe_float = round(float(total_pipe), 2)
+        client_credit = c.limite_credito if (c.limite_credito is not None and c.limite_credito > Decimal('0.00')) else Decimal('200.00')
         results.append(ClientResponse(
             id=c.id,
             nombre=c.nombre,
@@ -4478,6 +4479,7 @@ def list_clients(
             email=c.email,
             phone=c.phone,
             address=c.address,
+            limite_credito=client_credit,
             deals_count=deals_count,
             total_pipeline=Decimal(str(pipe_float)),
             pipeline_activo=pipe_float,
@@ -4507,13 +4509,15 @@ def create_client(
             detail=f"Ya existe un cliente con el nombre '{payload.nombre.strip()}'."
         )
 
+    credit_val = payload.limite_credito if (payload.limite_credito is not None and payload.limite_credito > Decimal('0.00')) else Decimal('200.00')
     new_client = Client(
         nombre=payload.nombre.strip(),
         rut=payload.rut.strip() if payload.rut else None,
         logo_url=payload.logo_url,
         email=payload.email.strip() if payload.email else None,
         phone=payload.phone.strip() if payload.phone else None,
-        address=payload.address.strip() if payload.address else None
+        address=payload.address.strip() if payload.address else None,
+        limite_credito=credit_val,
     )
     db.add(new_client)
     db.commit()
@@ -4525,7 +4529,7 @@ def create_client(
         role=user.role,
         action="CLIENT_CREATE",
         resource=f"clients/{new_client.id}",
-        details=payload.model_dump()
+        details=payload.model_dump(mode="json")
     )
 
     return ClientResponse(
@@ -4536,6 +4540,7 @@ def create_client(
         email=new_client.email,
         phone=new_client.phone,
         address=new_client.address,
+        limite_credito=new_client.limite_credito or Decimal('200.00'),
         deals_count=0,
         total_pipeline=0.0,
         deals=[],
@@ -4572,6 +4577,8 @@ def update_client(
         client.phone = payload.phone.strip() if payload.phone else None
     if payload.address is not None:
         client.address = payload.address.strip() if payload.address else None
+    if payload.limite_credito is not None:
+        client.limite_credito = payload.limite_credito
 
     db.commit()
     db.refresh(client)
@@ -4582,7 +4589,7 @@ def update_client(
         role=user.role,
         action="CLIENT_UPDATE",
         resource=f"clients/{client.id}",
-        details=payload.model_dump(exclude_unset=True)
+        details=payload.model_dump(exclude_unset=True, mode="json")
     )
 
     # Vincular tratos
@@ -4632,6 +4639,7 @@ def update_client(
         email=client.email,
         phone=client.phone,
         address=client.address,
+        limite_credito=client.limite_credito if (client.limite_credito is not None and client.limite_credito > Decimal('0.00')) else Decimal('200.00'),
         deals_count=len(c_deals),
         total_pipeline=Decimal(str(pipe_float)),
         pipeline_activo=pipe_float,

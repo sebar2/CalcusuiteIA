@@ -141,6 +141,11 @@ import type {
   LegalNoticeResponse,
   GeneralLedgerAccount,
   DashboardMetricsResponse,
+  IntegrationChannelConfig,
+  OmnichannelConversationSummary,
+  OmnichannelMessageItem,
+  AIChatSuggestionResponse,
+  TenantAccountItem,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -191,6 +196,15 @@ export interface StoredUser {
   user_id: string;
   role: string;
   nombre?: string;
+  tenant_id?: string;
+  company_name?: string;
+  license_tier?: string;
+  simulated_tier?: string;
+  subscription_status?: string;
+  trial_days_remaining?: number;
+  two_factor_enabled?: boolean;
+  is_master_superadmin?: boolean;
+  mfa_required?: boolean;
 }
 
 export const getStoredUser = (): StoredUser | null => {
@@ -204,6 +218,14 @@ export const getStoredUser = (): StoredUser | null => {
       user_id: parsed.user_id,
       role: parsed.role,
       nombre: parsed.nombre,
+      tenant_id: parsed.tenant_id || 'tenant_calcu_corp',
+      company_name: parsed.company_name || 'Calcu Corporación Central S.A.',
+      license_tier: parsed.license_tier || 'ENTERPRISE_3PL',
+      simulated_tier: parsed.simulated_tier || parsed.license_tier || 'ENTERPRISE_3PL',
+      subscription_status: parsed.subscription_status || 'ACTIVE_PAID',
+      trial_days_remaining: parsed.trial_days_remaining ?? 14,
+      two_factor_enabled: Boolean(parsed.two_factor_enabled),
+      is_master_superadmin: Boolean(parsed.is_master_superadmin),
     };
   } catch {
     return null;
@@ -240,25 +262,51 @@ export const logout = () => {
   }
 };
 
-export const login = async (username: string, password: string): Promise<StoredUser> => {
-  const res = await axios.post(`${getApiBaseUrl()}/api/v1/auth/login`, { username, password });
+export const login = async (
+  username: string,
+  password: string,
+  captchaToken?: string,
+  captchaAnswer?: string,
+  totpCode?: string
+): Promise<StoredUser> => {
+  const payload: Record<string, any> = { username, password };
+  if (captchaToken) payload.captcha_token = captchaToken;
+  if (captchaAnswer !== undefined) payload.captcha_answer = captchaAnswer;
+  if (totpCode) payload.totp_code = totpCode;
+
+  const res = await axios.post(`${getApiBaseUrl()}/api/v1/auth/login`, payload);
   const data = res.data;
-  localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
-  localStorage.setItem(
-    USER_STORAGE_KEY,
-    JSON.stringify({
+
+  if (data.mfa_required) {
+    return {
+      token: '',
       user_id: data.user_id,
       role: data.role,
       nombre: data.nombre,
-    })
-  );
+      mfa_required: true,
+    };
+  }
+
+  localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
+  const storedMeta = {
+    user_id: data.user_id,
+    role: data.role,
+    nombre: data.nombre,
+    tenant_id: data.tenant_id || 'tenant_calcu_corp',
+    company_name: data.company_name || 'Calcu Corporación Central S.A.',
+    license_tier: data.license_tier || 'ENTERPRISE_3PL',
+    simulated_tier: data.simulated_tier || data.license_tier || 'ENTERPRISE_3PL',
+    subscription_status: data.subscription_status || 'ACTIVE_PAID',
+    trial_days_remaining: data.trial_days_remaining ?? 14,
+    two_factor_enabled: Boolean(data.two_factor_enabled),
+    is_master_superadmin: Boolean(data.is_master_superadmin),
+  };
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(storedMeta));
   currentRole = data.role;
   currentUserId = data.user_id;
   const user: StoredUser = {
     token: data.access_token,
-    user_id: data.user_id,
-    role: data.role,
-    nombre: data.nombre,
+    ...storedMeta,
   };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('calcu:auth:login', { detail: user }));
@@ -281,12 +329,16 @@ apiClient.interceptors.request.use((config) => {
     config.headers['Authorization'] = `Bearer ${stored.token}`;
     config.headers['X-User-Role'] = stored.role;
     config.headers['X-User-Id'] = stored.user_id;
+    if (stored.tenant_id) {
+      config.headers['X-Tenant-Id'] = stored.tenant_id;
+    }
   } else {
     config.headers['X-User-Role'] = currentRole;
     config.headers['X-User-Id'] = currentUserId;
   }
   return config;
 });
+
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -1631,7 +1683,226 @@ export const apiService = {
     const res = await apiClient.post('/api/v1/monitoring/dashboard/ai-copilot', { prompt });
     return res.data;
   },
+
+  // --- AUTENTICACIÓN AVANZADA: CAPTCHA SVG & 2FA TOTP ---
+  async getCaptcha(): Promise<{ captcha_token: string; captcha_svg: string; expires_in_seconds: number }> {
+    const res = await apiClient.get('/api/v1/auth/captcha');
+    return res.data;
+  },
+
+  async setup2FA(): Promise<{ status: string; user_id: string; totp_secret: string; otpauth_uri: string; instructions: string }> {
+    const res = await apiClient.post('/api/v1/auth/2fa/setup');
+    return res.data;
+  },
+
+  async enable2FA(totpCode: string): Promise<{ status: string; two_factor_enabled: boolean; message: string }> {
+    const res = await apiClient.post('/api/v1/auth/2fa/enable', { totp_code: totpCode });
+    return res.data;
+  },
+
+  async disable2FA(): Promise<{ status: string; two_factor_enabled: boolean; message: string }> {
+    const res = await apiClient.post('/api/v1/auth/2fa/disable');
+    return res.data;
+  },
+
+  // --- HUB DE INTEGRACIONES MULTICANAL & ADTECH ---
+  async getIntegrationChannels(): Promise<IntegrationChannelConfig[]> {
+    const res = await apiClient.get<IntegrationChannelConfig[]>('/api/v1/integrations/channels');
+    return res.data;
+  },
+
+  async updateIntegrationChannel(
+    channel: string,
+    payload: {
+      is_enabled: boolean;
+      credentials?: Record<string, any>;
+      auto_reply_enabled?: boolean;
+      assigned_seller_strategy?: string;
+      default_seller?: string;
+      cost_per_lead_usd?: number;
+    }
+  ): Promise<IntegrationChannelConfig> {
+    const res = await apiClient.put<IntegrationChannelConfig>(`/api/v1/integrations/channels/${channel}`, payload);
+    return res.data;
+  },
+
+  async testIntegrationChannel(channel: string): Promise<{
+    channel: string;
+    connected: boolean;
+    status: string;
+    message: string;
+  }> {
+    const res = await apiClient.post(`/api/v1/integrations/channels/${channel}/test`);
+    return res.data;
+  },
+
+  async generateWhatsAppQR(): Promise<{
+    channel: string;
+    tenant_id: string;
+    current_status: string;
+    qr_token: string;
+    qr_svg: string;
+    pairing_code: string;
+    expires_in_seconds: number;
+    bridge_online?: boolean;
+    bridge_connection?: string;
+    bridge_linked_phone?: string | null;
+    instructions: string[];
+  }> {
+    const res = await apiClient.post('/api/v1/integrations/whatsapp-qr/generate');
+    return res.data;
+  },
+
+  async confirmWhatsAppQRScan(payload: {
+    qr_token: string;
+    linked_phone: string;
+    device_label: string;
+  }): Promise<IntegrationChannelConfig> {
+    const res = await apiClient.post<IntegrationChannelConfig>(
+      '/api/v1/integrations/whatsapp-qr/confirm-scan',
+      payload
+    );
+    return res.data;
+  },
+
+  async disconnectWhatsAppQR(): Promise<IntegrationChannelConfig> {
+    const res = await apiClient.post<IntegrationChannelConfig>('/api/v1/integrations/whatsapp-qr/disconnect');
+    return res.data;
+  },
+
+  async getWhatsAppQRStatus(): Promise<{
+    channel: string;
+    status: string;
+    is_enabled: boolean;
+    bridge_online: boolean;
+    bridge_connection: string;
+    linked_phone?: string | null;
+    qr_svg?: string | null;
+    masked_credentials: Record<string, string>;
+    channel_config?: IntegrationChannelConfig;
+  }> {
+    const res = await apiClient.get('/api/v1/integrations/whatsapp-qr/status');
+    return res.data;
+  },
+
+  async ingestWebhookLead(
+    channel: string,
+    payload: {
+      nombre_contacto: string;
+      empresa?: string;
+      email?: string;
+      telefono?: string;
+      proyecto_o_interes?: string;
+      mensaje_inicial?: string;
+      monto_estimado_usd?: number;
+      utm_source?: string;
+      utm_medium?: string;
+      utm_campaign?: string;
+      external_lead_id?: string;
+    }
+  ): Promise<{
+    status: string;
+    deal_id: string;
+    etapa: string;
+    etapa_label: string;
+    canal_origen: string;
+    assigned_seller: string;
+    ai_score: number;
+    ai_classification: string;
+    message: string;
+  }> {
+    const res = await apiClient.post(`/api/v1/integrations/webhooks/${channel}`, payload);
+    return res.data;
+  },
+
+  // --- CHAT OMNICANAL UNIFICADO & COPILOTO IA GRATUITO ---
+  async getOmnichannelConversations(canalFilter?: string): Promise<OmnichannelConversationSummary[]> {
+    const res = await apiClient.get<OmnichannelConversationSummary[]>('/api/v1/omnichannel/conversations', {
+      params: canalFilter && canalFilter !== 'ALL' ? { canal_filter: canalFilter } : undefined,
+    });
+    return res.data;
+  },
+
+  async getOmnichannelMessages(dealId: string): Promise<OmnichannelMessageItem[]> {
+    const res = await apiClient.get<OmnichannelMessageItem[]>(`/api/v1/omnichannel/messages/${dealId}`);
+    return res.data;
+  },
+
+  async sendOmnichannelMessage(
+    dealId: string,
+    payload: { channel: string; message_text: string; is_ai_generated?: boolean }
+  ): Promise<{
+    message: OmnichannelMessageItem;
+    channel_connected: boolean;
+    delivery_status: string;
+    direct_action_url?: string | null;
+    status_notice: string;
+  }> {
+    const res = await apiClient.post(`/api/v1/omnichannel/messages/${dealId}`, payload);
+    return res.data;
+  },
+
+  async getAIChatSuggestions(dealId: string, tone: string = 'consultivo_b2b'): Promise<AIChatSuggestionResponse> {
+    const res = await apiClient.post<AIChatSuggestionResponse>(`/api/v1/omnichannel/ai-suggest/${dealId}`, { tone });
+    return res.data;
+  },
+
+  async updateOmnichannelContact(
+    dealId: string,
+    payload: { phone?: string; email?: string; ai_classification?: string; clear_items?: boolean }
+  ): Promise<{
+    deal_id: string;
+    phone?: string | null;
+    email?: string | null;
+    ai_classification?: string;
+    ai_score?: number;
+    monto_total?: number;
+    message: string;
+  }> {
+    const res = await apiClient.patch(`/api/v1/omnichannel/conversations/${dealId}/contact`, payload);
+    return res.data;
+  },
+
+  // --- MULTI-TENANT SAAS, LICENCIAS & PANEL SUPER-ADMIN MAESTRO ---
+  async getCurrentTenant(): Promise<TenantAccountItem> {
+    const res = await apiClient.get<TenantAccountItem>('/api/v1/tenants/current');
+    return res.data;
+  },
+
+  async getAllTenants(): Promise<TenantAccountItem[]> {
+    const res = await apiClient.get<TenantAccountItem[]>('/api/v1/tenants');
+    return res.data;
+  },
+
+  async provisionTenant(payload: {
+    slug: string;
+    nombre_empresa: string;
+    rut?: string;
+    admin_email: string;
+    admin_username: string;
+    admin_password?: string;
+    license_tier?: string;
+    trial_days?: number;
+  }): Promise<TenantAccountItem> {
+    const res = await apiClient.post<TenantAccountItem>('/api/v1/tenants', payload);
+    return res.data;
+  },
+
+  async updateTenantLicense(
+    tenantId: string,
+    payload: {
+      simulated_tier?: string;
+      license_tier?: string;
+      subscription_status?: string;
+      extend_trial_days?: number;
+      is_active?: boolean;
+    }
+  ): Promise<TenantAccountItem> {
+    const res = await apiClient.patch<TenantAccountItem>(`/api/v1/tenants/${tenantId}/license`, payload);
+    return res.data;
+  },
 };
+
 
 export const api = apiService;
 export default apiService;

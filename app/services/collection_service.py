@@ -66,7 +66,7 @@ class CollectionService:
             if rut not in debtors_map:
                 # Buscar datos del cliente
                 cli = db.query(Client).filter(or_(Client.rut == rut, Client.nombre == inv.cliente_nombre)).first()
-                limite_credito = float(cli.limite_credito) if cli and cli.limite_credito else 0.0
+                limite_credito = float(cli.limite_credito) if (cli and cli.limite_credito and cli.limite_credito > 0) else 200.0
                 email = cli.email if cli else None
                 phone = cli.phone if cli else None
                 address = cli.address if cli else inv.cliente_direccion

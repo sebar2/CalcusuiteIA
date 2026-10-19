@@ -12,6 +12,11 @@ from app.models.logistics_entities import (
     LogisticsCostItem,
     LogisticsHub,
 )
+from app.models.multitenant_entities import (
+    TenantAccount,
+    IntegrationConfig,
+    OmnichannelMessage,
+)
 
 __all__ = [
     "Base",
@@ -29,5 +34,9 @@ __all__ = [
     "LogisticsTelemetryPing",
     "LogisticsCostItem",
     "LogisticsHub",
+    "TenantAccount",
+    "IntegrationConfig",
+    "OmnichannelMessage",
 ]
+
 

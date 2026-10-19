@@ -916,6 +916,8 @@ export interface DealItem {
   image_url?: string | null;
 }
 
+export type LeadSourceChannel = 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | 'MANUAL' | string;
+
 export interface CommercialDeal {
   id: string;
   proyecto_nombre: string;
@@ -925,6 +927,14 @@ export interface CommercialDeal {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  canal_origen?: LeadSourceChannel;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  external_lead_id?: string | null;
+  costo_adquisicion_estimado?: number;
+  ai_score?: number;
+  ai_classification?: 'HOT' | 'WARM' | 'COLD' | 'AMIGOS_FAMILIA' | string;
   vendedor: string;
   monto_total: number;
   moneda: 'USD' | 'UYU' | string;
@@ -944,6 +954,14 @@ export interface CommercialDealCreatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  canal_origen?: LeadSourceChannel;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  external_lead_id?: string;
+  costo_adquisicion_estimado?: number;
+  ai_score?: number;
+  ai_classification?: string;
   vendedor?: string;
   monto_total?: number;
   moneda?: string;
@@ -960,6 +978,10 @@ export interface CommercialDealUpdatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  canal_origen?: LeadSourceChannel;
+  utm_campaign?: string;
+  ai_score?: number;
+  ai_classification?: string;
   vendedor?: string;
   monto_total?: number;
   moneda?: string;
@@ -967,6 +989,7 @@ export interface CommercialDealUpdatePayload {
   observaciones?: string;
   items?: DealItemPayload[];
 }
+
 
 
 // --- MÓDULO 2: Monitor de Stock Multi-Ubicación & Tránsito ---
@@ -1398,6 +1421,7 @@ export interface ClientItem {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  limite_credito?: number;
   deals_count: number;
   total_pipeline: number;
   pipeline_activo?: number;
@@ -1413,6 +1437,7 @@ export interface ClientCreatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  limite_credito?: number;
 }
 
 export interface ClientUpdatePayload {
@@ -1422,6 +1447,7 @@ export interface ClientUpdatePayload {
   email?: string;
   phone?: string;
   address?: string;
+  limite_credito?: number;
 }
 
 export interface SupplierProductItem {
@@ -2578,5 +2604,142 @@ export interface DashboardMetricsResponse {
     ordenes: number;
   }>;
 }
+
+// --- MÓDULOS NUEVOS: HUB DE INTEGRACIONES MULTICANAL, CHAT OMNICANAL IA & MULTI-TENANT SAAS ---
+
+export interface IntegrationChannelConfig {
+  id: number;
+  tenant_id: string;
+  channel: 'GOOGLE_ADS' | 'META_ADS' | 'WHATSAPP' | 'WHATSAPP_QR' | 'EMAIL' | 'WEB_FORM' | string;
+  display_name: string;
+  is_enabled: boolean;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'PENDING_CREDENTIALS' | 'AUTH_ERROR' | string;
+  masked_credentials: Record<string, string>;
+  webhook_url: string;
+  webhook_token_masked: string;
+  auto_reply_enabled: boolean;
+  assigned_seller_strategy: string;
+  default_seller: string;
+  cost_per_lead_usd: number;
+  leads_captured_count: number;
+  deals_won_count: number;
+  revenue_closed_usd: number;
+  estimated_roas: number;
+  last_tested_at?: string | null;
+  updated_at: string;
+}
+
+export interface WhatsAppQRSessionResponse {
+  channel: string;
+  tenant_id: string;
+  current_status: string;
+  qr_token: string;
+  qr_svg: string;
+  pairing_code: string;
+  expires_in_seconds: number;
+  bridge_online?: boolean;
+  bridge_connection?: string;
+  bridge_linked_phone?: string | null;
+  instructions: string[];
+}
+
+export interface WhatsAppQRStatusResponse {
+  channel: string;
+  status: string;
+  is_enabled: boolean;
+  bridge_online: boolean;
+  bridge_connection: string;
+  linked_phone?: string | null;
+  qr_svg?: string | null;
+  masked_credentials: Record<string, string>;
+  channel_config?: IntegrationChannelConfig;
+}
+
+export interface OmnichannelConversationSummary {
+  deal_id: string;
+  proyecto_nombre: string;
+  cliente: string;
+  vendedor: string;
+  etapa: DealStage;
+  monto_total: number;
+  moneda: string;
+  canal_origen: LeadSourceChannel;
+  utm_campaign?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  ai_score: number;
+  ai_classification: string;
+  last_message_text: string;
+  last_message_channel: string;
+  last_message_at: string;
+  messages_count: number;
+}
+
+export interface OmnichannelMessageItem {
+  id: number;
+  deal_id: string;
+  channel: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  sender_name: string;
+  sender_address?: string | null;
+  message_text: string;
+  delivery_status: string;
+  is_ai_generated: boolean;
+  created_at: string;
+}
+
+export interface AIChatSuggestionItem {
+  id: string;
+  title: string;
+  channel_recommended: string;
+  text: string;
+}
+
+export interface AIChatSuggestionResponse {
+  deal_id: string;
+  ai_engine: string;
+  lead_analysis: {
+    canal_origen: string;
+    utm_campaign: string;
+    ai_score: number;
+    ai_classification: string;
+    detected_intent: string;
+    catalog_matched: string;
+  };
+  suggestions: AIChatSuggestionItem[];
+}
+
+export interface TenantAccountItem {
+  id: string;
+  slug: string;
+  nombre_empresa: string;
+  rut?: string | null;
+  schema_name: string;
+  db_strategy: string;
+  license_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
+  simulated_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
+  effective_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
+  subscription_status: 'TRIAL_14_DAYS' | 'ACTIVE_PAID' | 'SUSPENDED' | 'EXPIRED' | string;
+  trial_days_remaining: number;
+  trial_ends_at: string;
+  max_users: number;
+  admin_email: string;
+  admin_username: string;
+  mrr_usd: number;
+  is_active: boolean;
+  created_at: string;
+  capabilities: {
+    name: string;
+    price_monthly_usd: number;
+    max_users: number;
+    allowed_channels: string[];
+    ai_autopilot: boolean;
+    b2b_invoicing: boolean;
+    module_3pl: boolean;
+    restricted_modules: string[];
+    features: string[];
+  };
+}
+
 
 

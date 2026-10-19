@@ -14,6 +14,7 @@ from app.models.entities import (
     Product,
     StockLocationBatch,
 )
+from app.models.multitenant_entities import OmnichannelMessage
 from app.domain.schemas import (
     CommercialDealCreate,
     CommercialDealUpdate,
@@ -54,6 +55,18 @@ class CommercialService:
             moneda=deal.moneda,
             etapa=deal.etapa,
             observaciones=deal.observaciones,
+            logo_url=getattr(deal, 'logo_url', None),
+            email=getattr(deal, 'email', None),
+            phone=getattr(deal, 'phone', None),
+            address=getattr(deal, 'address', None),
+            canal_origen=getattr(deal, 'canal_origen', 'MANUAL') or 'MANUAL',
+            utm_source=getattr(deal, 'utm_source', None),
+            utm_medium=getattr(deal, 'utm_medium', None),
+            utm_campaign=getattr(deal, 'utm_campaign', None),
+            external_lead_id=getattr(deal, 'external_lead_id', None),
+            costo_adquisicion_estimado=getattr(deal, 'costo_adquisicion_estimado', Decimal('0.00')) or Decimal('0.00'),
+            ai_score=getattr(deal, 'ai_score', 75) or 75,
+            ai_classification=getattr(deal, 'ai_classification', 'WARM') or 'WARM',
             created_at=deal.created_at,
             items=items_res,
             total_items_count=len(items_res),
@@ -139,6 +152,18 @@ class CommercialService:
             moneda=payload.moneda,
             etapa=payload.etapa,
             observaciones=payload.observaciones,
+            logo_url=payload.logo_url,
+            email=payload.email,
+            phone=payload.phone,
+            address=payload.address,
+            canal_origen=payload.canal_origen or "MANUAL",
+            utm_source=payload.utm_source,
+            utm_medium=payload.utm_medium,
+            utm_campaign=payload.utm_campaign,
+            external_lead_id=payload.external_lead_id,
+            costo_adquisicion_estimado=payload.costo_adquisicion_estimado or Decimal('0.00'),
+            ai_score=payload.ai_score if payload.ai_score is not None else 75,
+            ai_classification=payload.ai_classification or "WARM",
         )
         db.add(deal)
         db.flush()
@@ -177,10 +202,25 @@ class CommercialService:
             deal.observaciones = payload.observaciones
         if payload.etapa is not None:
             deal.etapa = payload.etapa
+        if payload.email is not None:
+            deal.email = payload.email
+        if payload.phone is not None:
+            deal.phone = payload.phone
+        if payload.address is not None:
+            deal.address = payload.address
+        if payload.canal_origen is not None:
+            deal.canal_origen = payload.canal_origen
+        if payload.utm_campaign is not None:
+            deal.utm_campaign = payload.utm_campaign
+        if payload.ai_classification is not None:
+            deal.ai_classification = payload.ai_classification
+        if payload.ai_score is not None:
+            deal.ai_score = payload.ai_score
+
 
         if payload.items is not None:
-            # Reemplazar items
-            db.query(CommercialDealItem).filter(CommercialDealItem.deal_id == deal.id).delete()
+            # Reemplazar items (permite lista vacía [] para dejar sin productos)
+            db.query(CommercialDealItem).filter(CommercialDealItem.deal_id == deal.id).delete(synchronize_session=False)
             calc_monto = Decimal('0.00')
             for it in payload.items:
                 pr = it.precio_unitario or Decimal('0.00')
@@ -335,6 +375,15 @@ class CommercialService:
         deal = db.query(CommercialDeal).filter(CommercialDeal.id == deal_id).first()
         if not deal:
             return False
+        # 1. Eliminar historial de mensajes omnicanal vinculados al prospecto (evita violación FK 23503)
+        db.query(OmnichannelMessage).filter(OmnichannelMessage.deal_id == deal_id).delete(synchronize_session=False)
+        # 2. Eliminar órdenes de venta vinculadas (si existieran) y sus ítems
+        linked_sos = db.query(SalesOrder).filter(SalesOrder.deal_id == deal_id).all()
+        for so in linked_sos:
+            db.query(SalesOrderItem).filter(SalesOrderItem.sales_order_id == so.id).delete(synchronize_session=False)
+            db.delete(so)
+        # 3. Eliminar ítems del trato y el trato mismo
+        db.query(CommercialDealItem).filter(CommercialDealItem.deal_id == deal_id).delete(synchronize_session=False)
         db.delete(deal)
         db.commit()
         return True

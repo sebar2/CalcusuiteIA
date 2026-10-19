@@ -70,7 +70,8 @@ export const ClientsView: React.FC = () => {
     logo_url: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    limite_credito: 200
   });
   const [saving, setSaving] = useState<boolean>(false);
 
@@ -104,7 +105,8 @@ export const ClientsView: React.FC = () => {
       logo_url: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&auto=format&fit=crop&q=80',
       email: '',
       phone: '',
-      address: ''
+      address: '',
+      limite_credito: 200
     });
     setIsModalOpen(true);
   };
@@ -117,7 +119,8 @@ export const ClientsView: React.FC = () => {
       logo_url: c.logo_url || '',
       email: c.email || '',
       phone: c.phone || '',
-      address: c.address || ''
+      address: c.address || '',
+      limite_credito: c.limite_credito !== undefined && c.limite_credito > 0 ? Number(c.limite_credito) : 200
     });
     setIsModalOpen(true);
   };
@@ -128,10 +131,14 @@ export const ClientsView: React.FC = () => {
 
     try {
       setSaving(true);
+      const payload = {
+        ...formData,
+        limite_credito: Number(formData.limite_credito) || 200,
+      };
       if (editingClient) {
-        await api.updateClient(editingClient.id, formData);
+        await api.updateClient(editingClient.id, payload);
       } else {
-        await api.createClient(formData);
+        await api.createClient(payload);
       }
       setIsModalOpen(false);
       await fetchClients(search);
@@ -462,11 +469,19 @@ export const ClientsView: React.FC = () => {
 
               {/* Métricas y Acción */}
               <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Pipeline Activo</span>
-                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline)}
-                  </span>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Pipeline Activo</span>
+                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(c.pipeline_activo ?? c.pipeline_total ?? c.total_pipeline)}
+                    </span>
+                  </div>
+                  <div className="border-l border-slate-200 dark:border-slate-700 pl-3">
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Crédito Cuenta</span>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                      {formatCurrency(c.limite_credito ?? 200)}
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -496,7 +511,9 @@ export const ClientsView: React.FC = () => {
                   />
                   <div>
                     <h2 className="font-bold text-slate-900 dark:text-slate-100 text-base">{selectedClient.nombre}</h2>
-                    <p className="text-xs text-slate-500">Pipeline: {formatCurrency(selectedClient.pipeline_activo ?? selectedClient.pipeline_total ?? selectedClient.total_pipeline)}</p>
+                    <p className="text-xs text-slate-500">
+                      Pipeline: {formatCurrency(selectedClient.pipeline_activo ?? selectedClient.pipeline_total ?? selectedClient.total_pipeline)} · Crédito: {formatCurrency(selectedClient.limite_credito ?? 200)}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -588,15 +605,30 @@ export const ClientsView: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">RUT Empresa</label>
-                <input
-                  type="text"
-                  placeholder="Ej: 76.452.120-K"
-                  value={formData.rut}
-                  onChange={(e) => setFormData({ ...formData, rut: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">RUT Empresa</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 214567890014"
+                    value={formData.rut}
+                    onChange={(e) => setFormData({ ...formData, rut: e.target.value })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Crédito de la Cuenta (USD)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10"
+                    value={formData.limite_credito}
+                    onChange={(e) => setFormData({ ...formData, limite_credito: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div>

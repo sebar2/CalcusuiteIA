@@ -149,8 +149,13 @@ class SystemUser(Base):
     restricted_modules: Mapped[Optional[Any]] = mapped_column(JSON, default=list, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(50), default="tenant_calcu_corp", nullable=True, index=True)
+    two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    two_factor_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_master_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
 
 
 class CollectionCase(Base):

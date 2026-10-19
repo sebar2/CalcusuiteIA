@@ -11,6 +11,8 @@ import {
   Warehouse as WarehouseIcon,
   Receipt,
   Check,
+  MessageSquare,
+  Plug,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -27,6 +29,8 @@ import { DealDetailDrawer } from './commercial/DealDetailDrawer';
 
 interface CommercialKanbanViewProps {
   onNavigateToTenders?: () => void;
+  onNavigateToOmnichannelChat?: (dealId?: string) => void;
+  onNavigateToIntegrations?: () => void;
 }
 
 interface StageColumnConfig {
@@ -91,7 +95,11 @@ const STAGES_CONFIG: StageColumnConfig[] = [
   },
 ];
 
-export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanViewProps) => {
+export const CommercialKanbanView = ({
+  onNavigateToTenders,
+  onNavigateToOmnichannelChat,
+  onNavigateToIntegrations,
+}: CommercialKanbanViewProps) => {
   const [deals, setDeals] = useState<CommercialDeal[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -101,6 +109,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   // Filtros
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
+  const [selectedCanal, setSelectedCanal] = useState<string>('todos');
 
   // Drawer lateral de detalle y Drag & Drop nativo
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
@@ -117,13 +126,12 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   const [newPhone, setNewPhone] = useState<string>('');
   const [newAddress, setNewAddress] = useState<string>('');
   const [newVendedor, setNewVendedor] = useState<string>('Martín Gómez');
-  const [newMonto, setNewMonto] = useState<string>('15000');
+  const [newMonto, setNewMonto] = useState<string>('0');
   const [newMoneda, setNewMoneda] = useState<string>('USD');
   const [newEtapa, setNewEtapa] = useState<DealStage>('prospeccion');
+  const [newCategoria, setNewCategoria] = useState<string>('WARM');
   const [newObservaciones, setNewObservaciones] = useState<string>('');
-  const [newItems, setNewItems] = useState<DealItemPayload[]>([
-    { sku: 'LUM-6060', cantidad: 500, precio_unitario: 30 },
-  ]);
+  const [newItems, setNewItems] = useState<DealItemPayload[]>([]);
 
   // Modal Editar Trato
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -139,6 +147,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
   const [editMonto, setEditMonto] = useState<string>('0');
   const [editMoneda, setEditMoneda] = useState<string>('USD');
   const [editEtapa, setEditEtapa] = useState<DealStage>('prospeccion');
+  const [editCategoria, setEditCategoria] = useState<string>('WARM');
   const [editObservaciones, setEditObservaciones] = useState<string>('');
   const [editItems, setEditItems] = useState<DealItemPayload[]>([]);
 
@@ -208,9 +217,18 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         (d.rut && d.rut.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (d.observaciones && d.observaciones.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchVend = selectedVendedor === 'todos' || d.vendedor === selectedVendedor;
-      return matchSearch && matchVend;
+      const dealCanal = (d.canal_origen || 'MANUAL').toUpperCase();
+      const matchCanal =
+        selectedCanal === 'todos'
+          ? true
+          : selectedCanal === 'AMIGOS_FAMILIA'
+          ? d.ai_classification === 'AMIGOS_FAMILIA'
+          : selectedCanal === 'SOLO_COMERCIALES'
+          ? d.ai_classification !== 'AMIGOS_FAMILIA'
+          : dealCanal === selectedCanal;
+      return matchSearch && matchVend && matchCanal;
     });
-  }, [deals, searchQuery, selectedVendedor]);
+  }, [deals, searchQuery, selectedVendedor, selectedCanal]);
 
   // Drag & Drop nativo y cambio de etapa con Optimistic UI
   const handleDragStart = (_e: React.DragEvent, dealId: string) => {
@@ -251,13 +269,16 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     }
   };
 
-  // Manejo de borrado
+  // Manejo de borrado (incluye tratos con historial de WhatsApp Omnicanal)
   const handleDeleteDeal = async (dealId: string) => {
-    if (!window.confirm('¿Desea eliminar este trato del pipeline?')) return;
+    if (!window.confirm('¿Desea eliminar este prospecto y su conversación asociada del pipeline?')) return;
     try {
       await apiService.deleteDeal(dealId);
       setDeals((prev) => prev.filter((d) => d.id !== dealId));
-      setSuccessBanner('Trato eliminado exitosamente.');
+      if (selectedDealForDrawer && selectedDealForDrawer.id === dealId) {
+        setSelectedDealForDrawer(null);
+      }
+      setSuccessBanner('Prospecto y conversación eliminados exitosamente.');
       setTimeout(() => setSuccessBanner(null), 4000);
     } catch (err: any) {
       console.error('Error al eliminar trato:', err);
@@ -265,7 +286,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     }
   };
 
-  // Agregar ítem en modal nuevo
+  // Agregar ítem en modal nuevo (opcional)
   const handleAddItem = () => {
     setNewItems((prev) => [...prev, { sku: 'LUM-6060', cantidad: 50, precio_unitario: 30 }]);
   };
@@ -298,24 +319,29 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         phone: newPhone.trim() || undefined,
         address: newAddress.trim() || undefined,
         vendedor: newVendedor.trim(),
-        monto_total: parseFloat(newMonto) || 0,
+        monto_total: newCategoria === 'AMIGOS_FAMILIA' ? 0 : parseFloat(newMonto) || 0,
         moneda: newMoneda,
         etapa: newEtapa,
+        ai_classification: newCategoria,
+        ai_score: newCategoria === 'AMIGOS_FAMILIA' ? 0 : newCategoria === 'HOT' ? 90 : 75,
         observaciones: newObservaciones.trim() || undefined,
-        items: newItems.map((it) => ({
-          sku: it.sku,
-          cantidad: Number(it.cantidad),
-          precio_unitario: Number(it.precio_unitario),
-        })),
+        items:
+          newCategoria === 'AMIGOS_FAMILIA'
+            ? []
+            : newItems.map((it) => ({
+                sku: it.sku,
+                cantidad: Number(it.cantidad),
+                precio_unitario: Number(it.precio_unitario),
+              })),
       };
 
       const created = await apiService.createDeal(payload);
       setDeals((prev) => [created, ...prev]);
       setIsModalOpen(false);
-      setSuccessBanner(`Trato "${created.proyecto_nombre}" creado exitosamente.`);
+      setSuccessBanner(`Prospecto "${created.proyecto_nombre}" creado exitosamente.`);
       setTimeout(() => setSuccessBanner(null), 5000);
 
-      // Reset form
+      // Reset form (productos vacíos por defecto)
       setNewProyecto('');
       setNewCliente('');
       setNewRut('');
@@ -323,7 +349,9 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
       setNewEmail('');
       setNewPhone('');
       setNewAddress('');
-      setNewMonto('15000');
+      setNewMonto('0');
+      setNewCategoria('WARM');
+      setNewItems([]);
       setNewObservaciones('');
     } catch (err: any) {
       console.error('Error al crear trato comercial:', err);
@@ -331,7 +359,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     }
   };
 
-  // Abrir Modal de Edición de Trato
+  // Abrir Modal de Edición de Trato (sin inyectar productos falsos cuando el prospecto no tiene SKUs)
   const handleOpenEditModal = (deal: CommercialDeal) => {
     setEditingDealId(deal.id);
     setEditProyecto(deal.proyecto_nombre);
@@ -345,6 +373,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
     setEditMonto(String(deal.monto_total || 0));
     setEditMoneda(deal.moneda || 'USD');
     setEditEtapa(deal.etapa);
+    setEditCategoria(deal.ai_classification || 'WARM');
     setEditObservaciones(deal.observaciones || '');
     setEditItems(
       deal.items && deal.items.length > 0
@@ -353,7 +382,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
             cantidad: it.cantidad,
             precio_unitario: it.precio_unitario,
           }))
-        : [{ sku: 'LUM-6060', cantidad: 100, precio_unitario: 30 }]
+        : []
     );
     setIsEditModalOpen(true);
   };
@@ -389,19 +418,27 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
         phone: editPhone.trim() || undefined,
         address: editAddress.trim() || undefined,
         vendedor: editVendedor.trim(),
-        monto_total: parseFloat(editMonto) || 0,
+        monto_total: editCategoria === 'AMIGOS_FAMILIA' ? 0 : parseFloat(editMonto) || 0,
         moneda: editMoneda,
         etapa: editEtapa,
+        ai_classification: editCategoria,
+        ai_score: editCategoria === 'AMIGOS_FAMILIA' ? 0 : editCategoria === 'HOT' ? 90 : 75,
         observaciones: editObservaciones.trim() || undefined,
-        items: editItems.map((it) => ({
-          sku: it.sku,
-          cantidad: Number(it.cantidad),
-          precio_unitario: Number(it.precio_unitario),
-        })),
+        items:
+          editCategoria === 'AMIGOS_FAMILIA'
+            ? []
+            : editItems.map((it) => ({
+                sku: it.sku,
+                cantidad: Number(it.cantidad),
+                precio_unitario: Number(it.precio_unitario),
+              })),
       };
 
       const updated = await apiService.updateDeal(editingDealId, payload);
       setDeals((prev) => prev.map((d) => (d.id === editingDealId ? updated : d)));
+      if (selectedDealForDrawer && selectedDealForDrawer.id === editingDealId) {
+        setSelectedDealForDrawer(updated);
+      }
       setIsEditModalOpen(false);
       setSuccessBanner(`Trato "${updated.proyecto_nombre}" actualizado correctamente.`);
       setTimeout(() => setSuccessBanner(null), 5000);
@@ -472,7 +509,29 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onNavigateToIntegrations && (
+            <button
+              onClick={onNavigateToIntegrations}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer"
+              title="Hub de Integraciones Multicanal (Google Ads, Meta, WhatsApp, Email, Web)"
+            >
+              <Plug size={15} />
+              <span>Hub Integraciones</span>
+            </button>
+          )}
+
+          {onNavigateToOmnichannelChat && (
+            <button
+              onClick={() => onNavigateToOmnichannelChat()}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
+              title="Abrir Bandeja de Chat Omnicanal con Agente IA"
+            >
+              <MessageSquare size={15} />
+              <span>Chat Omnicanal IA</span>
+            </button>
+          )}
+
           {onNavigateToTenders && (
             <button
               onClick={onNavigateToTenders}
@@ -551,20 +610,42 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
           />
         </div>
 
-        <div className="flex items-center space-x-2">
-          <span className="text-slate-400">Vendedor:</span>
-          <select
-            value={selectedVendedor}
-            onChange={(e) => setSelectedVendedor(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="todos">Todos los vendedores</option>
-            {vendedoresList.map((vend) => (
-              <option key={vend} value={vend}>
-                {vend}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Fuente / Categoría:</span>
+            <select
+              value={selectedCanal}
+              onChange={(e) => setSelectedCanal(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+            >
+              <option value="todos">Todas las fuentes</option>
+              <option value="SOLO_COMERCIALES">🏢 Solo Prospectos Comerciales B2B</option>
+              <option value="AMIGOS_FAMILIA">👨‍👩‍👧‍👦 Amigos / Familiares (Personal)</option>
+              <option value="GOOGLE_ADS">Google Ads</option>
+              <option value="META_ADS">Meta / Facebook</option>
+              <option value="WHATSAPP">WhatsApp Business API</option>
+              <option value="WHATSAPP_QR">WhatsApp Directo (QR)</option>
+              <option value="EMAIL">Email Corporativo</option>
+              <option value="WEB_FORM">Página Web (Webhook)</option>
+              <option value="MANUAL">CRM Directo</option>
+            </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400">Vendedor:</span>
+            <select
+              value={selectedVendedor}
+              onChange={(e) => setSelectedVendedor(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="todos">Todos los vendedores</option>
+              {vendedoresList.map((vend) => (
+                <option key={vend} value={vend}>
+                  {vend}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -585,6 +666,11 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
               onMoveStage={(dealId, newStage) => handleStageChange(dealId, newStage)}
               onDragStart={handleDragStart}
               onDropDeal={handleDropDeal}
+              onOpenChat={
+                onNavigateToOmnichannelChat
+                  ? (deal) => onNavigateToOmnichannelChat(deal.id)
+                  : undefined
+              }
             />
           );
         })}
@@ -608,6 +694,14 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
           setIsDrawerOpen(false);
           handleDeleteDeal(dealId);
         }}
+        onOpenChat={
+          onNavigateToOmnichannelChat
+            ? (deal) => {
+                setIsDrawerOpen(false);
+                onNavigateToOmnichannelChat(deal.id);
+              }
+            : undefined
+        }
       />
 
       {/* Modal [+ Nuevo Trato] */}
@@ -716,15 +810,17 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                 </div>
                 <div>
                   <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Dirección / Obra
+                    Categoría / Etiqueta
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Av. Italia 2500, Montevideo"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
-                  />
+                  <select
+                    value={newCategoria}
+                    onChange={(e) => setNewCategoria(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  >
+                    <option value="WARM">🏢 Prospecto Comercial B2B (WARM)</option>
+                    <option value="HOT">🔥 Prospecto Alta Prioridad (HOT)</option>
+                    <option value="AMIGOS_FAMILIA">👨‍👩‍👧‍👦 Amigos / Familiares (Personal)</option>
+                  </select>
                 </div>
               </div>
 
@@ -743,7 +839,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
 
                 <div>
                   <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Monto Total
+                    Monto Estimado (Opcional)
                   </label>
                   <input
                     type="number"
@@ -788,64 +884,80 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                 </div>
               </div>
 
-              {/* Partidas de SKUs */}
+              {/* Partidas de SKUs (Opcional) */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">
-                    Artículos / SKUs Requeridos
+                    Artículos / SKUs (Opcional — No obligatorio en Prospección)
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline"
-                  >
-                    + Agregar SKU
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {newItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNewItems([])}
+                        className="text-rose-500 hover:underline font-semibold"
+                      >
+                        Quitar todos
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      className="text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                    >
+                      + Agregar SKU
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                  {newItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <select
-                        value={item.sku}
-                        onChange={(e) => handleItemChange(idx, 'sku', e.target.value)}
-                        className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 font-mono text-xs"
-                      >
-                        <option value="LUM-6060">LUM-6060 (Panel LED 60x60)</option>
-                        <option value="UFO-150W">UFO-150W (Campana 150W)</option>
-                        <option value="DRV-DALI">DRV-DALI (Driver DALI-2)</option>
-                        <option value="PRY-100W">PRY-100W (Proyector Exterior)</option>
-                      </select>
+                {newItems.length === 0 ? (
+                  <div className="p-2.5 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-center text-[11px] text-slate-400">
+                    Sin productos asignados (puede agregarlos luego al cotizar).
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {newItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <select
+                          value={item.sku}
+                          onChange={(e) => handleItemChange(idx, 'sku', e.target.value)}
+                          className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 font-mono text-xs"
+                        >
+                          <option value="LUM-6060">LUM-6060 (Panel LED 60x60)</option>
+                          <option value="UFO-150W">UFO-150W (Campana 150W)</option>
+                          <option value="DRV-DALI">DRV-DALI (Driver DALI-2)</option>
+                          <option value="PRY-100W">PRY-100W (Proyector Exterior)</option>
+                        </select>
 
-                      <input
-                        type="number"
-                        placeholder="Cant"
-                        value={item.cantidad}
-                        onChange={(e) => handleItemChange(idx, 'cantidad', e.target.value)}
-                        className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
-                      />
+                        <input
+                          type="number"
+                          placeholder="Cant"
+                          value={item.cantidad}
+                          onChange={(e) => handleItemChange(idx, 'cantidad', e.target.value)}
+                          className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
+                        />
 
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Precio"
-                        value={item.precio_unitario}
-                        onChange={(e) => handleItemChange(idx, 'precio_unitario', e.target.value)}
-                        className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
-                      />
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Precio"
+                          value={item.precio_unitario}
+                          onChange={(e) => handleItemChange(idx, 'precio_unitario', e.target.value)}
+                          className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
+                        />
 
-                      {newItems.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
-                          className="text-rose-500 hover:text-rose-700 px-1"
+                          title="Quitar producto"
+                          className="text-rose-500 hover:text-rose-700 px-1 font-bold"
                         >
                           ×
                         </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -889,7 +1001,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
               <div className="flex items-center space-x-2">
                 <Edit3 size={20} className="text-blue-600" />
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Editar Trato Comercial
+                  Editar Prospecto / Trato Comercial
                 </h3>
               </div>
               <button
@@ -985,15 +1097,18 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                 </div>
                 <div>
                   <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Dirección / Obra
+                    Categoría / Etiqueta
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Av. Italia 2500, Montevideo"
-                    value={editAddress}
-                    onChange={(e) => setEditAddress(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
-                  />
+                  <select
+                    value={editCategoria}
+                    onChange={(e) => setEditCategoria(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-[#00a2e8]"
+                  >
+                    <option value="WARM">🏢 Prospecto Comercial B2B (WARM)</option>
+                    <option value="HOT">🔥 Prospecto Alta Prioridad (HOT)</option>
+                    <option value="COLD">❄️ Prospecto Frío (COLD)</option>
+                    <option value="AMIGOS_FAMILIA">👨‍👩‍👧‍👦 Amigos / Familiares (Personal)</option>
+                  </select>
                 </div>
               </div>
 
@@ -1012,7 +1127,7 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
 
                 <div>
                   <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Monto Total
+                    Monto Total (Opcional)
                   </label>
                   <input
                     type="number"
@@ -1058,64 +1173,83 @@ export const CommercialKanbanView = ({ onNavigateToTenders }: CommercialKanbanVi
                 </div>
               </div>
 
-              {/* Partidas de SKUs Editables */}
+              {/* Partidas de SKUs Editables (Opcional) */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">
-                    Artículos / SKUs del Trato
+                    Artículos / SKUs del Trato (Opcional)
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleEditAddItem}
-                    className="text-blue-600 dark:text-blue-400 font-bold hover:underline"
-                  >
-                    + Agregar SKU
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {editItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditItems([]);
+                          setEditMonto('0');
+                        }}
+                        className="text-rose-500 hover:underline font-semibold"
+                      >
+                        Vaciar productos (0 SKUs)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleEditAddItem}
+                      className="text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                    >
+                      + Agregar SKU
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                  {editItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <select
-                        value={item.sku}
-                        onChange={(e) => handleEditItemChange(idx, 'sku', e.target.value)}
-                        className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 font-mono text-xs"
-                      >
-                        <option value="LUM-6060">LUM-6060 (Panel LED 60x60)</option>
-                        <option value="UFO-150W">UFO-150W (Campana 150W)</option>
-                        <option value="DRV-DALI">DRV-DALI (Driver DALI-2)</option>
-                        <option value="PRY-100W">PRY-100W (Proyector Exterior)</option>
-                      </select>
+                {editItems.length === 0 ? (
+                  <div className="p-2.5 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-center text-[11px] text-slate-400">
+                    Sin productos asignados (el prospecto quedará sin SKUs).
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {editItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <select
+                          value={item.sku}
+                          onChange={(e) => handleEditItemChange(idx, 'sku', e.target.value)}
+                          className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 font-mono text-xs"
+                        >
+                          <option value="LUM-6060">LUM-6060 (Panel LED 60x60)</option>
+                          <option value="UFO-150W">UFO-150W (Campana 150W)</option>
+                          <option value="DRV-DALI">DRV-DALI (Driver DALI-2)</option>
+                          <option value="PRY-100W">PRY-100W (Proyector Exterior)</option>
+                        </select>
 
-                      <input
-                        type="number"
-                        placeholder="Cant"
-                        value={item.cantidad}
-                        onChange={(e) => handleEditItemChange(idx, 'cantidad', e.target.value)}
-                        className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
-                      />
+                        <input
+                          type="number"
+                          placeholder="Cant"
+                          value={item.cantidad}
+                          onChange={(e) => handleEditItemChange(idx, 'cantidad', e.target.value)}
+                          className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
+                        />
 
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Precio"
-                        value={item.precio_unitario}
-                        onChange={(e) => handleEditItemChange(idx, 'precio_unitario', e.target.value)}
-                        className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
-                      />
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Precio"
+                          value={item.precio_unitario}
+                          onChange={(e) => handleEditItemChange(idx, 'precio_unitario', e.target.value)}
+                          className="w-20 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-900 dark:text-slate-100 text-right"
+                        />
 
-                      {editItems.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleEditRemoveItem(idx)}
-                          className="text-rose-500 hover:text-rose-700 px-1"
+                          title="Quitar producto"
+                          className="text-rose-500 hover:text-rose-700 px-1 font-bold"
                         >
                           ×
                         </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

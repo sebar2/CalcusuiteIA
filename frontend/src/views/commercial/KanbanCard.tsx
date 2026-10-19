@@ -5,7 +5,14 @@ import {
   ChevronRight, 
   AlertTriangle, 
   User, 
-  Layers 
+  Layers,
+  MessageSquare,
+  Flame,
+  Sparkles,
+  Globe,
+  Mail,
+  Megaphone,
+  QrCode
 } from 'lucide-react';
 import type { CommercialDeal, DealStage } from '../../types';
 import { ProductThumbnail } from '../../components/common/ProductThumbnail';
@@ -16,7 +23,56 @@ interface KanbanCardProps {
   onSelectDeal: (deal: CommercialDeal) => void;
   onMoveStage: (dealId: string, newStage: DealStage) => void;
   onDragStart: (e: React.DragEvent, dealId: string) => void;
+  onOpenChat?: (deal: CommercialDeal) => void;
 }
+
+export const getOriginBadgeConfig = (canal?: string) => {
+  const key = (canal || 'MANUAL').toUpperCase();
+  switch (key) {
+    case 'GOOGLE_ADS':
+      return {
+        label: 'Google Ads',
+        className: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        icon: Megaphone,
+      };
+    case 'META_ADS':
+      return {
+        label: 'Meta / Facebook',
+        className: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+        icon: Megaphone,
+      };
+    case 'WHATSAPP':
+      return {
+        label: 'WhatsApp API',
+        className: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+        icon: MessageSquare,
+      };
+    case 'WHATSAPP_QR':
+      return {
+        label: 'WhatsApp QR',
+        className: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+        icon: QrCode,
+      };
+    case 'EMAIL':
+      return {
+        label: 'Email Corp.',
+        className: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+        icon: Mail,
+      };
+    case 'WEB_FORM':
+      return {
+        label: 'Página Web',
+        className: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+        icon: Globe,
+      };
+    default:
+      return {
+        label: 'CRM Directo',
+        className: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+        icon: Building2,
+      };
+  }
+};
 
 export const KanbanCard: React.FC<KanbanCardProps> = ({
   deal,
@@ -24,6 +80,7 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
   onSelectDeal,
   onMoveStage,
   onDragStart,
+  onOpenChat,
 }) => {
   const currentIndex = stages.indexOf(deal.etapa);
   const canMovePrev = currentIndex > 0;
@@ -43,6 +100,9 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
     }
   };
 
+  const originBadge = getOriginBadgeConfig(deal.canal_origen);
+  const OriginIcon = originBadge.icon;
+
   return (
     <div
       draggable
@@ -50,6 +110,59 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
       onClick={() => onSelectDeal(deal)}
       className="group relative p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 hover:border-[#00a2e8]/60 dark:hover:border-[#00a2e8]/60 shadow-xs hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing select-none"
     >
+      {/* Fila Superior: Etiqueta de Fuente de Origen + Score IA */}
+      <div className="flex items-center justify-between gap-1.5 mb-2">
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold border ${originBadge.className}`}
+          title={deal.utm_campaign ? `Campaña: ${deal.utm_campaign}` : `Origen: ${originBadge.label}`}
+        >
+          <OriginIcon size={10} />
+          <span>{originBadge.label}</span>
+        </span>
+
+        <div className="flex items-center gap-1">
+          {deal.ai_classification === 'AMIGOS_FAMILIA' && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-fuchsia-50 dark:bg-fuchsia-950/60 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-800"
+              title="Contacto Personal: Amigos / Familiares"
+            >
+              <span>👨‍👩‍👧‍👦 Amigos / Familia</span>
+            </span>
+          )}
+          {deal.ai_classification === 'HOT' && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
+              title={`Lead Score IA: ${deal.ai_score || 85}/100 (Alta Prioridad)`}
+            >
+              <Flame size={9} />
+              <span>HOT {deal.ai_score ? `${deal.ai_score}` : ''}</span>
+            </span>
+          )}
+          {deal.ai_classification === 'WARM' && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+              title={`Lead Score IA: ${deal.ai_score || 60}/100`}
+            >
+              <Sparkles size={9} />
+              <span>WARM</span>
+            </span>
+          )}
+          {onOpenChat && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenChat(deal);
+              }}
+              title="Abrir Chat Omnicanal con este prospecto"
+              className="p-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-[#00a2e8] hover:bg-[#00a2e8] hover:text-white border border-sky-200/70 dark:border-sky-800/70 transition-colors cursor-pointer"
+            >
+              <MessageSquare size={11} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Cabecera del Deal: Cliente & Micro-acciones */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -100,6 +213,13 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
         {deal.proyecto_nombre}
       </div>
 
+      {/* Campaña UTM si existe */}
+      {deal.utm_campaign && (
+        <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
+          🎯 {deal.utm_campaign}
+        </div>
+      )}
+
       {/* Monto y Moneda */}
       <div className="mt-2 flex items-baseline justify-between">
         <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
@@ -147,3 +267,4 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({
 };
 
 export default KanbanCard;
+

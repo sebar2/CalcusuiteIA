@@ -7,11 +7,15 @@ import {
   User,
   Clock,
   Edit3,
-  Trash2
+  Trash2,
+  MessageSquare,
+  Flame,
+  Target
 } from 'lucide-react';
 import type { CommercialDeal, DealStage } from '../../types';
 import { ProductThumbnail } from '../../components/common/ProductThumbnail';
 import { CompanyContactCard } from '../../components/common/CompanyContactCard';
+import { getOriginBadgeConfig } from './KanbanCard';
 
 interface DealDetailDrawerProps {
   deal: CommercialDeal | null;
@@ -21,6 +25,7 @@ interface DealDetailDrawerProps {
   onGenerateSalesOrder?: (deal: CommercialDeal) => void;
   onEditDeal?: (deal: CommercialDeal) => void;
   onDeleteDeal?: (dealId: string) => void;
+  onOpenChat?: (deal: CommercialDeal) => void;
 }
 
 const STAGES_LIST: { key: DealStage; label: string }[] = [
@@ -40,8 +45,12 @@ export const DealDetailDrawer: React.FC<DealDetailDrawerProps> = ({
   onGenerateSalesOrder,
   onEditDeal,
   onDeleteDeal,
+  onOpenChat,
 }) => {
   if (!isOpen || !deal) return null;
+
+  const originBadge = getOriginBadgeConfig(deal.canal_origen);
+  const OriginIcon = originBadge.icon;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
@@ -56,10 +65,26 @@ export const DealDetailDrawer: React.FC<DealDetailDrawerProps> = ({
         {/* Cabecera del Drawer */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-900/50">
           <div>
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-full border border-sky-200/60 dark:border-sky-800/60">
-              Trato Comercial #{deal.id}
-            </span>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50 mt-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60 px-2 py-0.5 rounded-full border border-sky-200/60 dark:border-sky-800/60">
+                Trato Comercial #{deal.id}
+              </span>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${originBadge.className}`}>
+                <OriginIcon size={11} />
+                <span>{originBadge.label}</span>
+              </span>
+              {deal.ai_classification === 'AMIGOS_FAMILIA' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-fuchsia-50 dark:bg-fuchsia-950/60 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-800">
+                  <span>👨‍👩‍👧‍👦 Amigos / Familiares (Personal)</span>
+                </span>
+              ) : deal.ai_classification ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+                  <Flame size={10} />
+                  <span>IA {deal.ai_classification} ({deal.ai_score || 75}/100)</span>
+                </span>
+              ) : null}
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50 mt-1.5">
               {deal.proyecto_nombre}
             </h2>
             <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -83,6 +108,30 @@ export const DealDetailDrawer: React.FC<DealDetailDrawerProps> = ({
 
         {/* Contenido con scroll */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Atribución de Marketing & Chat Rápido */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-sky-50/90 to-indigo-50/70 dark:from-sky-950/40 dark:to-indigo-950/30 border border-sky-200/70 dark:border-sky-800/60 flex items-center justify-between gap-3">
+            <div className="text-xs space-y-0.5">
+              <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Target size={14} className="text-[#00a2e8]" />
+                <span>Fuente de Captación: {originBadge.label}</span>
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                {deal.utm_campaign ? `Campaña: ${deal.utm_campaign}` : 'Captación directa en Pipeline'}
+                {deal.costo_adquisicion_estimado ? ` · CAC Est.: USD $${Number(deal.costo_adquisicion_estimado).toFixed(2)}` : ''}
+              </div>
+            </div>
+            {onOpenChat && (
+              <button
+                type="button"
+                onClick={() => onOpenChat(deal)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#00a2e8] hover:bg-[#008ecb] text-white text-xs font-bold shadow-xs transition-all shrink-0 cursor-pointer"
+              >
+                <MessageSquare size={14} />
+                <span>Chatear</span>
+              </button>
+            )}
+          </div>
+
           {/* Ficha de Empresa / Contacto */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">

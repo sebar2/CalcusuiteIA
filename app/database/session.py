@@ -121,8 +121,16 @@ def sync_table_columns(conn):
     # 3. warehouses (Nodos Logísticos Internacionales y Nacionales)
     add_col_if_missing("warehouses", "pais", "VARCHAR(100)", "'Uruguay'")
 
-    # 4. commercial_deals (CRM B2B)
+    # 4. commercial_deals (CRM B2B & Atribución Multicanal AdTech)
     add_col_if_missing("commercial_deals", "rut", "VARCHAR(50)")
+    add_col_if_missing("commercial_deals", "canal_origen", "VARCHAR(50)", "'MANUAL'")
+    add_col_if_missing("commercial_deals", "utm_source", "VARCHAR(150)")
+    add_col_if_missing("commercial_deals", "utm_medium", "VARCHAR(150)")
+    add_col_if_missing("commercial_deals", "utm_campaign", "VARCHAR(150)")
+    add_col_if_missing("commercial_deals", "external_lead_id", "VARCHAR(100)")
+    add_col_if_missing("commercial_deals", "costo_adquisicion_estimado", "NUMERIC(14, 4)", "0.0")
+    add_col_if_missing("commercial_deals", "ai_score", "INTEGER", "75")
+    add_col_if_missing("commercial_deals", "ai_classification", "VARCHAR(50)", "'WARM'")
 
     # 5. centros_costo & acciones_compromisos (BCNF)
     add_col_if_missing("centros_costo", "area_id", "INTEGER")
@@ -168,7 +176,7 @@ def sync_table_columns(conn):
     add_col_if_missing("clients", "documento", "VARCHAR(50)")
     add_col_if_missing("clients", "tipo_documento", "VARCHAR(20)", "'RUT'")
     add_col_if_missing("clients", "es_consumidor_final", "BOOLEAN", "FALSE")
-    add_col_if_missing("clients", "limite_credito", "NUMERIC(14, 4)", "0.0")
+    add_col_if_missing("clients", "limite_credito", "NUMERIC(14, 4)", "200.0")
 
     # 7.4. Facturación B2B & Notas de Crédito
     add_col_if_missing("invoices", "cliente_documento", "VARCHAR(50)")
@@ -177,8 +185,13 @@ def sync_table_columns(conn):
     add_col_if_missing("invoices", "orden_compra_ref", "VARCHAR(50)")
     add_col_if_missing("invoices", "factura_referencia_id", "INTEGER")
 
-    # 7.5. Usuarios del Sistema & Contraseñas
+    # 7.5. Usuarios del Sistema, Multi-Tenancy & 2FA
     add_col_if_missing("system_users", "password_hash", "VARCHAR(255)")
+    add_col_if_missing("system_users", "tenant_id", "VARCHAR(50)", "'tenant_calcu_corp'")
+    add_col_if_missing("system_users", "two_factor_enabled", "BOOLEAN", "FALSE")
+    add_col_if_missing("system_users", "two_factor_secret_encrypted", "VARCHAR(255)")
+    add_col_if_missing("system_users", "is_master_superadmin", "BOOLEAN", "FALSE")
+
 
 
 
@@ -1100,12 +1113,429 @@ def run_non_destructive_migrations(target_engine: Engine = None):
             conn.commit()
 
 
+def seed_multitenant_and_omnichannel(conn):
+    """
+    Inicializa cuentas Multi-Tenant (SaaS), los 5 canales del Hub de Integraciones
+    respetando la política de Cero Falsos Positivos (PENDING_CREDENTIALS por defecto)
+    y prospectos multicanal en '1. Prospección' con su historial de Chat Omnicanal.
+    """
+    import json
+    import secrets
+    from datetime import datetime, timezone, timedelta
+
+    now_utc = datetime.now(timezone.utc)
+    trial_end = now_utc + timedelta(days=14)
+
+    # 1. Cuentas Multi-Tenant iniciales
+    try:
+        t_count = conn.execute(text("SELECT COUNT(*) FROM tenant_accounts")).scalar() or 0
+        if t_count == 0:
+            default_tenants = [
+                (
+                    "tenant_calcu_corp",
+                    "calcu_corp",
+                    "Calcu Corporación Central S.A.",
+                    "218994020015",
+                    "tenant_calcu_corp",
+                    "POSTGRES_SCHEMA",
+                    "ENTERPRISE_3PL",
+                    None,
+                    "ACTIVE_PAID",
+                    now_utc,
+                    now_utc + timedelta(days=365),
+                    999,
+                    "admin@calcu.com",
+                    "admin",
+                    490.00,
+                    True,
+                ),
+                (
+                    "tenant_demo_sandbox",
+                    "demo_sandbox",
+                    "Empresa Evaluadora Trial (14 Días)",
+                    "215551110019",
+                    "tenant_demo_sandbox",
+                    "POSTGRES_SCHEMA",
+                    "ENTERPRISE_3PL",
+                    "ENTERPRISE_3PL",
+                    "TRIAL_14_DAYS",
+                    now_utc,
+                    trial_end,
+                    999,
+                    "demo@calcu.com",
+                    "demo",
+                    0.00,
+                    True,
+                ),
+                (
+                    "tenant_distsur",
+                    "distsur",
+                    "Distribuidora del Sur Ltda.",
+                    "214409820012",
+                    "tenant_distsur",
+                    "POSTGRES_SCHEMA",
+                    "ENTERPRISE_3PL",
+                    "ENTERPRISE_3PL",
+                    "TRIAL_14_DAYS",
+                    now_utc,
+                    trial_end,
+                    25,
+                    "admin@distsur.com.uy",
+                    "admin_distsur",
+                    190.00,
+                    True,
+                ),
+            ]
+            for (
+                tid, slug, nom, rut, sch, strat, tier, sim_tier,
+                st, t_start, t_end, max_u, adm_em, adm_usr, mrr, act
+            ) in default_tenants:
+                conn.execute(
+                    text("""
+                        INSERT INTO tenant_accounts (
+                            id, slug, nombre_empresa, rut, schema_name, db_strategy,
+                            license_tier, simulated_tier, subscription_status,
+                            trial_starts_at, trial_ends_at, max_users,
+                            admin_email, admin_username, mrr_usd, is_active, created_at
+                        ) VALUES (
+                            :tid, :slug, :nom, :rut, :sch, :strat,
+                            :tier, :sim_tier, :st,
+                            :t_start, :t_end, :max_u,
+                            :adm_em, :adm_usr, :mrr, :act, :now_utc
+                        )
+                    """),
+                    {
+                        "tid": tid, "slug": slug, "nom": nom, "rut": rut,
+                        "sch": sch, "strat": strat, "tier": tier, "sim_tier": sim_tier,
+                        "st": st, "t_start": t_start, "t_end": t_end, "max_u": max_u,
+                        "adm_em": adm_em, "adm_usr": adm_usr, "mrr": mrr, "act": act,
+                        "now_utc": now_utc
+                    }
+                )
+            conn.commit()
+    except Exception as e:
+        logger.warning("No se pudo sembrar tenant_accounts: %s", e)
+
+    # 2. Canales del Hub de Integraciones (Sin falsos positivos: PENDING_CREDENTIALS hasta configurar llaves reales)
+    try:
+        channels_seed = [
+            ("GOOGLE_ADS", "Google Ads (Lead Form & Campañas Search)", False, "PENDING_CREDENTIALS", 12.50, "Martín Gómez"),
+            ("META_ADS", "Facebook & Instagram (Meta Lead Ads)", False, "PENDING_CREDENTIALS", 8.40, "Laura Varela"),
+            ("WHATSAPP", "WhatsApp Business Cloud API Oficial", False, "PENDING_CREDENTIALS", 2.10, "Martín Gómez"),
+            ("WHATSAPP_QR", "WhatsApp Directo (Vinculación por Código QR)", False, "PENDING_CREDENTIALS", 0.50, "Martín Gómez"),
+            ("EMAIL", "Correo Corporativo (SMTP / IMAP Verificado)", False, "PENDING_CREDENTIALS", 1.50, "Laura Varela"),
+            ("WEB_FORM", "Página Web Corporativa (Webhook Directo)", False, "PENDING_CREDENTIALS", 3.00, "Martín Gómez"),
+        ]
+        for ch_code, disp, enab, stat, cpl, seller in channels_seed:
+            ch_exists = conn.execute(
+                text("SELECT COUNT(*) FROM integration_configs WHERE channel = :ch"),
+                {"ch": ch_code}
+            ).scalar() or 0
+            if ch_exists == 0:
+                wh_tok = f"whk_{ch_code.lower()}_{secrets.token_hex(8)}"
+                conn.execute(
+                    text("""
+                        INSERT INTO integration_configs (
+                            tenant_id, channel, display_name, is_enabled, status,
+                            encrypted_credentials, masked_summary, webhook_token,
+                            auto_reply_enabled, assigned_seller_strategy, default_seller,
+                            cost_per_lead_usd, leads_captured_count, updated_at
+                        ) VALUES (
+                            'tenant_calcu_corp', :ch, :disp, :enab, :stat,
+                            NULL, :msum, :wht,
+                            :auto_rep, 'ROUND_ROBIN', :seller,
+                            :cpl, 0, :now_utc
+                        )
+                    """),
+                    {
+                        "ch": ch_code,
+                        "disp": disp,
+                        "enab": enab,
+                        "stat": stat,
+                        "msum": json.dumps({}),
+                        "wht": wh_tok,
+                        "auto_rep": True,
+                        "seller": seller,
+                        "cpl": cpl,
+                        "now_utc": now_utc,
+                    }
+                )
+        conn.commit()
+    except Exception as e:
+        logger.warning("No se pudo sembrar integration_configs: %s", e)
+
+    # 3. Prospectos Multicanal de Muestra en "1. Prospección" y Mensajes de Chat Omnicanal
+    try:
+        # Actualizar deal-oficinas-wts-004 existente para que tenga fuente clara y contacto
+        conn.execute(
+            text("""
+                UPDATE commercial_deals
+                SET canal_origen = 'GOOGLE_ADS',
+                    utm_source = 'google',
+                    utm_medium = 'cpc',
+                    utm_campaign = 'B2B_Iluminacion_Oficinas_Q4',
+                    email = COALESCE(email, 'compras@techhub.uy'),
+                    phone = COALESCE(phone, '+59899112233'),
+                    costo_adquisicion_estimado = 14.50,
+                    ai_score = 92,
+                    ai_classification = 'HOT'
+                WHERE id = 'deal-oficinas-wts-004'
+            """)
+        )
+
+        multichannel_prospects = [
+            (
+                "deal-meta-logistica-005",
+                "Almacenamiento & Ruteo 3PL Retail",
+                "Supermercados El Dorado / Lic. Fernando Silva",
+                "213344550018",
+                "Laura Varela",
+                18500.0,
+                "USD",
+                "prospeccion",
+                "Lead capturado vía Meta Lead Ads. Consulta por servicio de depósito 3PL y distribución a sucursales en Maldonado y Rocha.",
+                "fsilva@eldorado.com.uy",
+                "+59894223344",
+                "META_ADS",
+                "facebook",
+                "paid_social",
+                "3PL_Expansion_Uruguay_2026",
+                "meta_lead_998123",
+                9.80,
+                88,
+                "HOT",
+            ),
+            (
+                "deal-wa-luminarias-006",
+                "Reposición Campanas Industriales Nave Logística",
+                "Frigorífico Modelo S.A. / Ing. Carlos Méndez",
+                "211122330011",
+                "Martín Gómez",
+                6800.0,
+                "USD",
+                "prospeccion",
+                "Contacto entrante por WhatsApp Business. Solicita cotización urgente de 80 campanas UFO 150W IP65 con entrega en Montevideo.",
+                "cmendez@frigorificomodelo.uy",
+                "+59898776655",
+                "WHATSAPP",
+                "whatsapp",
+                "inbound_chat",
+                "Directo_WA_Corporativo",
+                "wa_msg_774120",
+                2.10,
+                95,
+                "HOT",
+            ),
+            (
+                "deal-web-licitacion-007",
+                "Proyectores Exteriores Complejo Deportivo",
+                "Club Atlético Bohemios / Intendencia",
+                "217788990014",
+                "Laura Varela",
+                5400.0,
+                "USD",
+                "prospeccion",
+                "Formulario Web Corporativo completado en landing page. Pide ficha técnica de proyectores PRY-100W y plazos de garantía.",
+                "infraestructura@bohemios.uy",
+                "+59891334455",
+                "WEB_FORM",
+                "web_organico",
+                "referral",
+                "Landing_Calcu_2026",
+                "web_lead_55201",
+                3.00,
+                79,
+                "WARM",
+            ),
+            (
+                "deal-email-corporativo-008",
+                "Suministro Anual Drivers DALI & Paneles",
+                "Estudio Arq. Gómez Platero",
+                "216655440017",
+                "Martín Gómez",
+                22400.0,
+                "USD",
+                "prospeccion",
+                "Consulta recibida por Email Corporativo. Adjuntan planilla de cómputo métrico para obra corporativa en Carrasco.",
+                "adquisiciones@gomezplatero.com",
+                "+59892445566",
+                "EMAIL",
+                "email_directo",
+                "inbound_email",
+                "Bandeja_Ventas_B2B",
+                "email_lead_33109",
+                1.50,
+                86,
+                "HOT",
+            ),
+        ]
+
+        for (
+            did, proj, cli, rut, vend, monto, mon, eta, obs,
+            em, ph, canal, usrc, umed, ucamp, ext_id, cac, score, clasif
+        ) in multichannel_prospects:
+            exists = conn.execute(
+                text("SELECT COUNT(*) FROM commercial_deals WHERE id = :did"),
+                {"did": did}
+            ).scalar() or 0
+            if exists == 0:
+                conn.execute(
+                    text("""
+                        INSERT INTO commercial_deals (
+                            id, proyecto_nombre, cliente, rut, vendedor, monto_total,
+                            moneda, etapa, observaciones, email, phone,
+                            canal_origen, utm_source, utm_medium, utm_campaign,
+                            external_lead_id, costo_adquisicion_estimado, ai_score, ai_classification, created_at
+                        ) VALUES (
+                            :did, :proj, :cli, :rut, :vend, :monto,
+                            :mon, :eta, :obs, :em, :ph,
+                            :canal, :usrc, :umed, :ucamp,
+                            :ext_id, :cac, :score, :clasif, :now_utc
+                        )
+                    """),
+                    {
+                        "did": did, "proj": proj, "cli": cli, "rut": rut, "vend": vend,
+                        "monto": monto, "mon": mon, "eta": eta, "obs": obs,
+                        "em": em, "ph": ph, "canal": canal, "usrc": usrc,
+                        "umed": umed, "ucamp": ucamp, "ext_id": ext_id,
+                        "cac": cac, "score": score, "clasif": clasif, "now_utc": now_utc
+                    }
+                )
+        conn.commit()
+
+        # Sembrar mensajes iniciales en omnichannel_messages si está vacío
+        msg_count = conn.execute(text("SELECT COUNT(*) FROM omnichannel_messages")).scalar() or 0
+        if msg_count == 0:
+            initial_messages = [
+                (
+                    "deal-oficinas-wts-004",
+                    "GOOGLE_ADS",
+                    "INBOUND",
+                    "TechHub Coworking (Compras)",
+                    "compras@techhub.uy",
+                    "Hola equipo de Calcu, vimos su anuncio en Google buscando iluminación eficiente para oficinas en WTC. Necesitamos cotizar 300 paneles LED 60x60 UGR<19 y 150 drivers DALI. ¿Tienen stock para entrega inmediata?",
+                    "RECEIVED",
+                    False,
+                ),
+                (
+                    "deal-meta-logistica-005",
+                    "META_ADS",
+                    "INBOUND",
+                    "Lic. Fernando Silva (El Dorado)",
+                    "+59894223344",
+                    "Buenas tardes, completé el formulario en Facebook. Estamos evaluando tercerizar recepción de mercadería y distribución 3PL para 12 locales del Este. ¿Cuáles son sus tarifas por pallet y flete por km?",
+                    "RECEIVED",
+                    False,
+                ),
+                (
+                    "deal-wa-luminarias-006",
+                    "WHATSAPP",
+                    "INBOUND",
+                    "Ing. Carlos Méndez (Frigorífico Modelo)",
+                    "+59898776655",
+                    "¡Hola! Les escribo por WhatsApp porque necesitamos urgente 80 Campanas Industriales LED UFO 150W IP65 para nuestra cámara seca. ¿A qué precio nos quedan por volumen y cuándo podrían despachar?",
+                    "RECEIVED",
+                    False,
+                ),
+                (
+                    "deal-web-licitacion-007",
+                    "WEB_FORM",
+                    "INBOUND",
+                    "Club Atlético Bohemios",
+                    "infraestructura@bohemios.uy",
+                    "Estimados, enviamos consulta desde su página web. Necesitamos proyectores exteriores de 100W para remodelación de canchas. ¿Cuentan con stock en Montevideo?",
+                    "RECEIVED",
+                    False,
+                ),
+                (
+                    "deal-email-corporativo-008",
+                    "EMAIL",
+                    "INBOUND",
+                    "Estudio Arq. Gómez Platero",
+                    "adquisiciones@gomezplatero.com",
+                    "Estimado equipo comercial: solicitamos presupuesto formal B2B para provisión anual de luminarias técnicas y drivers regulables DALI-2 según pliego adjunto. Quedamos atentos.",
+                    "RECEIVED",
+                    False,
+                ),
+            ]
+            for d_id, ch, direc, s_name, s_addr, m_txt, d_stat, is_ai in initial_messages:
+                conn.execute(
+                    text("""
+                        INSERT INTO omnichannel_messages (
+                            tenant_id, deal_id, channel, direction, sender_name,
+                            sender_address, message_text, delivery_status, is_ai_generated, created_at
+                        ) VALUES (
+                            'tenant_calcu_corp', :did, :ch, :direc, :sname,
+                            :saddr, :mtxt, :dstat, :isai, :now_utc
+                        )
+                    """),
+                    {
+                        "did": d_id, "ch": ch, "direc": direc, "sname": s_name,
+                        "saddr": s_addr, "mtxt": m_txt, "dstat": d_stat,
+                        "isai": is_ai, "now_utc": now_utc
+                    }
+                )
+            conn.commit()
+    except Exception as e:
+        logger.warning("No se pudo sembrar prospectos multicanal y mensajes omnicanal: %s", e)
+
+
+class TenantConnectionManager:
+    """
+    Gestor Multi-Tenant de Bases de Datos Aisladas (Opción B — PostgreSQL Schema / Isolated DB).
+    - En PostgreSQL: Crea e inicializa esquemas dedicados `tenant_{slug}` y ejecuta `SET search_path`.
+    - En entorno local SQLite: Crea bases de datos físicamente separadas en `tenants_data/{tenant_id}.db`
+      para nuevos tenants, manteniendo `calcu.db` para `tenant_calcu_corp` y `calcu_demo.db` para `demo`.
+    """
+    def __init__(self):
+        self._engines: dict[str, Engine] = {}
+        self._sessionmakers: dict[str, sessionmaker] = {}
+        self.tenants_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tenants_data")
+        os.makedirs(self.tenants_dir, exist_ok=True)
+
+    def get_session_for_tenant(self, tenant_id: str) -> Session:
+        clean_tid = (tenant_id or "tenant_calcu_corp").strip().lower()
+        # 1. Cuentas predeterminadas existentes
+        if clean_tid in ("tenant_calcu_corp", "default", "calcu_corp", ""):
+            return SessionLocal()
+        if clean_tid in ("tenant_demo_sandbox", "demo_sandbox", "demo"):
+            return SessionDemo()
+
+        # 2. Cuentas aisladas adicionales (PostgreSQL Schema o Base Aislada)
+        if clean_tid not in self._sessionmakers:
+            if DATABASE_URL.startswith("postgresql"):
+                # En PostgreSQL usamos schema-per-tenant sobre el motor principal
+                schema_safe = "".join(c for c in clean_tid if c.isalnum() or c == "_")
+                with engine.connect() as conn:
+                    conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_safe}"'))
+                    conn.commit()
+                tenant_eng = engine.execution_options(schema_translate_map={None: schema_safe})
+                Base.metadata.create_all(bind=tenant_eng)
+                self._engines[clean_tid] = tenant_eng
+                self._sessionmakers[clean_tid] = sessionmaker(autocommit=False, autoflush=False, bind=tenant_eng)
+            else:
+                # Archivo físico independiente por Tenant
+                safe_filename = "".join(c for c in clean_tid if c.isalnum() or c in ("_", "-"))
+                db_path = os.path.join(self.tenants_dir, f"{safe_filename}.db")
+                tenant_url = f"sqlite:///{db_path}"
+                tenant_eng = create_app_engine(tenant_url)
+                init_db(target_engine=tenant_eng)
+                self._engines[clean_tid] = tenant_eng
+                self._sessionmakers[clean_tid] = sessionmaker(autocommit=False, autoflush=False, bind=tenant_eng)
+
+        return self._sessionmakers[clean_tid]()
+
+
+tenant_connection_manager = TenantConnectionManager()
+
+
 def init_db(target_engine: Engine = None):
     """Crea todas las tablas si no existen y corre migraciones seguras multi-dialecto en base principal y demo"""
     engines_to_init = [target_engine] if target_engine else [engine, engine_demo]
     from app.models import entities  # Asegurar registro de modelos
     from app.models import logistics_entities  # Asegurar registro de modelos 3PL Logística
     from app.models import accounting_entities  # Asegurar registro de facturación, contabilidad y RBAC
+    from app.models import multitenant_entities  # Asegurar registro de Multi-Tenancy, Vault y Chat Omnicanal
     from app.domain import models   # Asegurar registro de modelos del dominio
     for eng in engines_to_init:
         try:
@@ -1114,19 +1544,19 @@ def init_db(target_engine: Engine = None):
                 sync_table_columns(conn)
             if eng.dialect.name == "sqlite":
                 run_non_destructive_migrations(eng)
+            with eng.connect() as conn:
+                seed_multitenant_and_omnichannel(conn)
         except Exception as e:
             logger.warning("Error inicializando motor de BD %s: %s", eng, e)
 
 
 def get_db(request: Request = None):
     """
-    Generador de sesión de base de datos con aislamiento estricto de Sandbox:
-    - Si la petición proviene del usuario 'demo' (identificado por JWT token, header o query param),
-      retorna una sesión conectada exclusivamente a la base aislada 'calcu_demo.db'.
-    - Para los demás usuarios del sistema, retorna la sesión de la base principal.
-    Esto garantiza aislamiento total para que pruebas externas no toquen datos reales ni el host.
+    Generador de sesión de base de datos Multi-Tenant & Sandbox Aislado:
+    - Resuelve el `tenant_id` desde el token JWT (`tenant_id`), encabezado `X-Tenant-Id` o usuario `demo`.
+    - Enruta de forma transparente a la base de datos / esquema PostgreSQL exclusivo de la empresa.
     """
-    use_demo_db = False
+    resolved_tenant_id = "tenant_calcu_corp"
     if request:
         try:
             # 1. Comprobar encabezado Authorization Bearer Token
@@ -1139,17 +1569,23 @@ def get_db(request: Request = None):
                     algorithms=[getattr(settings, "jwt_algorithm", "HS256")]
                 )
                 if payload.get("sub") == "demo":
-                    use_demo_db = True
-            # 2. Comprobar encabezado explícito o query param
-            if not use_demo_db:
-                if request.headers.get("x-user-id") == "demo" or request.query_params.get("user_id") == "demo":
-                    use_demo_db = True
+                    resolved_tenant_id = "tenant_demo_sandbox"
+                elif payload.get("tenant_id"):
+                    resolved_tenant_id = str(payload.get("tenant_id"))
+            # 2. Comprobar encabezado explícito X-Tenant-Id o X-User-Id
+            if resolved_tenant_id == "tenant_calcu_corp":
+                header_tenant = request.headers.get("x-tenant-id")
+                if header_tenant:
+                    resolved_tenant_id = header_tenant.strip()
+                elif request.headers.get("x-user-id") == "demo" or request.query_params.get("user_id") == "demo":
+                    resolved_tenant_id = "tenant_demo_sandbox"
         except Exception:
             pass
 
-    db = SessionDemo() if use_demo_db else SessionLocal()
+    db = tenant_connection_manager.get_session_for_tenant(resolved_tenant_id)
     try:
         yield db
     finally:
         db.close()
+
 

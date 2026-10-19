@@ -131,7 +131,7 @@ class InvoiceService:
                 ~Invoice.tipo_cfe.in_(["112_NOTA_CREDITO", "102_NOTA_CREDITO_ETICKET"])
             ).scalar() or Decimal("0.00")
 
-            limite = float(c.limite_credito or 0.0)
+            limite = float(c.limite_credito) if (c.limite_credito and c.limite_credito > 0) else 200.0
             deuda = float(deuda_total)
             cupo_disponible = max(0.0, limite - deuda) if limite > 0 else 0.0
 
