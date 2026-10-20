@@ -28,6 +28,10 @@ const TendersBuyersView = lazy(() => import('./views/tenders/TendersBuyersView')
 const TendersCalendarView = lazy(() => import('./views/tenders/TendersCalendarView').then(m => ({ default: m.TendersCalendarView })));
 const TendersQuoterView = lazy(() => import('./views/tenders/TendersQuoterView').then(m => ({ default: m.TendersQuoterView })));
 
+// DIGITAL TWIN 3D MODULES
+const SupplyDigitalTwinModule = lazy(() => import('./views/SupplyDigitalTwinModule').then(m => ({ default: m.SupplyDigitalTwinModule })));
+const TplDigitalTwinModule = lazy(() => import('./views/TplDigitalTwinModule').then(m => ({ default: m.TplDigitalTwinModule })));
+
 // 3PL LOGÍSTICA & DISTRIBUCIÓN
 const LogisticsClientsView = lazy(() => import('./views/logistics/LogisticsClientsView').then(m => ({ default: m.LogisticsClientsView })));
 const LogisticsFleetView = lazy(() => import('./views/logistics/LogisticsFleetView').then(m => ({ default: m.LogisticsFleetView })));
@@ -176,7 +180,7 @@ export function AppContent() {
         if (pref.default_engine_mode) {
           setEngineMode(pref.default_engine_mode);
         }
-        if (pref.last_view && ['control_room', 'kanban', 'stock_trace', 'pricing', 'crm', 'initiatives', 'tenders', 'variance', 'reports', 'etl'].includes(pref.last_view)) {
+        if (pref.last_view && ['control_room', 'kanban', 'stock_trace', 'supply_digital_twin', 'tpl_digital_twin', 'pricing', 'crm', 'initiatives', 'tenders', 'variance', 'reports', 'etl'].includes(pref.last_view)) {
           setActiveTab(pref.last_view as ActiveTab);
         }
         if (pref.saved_filters) {
@@ -401,7 +405,7 @@ export function AppContent() {
         />
 
         {/* Content Area con Padding del Header Fijo optimizado para Redmi Note 9 Pro */}
-        <main className="flex-1 mt-16 p-3 sm:p-6 overflow-y-auto">
+        <main className={`flex-1 mt-16 ${activeTab === 'supply_digital_twin' || activeTab === 'tpl_digital_twin' ? 'p-0 overflow-hidden h-[calc(100vh-64px)]' : 'p-3 sm:p-6 overflow-y-auto'}`}>
           <Suspense fallback={<ViewLoading />}>
             {restrictedModules.includes(activeTab) ? (
               <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/50 shadow-sm space-y-3 max-w-lg mx-auto mt-12 animate-in fade-in">
@@ -467,6 +471,12 @@ export function AppContent() {
             {activeTab === 'stock_trace' && (
               <ErrorBoundary fallbackTitle="Error al cargar Trazabilidad Multi-Depósito">
                 <MultiLocationStockView currentRole={currentRole} />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'supply_digital_twin' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Gemelo 3D Supply Chain">
+                <SupplyDigitalTwinModule currentRole={currentRole} />
               </ErrorBoundary>
             )}
 
@@ -638,6 +648,12 @@ export function AppContent() {
             {activeTab === 'logistics-inventory' && (
               <ErrorBoundary fallbackTitle="Error al cargar Depósito & Stock 3PL">
                 <LogisticsInventoryView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'tpl_digital_twin' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Gemelo 3D 3PL">
+                <TplDigitalTwinModule currentRole={currentRole} />
               </ErrorBoundary>
             )}
 

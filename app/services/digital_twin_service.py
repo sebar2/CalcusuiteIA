@@ -659,6 +659,10 @@ class DigitalTwinService:
         real_product_id: Optional[int] = None,
         lote: Optional[str] = None,
         descripcion: Optional[str] = None,
+        estado: Optional[str] = None,
+        rack_width_m: Optional[float] = None,
+        rack_height_m: Optional[float] = None,
+        rack_depth_m: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Actualiza las especificaciones de caja/bulto y vincula opcionalmente con un SKU Real de Calcu.
@@ -688,10 +692,21 @@ class DigitalTwinService:
         if lote:
             slot.lote = lote
 
+        if rack_width_m:
+            slot.rack_width_m = Decimal(str(rack_width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if rack_height_m:
+            slot.rack_height_m = Decimal(str(rack_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if rack_depth_m:
+            slot.rack_depth_m = Decimal(str(rack_depth_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
         slot.box_width_m = bw
         slot.box_height_m = bh
         slot.box_length_m = bl
         slot.unit_weight_kg = uw
+
+        if estado == "VACIA" or cnt == 0:
+            cnt = 0
+
         slot.units_count = cnt
         slot.cajas_count = cnt
         slot.cantidad = Decimal(str(cnt)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
@@ -703,7 +718,10 @@ class DigitalTwinService:
         slot.volumen_actual_m3 = tot_vol
         slot.peso_actual_kg = tot_peso
 
-        slot.estado = "OCUPADA" if cnt > 0 else "VACIA"
+        if estado:
+            slot.estado = estado
+        else:
+            slot.estado = "OCUPADA" if cnt > 0 else "VACIA"
         if cnt == 0:
             slot.sku = None
             slot.lote = None

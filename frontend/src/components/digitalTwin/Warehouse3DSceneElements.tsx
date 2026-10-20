@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useLayoutEffect, useEffect, Suspense } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { CanvasLabelSprite } from './CanvasLabelSprite';
@@ -9,17 +9,18 @@ import type { DigitalTwinWarehouse, DigitalTwinSlot } from '../../services/digit
 // 3D OBJECTS & MESHES (THREE.JS) - HIGH FIDELITY PBR
 // ==========================================
 
-// Atmósfera de galpón industrial PBR con niebla suave y balance de luces
+// Atmósfera de galpón industrial realista PBR con iluminación balanceada
 const SceneAtmosphere: React.FC<{ isMaritime: boolean }> = React.memo(({ isMaritime }) => {
   const { scene } = useThree();
 
   useEffect(() => {
     if (isMaritime) {
-      scene.fog = new THREE.FogExp2('#090d16', 0.012);
-      scene.background = new THREE.Color('#060911');
+      scene.fog = new THREE.FogExp2('#0f172a', 0.010);
+      scene.background = new THREE.Color('#0b1120');
     } else {
-      scene.fog = new THREE.FogExp2('#0b101b', 0.014);
-      scene.background = new THREE.Color('#080d1a');
+      // Fondo industrial slate profesional, eliminando el negro vacío
+      scene.fog = new THREE.FogExp2('#1e293b', 0.007);
+      scene.background = new THREE.Color('#1e293b');
     }
     return () => {
       scene.fog = null;
@@ -118,7 +119,67 @@ const IndustrialForklift: React.FC<{
   );
 });
 
-// Suelo de Concreto Pulido Industrial con Señalética Vial PBR y Dársenas
+// Camión de Carga Pesada en Dársena (Patio de Maniobras)
+const IndustrialTruck: React.FC<{
+  position: [number, number, number];
+  rotation?: [x: number, y: number, z: number];
+}> = React.memo(({ position, rotation }) => {
+  return (
+    <group position={position} rotation={rotation || [0, 0, 0]}>
+      {/* Caja cerrada de furgón semi-remolque térmico */}
+      <mesh position={[0, 2.3, -4.2]} castShadow receiveShadow>
+        <boxGeometry args={[2.5, 3.4, 8.2]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.35} metalness={0.2} />
+      </mesh>
+
+      {/* Marco perimetral de acero del semi-remolque */}
+      <mesh position={[0, 0.7, -4.2]}>
+        <boxGeometry args={[2.55, 0.2, 8.3]} />
+        <meshStandardMaterial color="#334155" roughness={0.5} metalness={0.6} />
+      </mesh>
+
+      {/* Cabina tractor frontal */}
+      <mesh position={[0, 1.8, 1.8]} castShadow receiveShadow>
+        <boxGeometry args={[2.45, 2.7, 3.2]} />
+        <meshStandardMaterial color="#0284c7" roughness={0.3} metalness={0.5} />
+      </mesh>
+
+      {/* Deflector de techo aerodinámico */}
+      <mesh position={[0, 3.25, 1.6]} castShadow>
+        <boxGeometry args={[2.3, 0.7, 2.6]} />
+        <meshStandardMaterial color="#0369a1" roughness={0.4} />
+      </mesh>
+
+      {/* Parabrisas tintado oscuro */}
+      <mesh position={[0, 2.35, 3.3]}>
+        <boxGeometry args={[2.2, 1.05, 0.2]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.9} />
+      </mesh>
+
+      {/* Paragolpes frontal con luces */}
+      <mesh position={[0, 0.5, 3.4]}>
+        <boxGeometry args={[2.5, 0.4, 0.3]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.6} metalness={0.3} />
+      </mesh>
+
+      {/* Ruedas industriales del camión */}
+      {[-2.2, -6.4].map((zPos, idx) => (
+        <group key={idx}>
+          <mesh position={[-1.25, 0.5, zPos]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.5, 0.5, 0.32, 16]} />
+            <meshStandardMaterial color="#090d16" roughness={0.9} />
+          </mesh>
+          <mesh position={[1.25, 0.5, zPos]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.5, 0.5, 0.32, 16]} />
+            <meshStandardMaterial color="#090d16" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+});
+
+// Suelo de Concreto Pulido Industrial Gris Claro, Techo con Vigas, Paredes y Dársenas
 const WarehouseNaveMesh: React.FC<{
   width: number;
   length: number;
@@ -129,17 +190,17 @@ const WarehouseNaveMesh: React.FC<{
     const stripes: Array<{ x: number; z: number; w: number; l: number; color: string }> = [];
 
     // Franja perimetral de seguridad continua (Amarillo Tráfico #eab308)
-    stripes.push({ x: 0, z: -length / 2 + 1.2, w: width - 4, l: 0.15, color: '#eab308' });
-    stripes.push({ x: 0, z: length / 2 - 1.2, w: width - 4, l: 0.15, color: '#eab308' });
-    stripes.push({ x: -width / 2 + 1.8, z: 0, w: 0.15, l: length - 4, color: '#eab308' });
-    stripes.push({ x: width / 2 - 1.8, z: 0, w: 0.15, l: length - 4, color: '#eab308' });
+    stripes.push({ x: 0, z: -length / 2 + 1.2, w: width - 4, l: 0.18, color: '#eab308' });
+    stripes.push({ x: 0, z: length / 2 - 1.2, w: width - 4, l: 0.18, color: '#eab308' });
+    stripes.push({ x: -width / 2 + 1.8, z: 0, w: 0.18, l: length - 4, color: '#eab308' });
+    stripes.push({ x: width / 2 - 1.8, z: 0, w: 0.18, l: length - 4, color: '#eab308' });
 
     // Franjas de circulación central para autoelevador (Forklift Highway)
-    stripes.push({ x: -2, z: 0, w: 0.12, l: length * 0.75, color: '#fbbf24' });
-    stripes.push({ x: 2, z: 0, w: 0.12, l: length * 0.75, color: '#fbbf24' });
+    stripes.push({ x: -2.2, z: 0, w: 0.15, l: length * 0.85, color: '#facc15' });
+    stripes.push({ x: 2.2, z: 0, w: 0.15, l: length * 0.85, color: '#facc15' });
 
     // Pasos cebra / Zona de precaución peatonal frente a dársenas
-    for (let zi = -12; zi <= 12; zi += 1.8) {
+    for (let zi = -14; zi <= 14; zi += 2.0) {
       stripes.push({ x: -width / 2 + 4.5, z: zi, w: 2.2, l: 0.45, color: '#facc15' });
     }
 
@@ -148,18 +209,18 @@ const WarehouseNaveMesh: React.FC<{
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Piso de concreto pulido PBR con baja rugosidad y ligera reflectividad */}
+      {/* 1. Piso de concreto pulido industrial GRIS CLARO PBR (sin fondo negro vacío) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[width, length]} />
+        <planeGeometry args={[width * 1.05, length * 1.05]} />
         <meshStandardMaterial
-          color="#0a0f1d"
-          roughness={0.38}
-          metalness={0.12}
+          color="#cbd5e1"
+          roughness={0.45}
+          metalness={0.08}
         />
       </mesh>
 
-      {/* Grid Helper sutil para orientación técnica */}
-      <gridHelper args={[Math.max(width, length), 24, '#0284c7', '#1e293b']} position={[0, 0.005, 0]} />
+      {/* Grid Helper sutil para alineación y escala técnica */}
+      <gridHelper args={[Math.max(width, length), 28, '#0284c7', '#94a3b8']} position={[0, 0.005, 0]} />
 
       {/* Franjas viales industriales reflectivas en el suelo */}
       {aisleStripes.map((s, idx) => (
@@ -167,15 +228,56 @@ const WarehouseNaveMesh: React.FC<{
           <planeGeometry args={[s.w, s.l]} />
           <meshStandardMaterial
             color={s.color}
-            roughness={0.5}
+            roughness={0.4}
             metalness={0.1}
             emissive={s.color}
-            emissiveIntensity={0.15}
+            emissiveIntensity={0.25}
           />
         </mesh>
       ))}
 
-      {/* Columnas estructurales perimetrales con refuerzo base amarillo */}
+      {/* 2. Paredes Perimetrales de Nave Industrial (Chapa corrugada & zócalo de hormigón) */}
+      {/* Pared trasera */}
+      <mesh position={[0, clearHeight / 2, -length / 2]} receiveShadow>
+        <boxGeometry args={[width, clearHeight, 0.4]} />
+        <meshStandardMaterial color="#334155" roughness={0.65} metalness={0.3} />
+      </mesh>
+      {/* Pared lateral derecha */}
+      <mesh position={[width / 2, clearHeight / 2, 0]} receiveShadow>
+        <boxGeometry args={[0.4, clearHeight, length]} />
+        <meshStandardMaterial color="#334155" roughness={0.65} metalness={0.3} />
+      </mesh>
+      {/* Pared lateral izquierda (zona muelles) */}
+      <mesh position={[-width / 2, clearHeight / 2, 0]} receiveShadow>
+        <boxGeometry args={[0.4, clearHeight, length]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* 3. Techo Industrial con Cerchas / Vigas Metálicas Reticuladas */}
+      {[-length * 0.35, 0, length * 0.35].map((zPos, idx) => (
+        <group key={idx} position={[0, clearHeight - 0.2, zPos]}>
+          {/* Viga maestra transversal */}
+          <mesh position={[0, 0, 0]} castShadow>
+            <boxGeometry args={[width - 1, 0.4, 0.25]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.8} />
+          </mesh>
+          {/* Luminaria industrial tipo campana LED suspendida */}
+          {[-width * 0.25, 0, width * 0.25].map((xPos, lIdx) => (
+            <group key={lIdx} position={[xPos, -0.4, 0]}>
+              <mesh>
+                <cylinderGeometry args={[0.35, 0.6, 0.3, 16]} />
+                <meshStandardMaterial color="#475569" roughness={0.3} metalness={0.7} />
+              </mesh>
+              <mesh position={[0, -0.15, 0]}>
+                <circleGeometry args={[0.55, 16]} />
+                <meshStandardMaterial color="#f8fafc" emissive="#f8fafc" emissiveIntensity={1.8} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      ))}
+
+      {/* 4. Columnas estructurales perimetrales con refuerzo base amarillo antichoque */}
       {[
         [-width / 2 + 1.2, -length / 2 + 1.2],
         [width / 2 - 1.2, -length / 2 + 1.2],
@@ -198,15 +300,15 @@ const WarehouseNaveMesh: React.FC<{
         </group>
       ))}
 
-      {/* Área de Dársenas de Carga y Descarga (Loading Docks) */}
+      {/* 5. Área de Dársenas de Carga y Descarga (Loading Docks) */}
       <group position={[-width / 2 - 2.8, 0, 0]}>
         {/* Plataforma de hormigón exterior */}
         <mesh position={[0, 0.08, 0]} receiveShadow>
           <boxGeometry args={[5.6, 0.16, length * 0.85]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.6} metalness={0.2} />
+          <meshStandardMaterial color="#64748b" roughness={0.5} metalness={0.2} />
         </mesh>
 
-        {/* Portones seccionales de muelle y camiones atracados */}
+        {/* Portones seccionales de muelle y abrigos */}
         {[-9, 0, 9].map((zPos, idx) => (
           <group key={idx} position={[1.4, 0, zPos]}>
             {/* Marco de portón seccional */}
@@ -226,18 +328,18 @@ const WarehouseNaveMesh: React.FC<{
             </mesh>
             <mesh position={[0.28, 3.6, 2.1]}>
               <sphereGeometry args={[0.06, 8, 8]} />
-              <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={1.5} />
-            </mesh>
-            <mesh position={[0.28, 3.4, 2.1]}>
-              <sphereGeometry args={[0.06, 8, 8]} />
-              <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.2} />
+              <meshStandardMaterial color={idx === 1 ? '#ef4444' : '#10b981'} emissive={idx === 1 ? '#ef4444' : '#10b981'} emissiveIntensity={1.8} />
             </mesh>
           </group>
         ))}
+
+        {/* Camión atracado en dársena central operando */}
+        <IndustrialTruck position={[-1.2, 0, 0]} rotation={[0, -Math.PI / 2, 0]} />
       </group>
 
-      {/* Autoelevador operativo en la zona de maniobras */}
+      {/* 6. Autoelevadores en cabecera de pasillo y zona de maniobras */}
       <IndustrialForklift position={[-width / 2 + 5.5, 0, 4.5]} rotation={[0, Math.PI / 6, 0]} />
+      <IndustrialForklift position={[4.0, 0, -length * 0.38]} rotation={[0, Math.PI, 0]} />
     </group>
   );
 });
@@ -252,6 +354,7 @@ const RackStructures: React.FC<{
   const postsMeshRef = useRef<THREE.InstancedMesh>(null);
   const beamsMeshRef = useRef<THREE.InstancedMesh>(null);
   const backMeshRef = useRef<THREE.InstancedMesh>(null);
+
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const postColor = useMemo(() => new THREE.Color(), []);
   const beamColor = useMemo(() => new THREE.Color(), []);
@@ -270,6 +373,7 @@ const RackStructures: React.FC<{
       lev: number;
       levelH: number;
       isSelected: boolean;
+      isMuted: boolean;
     }> = [];
 
     let postsCount = 0;
@@ -288,10 +392,11 @@ const RackStructures: React.FC<{
       const levelH = rh / lev;
       const rackNums = Array.from(new Set(cuerpoSlots.map((s) => parseInt(s.rack.replace(/\D/g, '')) || 1)));
       const isSelected = selectedCuerpo === cuerpo;
+      const isMuted = selectedCuerpo !== 'ALL' && selectedCuerpo !== cuerpo;
 
       rackNums.forEach((rackNum) => {
         const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-        list.push({ cuerpo, rackNum, sample, posX, rw, rh, rd, lev, levelH, isSelected });
+        list.push({ cuerpo, rackNum, sample, posX, rw, rh, rd, lev, levelH, isSelected, isMuted });
         postsCount += 4;
         beamsCount += (lev + 1) * 2; // Doble travesaño (frontal y trasero)
         backsCount += 1;
@@ -312,7 +417,7 @@ const RackStructures: React.FC<{
     let mIdx = 0;
 
     allRacks.forEach((rack) => {
-      const { posX, rw, rh, rd, lev, levelH, isSelected } = rack;
+      const { posX, rw, rh, rd, lev, levelH, isSelected, isMuted } = rack;
 
       // 4 Montantes verticales metálicos perforados (Azul Industrial #0284c7)
       [-rd / 2, rd / 2].forEach((xOff) => {
@@ -321,7 +426,13 @@ const RackStructures: React.FC<{
           dummy.scale.set(0.08, rh, 0.08);
           dummy.updateMatrix();
           postsMesh.setMatrixAt(pIdx, dummy.matrix);
-          postColor.set(isSelected ? '#38bdf8' : '#0369a1');
+          if (isSelected) {
+            postColor.set('#38bdf8'); // Cyan brillante para cuerpo seleccionado
+          } else if (isMuted) {
+            postColor.set('#475569'); // Translúcido/atenuado para otros cuerpos
+          } else {
+            postColor.set('#0284c7'); // Azul industrial estándar
+          }
           postsMesh.setColorAt(pIdx, postColor);
           pIdx++;
         });
@@ -334,7 +445,13 @@ const RackStructures: React.FC<{
         dummy.scale.set(0.06, 0.09, rw);
         dummy.updateMatrix();
         beamsMesh.setMatrixAt(bIdx, dummy.matrix);
-        beamColor.set(isSelected ? '#fbbf24' : '#ea580c');
+        if (isSelected) {
+          beamColor.set('#fbbf24');
+        } else if (isMuted) {
+          beamColor.set('#64748b');
+        } else {
+          beamColor.set('#ea580c');
+        }
         beamsMesh.setColorAt(bIdx, beamColor);
         bIdx++;
 
@@ -343,17 +460,23 @@ const RackStructures: React.FC<{
         dummy.scale.set(0.06, 0.09, rw);
         dummy.updateMatrix();
         beamsMesh.setMatrixAt(bIdx, dummy.matrix);
-        beamColor.set(isSelected ? '#fbbf24' : '#ea580c');
+        if (isSelected) {
+          beamColor.set('#fbbf24');
+        } else if (isMuted) {
+          beamColor.set('#64748b');
+        } else {
+          beamColor.set('#ea580c');
+        }
         beamsMesh.setColorAt(bIdx, beamColor);
         bIdx++;
       }
 
-      // Malla de seguridad anticaída trasera
+      // Malla de seguridad posterior anticaída de palets
       dummy.position.set(posX - rd / 2 - 0.02, rh / 2, 0);
-      dummy.scale.set(0.01, rh * 0.95, rw * 0.98);
+      dummy.scale.set(0.01, rh * 0.98, rw * 0.98);
       dummy.updateMatrix();
       backsMesh.setMatrixAt(mIdx, dummy.matrix);
-      meshColor.set(isSelected ? '#38bdf8' : '#334155');
+      meshColor.set(isMuted ? '#334155' : '#475569');
       backsMesh.setColorAt(mIdx, meshColor);
       mIdx++;
     });
@@ -370,43 +493,36 @@ const RackStructures: React.FC<{
 
   return (
     <group>
-      {/* Montantes verticales */}
-      {totalPosts > 0 && (
-        <instancedMesh
-          ref={postsMeshRef}
-          args={[undefined, undefined, totalPosts]}
-          frustumCulled={false}
-          castShadow
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial roughness={0.3} metalness={0.7} />
-        </instancedMesh>
-      )}
+      {/* Montantes verticales InstancedMesh */}
+      <instancedMesh
+        ref={postsMeshRef}
+        args={[undefined, undefined, totalPosts]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial roughness={0.3} metalness={0.7} />
+      </instancedMesh>
 
-      {/* Travesaños naranjas */}
-      {totalBeams > 0 && (
-        <instancedMesh
-          ref={beamsMeshRef}
-          args={[undefined, undefined, totalBeams]}
-          frustumCulled={false}
-          castShadow
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial roughness={0.35} metalness={0.5} />
-        </instancedMesh>
-      )}
+      {/* Travesaños horizontales InstancedMesh */}
+      <instancedMesh
+        ref={beamsMeshRef}
+        args={[undefined, undefined, totalBeams]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial roughness={0.35} metalness={0.6} />
+      </instancedMesh>
 
-      {/* Malla metálica de seguridad trasera */}
-      {totalBacks > 0 && (
-        <instancedMesh
-          ref={backMeshRef}
-          args={[undefined, undefined, totalBacks]}
-          frustumCulled={false}
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <meshBasicMaterial wireframe transparent opacity={0.25} />
-        </instancedMesh>
-      )}
+      {/* Mallas traseras anticaída InstancedMesh */}
+      <instancedMesh
+        ref={backMeshRef}
+        args={[undefined, undefined, totalBacks]}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial roughness={0.8} metalness={0.2} transparent opacity={0.3} />
+      </instancedMesh>
 
       {/* Hitboxes livianas para selección y etiquetas 3D nativas */}
       {allRacks.map((rack) => (
@@ -438,17 +554,19 @@ const RackStructures: React.FC<{
   );
 });
 
-// Pallets de Madera Europeos y Cajas Corrugadas PBR en InstancedMesh
+// Pallets de Madera Europeos y Cajas Corrugadas Kraft PBR en InstancedMesh
 const InstancedTerrestrialCargo: React.FC<{
   slots: DigitalTwinSlot[];
   selectedSlotId: string | null;
+  highlightedSlotIds?: string[];
+  selectedCuerpo: string;
   onSelectSlot: (slot: DigitalTwinSlot) => void;
-}> = React.memo(({ slots, selectedSlotId, onSelectSlot }) => {
+}> = React.memo(({ slots, selectedSlotId, highlightedSlotIds = [], selectedCuerpo, onSelectSlot }) => {
   const boxesMeshRef = useRef<THREE.InstancedMesh>(null);
   const palletsMeshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const boxColor = useMemo(() => new THREE.Color(), []);
-  const palletColor = useMemo(() => new THREE.Color('#78350f'), []); // Madera marrón nogal/pino
+  const palletColor = useMemo(() => new THREE.Color('#854d0e'), []); // Madera marrón pino/nogal
 
   const occupiedSlots = useMemo(() => {
     return slots.filter((s) => s.estado === 'OCUPADA' || s.estado === 'RESERVADA');
@@ -482,28 +600,32 @@ const InstancedTerrestrialCargo: React.FC<{
       palletsMesh.setMatrixAt(i, dummy.matrix);
       palletsMesh.setColorAt(i, palletColor);
 
-      // 2. Bloque de Cajas de Cartón Corrugado sobre el pallet
+      // 2. Bloque de Cajas de Cartón Kraft Corrugado sobre el pallet
       dummy.position.set(posX, (slot.nivel - 1) * levelH + 0.12 + bh / 2, posZ);
       dummy.scale.set(bw, bh, bl);
       dummy.updateMatrix();
       boxesMesh.setMatrixAt(i, dummy.matrix);
 
-      // Clasificación de color PBR según criticidad y estado operativo
-      let hexColor = '#b45309'; // Cartón kraft marrón natural por defecto
+      // Clasificación de color PBR: Cartón kraft natural, eliminando cajas fucsias sobre negro
+      let hexColor = '#b45309'; // Kraft marrón corrugado natural por defecto
+
+      const isHighlightedRisk = highlightedSlotIds.includes(slot.id);
+      const isMutedCuerpo = selectedCuerpo !== 'ALL' && slot.cuerpo !== selectedCuerpo;
+
       if (slot.id === selectedSlotId) {
-        hexColor = '#38bdf8'; // Cyan brillante inspeccionado
+        hexColor = '#38bdf8'; // Cyan brillante posición seleccionada
+      } else if (isHighlightedRisk) {
+        hexColor = '#ef4444'; // Rojo brillante de alerta (activado por el ojo en Riesgos)
       } else if (slot.reservation_type === 'HARD_RESERVED') {
         hexColor = '#2563eb'; // Azul eléctrico Licitaciones / SICE
       } else if (slot.reservation_type === 'SOFT_RESERVED') {
         hexColor = '#f59e0b'; // Ámbar Cotizaciones B2B
-      } else if (slot.desvios) {
-        hexColor = '#ec4899'; // Magenta desviación física
       } else if (slot.rop_status === 'CRITICO_ROP') {
-        hexColor = '#ef4444'; // Rojo crítico ROP
+        hexColor = '#dc2626'; // Rojo crítico ROP
       } else if (slot.rop_status === 'ALERTA_DOH') {
-        hexColor = '#ea580c'; // Naranja alerta DOH
-      } else if (slot.rop_status === 'OPTIMO') {
-        hexColor = '#059669'; // Verde esmeralda óptimo
+        hexColor = '#d97706'; // Naranja alerta DOH
+      } else if (isMutedCuerpo) {
+        hexColor = '#64748b'; // Atenuado si otro cuerpo está enfocado
       }
 
       boxColor.set(hexColor);
@@ -515,7 +637,7 @@ const InstancedTerrestrialCargo: React.FC<{
 
     palletsMesh.instanceMatrix.needsUpdate = true;
     if (palletsMesh.instanceColor) palletsMesh.instanceColor.needsUpdate = true;
-  }, [occupiedSlots, selectedSlotId, dummy, boxColor, palletColor]);
+  }, [occupiedSlots, selectedSlotId, highlightedSlotIds, selectedCuerpo, dummy, boxColor, palletColor]);
 
   if (occupiedSlots.length === 0) return null;
 
@@ -532,7 +654,7 @@ const InstancedTerrestrialCargo: React.FC<{
         <meshStandardMaterial roughness={0.8} metalness={0.05} />
       </instancedMesh>
 
-      {/* Cajas de mercancía apiladas */}
+      {/* Cajas de mercancía apiladas en kraft */}
       <instancedMesh
         ref={boxesMeshRef}
         args={[undefined, undefined, occupiedSlots.length]}
@@ -553,7 +675,7 @@ const InstancedTerrestrialCargo: React.FC<{
   );
 });
 
-// Modo Holográfico / Wireframe Brillante para Posiciones Vacías y Bloqueadas
+// Modo Holográfico / Wireframe Celeste para Posiciones Vacías y Bloqueadas
 const EmptyAndBlockedSlotsMesh: React.FC<{
   slots: DigitalTwinSlot[];
   showEmptySlots: boolean;
@@ -564,19 +686,19 @@ const EmptyAndBlockedSlotsMesh: React.FC<{
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
-  const targetSlots = useMemo(() => {
+  const visibleSlots = useMemo(() => {
     return slots.filter((s) => {
-      if (s.estado === 'OCUPADA') return false;
-      if (s.estado === 'VACIA' && !showEmptySlots) return false;
-      return true;
+      if (s.estado === 'BLOQUEADA') return true;
+      if (s.estado === 'VACIA' && showEmptySlots) return true;
+      return false;
     });
   }, [slots, showEmptySlots]);
 
   useLayoutEffect(() => {
-    if (!meshRef.current) return;
+    if (!meshRef.current || visibleSlots.length === 0) return;
     const mesh = meshRef.current;
 
-    targetSlots.forEach((slot, i) => {
+    visibleSlots.forEach((slot, i) => {
       const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
       const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
       const rw = slot.rack_width_m || 2.4;
@@ -586,124 +708,69 @@ const EmptyAndBlockedSlotsMesh: React.FC<{
       const levelH = rh / lev;
 
       const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-      const posY = (slot.nivel - 1) * levelH + levelH * 0.45;
       const posZ = (slot.posicion - 2) * (rw / 3.0);
+      const posY = (slot.nivel - 1) * levelH + levelH / 2;
 
       dummy.position.set(posX, posY, posZ);
-      dummy.scale.set(rd * 0.85, levelH * 0.75, rw / 3.2);
+      dummy.scale.set(rd * 0.9, levelH * 0.85, rw / 3.1);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
-      const isBlocked = slot.estado === 'BLOQUEADA';
-      const isSelected = slot.id === selectedSlotId;
-
-      if (isSelected) {
-        color.set('#38bdf8'); // Neón cian
-      } else if (isBlocked) {
-        color.set('#ef4444'); // Rojo advertencia
+      if (slot.id === selectedSlotId) {
+        color.set('#38bdf8');
+      } else if (slot.estado === 'BLOQUEADA') {
+        color.set('#f43f5e'); // Rojo tenue para bloqueadas
       } else {
-        color.set('#10b981'); // Verde neón translúcido para posiciones vacías listas
+        color.set('#0284c7'); // Celeste holográfico para vacías
       }
       mesh.setColorAt(i, color);
     });
 
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) {
-      mesh.instanceColor.needsUpdate = true;
-    }
-  }, [targetSlots, selectedSlotId, dummy, color]);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [visibleSlots, selectedSlotId, dummy, color]);
 
-  if (targetSlots.length === 0) return null;
+  if (visibleSlots.length === 0) return null;
 
   return (
     <instancedMesh
       ref={meshRef}
-      args={[undefined, undefined, targetSlots.length]}
-      frustumCulled={false}
+      args={[undefined, undefined, visibleSlots.length]}
       onClick={(e) => {
         e.stopPropagation();
         const instanceId = e.instanceId;
-        if (instanceId !== undefined && targetSlots[instanceId]) {
-          onSelectSlot(targetSlots[instanceId]);
+        if (instanceId !== undefined && visibleSlots[instanceId]) {
+          onSelectSlot(visibleSlots[instanceId]);
         }
       }}
     >
       <boxGeometry args={[1, 1, 1]} />
-      {/* Efecto holográfico translúcido con wireframe de emisión */}
-      <meshStandardMaterial
-        roughness={0.1}
-        metalness={0.9}
-        wireframe
-        transparent
-        opacity={0.35}
-        emissive="#059669"
-        emissiveIntensity={0.4}
-      />
+      <meshBasicMaterial wireframe transparent opacity={0.28} />
     </instancedMesh>
   );
 });
 
-// Buque Portacontenedores de Alta Fidelidad en Alta Mar
+// Casco Buque Portacontenedores para Tránsito Marítimo
 const ContainerShipHull: React.FC = React.memo(() => {
   return (
-    <group position={[0, 0, 0]}>
-      {/* Océano profundo con ligera ondulación y transparencia */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-        <planeGeometry args={[160, 100, 32, 32]} />
-        <meshStandardMaterial
-          color="#081b2e"
-          roughness={0.15}
-          metalness={0.7}
-          transparent
-          opacity={0.88}
-        />
-      </mesh>
-
-      {/* Casco principal (Rojo antifouling náutico en obra viva) */}
-      <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
+    <group position={[0, -0.5, 0]}>
+      <mesh position={[0, 0, 0]} receiveShadow>
         <boxGeometry args={[26, 0.9, 8.5]} />
-        <meshStandardMaterial color="#7f1d1d" roughness={0.5} metalness={0.3} />
+        <meshStandardMaterial color="#0f172a" roughness={0.4} metalness={0.7} />
       </mesh>
-
-      {/* Banda negra superior de obra muerta */}
-      <mesh position={[0, 1.0, 0]} castShadow>
+      <mesh position={[0, -0.4, 0]}>
         <boxGeometry args={[26.5, 0.5, 8.8]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.35} metalness={0.6} />
+        <meshStandardMaterial color="#b91c1c" roughness={0.6} />
       </mesh>
-
-      {/* Proa bulbosa afilada para corte hidrodinámico */}
-      <mesh position={[14.5, 0.75, 0]} rotation={[0, 0, -Math.PI / 10]} castShadow>
-        <coneGeometry args={[4.6, 4.2, 4]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.4} />
+      <mesh position={[-11.5, 2.8, 0]} castShadow>
+        <boxGeometry args={[3.0, 3.6, 6.0]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.3} />
       </mesh>
-
-      {/* Puente de mando y torre de navegación (Superestructura blanca) */}
-      <group position={[-11, 2.8, 0]} castShadow>
-        <mesh position={[0, 0, 0]} castShadow>
-          <boxGeometry args={[3.0, 3.6, 6.0]} />
-          <meshStandardMaterial color="#f8fafc" roughness={0.25} />
-        </mesh>
-        {/* Ventanales panorámicos de navegación */}
-        <mesh position={[1.1, 1.3, 0]}>
-          <boxGeometry args={[1.1, 0.45, 5.8]} />
-          <meshStandardMaterial color="#0284c7" emissive="#0284c7" emissiveIntensity={0.6} />
-        </mesh>
-        {/* Chimenea de escape con franja roja corporativa */}
-        <mesh position={[-1.0, 2.5, 0]} castShadow>
-          <cylinderGeometry args={[0.45, 0.55, 1.8, 16]} />
-          <meshStandardMaterial color="#dc2626" roughness={0.4} />
-        </mesh>
-        {/* Mástil de radar y comunicaciones */}
-        <mesh position={[0, 2.5, 0]}>
-          <cylinderGeometry args={[0.06, 0.06, 1.4, 8]} />
-          <meshBasicMaterial color="#94a3b8" />
-        </mesh>
-      </group>
     </group>
   );
 });
 
-// Contenedores Marítimos 40HQ y 20ST con PBR corrugado y etiquetas de naviera
+// Contenedores Marítimos en InstancedMesh
 const InstancedMaritimeCargo: React.FC<{
   slots: DigitalTwinSlot[];
   selectedSlotId: string | null;
@@ -713,110 +780,129 @@ const InstancedMaritimeCargo: React.FC<{
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
-  const containerColors = ['#0284c7', '#059669', '#dc2626', '#d97706', '#475569'];
+  const maritimeSlots = useMemo(() => {
+    return slots.filter((s) => s.estado === 'OCUPADA' || s.estado === 'RESERVADA');
+  }, [slots]);
 
   useLayoutEffect(() => {
-    if (!meshRef.current) return;
+    if (!meshRef.current || maritimeSlots.length === 0) return;
     const mesh = meshRef.current;
 
-    slots.forEach((slot, i) => {
-      const bayNum = parseInt(slot.cuerpo.replace('BAY-', '')) || 1;
+    maritimeSlots.forEach((slot, i) => {
       const rowNum = parseInt(slot.rack.replace('ROW-', '')) || 1;
-      const tier = slot.nivel;
-      const pos = slot.posicion;
-
-      const is40HQ = slot.tipo_contenedor === '40HQ';
-      const length = is40HQ ? 4.8 : 2.4;
-      const height = is40HQ ? 1.3 : 1.1;
-      const width = 1.1;
-
-      const posX = (bayNum - 2) * 5.8 + (pos - 1.5) * 0.1;
-      const posY = (tier - 1) * (height + 0.05) + 1.25;
-      const posZ = (rowNum - 1.5) * 3.2;
+      const posX = (slot.nivel - 1) * 3.2 - 9;
+      const posY = (slot.posicion - 1) * 1.5 + 0.8;
+      const posZ = (rowNum - 2) * 2.6;
 
       dummy.position.set(posX, posY, posZ);
-      dummy.scale.set(length, height, width);
+      const is40HQ = slot.tipo_contenedor === '40HQ';
+      dummy.scale.set(is40HQ ? 3.0 : 1.5, 1.4, 2.4);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
-      const isSelected = slot.id === selectedSlotId;
-      if (isSelected) {
-        color.set('#38bdf8');
-      } else {
-        const baseColor = containerColors[(bayNum + rowNum + tier) % containerColors.length];
-        color.set(baseColor);
-      }
+      let hexColor = is40HQ ? '#0284c7' : '#ea580c';
+      if (slot.id === selectedSlotId) hexColor = '#38bdf8';
+      color.set(hexColor);
       mesh.setColorAt(i, color);
     });
 
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) {
-      mesh.instanceColor.needsUpdate = true;
-    }
-  }, [slots, selectedSlotId, dummy, color]);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [maritimeSlots, selectedSlotId, dummy, color]);
 
-  const selectedSlot = useMemo(() => {
-    return slots.find((s) => s.id === selectedSlotId) || null;
-  }, [slots, selectedSlotId]);
-
-  if (slots.length === 0) return null;
+  if (maritimeSlots.length === 0) return null;
 
   return (
-    <group>
-      <instancedMesh
-        ref={meshRef}
-        args={[undefined, undefined, slots.length]}
-        castShadow
-        receiveShadow
-        onClick={(e) => {
-          e.stopPropagation();
-          const instanceId = e.instanceId;
-          if (instanceId !== undefined && slots[instanceId]) {
-            onSelectSlot(slots[instanceId]);
-          }
-        }}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial roughness={0.35} metalness={0.65} />
-      </instancedMesh>
-
-      {/* Indicador holográfico y etiqueta al seleccionar contenedor */}
-      {selectedSlot && (() => {
-        const bayNum = parseInt(selectedSlot.cuerpo.replace('BAY-', '')) || 1;
-        const rowNum = parseInt(selectedSlot.rack.replace('ROW-', '')) || 1;
-        const tier = selectedSlot.nivel;
-        const pos = selectedSlot.posicion;
-        const is40HQ = selectedSlot.tipo_contenedor === '40HQ';
-        const length = is40HQ ? 4.8 : 2.4;
-        const height = is40HQ ? 1.3 : 1.1;
-        const width = 1.1;
-        const posX = (bayNum - 2) * 5.8 + (pos - 1.5) * 0.1;
-        const posY = (tier - 1) * (height + 0.05) + 1.25;
-        const posZ = (rowNum - 1.5) * 3.2;
-
-        return (
-          <group position={[posX, posY, posZ]}>
-            <mesh>
-              <boxGeometry args={[length * 1.02, height * 1.02, width * 1.02]} />
-              <meshBasicMaterial color="#38bdf8" wireframe />
-            </mesh>
-            <CanvasLabelSprite
-              text={`${selectedSlot.tipo_contenedor || '40HQ'} | ${selectedSlot.slot_code}`}
-              position={[0, height + 0.45, 0]}
-              height={0.5}
-              color="#7dd3fc"
-              background="rgba(8, 47, 73, 0.92)"
-              border="#38bdf8"
-            />
-          </group>
-        );
-      })()}
-    </group>
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, maritimeSlots.length]}
+      castShadow
+      receiveShadow
+      onClick={(e) => {
+        e.stopPropagation();
+        const instanceId = e.instanceId;
+        if (instanceId !== undefined && maritimeSlots[instanceId]) {
+          onSelectSlot(maritimeSlots[instanceId]);
+        }
+      }}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial roughness={0.4} metalness={0.6} />
+    </instancedMesh>
   );
 });
 
+// Controlador de Cámara 3D (Animaciones Lerp, Vistas Predefinidas y Giro 360°)
+const WarehouseCameraController: React.FC<{
+  rotationMode?: 'AUTO_360' | 'PAUSED' | 'MANUAL';
+  cameraViewPreset?: 'ISOMETRIC' | 'TOP' | 'FRONT' | 'AISLE' | 'DOCK' | null;
+  focusTargetPosition?: [number, number, number] | null;
+  orbitControlsRef: React.RefObject<any>;
+}> = ({ rotationMode, cameraViewPreset, focusTargetPosition, orbitControlsRef }) => {
+  const { camera } = useThree();
+  const targetCamPos = useRef<THREE.Vector3 | null>(null);
+  const targetLookAt = useRef<THREE.Vector3 | null>(null);
+
+  useEffect(() => {
+    if (!cameraViewPreset) return;
+    if (cameraViewPreset === 'ISOMETRIC') {
+      targetCamPos.current = new THREE.Vector3(22, 18, 28);
+      targetLookAt.current = new THREE.Vector3(0, 3, 0);
+    } else if (cameraViewPreset === 'TOP') {
+      targetCamPos.current = new THREE.Vector3(0, 48, 0.05);
+      targetLookAt.current = new THREE.Vector3(0, 0, 0);
+    } else if (cameraViewPreset === 'FRONT') {
+      targetCamPos.current = new THREE.Vector3(0, 12, 36);
+      targetLookAt.current = new THREE.Vector3(0, 4, 0);
+    } else if (cameraViewPreset === 'AISLE') {
+      targetCamPos.current = new THREE.Vector3(-4, 2.6, 10);
+      targetLookAt.current = new THREE.Vector3(0, 2, 0);
+    } else if (cameraViewPreset === 'DOCK') {
+      targetCamPos.current = new THREE.Vector3(-28, 7, 0);
+      targetLookAt.current = new THREE.Vector3(-12, 2, 0);
+    }
+  }, [cameraViewPreset]);
+
+  useEffect(() => {
+    if (focusTargetPosition) {
+      targetCamPos.current = new THREE.Vector3(
+        focusTargetPosition[0] + 3.8,
+        focusTargetPosition[1] + 2.4,
+        focusTargetPosition[2] + 4.0
+      );
+      targetLookAt.current = new THREE.Vector3(
+        focusTargetPosition[0],
+        focusTargetPosition[1],
+        focusTargetPosition[2]
+      );
+    }
+  }, [focusTargetPosition]);
+
+  useFrame((_, delta) => {
+    if (orbitControlsRef.current) {
+      orbitControlsRef.current.autoRotate = rotationMode === 'AUTO_360';
+      orbitControlsRef.current.autoRotateSpeed = 1.3;
+    }
+
+    if (targetCamPos.current && targetLookAt.current) {
+      const step = Math.min(delta * 4, 0.15);
+      camera.position.lerp(targetCamPos.current, step);
+      if (orbitControlsRef.current) {
+        orbitControlsRef.current.target.lerp(targetLookAt.current, step);
+        orbitControlsRef.current.update();
+      }
+      if (camera.position.distanceTo(targetCamPos.current) < 0.08) {
+        targetCamPos.current = null;
+        targetLookAt.current = null;
+      }
+    }
+  });
+
+  return null;
+};
+
 // Canvas Scene Memoizado con Iluminación Industrial PBR Profesional
-interface WarehouseCanvasSceneProps {
+export interface WarehouseCanvasSceneProps {
   active: boolean;
   isMaritimeScene: boolean;
   slots: DigitalTwinSlot[];
@@ -828,6 +914,10 @@ interface WarehouseCanvasSceneProps {
   selectedCuerpo: string;
   onSelectRackCuerpo: (cuerpo: string, sampleSlot: DigitalTwinSlot) => void;
   showEmptySlots: boolean;
+  rotationMode?: 'AUTO_360' | 'PAUSED' | 'MANUAL';
+  cameraViewPreset?: 'ISOMETRIC' | 'TOP' | 'FRONT' | 'AISLE' | 'DOCK' | null;
+  highlightedSlotIds?: string[];
+  focusTargetPosition?: [number, number, number] | null;
 }
 
 export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.memo(({
@@ -842,10 +932,16 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
   selectedCuerpo,
   onSelectRackCuerpo,
   showEmptySlots,
+  rotationMode = 'MANUAL',
+  cameraViewPreset = null,
+  highlightedSlotIds = [],
+  focusTargetPosition = null,
 }) => {
+  const orbitControlsRef = useRef<any>(null);
+
   return (
     <Canvas
-      frameloop={active ? 'demand' : 'never'}
+      frameloop={active ? 'always' : 'never'}
       dpr={[1, 1.5]}
       gl={{
         powerPreference: 'high-performance',
@@ -867,13 +963,13 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
       <SceneAtmosphere isMaritime={isMaritimeScene} />
 
       {/* Iluminación Global Neutra Suave */}
-      <ambientLight color="#e2e8f0" intensity={0.65} />
+      <ambientLight color="#f8fafc" intensity={0.75} />
 
       {/* Luces Cenitales LED de Techo (Directional Lights con sombras suaves PCF) */}
       <directionalLight
         position={[20, 38, 20]}
-        intensity={1.4}
-        color="#f8fafc"
+        intensity={1.5}
+        color="#ffffff"
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -889,8 +985,8 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
       {/* Luz cenital secundaria de relleno para evitar oclusiones oscuras */}
       <directionalLight
         position={[-20, 32, -20]}
-        intensity={0.6}
-        color="#93c5fd"
+        intensity={0.65}
+        color="#bfdbfe"
       />
 
       {/* Luces Puntuales de Acento: Dársenas (Cálido) y Racks (Cian) */}
@@ -899,12 +995,20 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
       <pointLight position={[20, 8, -15]} intensity={0.6} distance={30} color="#a7f3d0" />
 
       <OrbitControls
+        ref={orbitControlsRef}
         makeDefault
         enableDamping
         dampingFactor={0.08}
         maxPolarAngle={Math.PI / 2.05}
         minDistance={3}
         maxDistance={110}
+      />
+
+      <WarehouseCameraController
+        rotationMode={rotationMode}
+        cameraViewPreset={cameraViewPreset}
+        focusTargetPosition={focusTargetPosition}
+        orbitControlsRef={orbitControlsRef}
       />
 
       <Suspense fallback={null}>
@@ -933,6 +1037,8 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
             <InstancedTerrestrialCargo
               slots={slots}
               selectedSlotId={inspectedSlotId}
+              highlightedSlotIds={highlightedSlotIds}
+              selectedCuerpo={selectedCuerpo}
               onSelectSlot={onSelectSlot}
             />
             <EmptyAndBlockedSlotsMesh

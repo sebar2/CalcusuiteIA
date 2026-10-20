@@ -190,6 +190,10 @@ export interface SlotItemSpecsUpdatePayload {
   real_product_id?: number | null;
   lote?: string | null;
   descripcion?: string | null;
+  estado?: 'VACIA' | 'OCUPADA' | 'BLOQUEADA' | 'CALIDAD' | 'RESERVADA' | string | null;
+  rack_width_m?: number;
+  rack_height_m?: number;
+  rack_depth_m?: number;
 }
 
 export interface RealProductItem {

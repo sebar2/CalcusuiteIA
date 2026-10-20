@@ -40,6 +40,8 @@ export type ActiveTab =
   | 'control_room' 
   | 'kanban' 
   | 'stock_trace'
+  | 'supply_digital_twin'
+  | 'tpl_digital_twin'
   | 'pricing' 
   | 'crm'
   | 'omnichannel_chat'
@@ -143,6 +145,13 @@ export const Sidebar = ({
           roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
         },
         {
+          id: 'supply_digital_twin',
+          label: '🧊 Gemelo 3D Supply',
+          shortLabel: 'Gemelo Supply',
+          icon: Boxes,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial'],
+        },
+        {
           id: 'suppliers',
           label: 'Directorio Proveedores',
           shortLabel: 'Proveedores',
@@ -181,6 +190,13 @@ export const Sidebar = ({
           shortLabel: 'Depósito 3PL',
           icon: Boxes,
           roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl'],
+        },
+        {
+          id: 'tpl_digital_twin',
+          label: '🏭 Gemelo 3D 3PL',
+          shortLabel: 'Gemelo 3PL',
+          icon: Building2,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'admin_3pl', 'operario_3pl', 'comercial'],
         },
         {
           id: 'logistics-kanban',

@@ -2387,3 +2387,8 @@ class SlotItemSpecsUpdate(BaseModel):
     real_product_id: Optional[int] = Field(None, description="ID del producto real del catálogo de Calcu")
     lote: Optional[str] = Field(None, description="Número de lote")
     descripcion: Optional[str] = Field(None, description="Descripción personalizada")
+    estado: Optional[str] = Field(None, description="Estado operativo: VACIA, OCUPADA, BLOQUEADA, CALIDAD, RESERVADA")
+    rack_width_m: Optional[float] = Field(None, gt=0, description="Ancho de estantería en metros")
+    rack_height_m: Optional[float] = Field(None, gt=0, description="Alto de estantería en metros")
+    rack_depth_m: Optional[float] = Field(None, gt=0, description="Profundidad de estantería en metros")
+

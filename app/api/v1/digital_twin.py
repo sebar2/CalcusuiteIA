@@ -195,6 +195,10 @@ def update_slot_item_specs_endpoint(
             real_product_id=payload.real_product_id,
             lote=payload.lote,
             descripcion=payload.descripcion,
+            estado=payload.estado,
+            rack_width_m=payload.rack_width_m,
+            rack_height_m=payload.rack_height_m,
+            rack_depth_m=payload.rack_depth_m,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
