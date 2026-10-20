@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.calcu.logistics3pl',
-  appName: 'Calcu 3PL Logistica',
+  appName: 'Calcu Enterprise Suite',
   webDir: 'dist',
   server: {
     androidScheme: 'http',

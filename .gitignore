@@ -33,7 +33,11 @@ frontend/dist/
 frontend/.cache/
 node_modules/
 
-# Logs & Temporales
+# Binarios y Builds Móviles (Android APK)
+*.apk
+frontend/android/app/build/
+frontend/android/.gradle/
+
 *.log
 scratch/
 .DS_Store

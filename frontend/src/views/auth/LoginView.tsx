@@ -466,8 +466,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </button>
             </form>
 
-            {/* Bloques Informativos: Prueba 14 Días Enterprise & 3PL y Soporte */}
+            {/* Bloques Informativos: Acceso SuperAdmin, Prueba 14 Días Enterprise & 3PL y Soporte */}
             <div className="mt-5 space-y-3">
+              {/* Acceso 1-Tap Superadministrador Propietario */}
+              <div 
+                onClick={() => {
+                  setUsername('seba');
+                  setPassword('seba2026!');
+                }}
+                className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/30 to-amber-900/20 border border-amber-500/40 hover:border-amber-400/80 cursor-pointer transition-all flex items-center justify-between group active:scale-[0.99]"
+              >
+                <div>
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>👑 Acceso Superadministrador (Sebastián - Propietario)</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 mt-0.5">
+                    Usuario: <span className="text-amber-400 font-mono font-bold">seba</span> &bull; 100% de módulos desbloqueados
+                  </div>
+                  <div className="text-[10px] text-amber-400/80 mt-0.5">
+                    Toque aquí para autorrellenar credenciales de SuperAdmin
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex-shrink-0 group-hover:bg-amber-500/30">
+                  SuperAdmin
+                </span>
+              </div>
               <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-800/40 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold text-cyan-200">Cuenta Trial 14 Días (Licencia Enterprise & 3PL)</div>
