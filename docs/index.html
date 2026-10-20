@@ -80,6 +80,7 @@
 
       <!-- Desktop Navigation Menu -->
       <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+        <a href="#gemelo3d" class="text-cyan-400 hover:text-cyan-300 font-bold transition-colors flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>Gemelo 3D</a>
         <a href="#modulos" class="hover:text-blue-400 transition-colors">Módulos</a>
         <a href="#galeria" class="hover:text-blue-400 transition-colors">Capturas Reales</a>
         <a href="#pioneros" class="hover:text-blue-400 transition-colors">Planes & Pioneros</a>
@@ -248,10 +249,89 @@
           </div>
         </div>
       </div>
+          <!-- CREDENCIALES OFICIALES DEMO 2026 -->
+      <div class="mt-8 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-slate-900/90 border border-cyan-500/40 shadow-xl shadow-cyan-950/30 backdrop-blur-md">
+        <div class="flex items-center gap-2 text-xs text-slate-300">
+          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span class="font-bold text-white">Acceso Inmediato Sandbox:</span>
+          <span>Usuario:</span> <code class="px-2.5 py-1 rounded-md bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/80">demo</code>
+          <span>Contraseña:</span> <code class="px-2.5 py-1 rounded-md bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/80">demo123</code>
+        </div>
+        <span class="text-xs text-slate-600">|</span>
+        <span class="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+          <span>Rol Controller Admin &bull; Esquema PostgreSQL Aislado</span>
+        </span>
+      </div>
+
     </section>
 
     <!-- INTERACTIVE SHOWCASE / MODULES GRID -->
-    <section id="modulos" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+    <section     <!-- SECCION GEMELO DIGITAL 3D & WMS ESPACIAL 2026 CON VIDEO EMBEBIDO -->
+    <section id="gemelo3d" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <span class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 uppercase tracking-wider">
+          WebGL Three.js Acelerado por GPU
+        </span>
+        <h2 class="mt-4 text-3xl sm:text-4xl font-extrabold text-white">
+          Gemelo Digital 3D: Traslado Espacial de Racks y Cajas en Tiempo Real
+        </h2>
+        <p class="mt-3 text-slate-400 text-sm sm:text-base leading-relaxed">
+          Revolucionario motor 3D interactivo con selección activa por raycasting, traslado de estructuras de racks en bloque a lo largo del piso del almacén (ejes X y Z), rotación (0°/90°), prevención algorítmica de colisiones físicas AABB y edición dimensional directa de cajas y niveles.
+        </p>
+      </div>
+
+      <!-- Video Demostrativo Interactivo -->
+      <div class="relative rounded-2xl overflow-hidden border border-cyan-500/40 bg-slate-950 shadow-2xl shadow-cyan-950/40">
+        <video autoplay loop muted playsinline controls class="w-full h-auto max-h-[640px] object-cover bg-black" poster="./screenshots/27_gemelo_digital_3d_rack_spatial.png">
+          <source src="./assets/video/gemelo_3d_demo.webm" type="video/webm">
+          <source src="./gemelo_3d_demo.webm" type="video/webm">
+          Tu navegador no soporta reproducción de video WebM HTML5.
+        </video>
+        <div class="p-4 bg-slate-900/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-300">
+          <div class="flex items-center gap-3">
+            <span class="flex h-2.5 w-2.5 relative">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+            </span>
+            <span class="font-bold text-white">Video Demostración 3D en Vivo:</span>
+            <span>Desplazamiento Espacial de Racks en Bloque (X, Z), Rotación 0°/90°, Detección AABB y Edición Dimensional</span>
+          </div>
+          <div class="flex items-center gap-2 font-mono text-[11px] text-cyan-300">
+            <span class="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60">Three.js r128+</span>
+            <span class="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60">AABB Collision Guard</span>
+            <span class="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60">Numeric(14, 4)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tarjetas de Características 3D -->
+      <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-cyan-500/40 transition-colors">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold mb-3 border border-cyan-500/20">01</div>
+          <h4 class="text-white font-bold text-base mb-2">Traslado en Bloque de Racks (X, Z)</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Permite mover estructuras completas de estantería en metros espaciales precisos, conservando intactos todos los slots, cajas asignadas y saldos de inventario en base de datos.
+          </p>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-cyan-500/40 transition-colors">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold mb-3 border border-indigo-500/20">02</div>
+          <h4 class="text-white font-bold text-base mb-2">Detección AABB Anticolisión</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Algoritmo de cajas envolventes 3D que previene en tiempo real la superposición indebida entre racks, garantizando pasillos de maniobra seguros para autoelevadores.
+          </p>
+        </div>
+        <div class="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-cyan-500/40 transition-colors">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold mb-3 border border-emerald-500/20">03</div>
+          <h4 class="text-white font-bold text-base mb-2">Edición Dimensional de Cajas</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Panel inspector lateral con ajuste milimétrico de ancho, alto y profundidad del cuerpo seleccionado, conteo de niveles y cálculo automático de cubicaje m3 libre y ocupado.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    id="modulos" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
       
       <div class="text-center max-w-3xl mx-auto mb-16">
         <h2 class="text-xs font-bold tracking-widest text-blue-400 uppercase">Arquitectura Funcional Verificada</h2>
@@ -563,6 +643,10 @@
         
         <!-- Tab selector buttons (Deslizable en móvil) -->
         <div class="mt-6 md:mt-0 flex flex-wrap gap-2" id="galleryTabs">
+          <button onclick="switchTab('gemelo3d')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md" data-tab="gemelo3d">Gemelo 3D Espacial</button>
+          <button onclick="switchTab('rack_editor')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="rack_editor">Editor Racks & Cajas</button>
+          <button onclick="switchTab('fpa_variance')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="fpa_variance">Finanzas FP&A</button>
+          <button onclick="switchTab('tenders')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="tenders">Licitaciones 19 Intendencias</button>
           <button onclick="switchTab('meli')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md" data-tab="meli">Mercado Libre Kanban</button>
           <button onclick="switchTab('meli_modal')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="meli_modal">Publicación 1-Clic MeLi</button>
           <button onclick="switchTab('omnichannel')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="omnichannel">Chat WhatsApp .opus</button>
@@ -804,7 +888,7 @@
               <div class="flex justify-between"><span>Plataforma:</span><span class="text-white font-medium">Android 10.0 a 15 (ARM64 & x86_64)</span></div>
               <div class="flex justify-between"><span>Optimización UX:</span><span class="text-white font-medium">Redmi Note 9 Pro / LineageOS 22.2</span></div>
               <div class="flex justify-between"><span>Modo de Operación:</span><span class="text-white font-medium">Online / Offline con Auto-Sync</span></div>
-              <div class="flex justify-between"><span>Archivo:</span><span class="text-emerald-400 font-mono">Calcu_3PL_Mobile_v2026.apk</span></div>
+              <div class="flex justify-between"><span>Archivo:</span><span class="text-emerald-400 font-mono">Calcu_3PL_Mobile_v2026.apk (6.88 MB)</span></div>
             </div>
           </div>
 
@@ -877,7 +961,7 @@
           </p>
           <div class="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-500/30 text-xs text-cyan-300">
             <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-            <span>Evaluación Inmediata Sandbox: Usuario: <code class="font-mono font-bold text-white">admin</code> &bull; Clave: <code class="font-mono font-bold text-white">admin123</code></span>
+            <span>Evaluación Inmediata Sandbox: Usuario: <code class="font-mono font-bold text-white">admin</code> &bull; Clave: <code class="font-mono font-bold text-white">demo123</code></span>
           </div>
         </div>
 

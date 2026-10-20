@@ -7,6 +7,55 @@
 
 // Diccionario de datos para las pestañas de inspección visual de capturas reales
 const GALLERY_DATA = {
+  'gemelo3d': {
+    image: './screenshots/27_gemelo_digital_3d_rack_spatial.png',
+    url: 'https://calcu.enterprise.app/wms/digital-twin-3d',
+    badge: 'Módulo Gemelo Digital 3D & WMS Espacial',
+    title: 'Gemelo Digital 3D: Traslado Espacial de Racks en Bloque y Cajas',
+    desc: 'Motor 3D Three.js acelerado por hardware para depósito inteligente. Selección activa por raycasting, traslado de estructuras completas en coordenadas espaciales (X, Z), rotación 0°/90°, detección AABB de colisiones físicas y persistencia ACID en Numeric(14, 4).',
+    bullets: [
+      'Desplazamiento del rack entero con persistencia espacial en base de datos Numeric(14, 4)',
+      'Algoritmo AABB anticolisión en tiempo real que previene superposiciones físicas de estructuras',
+      'Configuración de slots, cajas volumétricas y mapa dinámico de coordenadas disponibles'
+    ]
+  },
+  'rack_editor': {
+    image: './screenshots/28_gemelo_digital_3d_rack_editor.png',
+    url: 'https://calcu.enterprise.app/wms/rack-editor',
+    badge: 'Editor Dimensional de Almacén',
+    title: 'Panel de Configuración Dimensional de Racks y Cajas',
+    desc: 'Inspector lateral en vivo con ajuste milimétrico de ancho, alto y profundidad del cuerpo seleccionado, conteo de niveles y capacidad de carga máxima en kilogramos.',
+    bullets: [
+      'Actualización instantánea en el lienzo 3D sin recargas de página vía WebGL InstancedMesh',
+      'Cálculo automático de volumen cúbico y cubicaje m3 ocupado vs libre',
+      'Auditoría y trazabilidad de reubicaciones de estructuras de estantería'
+    ]
+  },
+  'fpa_variance': {
+    image: './screenshots/14_budget_variance.png',
+    url: 'https://calcu.enterprise.app/finance/fpa',
+    badge: 'Módulo Finanzas & Control FP&A',
+    title: 'Sincronización Automática Contabilidad ➔ Presupuestos Real vs Budget',
+    desc: 'Vínculo nativo entre asientos contables del Libro Diario y Centros de Costo OPEX (CC-LOG, CC-WMS, CC-TI, CC-COM). Monitoreo de desvíos en tiempo real con Copiloto Financiero IA.',
+    bullets: [
+      'Cálculos matemáticos estrictos en decimal.Decimal (ROUND_HALF_UP) y Numeric(14, 4)',
+      'Alertas tempranas de sobrecosto por partida presupuestaria',
+      'Reporte consolidado de ejecución mensual y proyecciones de flujo de caja'
+    ]
+  },
+  'tenders': {
+    image: './screenshots/19_licitaciones_radar_arce.png',
+    url: 'https://calcu.enterprise.app/procurement/intendencias',
+    badge: 'Módulo Licitaciones & Compras Estatales',
+    title: 'Radar de Licitaciones ARCE & Análisis de las 19 Intendencias de Uruguay',
+    desc: 'Monitoreo automatizado de compras del Estado, pliegos SICE y radar consolidado de las 19 Intendencias Departamentales con detección de competidores, dispersión de precios y quórum.',
+    bullets: [
+      'Radar consolidado de las 19 Intendencias Departamentales de Uruguay',
+      'Detección de patrones de compra y dispersión de precios de adjudicación',
+      'Alertas de convocatorias abiertas y generación de ofertas B2B en un clic'
+    ]
+  },
+
   'meli': {
     image: './screenshots/21_mercadolibre_kanban_5etapas.png',
     url: 'https://calcu.enterprise.app/ecommerce/mercadolibre',

@@ -35,7 +35,7 @@
 23. [Chat Omnicanal & WhatsApp Directo QR (Multimedia & Audio PTT .Opus)](#23-chat-omnicanal--whatsapp-directo-qr-multimedia--audio-ptt-opus)
 24. [Integraciones Multicanal & Atribución de Leads (ROAS/CAC)](#24-integraciones-multicanal--atribución-de-leads-roascac)
 25. [Experiencia Móvil Optimizada (Menú Hamburguesa ☰ para Redmi Note 9 Pro)](#25-experiencia-móvil-optimizada-menú-hamburguesa--para-redmi-note-9-pro)
-26. [Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant](#26-modelo-de-licenciamiento-programa-pioneros--aislamiento-multi-tenant)
+26. [Modelo de Licenciamiento, Programa Pioneros & Aislamiento Multi-Tenant](#26-modelo-de-licenciamiento-programa-pioneros--aislamiento-multi-tenant)\n27. [Gemelo Digital 3D: Traslado Espacial de Racks en Bloque & AABB](#27-gemelo-digital-3d-traslado-espacial-de-racks-en-bloque--aabb)\n28. [Finanzas & Control FP&A con Sincronización Contable Automática](#28-finanzas--control-fpa-con-sincronización-contable-automática)
 
 ---
 
@@ -276,7 +276,7 @@ Para choferes y operarios, Calcu incluye un cliente móvil nativo Android:
 
 | Característica | Especificación |
 | :--- | :--- |
-| **Archivo Binario Compilado** | `Calcu_3PL_Mobile_v2026.apk` (5.94 MB) |
+| **Archivo Binario Compilado** | `Calcu_3PL_Mobile_v2026.apk` (6.88 MB) |
 | **Identificador de Paquete** | `com.calcu.logistics3pl` |
 | **Framework Móvil** | Capacitor 8 + React 19 |
 | **Compatibilidad** | Android 10.0 (API 29) hasta Android 15 (API 35) |
@@ -386,9 +386,38 @@ Calcu opera bajo una arquitectura **SaaS Multi-Tenant con Aislamiento Estricto**
 
 ---
 
-## Archivos Entregables
+---
+
+## 27. Gemelo Digital 3D: Traslado Espacial de Racks en Bloque & AABB
+
+Motor tridimensional interactivo Three.js WebGL para depósitos inteligentes y WMS:
+
+![Gemelo Digital 3D Espacial](screenshots/27_gemelo_digital_3d_rack_spatial.png)
+
+![Editor Dimensional de Racks y Cajas](screenshots/28_gemelo_digital_3d_rack_editor.png)
+
+* **Video Demostrativo 3D**: ssets/video/gemelo_3d_demo.webm (disponible y embebible en el manual web interactivo).
+* **Selección por Raycasting**: Detección precisa de cuerpos al hacer clic en cualquier viga o parante del lienzo 3D.
+* **Traslado Espacial en Bloque (X, Z)**: Desplazamiento del rack completo por el suelo del almacén conservando intacta la asignación de cajas, slots y saldos contables.
+* **Prevención Anticolisión AABB**: Detección geométrica en tiempo real que previene solapamiento físico entre estructuras y asegura pasillos libres para montacargas.
+* **Edición Dimensional de Cajas y Niveles**: Configuración interactiva de ancho, alto y profundidad en milímetros con recálculo automático de cubicaje m3.
+
+---
+
+## 28. Finanzas & Control FP&A con Sincronización Contable Automática
+
+Vínculo nativo entre asientos del Libro Diario y Centros de Costo OPEX:
+
+![Control Presupuestario FP&A](screenshots/14_budget_variance.png)
+
+* **Centros de Costo OPEX**: Imputación automática a CC-LOG, CC-WMS, CC-TI, CC-COM y CC-DIR.
+* **Cálculo de Precisión Absoluta**: Matemáticas financieras en decimal.Decimal con ROUND_HALF_UP y almacenamiento Numeric(14, 4).
+* **Copiloto Financiero IA**: Detección de partidas con sobrecosto y proyecciones de flujo de caja.
+
+---
+\n## Archivos Entregables
 
 1. **PDF Oficial de Presentación**: `MANUAL_COMPLETO_CALCU_2026.pdf` (imprimible en formato A4 con 24 capturas de pantalla de alta resolución).
 2. **HTML Interactivo Autocontenido**: `docs/MANUAL_COMPLETO_CALCU_2026.html` (con estilos modernos y navegación fluida).
 3. **Documento Markdown Maestro**: `docs/MANUAL_COMPLETO_CALCU_2026.md`.
-4. **Aplicación Android Móvil Compilada**: `Calcu_3PL_Mobile_v2026.apk` (5.95 MB, lista para instalación en Android 10 a 15).
+4. **Aplicación Android Móvil Compilada**: `Calcu_3PL_Mobile_v2026.apk` (6.88 MB, lista para instalación en Android 10 a 15).
