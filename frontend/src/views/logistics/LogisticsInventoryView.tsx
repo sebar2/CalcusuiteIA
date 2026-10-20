@@ -16,7 +16,6 @@ import {
   Navigation,
   Sparkles,
 } from 'lucide-react';
-import { KeepAlive, LazyUniversalWarehouseTwin3D, DevRenderProfiler } from '../../components/digitalTwin/KeepAliveTwin';
 import { logisticsApi } from '../../services/logisticsApi';
 import type {
   LogisticsInventoryItem,
@@ -33,7 +32,6 @@ export const LogisticsInventoryView: React.FC = () => {
   const [search, setSearch] = useState<string>('');
   const [rackFilter, setRackFilter] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<'3D_TWIN' | 'TABLE'>('3D_TWIN');
 
   // Modals
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
@@ -387,33 +385,7 @@ export const LogisticsInventoryView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Conmutador 3D / Tabla WMS */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => React.startTransition(() => setViewMode('3D_TWIN'))}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === '3D_TWIN'
-                  ? 'bg-sky-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Boxes size={14} />
-              <span>🧊 Gemelo Digital 3D</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => React.startTransition(() => setViewMode('TABLE'))}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'TABLE'
-                  ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <ClipboardList size={14} />
-              <span>📋 Inventario & Picking</span>
-            </button>
-          </div>
+
 
           <button
             onClick={handleOpenHubModal}
@@ -461,17 +433,7 @@ export const LogisticsInventoryView: React.FC = () => {
         </div>
       </div>
 
-      <KeepAlive active={viewMode === '3D_TWIN'} className="space-y-4">
-          <DevRenderProfiler id="UniversalWarehouseTwin3D">
-          <LazyUniversalWarehouseTwin3D
-            active={viewMode === '3D_TWIN'}
-            moduleScope="3PL"
-            onTransferSuccess={loadData}
-          />
-          </DevRenderProfiler>
-      </KeepAlive>
-      {viewMode === '3D_TWIN' ? null : (
-        <div className="space-y-6">
+      <div className="space-y-6">
 {/* Hub Central Base Banner */}
       {hub && (
         <div className="bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-transparent p-4 rounded-2xl border border-sky-500/20 dark:border-sky-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
@@ -704,7 +666,6 @@ export const LogisticsInventoryView: React.FC = () => {
       </div>
 
               </div>
-      )}
 
       {/* Modal Ingreso Manual */}
       {isManualModalOpen && (
