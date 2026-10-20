@@ -38,6 +38,10 @@ import type {
   CategoryCreateRequest,
   BROUExchangeRateResponse,
   CostCenterItem,
+  FpaSummaryResponse,
+  FpaBudgetLinePayload,
+  FpaGovernancePayload,
+  FpaCopilotResponse,
   CostCenterCreateRequest,
   CostCenterBudgetReportResponse,
   CostCenterBatchRequest,
@@ -2201,8 +2205,39 @@ export const apiService = {
     const res = await apiClient.patch<TenantAccountItem>(`/api/v1/tenants/${tenantId}/license`, payload);
     return res.data;
   },
-};
+  // --- FINANZAS & CONTROL FP&A (CONEXIÓN CONTABILIDAD ➔ PRESUPUESTOS Y COPILOTO IA) ---
+  async getFpaSummary(period: string = '2025-09'): Promise<FpaSummaryResponse> {
+    const res = await apiClient.get<FpaSummaryResponse>('/api/v1/finance/fpa/summary', {
+      params: { period },
+    });
+    return res.data;
+  },
 
+  async saveFpaBudgetLine(payload: FpaBudgetLinePayload): Promise<any> {
+    const res = await apiClient.post('/api/v1/finance/fpa/budget-line', payload);
+    return res.data;
+  },
+
+  async updateFpaGovernance(payload: FpaGovernancePayload): Promise<any> {
+    const res = await apiClient.post('/api/v1/finance/fpa/responsables', payload);
+    return res.data;
+  },
+
+  async askFpaCopilot(prompt: string, periodo: string = '2025-09'): Promise<FpaCopilotResponse> {
+    const res = await apiClient.post<FpaCopilotResponse>('/api/v1/finance/fpa/copilot', {
+      prompt,
+      periodo,
+    });
+    return res.data;
+  },
+
+  async getFpaProjections(period: string = '2025-09'): Promise<any> {
+    const res = await apiClient.get('/api/v1/finance/fpa/projections', {
+      params: { period },
+    });
+    return res.data;
+  },
+};
 
 export const api = apiService;
 export default apiService;

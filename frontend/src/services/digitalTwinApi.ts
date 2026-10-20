@@ -65,6 +65,13 @@ export interface DigitalTwinSlot {
   rack_depth_m?: number;
   levels_count?: number;
   max_rack_weight_kg?: number;
+  pos_x_m?: number;
+  pos_z_m?: number;
+  rotation_y_deg?: number;
+  bays_count?: number;
+  position_x?: number;
+  position_y?: number;
+  position_z?: number;
   box_width_m?: number;
   box_height_m?: number;
   box_length_m?: number;
@@ -171,6 +178,71 @@ export interface WarehouseDimensionsUpdatePayload {
   width_m: number;
   length_m: number;
   clear_height_m: number;
+}
+
+export interface DigitalTwinRack {
+  rack_id: string;
+  cuerpo: string;
+  rack_code: string;
+  warehouse_id: string;
+  pos_x_m: number;
+  pos_z_m: number;
+  rotation_y_deg: number;
+  rack_width_m: number;
+  rack_height_m: number;
+  rack_depth_m: number;
+  levels_count: number;
+  bays_count: number;
+  max_weight_kg: number;
+  total_slots: number;
+  occupied_slots: number;
+  free_slots: number;
+  blocked_slots: number;
+}
+
+export interface CreateRackPayload {
+  warehouse_id: string;
+  zone_code?: string;
+  rack_code: string;
+  rack_width_m: number;
+  rack_height_m: number;
+  rack_depth_m: number;
+  levels_count: number;
+  max_weight_kg: number;
+  racks_count?: number;
+  bays_count?: number;
+  positions_per_level?: number;
+  pos_x_m?: number;
+  pos_z_m?: number;
+  rotation_y_deg?: number;
+}
+
+export interface RackUpdatePayload {
+  warehouse_id?: string;
+  rack_width_m?: number;
+  rack_height_m?: number;
+  rack_depth_m?: number;
+  levels_count?: number;
+  max_weight_kg?: number;
+  bays_count?: number;
+  pos_x_m?: number;
+  pos_z_m?: number;
+  rotation_y_deg?: number;
+  position_x?: number;
+  position_y?: number;
+  position_z?: number;
+}
+
+export interface RackTransformPayload {
+  warehouse_id?: string;
+  pos_x_m?: number;
+  pos_z_m?: number;
+  rotation_y_deg?: number;
+  rack_width_m?: number;
+  rack_height_m?: number;
+  rack_depth_m?: number;
+  levels_count?: number;
+  max_weight_kg?: number;
 }
 
 export interface RackDimensionsUpdatePayload {
@@ -399,6 +471,32 @@ export const digitalTwinApi = {
     payload: WarehouseDimensionsUpdatePayload
   ): Promise<any> => {
     const res = await axios.patch(`${API_BASE}/warehouses/${warehouse_id}/dimensions`, payload);
+    return res.data;
+  },
+
+  getRacks: async (warehouse_id: string): Promise<DigitalTwinRack[]> => {
+    const res = await axios.get<DigitalTwinRack[]>(`${API_BASE}/racks`, { params: { warehouse_id } });
+    return res.data;
+  },
+
+  createRack: async (payload: CreateRackPayload): Promise<any> => {
+    const res = await axios.post(`${API_BASE}/racks`, payload);
+    return res.data;
+  },
+
+  transformRack: async (
+    rack_identifier: string,
+    payload: RackTransformPayload
+  ): Promise<any> => {
+    const res = await axios.patch(
+      `${API_BASE}/racks/${encodeURIComponent(rack_identifier)}/transform`,
+      payload
+    );
+    return res.data;
+  },
+
+  updateRackById: async (rack_id: string, payload: RackUpdatePayload): Promise<any> => {
+    const res = await axios.patch(`${API_BASE}/racks/${encodeURIComponent(rack_id)}`, payload);
     return res.data;
   },
 

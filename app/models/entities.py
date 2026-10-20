@@ -307,6 +307,9 @@ class CentroCosto(Base):
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     area_id: Mapped[Optional[int]] = mapped_column(ForeignKey("areas.id"), nullable=True, index=True)
     responsable_id: Mapped[Optional[int]] = mapped_column(ForeignKey("responsables_organizacion.id"), nullable=True, index=True)
+    alerta_85_activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    alerta_100_activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_notificacion: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
 
     area: Mapped[Optional["Area"]] = relationship(back_populates="centros_costo")
     responsable_user: Mapped[Optional["ResponsableUser"]] = relationship(back_populates="centros_costo")
@@ -539,6 +542,33 @@ class Warehouse(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     slots: Mapped[List["WarehouseSlot"]] = relationship(back_populates="warehouse_rel", cascade="all, delete-orphan")
+    racks: Mapped[List["WarehouseRack"]] = relationship(back_populates="warehouse_rel", cascade="all, delete-orphan")
+
+
+class WarehouseRack(Base):
+    """
+    Entidad Estructura / Cuerpo de Rack (Gemelo Digital Universal 3D)
+    Almacena las coordenadas reales de planta (pos_x_m, pos_z_m, rotation_y_deg)
+    y dimensiones paramétricas del cuerpo completo en PostgreSQL 16 con Numeric(14, 4).
+    """
+    __tablename__ = "warehouse_racks"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True) # ej. 'WH-001:CUERPO-A'
+    warehouse_id: Mapped[str] = mapped_column(String(50), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    rack_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True) # ej. 'Cuerpo A', 'RACK-001'
+    zone_code: Mapped[str] = mapped_column(String(50), default="GENERAL", nullable=False)
+    pos_x_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    pos_z_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    rotation_y_deg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    rack_width_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('2.4000'), nullable=False)
+    rack_height_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('6.0000'), nullable=False)
+    rack_depth_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1.2000'), nullable=False)
+    levels_count: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    bays_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    max_weight_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('3000.0000'), nullable=False)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    warehouse_rel: Mapped["Warehouse"] = relationship(back_populates="racks")
 
 
 class WarehouseSlot(Base):
@@ -577,6 +607,13 @@ class WarehouseSlot(Base):
     rack_depth_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1.2000'), nullable=False)
     levels_count: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     max_rack_weight_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('3000.0000'), nullable=False)
+    position_x: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    position_y: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    position_z: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    pos_x_m: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    pos_z_m: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), nullable=True)
+    rotation_y_deg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    bays_count: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
 
     # 2. Medidas Reales de Caja / Bulto y Vínculo con Catálogo Real
     box_width_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.4000'), nullable=False)

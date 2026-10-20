@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -12,6 +12,9 @@ from app.domain.schemas import (
     WarehouseDimensionsUpdate,
     RackDimensionsUpdate,
     SlotItemSpecsUpdate,
+    CreateRackPayload,
+    RackUpdatePayload,
+    RackTransformPayload,
 )
 
 router = APIRouter(prefix="/digital-twin", tags=["Digital Twin 3D Universal"])
@@ -40,12 +43,13 @@ class CreateWarehousePayload(BaseModel):
 
 
 class TransferStockPayload(BaseModel):
-    source_warehouse_id: str
-    source_slot_code: str
-    target_warehouse_id: str
-    target_slot_code: str
-    cantidad_a_mover: Optional[float] = None
-    mover_lote_completo: bool = True
+    model_config = ConfigDict(from_attributes=True)
+    source_warehouse_id: str = Field(..., min_length=1, description="ID del almacen origen")
+    source_slot_code: str = Field(..., min_length=1, max_length=50, description="Coordenada del slot origen")
+    target_warehouse_id: str = Field(..., min_length=1, description="ID del almacen destino")
+    target_slot_code: str = Field(..., min_length=1, max_length=50, description="Coordenada del slot destino")
+    cantidad_a_mover: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Cantidad a transferir en Decimal (> 0)")
+    mover_lote_completo: bool = Field(default=True, description="Si es True transfiere todo el saldo del slot")
 
 
 class OptimizeSlottingPayload(BaseModel):
@@ -141,6 +145,148 @@ def update_warehouse_dimensions_endpoint(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/racks")
+def get_digital_twin_racks_endpoint(
+    warehouse_id: str = Query(..., description="ID del depósito"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna el listado consolidado de estructuras de Rack en el depósito con sus coordenadas de planta.
+    """
+    DigitalTwinService.ensure_default_warehouses_and_slots(db)
+    return DigitalTwinService.get_racks(db=db, warehouse_id=warehouse_id)
+
+
+@router.post("/racks", status_code=status.HTTP_201_CREATED)
+def create_rack_endpoint(
+    payload: CreateRackPayload,
+    db: Session = Depends(get_db),
+):
+    """
+    Crea un nuevo rack / cuerpo en el almacén de forma transaccional (ACID),
+    instanciando todos sus niveles y posiciones con precisión Decimal (Numeric(14, 4))
+    y ubicándolo en sus coordenadas iniciales de planta (pos_x_m, pos_z_m, rotation_y_deg).
+    """
+    try:
+        return DigitalTwinService.create_rack(
+            db=db,
+            warehouse_id=payload.warehouse_id,
+            rack_code=payload.rack_code,
+            rack_width_m=payload.rack_width_m,
+            rack_height_m=payload.rack_height_m,
+            rack_depth_m=payload.rack_depth_m,
+            levels_count=payload.levels_count,
+            max_weight_kg=payload.max_weight_kg,
+            zone_code=payload.zone_code or "GENERAL",
+            racks_count=payload.racks_count or 2,
+            positions_per_level=payload.positions_per_level or 3,
+            pos_x_m=payload.pos_x_m,
+            pos_z_m=payload.pos_z_m,
+            rotation_y_deg=payload.rotation_y_deg,
+            bays_count=payload.bays_count,
+        )
+    except ValueError as e:
+        err_msg = str(e)
+        if "Colisión" in err_msg or "superpone" in err_msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+        if "Límites" in err_msg or "excedidos" in err_msg or "positivos" in err_msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch("/racks/{rack_identifier}/transform")
+def transform_rack_endpoint(
+    rack_identifier: str,
+    payload: RackTransformPayload,
+    db: Session = Depends(get_db),
+):
+    """
+    Mueve espacialmente (pos_x_m, pos_z_m, rotation_y_deg) y/o redimensiona
+    el RACK ENTERO (con todas sus cajas y lotes adentro) dentro del depósito,
+    validando colisiones 2D y límites de la nave.
+    """
+    try:
+        return DigitalTwinService.transform_rack(
+            db=db,
+            rack_identifier=rack_identifier,
+            warehouse_id=payload.warehouse_id,
+            pos_x_m=payload.pos_x_m,
+            pos_z_m=payload.pos_z_m,
+            rotation_y_deg=payload.rotation_y_deg,
+            rack_width_m=payload.rack_width_m,
+            rack_height_m=payload.rack_height_m,
+            rack_depth_m=payload.rack_depth_m,
+            levels_count=payload.levels_count,
+            max_weight_kg=payload.max_weight_kg,
+        )
+    except ValueError as e:
+        err_msg = str(e)
+        if "Colisión" in err_msg or "superpone" in err_msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+        if "Límites" in err_msg or "excedidos" in err_msg or "positivos" in err_msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+        if "no existe" in err_msg or "No se encontraron" in err_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.put("/racks/{warehouse_id}/{cuerpo}/dimensions")
+def update_rack_dimensions_put_endpoint(
+    warehouse_id: str,
+    cuerpo: str,
+    payload: RackDimensionsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Alias PUT para actualizar la geometría paramétrica estructural de una estantería / cuerpo.
+    """
+    return update_rack_dimensions_endpoint(warehouse_id=warehouse_id, cuerpo=cuerpo, payload=payload, db=db)
+
+
+@router.patch("/racks/{rack_id}")
+def update_rack_by_id_endpoint(
+    rack_id: str,
+    payload: RackUpdatePayload,
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza de forma transaccional (ACID) las medidas y/o coordenadas espaciales
+    de un rack o cuerpo por su identificador, recalculando el volumen y espacio libre del almacén.
+    """
+    try:
+        return DigitalTwinService.update_rack_by_id(
+            db=db,
+            rack_id=rack_id,
+            warehouse_id=payload.warehouse_id,
+            rack_width_m=payload.rack_width_m,
+            rack_height_m=payload.rack_height_m,
+            rack_depth_m=payload.rack_depth_m,
+            levels_count=payload.levels_count,
+            max_weight_kg=payload.max_weight_kg,
+            position_x=payload.position_x,
+            position_y=payload.position_y,
+            position_z=payload.position_z,
+            pos_x_m=payload.pos_x_m,
+            pos_z_m=payload.pos_z_m,
+            rotation_y_deg=payload.rotation_y_deg,
+        )
+    except ValueError as e:
+        err_msg = str(e)
+        if "Colisión" in err_msg or "superpone" in err_msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+        if "Límites" in err_msg or "excedidos" in err_msg or "positivos" in err_msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+        if "no existe" in err_msg or "No se encontraron" in err_msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -333,8 +479,9 @@ from app.engine.inventory import calculate_3d_load_plan, recommend_container_fil
 
 
 # ============================================================================
-# WEBSOCKET CONNECTION MANAGER PARA RECEPCIÓN EN VIVO 3D
+# WEBSOCKET CONNECTION MANAGER PARA RECEPCIÓN EN VIVO 3D (CON HEARTBEAT ACTIVO)
 # ============================================================================
+import asyncio
 
 class DigitalTwinConnectionManager:
     def __init__(self):
@@ -342,7 +489,8 @@ class DigitalTwinConnectionManager:
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        if websocket not in self.active_connections:
+            self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
@@ -358,16 +506,62 @@ class DigitalTwinConnectionManager:
 ws_manager = DigitalTwinConnectionManager()
 
 
-@router.websocket("/ws")
-async def digital_twin_websocket(websocket: WebSocket):
+async def handle_digital_twin_ws(websocket: WebSocket):
+    """
+    Manejador asíncrono resiliente de WebSocket para Gemelo Digital 3D:
+    - Handshake inicial estructurado.
+    - Heartbeat activo cada 20 segundos para evitar desconexiones prematuras por timeout (Tailscale / proxies).
+    - Respuesta inmediata a pings del cliente.
+    """
     await ws_manager.connect(websocket)
     try:
-        while True:
-            data = await websocket.receive_text()
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        await websocket.send_json({
+            "type": "CONNECTION_ESTABLISHED",
+            "status": "connected",
+            "message": "Gemelo Digital 3D Live Hub Activo",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
     except Exception:
         ws_manager.disconnect(websocket)
+        return
+
+    # Tarea asíncrona de heartbeat continuo (cada 20s)
+    async def heartbeat_loop():
+        try:
+            while True:
+                await asyncio.sleep(20)
+                await websocket.send_json({
+                    "type": "HEARTBEAT",
+                    "status": "alive",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            ws_manager.disconnect(websocket)
+
+    heartbeat_task = asyncio.create_task(heartbeat_loop())
+
+    try:
+        while True:
+            text = await websocket.receive_text()
+            if text in ("ping", '{"type":"ping"}', '{"type": "ping"}'):
+                await websocket.send_json({
+                    "type": "pong",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        heartbeat_task.cancel()
+        ws_manager.disconnect(websocket)
+
+
+@router.websocket("/ws")
+async def digital_twin_websocket(websocket: WebSocket):
+    await handle_digital_twin_ws(websocket)
 
 
 # ============================================================================

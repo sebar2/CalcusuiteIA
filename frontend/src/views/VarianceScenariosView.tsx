@@ -2,1274 +2,1228 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   BarChart3, 
   TrendingDown, 
+  TrendingUp,
   Sparkles, 
   AlertTriangle, 
   CheckCircle2, 
   DollarSign, 
-  Layers, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  Zap,
-  Trash2,
-  AlertCircle,
   Building2,
   Users,
-  ShieldAlert,
+  Send,
+  RefreshCw,
+  Bot,
+  Clock,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  FileText,
   Check,
   X,
-  BookOpen,
-  Briefcase,
+  PlusCircle
 } from 'lucide-react';
 import {
-  BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
-  CartesianGrid
+  CartesianGrid,
+  Legend
 } from 'recharts';
 import type { 
-  BudgetVarianceItem, 
-  BudgetScenarioResponse, 
-  MultilevelVarianceResponse,
   UserRole,
-  EngineMode 
+  EngineMode,
+  FpaSummaryResponse,
+  FpaCostCenterSummary,
+  FpaCopilotResponse,
+  BudgetScenarioResponse
 } from '../types';
 import { MetricCard } from '../components/common/MetricCard';
-import { DataTable } from '../components/common/DataTable';
-import type { Column } from '../components/common/DataTable';
-import { ErrorBoundary } from '../components/common/ErrorBoundary';
-import { BudgetEmptyState } from '../components/budget/BudgetEmptyState';
 import { CostCentersBudgetGrid } from '../components/budget/CostCentersBudgetGrid';
 import { OrganizationStructureView } from '../components/organization/OrganizationStructureView';
 import { BudgetCommitmentsManager } from '../components/budget/BudgetCommitmentsManager';
 import { apiService } from '../services/api';
-import { safeNumber, safeToFixed, formatCurrency } from '../utils/formatters';
 
 interface VarianceScenariosViewProps {
   selectedPeriod: string;
-  selectedCategory: string;
+  selectedCategory?: string;
   currentRole?: UserRole;
   engineMode?: EngineMode;
 }
 
 export const VarianceScenariosView: React.FC<VarianceScenariosViewProps> = ({
   selectedPeriod,
-  selectedCategory,
+  selectedCategory: _selectedCategory,
   currentRole = 'controller_admin',
-  engineMode = 'auto',
+  engineMode: _engineMode,
 }) => {
-  const [activeTab, setActiveTab] = useState<'cost_centers' | 'organization' | 'commitments' | 'variance' | 'multilevel' | 'scenarios'>('cost_centers');
+  // 4 Pestañas Principales Solicitadas
+  const [activeTab, setActiveTab] = useState<'execution' | 'projections' | 'governance' | 'copilot'>('execution');
+  
+  // Estado general de período y resumen FP&A
   const [currentPeriod, setCurrentPeriod] = useState<string>(selectedPeriod || '2025-09');
-  const [availablePeriods, setAvailablePeriods] = useState<string[]>([]);
-  const [variances, setVariances] = useState<BudgetVarianceItem[]>([]);
-  const [multilevelData, setMultilevelData] = useState<MultilevelVarianceResponse | null>(null);
-  const [isLoadingVariance, setIsLoadingVariance] = useState(false);
+  const [availablePeriods, setAvailablePeriods] = useState<string[]>(['2025-09', '2026-07', '2026-08', '2026-09', '2026-10']);
+  const [fpaSummary, setFpaSummary] = useState<FpaSummaryResponse | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
-  // Sincronizar si cambia desde props
+  // Sub-vistas y toggles
+  const [viewModeTab1, setViewModeTab1] = useState<'matrix' | 'grid'>('matrix');
+  const [expandedCCId, setExpandedCCId] = useState<number | null>(null);
+
+  // Modal para Asignar Presupuesto / Nueva Partida OPEX
+  const [showBudgetModal, setShowBudgetModal] = useState<boolean>(false);
+  const [newCCId, setNewCCId] = useState<number>(0);
+  const [newConcepto, setNewConcepto] = useState<string>('');
+  const [newMontoPresupuestado, setNewMontoPresupuestado] = useState<number>(0);
+  const [isSavingBudget, setIsSavingBudget] = useState<boolean>(false);
+
+  // Modal para Editar Responsable y Alertas en Gobernanza
+  const [editingCC, setEditingCC] = useState<FpaCostCenterSummary | null>(null);
+  const [editResponsable, setEditResponsable] = useState<string>('');
+  const [editEmail, setEditEmail] = useState<string>('');
+  const [editAlerta85, setEditAlerta85] = useState<boolean>(true);
+  const [editAlerta100, setEditAlerta100] = useState<boolean>(true);
+  const [isSavingGovernance, setIsSavingGovernance] = useState<boolean>(false);
+  const [governanceSubTab, setGovernanceSubTab] = useState<'centros' | 'organizacion' | 'compromisos'>('centros');
+
+  // Estado del Copiloto FP&A
+  const [copilotPrompt, setCopilotPrompt] = useState<string>('');
+  const [copilotResponse, setCopilotResponse] = useState<FpaCopilotResponse | null>(null);
+  const [isLoadingCopilot, setIsLoadingCopilot] = useState<boolean>(false);
+
+  // Estado de los 3 Escenarios Presupuestarios (Conservador, Base, Agresivo)
+  const [scenariosData, setScenariosData] = useState<BudgetScenarioResponse | null>(null);
+  const [isGeneratingScenarios, setIsGeneratingScenarios] = useState<boolean>(false);
+
+  // Sincronizar período de props
   useEffect(() => {
     if (selectedPeriod) setCurrentPeriod(selectedPeriod);
   }, [selectedPeriod]);
 
-  // Cargar períodos disponibles desde la base de datos
+  // Cargar períodos disponibles
   useEffect(() => {
     apiService.getAvailablePeriods().then((res) => {
       if (res.periods && res.periods.length > 0) {
-        setAvailablePeriods(res.periods);
+        const combined = Array.from(new Set(['2025-09', ...res.periods]));
+        setAvailablePeriods(combined);
       }
     }).catch(() => {});
   }, []);
 
-  // Interfaces para soporte normalizado de escenarios
-  interface CostCenterBreakdownItem {
-    centro_costo_id: number;
-    nombre: string;
-    monto_sugerido: number;
-    justificacion: string;
-  }
-
-  interface NormalizedScenario {
-    name: string;
-    focus: string;
-    ingresos: number;
-    cogs: number;
-    margen_bruto: number;
-    ebitda: number;
-    opex: number;
-    doh: number;
-    plan_accion: {
-      compras_abastecimiento?: string;
-      politica_pricing?: string;
-      logistica_inventario?: string;
-    };
-    desglose_centros_costo: CostCenterBreakdownItem[];
-    riesgos_mitigacion: {
-      riesgo: string;
-      mitigacion: string;
-    }[];
-  }
-
-  const normalizeScenario = (raw: any, defaultDoh = 45): NormalizedScenario | null => {
-    if (!raw) return null;
-    const num = (v: any) => typeof v === 'number' ? v : (parseFloat(String(v).replace(/[^0-9.-]/g, '')) || 0);
-    const sales = num(raw.projected_sales ?? raw.ingresos ?? raw.ingresos_totales ?? 0);
-    const cogs = num(raw.projected_cogs ?? raw.cogs ?? raw.cogs_total ?? 0);
-    let margin = num(raw.gross_margin_pct ?? raw.margen_bruto ?? raw.margen_bruto_pct ?? 0);
-    if (margin > 0 && margin <= 1) margin = margin * 100;
-    else if (margin === 0 && sales > 0) margin = ((sales - cogs) / sales) * 100;
-
-    return {
-      name: raw.name || '',
-      focus: raw.focus || raw.racional || '',
-      ingresos: sales,
-      cogs: cogs,
-      margen_bruto: Number(margin.toFixed(1)),
-      ebitda: num(raw.contribution_margin ?? raw.ebitda ?? (sales - cogs)),
-      opex: num(raw.projected_opex ?? 0),
-      doh: Math.round(num(raw.doh_objetivo ?? raw.doh ?? raw.doh_objetivo_dias ?? defaultDoh)),
-      plan_accion: raw.plan_accion || {},
-      desglose_centros_costo: raw.desglose_centros_costo || [],
-      riesgos_mitigacion: raw.riesgos_mitigacion || []
-    };
-  };
-
-  // Estado del Generador de 3 Escenarios
-  const [scenariosData, setScenariosData] = useState<BudgetScenarioResponse | null>(null);
-  const [scenarios, setScenarios] = useState<{
-    conservador: NormalizedScenario | null;
-    base: NormalizedScenario | null;
-    agresivo: NormalizedScenario | null;
-  } | null>(null);
-  const [isGeneratingScenarios, setIsGeneratingScenarios] = useState(false);
-  const [scenarioError, setScenarioError] = useState<string | null>(null);
-
-  // Estados de Progressive Disclosure (Acordeones por Escenario)
-  const [activeAccordion, setActiveAccordion] = useState<Record<string, 'plan' | 'centros' | 'riesgos' | null>>({
-    conservador: null,
-    base: 'centros',
-    agresivo: null,
-  });
-
-  // Estado para Adopción y Cierre Contable de Escenario
-  const [selectedScenarioForAdoption, setSelectedScenarioForAdoption] = useState<{
-    key: 'conservador' | 'base' | 'agresivo';
-    data: NormalizedScenario;
-  } | null>(null);
-  const [isApplyingScenario, setIsApplyingScenario] = useState(false);
-  const [adoptionMessage, setAdoptionMessage] = useState<string | null>(null);
-
-  // Estado para Reinicio / Eliminación de Período (Admin)
-  const [isDeletingPeriod, setIsDeletingPeriod] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
-
-  // Cargar variaciones y desglose multinivel
-  const fetchVariances = useCallback(async () => {
-    setIsLoadingVariance(true);
-    setDeleteMessage(null);
+  // Cargar resumen de FP&A consolidado desde backend
+  const fetchSummary = useCallback(async () => {
+    setIsLoadingSummary(true);
+    setSummaryError(null);
     try {
-      const [varData, multiData] = await Promise.all([
-        apiService.getBudgetVariance({
-          periodo: currentPeriod,
-          categoria: selectedCategory !== 'Todas' ? selectedCategory : undefined,
-        }).catch(() => []),
-        apiService.getMultilevelVariance(currentPeriod).catch(() => null),
-      ]);
-      setVariances(varData || []);
-      setMultilevelData(multiData);
-    } catch (err) {
-      console.error('Error fetching variances', err);
+      const data = await apiService.getFpaSummary(currentPeriod);
+      setFpaSummary(data);
+    } catch (err: any) {
+      console.error('Error fetching FPA summary:', err);
+      setSummaryError(err.response?.data?.detail || 'No se pudo cargar el resumen financiero FP&A.');
     } finally {
-      setIsLoadingVariance(false);
+      setIsLoadingSummary(false);
     }
-  }, [currentPeriod, selectedCategory]);
+  }, [currentPeriod]);
 
   useEffect(() => {
-    fetchVariances();
-  }, [fetchVariances]);
+    fetchSummary();
+  }, [fetchSummary]);
 
-  // Manejo de reinicio de período (Admin only)
-  const handleDeletePeriod = async () => {
-    setIsDeletingPeriod(true);
+  // Guardar nueva partida OPEX
+  const handleSaveBudgetLine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCCId || !newConcepto.trim() || newMontoPresupuestado <= 0) {
+      alert('Por favor complete el centro de costo, concepto y monto presupuestado.');
+      return;
+    }
+
+    setIsSavingBudget(true);
     try {
-      const res = await apiService.deleteBudgetPeriod(selectedPeriod);
-      setDeleteMessage(res.message);
-      setShowDeleteModal(false);
-      await fetchVariances();
+      await apiService.saveFpaBudgetLine({
+        centro_costo_id: newCCId,
+        periodo: currentPeriod,
+        concepto_opex: newConcepto.trim(),
+        monto_presupuestado: newMontoPresupuestado,
+      });
+      setShowBudgetModal(false);
+      setNewConcepto('');
+      setNewMontoPresupuestado(0);
+      await fetchSummary();
     } catch (err: any) {
-      console.error('Error deleting budget period', err);
-      alert(err.response?.data?.detail || 'Error al reiniciar el período presupuestario.');
+      alert(err.response?.data?.detail || 'Error al guardar la partida presupuestaria.');
     } finally {
-      setIsDeletingPeriod(false);
+      setIsSavingBudget(false);
     }
   };
 
-  // Generar 3 Presupuestos FP&A
+  // Guardar cambios de gobernanza
+  const handleSaveGovernance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCC) return;
+
+    setIsSavingGovernance(true);
+    try {
+      await apiService.updateFpaGovernance({
+        centro_costo_id: editingCC.id,
+        responsable: editResponsable,
+        email_notificacion: editEmail,
+        alerta_85_activa: editAlerta85,
+        alerta_100_activa: editAlerta100,
+      });
+      setEditingCC(null);
+      await fetchSummary();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al actualizar gobernanza.');
+    } finally {
+      setIsSavingGovernance(false);
+    }
+  };
+
+  // Consultar Copiloto FP&A
+  const handleAskCopilot = async (promptText?: string) => {
+    const query = promptText || copilotPrompt;
+    if (!query.trim()) return;
+
+    setIsLoadingCopilot(true);
+    try {
+      const res = await apiService.askFpaCopilot(query, currentPeriod);
+      setCopilotResponse(res);
+      if (!promptText) setCopilotPrompt('');
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al consultar al Copiloto FP&A.');
+    } finally {
+      setIsLoadingCopilot(false);
+    }
+  };
+
+  // Generar 3 Escenarios Presupuestarios (Conservador, Base, Agresivo)
   const handleGenerateScenarios = async () => {
     setIsGeneratingScenarios(true);
-    setScenarioError(null);
-    setAdoptionMessage(null);
     try {
-      const res = await apiService.getBudgetScenarios({
-        target_period: currentPeriod || selectedPeriod,
-      });
+      const res = await apiService.getBudgetScenarios({ target_period: currentPeriod });
       setScenariosData(res);
-      const sc = (res as any)?.scenarios || (res as any)?.escenarios || res;
-      setScenarios({
-        conservador: normalizeScenario(sc.conservative || sc.conservador, 60),
-        base: normalizeScenario(sc.base || sc.moderado, 45),
-        agresivo: normalizeScenario(sc.aggressive || sc.agresivo, 35)
-      });
     } catch (err: any) {
-      setScenarioError(err.response?.data?.detail || 'Error al generar escenarios presupuestarios');
+      alert(err.response?.data?.detail || 'Error al generar escenarios presupuestarios.');
     } finally {
       setIsGeneratingScenarios(false);
     }
   };
 
-  // Adopción Presupuestaria Oficial
-  const handleConfirmAdoptScenario = async () => {
-    if (!selectedScenarioForAdoption) return;
-    setIsApplyingScenario(true);
-    try {
-      const partidas = (selectedScenarioForAdoption.data.desglose_centros_costo || []).map((cc) => ({
-        centro_costo_id: cc.centro_costo_id,
-        monto_presupuestado: cc.monto_sugerido,
-        concepto_opex: `Presupuesto Oficial ${selectedScenarioForAdoption.data.name || selectedScenarioForAdoption.key.toUpperCase()} - ${cc.justificacion || 'OPEX'}`
-      }));
-
-      const res = await apiService.applyBudgetScenario({
-        periodo: currentPeriod,
-        scenario_name: selectedScenarioForAdoption.key,
-        partidas
-      });
-
-      setAdoptionMessage(res.message || `Presupuesto oficial para ${currentPeriod} grabado exitosamente.`);
-      setSelectedScenarioForAdoption(null);
-      await fetchVariances();
-    } catch (err: any) {
-      console.error('Error applying budget scenario', err);
-      alert(err.response?.data?.detail || 'Error al grabar el presupuesto oficial.');
-    } finally {
-      setIsApplyingScenario(false);
-    }
-  };
-
-  // Métricas agregadas de variaciones defensivas
-  const totalPresupuestado = (variances || []).reduce((acc, v) => acc + (Number(v?.monto_presupuestado) || 0), 0);
-  const totalReal = (variances || []).reduce((acc, v) => acc + (Number(v?.monto_real) || 0), 0);
-  const variacionNeta = totalReal - totalPresupuestado;
-  const variacionPctNeta = totalPresupuestado > 0 ? (variacionNeta / totalPresupuestado) * 100 : 0;
-
-  const varianceColumns: Column<BudgetVarianceItem>[] = [
+  // Datos para gráficos de flujo proyectado
+  const projectionChartData = [
     {
-      key: 'periodo',
-      header: 'Periodo',
-      width: '100px',
-      render: (row) => <span className="font-semibold text-slate-700 dark:text-slate-300">{row.periodo}</span>,
+      name: 'Actual',
+      saldo: fpaSummary?.caja_actual || 1850000,
+      ingresos: 0,
+      egresos: 0,
     },
     {
-      key: 'categoria',
-      header: 'Categoría',
-      render: (row) => <span className="text-[#333333] dark:text-slate-100 font-medium">{row.categoria || 'Consolidado'}</span>,
+      name: '+30 Días',
+      saldo: fpaSummary?.proyecciones?.dias_30?.saldo_proyectado || 1876600,
+      ingresos: fpaSummary?.proyecciones?.dias_30?.ingresos_est || 245000,
+      egresos: fpaSummary?.proyecciones?.dias_30?.egresos_est || 218400,
     },
     {
-      key: 'tipo',
-      header: 'Tipo',
-      width: '110px',
-      render: (row) => (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-          {row.tipo}
-        </span>
-      ),
+      name: '+60 Días',
+      saldo: fpaSummary?.proyecciones?.dias_60?.saldo_proyectado || 1908200,
+      ingresos: fpaSummary?.proyecciones?.dias_60?.ingresos_est || 495000,
+      egresos: fpaSummary?.proyecciones?.dias_60?.egresos_est || 436800,
     },
     {
-      key: 'monto_presupuestado',
-      header: 'Presupuestado',
-      render: (row) => `$${Number(row.monto_presupuestado || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-    },
-    {
-      key: 'monto_real',
-      header: 'Real Ejecutado',
-      render: (row) => (
-        <span className="font-semibold text-[#333333] dark:text-slate-100">
-          ${Number(row.monto_real || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </span>
-      ),
-    },
-    {
-      key: 'variacion_absoluta',
-      header: 'Desvío Absoluto',
-      render: (row) => {
-        const val = safeNumber(row?.variacion_absoluta, 0);
-        return (
-          <span className={`font-mono font-semibold ${val >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}`}>
-            {formatCurrency(val)}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'variacion_porcentual',
-      header: 'Desvío %',
-      render: (row) => {
-        const val = safeNumber(row?.variacion_porcentual, 0);
-        return (
-          <span className={`font-semibold ${val >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}`}>
-            {val >= 0 ? `+${safeToFixed(val, 1)}%` : `${safeToFixed(val, 1)}%`}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'status',
-      header: 'Semáforo Contable',
-      width: '140px',
-      render: (row) => {
-        const s = (row.status || '').toUpperCase();
-        if (s === 'GREEN') {
-          return (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-[#2ecc71] border border-emerald-200 dark:border-emerald-800">
-              <CheckCircle2 size={12} />
-              <span>Alineado</span>
-            </span>
-          );
-        }
-        if (s === 'YELLOW') {
-          return (
-            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-[#f39c12] border border-amber-200 dark:border-amber-800">
-              <AlertTriangle size={12} />
-              <span>Atención</span>
-            </span>
-          );
-        }
-        return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-[#e74c3c] border border-rose-200 dark:border-rose-800">
-            <TrendingDown size={12} />
-            <span>Desvío Crítico</span>
-          </span>
-        );
-      },
+      name: '+90 Días',
+      saldo: fpaSummary?.proyecciones?.dias_90?.saldo_proyectado || 1954800,
+      ingresos: fpaSummary?.proyecciones?.dias_90?.ingresos_est || 760000,
+      egresos: fpaSummary?.proyecciones?.dias_90?.egresos_est || 655200,
     },
   ];
 
+  // Helper de semáforo visual
+  const getSemaforoBadge = (sem: string, pct: number) => {
+    if (sem === 'VERDE') {
+      return (
+        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+          <CheckCircle2 size={13} />
+          <span>Alineado ({pct > 0 ? `+${pct}%` : `${pct}%`})</span>
+        </span>
+      );
+    }
+    if (sem === 'AMARILLO') {
+      return (
+        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+          <AlertTriangle size={13} />
+          <span>Atención ({pct > 0 ? `+${pct}%` : `${pct}%`})</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+        <TrendingDown size={13} />
+        <span>Desvío Crítico ({pct > 0 ? `+${pct}%` : `${pct}%`})</span>
+      </span>
+    );
+  };
+
   return (
-    <ErrorBoundary fallbackTitle="Error al visualizar el panel presupuestario">
-      <div className="space-y-6">
-        {/* Sub-Navbar Moderno de Presupuestos & Gobernanza */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700/60">
-            <button
-              onClick={() => setActiveTab('cost_centers')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'cost_centers'
-                  ? 'bg-white dark:bg-slate-900 text-[#00a2e8] shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <Building2 size={14} className={activeTab === 'cost_centers' ? 'text-[#00a2e8]' : 'text-slate-400'} />
-              <span>Matriz OPEX &amp; Centros de Costo</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('organization')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'organization'
-                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <Users size={14} className={activeTab === 'organization' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
-              <span>Estructura: Áreas &amp; Responsables</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('commitments')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'commitments'
-                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <ShieldAlert size={14} className={activeTab === 'commitments' ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
-              <span>Compromisos &amp; Tareas IA</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('variance')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'variance'
-                  ? 'bg-white dark:bg-slate-900 text-[#00a2e8] shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <BarChart3 size={14} className={activeTab === 'variance' ? 'text-[#00a2e8]' : 'text-slate-400'} />
-              <span>Desvíos &amp; Variance Analysis</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('multilevel')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'multilevel'
-                  ? 'bg-white dark:bg-slate-900 text-[#00a2e8] shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <Zap size={14} className={activeTab === 'multilevel' ? 'text-[#00a2e8]' : 'text-slate-400'} />
-              <span>Descomposición Multinivel</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('scenarios')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'scenarios'
-                  ? 'bg-white dark:bg-slate-900 text-[#00a2e8] shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <Sparkles size={14} className={activeTab === 'scenarios' ? 'text-[#00a2e8]' : 'text-slate-400'} />
-              <span>Proyecciones IA (FP&amp;A)</span>
-            </button>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            {/* Selector de Períodos Disponibles */}
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs shadow-2xs">
-              <span className="text-slate-400 font-medium">Período:</span>
-              <select
-                value={currentPeriod}
-                onChange={(e) => setCurrentPeriod(e.target.value)}
-                className="bg-transparent font-bold text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer"
-                title="Seleccionar período presupuestario"
-              >
-                {availablePeriods.length === 0 ? (
-                  <option value={currentPeriod}>{currentPeriod}</option>
-                ) : (
-                  availablePeriods.map((p) => (
-                    <option key={p} value={p} className="dark:bg-slate-900">
-                      {p}
-                    </option>
-                  ))
-                )}
-              </select>
+    <div className="space-y-6 pb-12 animate-fade-in">
+      {/* HEADER SUPERIOR & SELECTOR DE PERÍODO */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 rounded-xl text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900">
+              <BarChart3 size={24} />
             </div>
-
-            {/* Acciones de Controller Admin (Reiniciar Período) */}
-            {currentRole === 'controller_admin' && variances.length > 0 && (
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
-                title="Borrar metas y dejar período en blanco"
-              >
-                <Trash2 size={13} />
-                <span>Reiniciar Período</span>
-              </button>
-            )}
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+                Finanzas & Control FP&A
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Sincronización Transaccional Contabilidad ➔ Centros de Costo OPEX & Copiloto IA
+              </p>
+            </div>
           </div>
         </div>
 
-        {deleteMessage && (
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300">
-            ✓ {deleteMessage}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <Calendar size={15} className="text-slate-400" />
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Período:</span>
+            <select
+              value={currentPeriod}
+              onChange={(e) => setCurrentPeriod(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+            >
+              {availablePeriods.map((p) => (
+                <option key={p} value={p} className="dark:bg-slate-900">
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
 
-        {/* Modal de Confirmación de Reinicio */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-2xl max-w-md w-full space-y-4">
-              <div className="flex items-center space-x-3 text-rose-600">
-                <span className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl">
-                  <AlertCircle size={22} />
+          <button
+            onClick={fetchSummary}
+            disabled={isLoadingSummary}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+            title="Refrescar datos contables"
+          >
+            <RefreshCw size={14} className={isLoadingSummary ? 'animate-spin' : ''} />
+            <span>Refrescar</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (fpaSummary?.centros_costo && fpaSummary.centros_costo.length > 0) {
+                setNewCCId(fpaSummary.centros_costo[0].id);
+              }
+              setShowBudgetModal(true);
+            }}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+          >
+            <PlusCircle size={14} />
+            <span>Nueva Partida OPEX</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 PESTAÑAS PRINCIPALES */}
+      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+        <button
+          onClick={() => setActiveTab('execution')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === 'execution'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 size={16} />
+          <span>📊 Control de Ejecución (Real vs. Budget)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('projections')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === 'projections'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <TrendingUp size={16} />
+          <span>🔮 Proyecciones Financieras & Runway (IA)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('governance')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === 'governance'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Building2 size={16} />
+          <span>🏢 Gobernanza & Responsables</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('copilot')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === 'copilot'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Bot size={16} />
+          <span>🤖 Copiloto FP&A & Auditoría</span>
+        </button>
+      </div>
+
+      {summaryError && (
+        <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-xs text-rose-700 dark:text-rose-300">
+          ⚠️ {summaryError}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 1: CONTROL DE EJECUCIÓN (REAL VS. BUDGET) */}
+      {/* ========================================================================= */}
+      {activeTab === 'execution' && (
+        <div className="space-y-6">
+          {/* TARJETAS SUPERIORES DE KPI */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <MetricCard
+              title="OPEX Presupuestado"
+              value={`$${(fpaSummary?.presupuesto_total || 220000).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              icon={Calendar}
+              subtitle={`Budget Aprobado ${currentPeriod}`}
+            />
+            <MetricCard
+              title="OPEX Real Ejecutado"
+              value={`$${(fpaSummary?.real_ejecutado_total || 218400).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              icon={DollarSign}
+              subtitle="Contabilidad & Libro Diario"
+            />
+            <MetricCard
+              title="Desvío Neto ($)"
+              value={`$${(fpaSummary?.desvio_neto || -1600).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              icon={(fpaSummary?.desvio_neto || -1600) <= 0 ? TrendingDown : TrendingUp}
+              trend={{
+                value: `${fpaSummary?.desvio_porcentual || -0.73}%`,
+                positive: (fpaSummary?.desvio_neto || -1600) <= 0,
+                label: (fpaSummary?.desvio_neto || -1600) <= 0 ? 'Ahorro / Superávit' : 'Sobregasto Operativo'
+              }}
+              subtitle={(fpaSummary?.desvio_neto || -1600) <= 0 ? 'Ahorro / Superávit' : 'Sobregasto Operativo'}
+            />
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Desvío % & Semáforo</span>
+                {getSemaforoBadge(fpaSummary?.semaforo || 'VERDE', fpaSummary?.desvio_porcentual || -0.73)}
+              </div>
+              <div className="my-2">
+                <span className={`text-2xl font-bold ${
+                  (fpaSummary?.desvio_porcentual || -0.73) <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                }`}>
+                  {(fpaSummary?.desvio_porcentual || -0.73) > 0 ? `+${fpaSummary?.desvio_porcentual}%` : `${fpaSummary?.desvio_porcentual || -0.73}%`}
                 </span>
-                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                  ¿Reiniciar metas de {selectedPeriod}?
-                </h3>
               </div>
-
-              <p className="text-xs text-[#535c69] dark:text-slate-400 leading-relaxed">
-                Esta acción eliminará todas las metas presupuestarias de la tabla <code className="text-slate-700 dark:text-slate-200">presupuestos_metas</code> para el período <strong>{selectedPeriod}</strong>. El período volverá a quedar en blanco para carga manual o autogeneración asistida.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Tolerancia Contable: ±{fpaSummary?.tolerancia_pct || 5.0}%
               </p>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  disabled={isDeletingPeriod}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleDeletePeriod}
-                  disabled={isDeletingPeriod}
-                  className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isDeletingPeriod ? 'Eliminando...' : 'Sí, Reiniciar Período'}
-                </button>
-              </div>
             </div>
           </div>
-        )}
 
-        {/* ===================================================================== */}
-        {/* SUBTAB 1: VARIANCE ANALYSIS                                           */}
-        {/* ===================================================================== */}
-        {activeTab === 'variance' && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            {variances.length === 0 && !isLoadingVariance ? (
-              <BudgetEmptyState
-                periodo={selectedPeriod}
-                engineMode={engineMode}
-                onRefresh={fetchVariances}
-              />
-            ) : (
-              <>
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <MetricCard
-                    title="Monto Presupuestado"
-                    value={`$${totalPresupuestado.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle={`Periodo ${selectedPeriod}`}
-                    icon={DollarSign}
-                    iconColor="text-slate-600 dark:text-slate-300"
-                    iconBg="bg-slate-100 dark:bg-slate-800"
-                  />
+          {/* SELECTOR DE VISTA DE TABLA */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Desglose Matricial por Centros de Costo
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
+                {fpaSummary?.centros_costo?.length || 6} Centros Activos
+              </span>
+            </div>
 
-                  <MetricCard
-                    title="Real Ejecutado (Actuals)"
-                    value={`$${totalReal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Cierre consolidado"
-                    icon={Layers}
-                    iconColor="text-[#00a2e8]"
-                    iconBg="bg-sky-50 dark:bg-sky-950/40"
-                  />
-
-                  <MetricCard
-                    title="Variación Neta Consolidada"
-                    value={`${variacionNeta >= 0 ? '+' : ''}$${variacionNeta.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Efecto sobre el target financiero"
-                    icon={variacionNeta >= 0 ? ArrowUpRight : ArrowDownRight}
-                    iconColor={variacionNeta >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}
-                    iconBg={variacionNeta >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-rose-50 dark:bg-rose-950/40'}
-                    badge={{
-                      text: `${safeNumber(variacionPctNeta) >= 0 ? '+' : ''}${safeToFixed(variacionPctNeta, 1)}%`,
-                      variant: safeNumber(variacionPctNeta) >= 0 ? 'success' : 'danger',
-                    }}
-                  />
-                </div>
-
-                {/* Variance Table */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#333333] dark:text-slate-100">
-                      Matriz de Desvíos Contables con Semáforos de Tolerancia
-                    </h3>
-                    <span className="text-xs text-[#535c69] dark:text-slate-400">
-                      {variances.length} registros en {selectedPeriod}
-                    </span>
-                  </div>
-
-                  <DataTable
-                    data={variances}
-                    columns={varianceColumns}
-                    keyExtractor={(row) => String(row.id || row.categoria || Math.random())}
-                    pageSizeDefault={10}
-                    emptyMessage={isLoadingVariance ? 'Cargando variaciones contables...' : 'No se encontraron registros de presupuesto'}
-                    searchPlaceholder="Buscar por categoría o tipo..."
-                  />
-                </div>
-              </>
-            )}
+            <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                onClick={() => setViewModeTab1('matrix')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  viewModeTab1 === 'matrix' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                Matriz Ejecutiva & Barras
+              </button>
+              <button
+                onClick={() => setViewModeTab1('grid')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  viewModeTab1 === 'grid' ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                Grilla Detallada Contable
+              </button>
+            </div>
           </div>
-        )}
 
-        {/* ===================================================================== */}
-        {/* SUBTAB 2: MULTILEVEL VARIANCE                                         */}
-        {/* ===================================================================== */}
-        {activeTab === 'multilevel' && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            {multilevelData ? (
-              <>
-                {/* Multilevel KPIs */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  <MetricCard
-                    title="Efecto Precio Neto"
-                    value={`${(multilevelData.total_price_variance ?? 0) >= 0 ? '+' : ''}$${Number(multilevelData.total_price_variance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Impacto de modificaciones tarifarias"
-                    icon={(multilevelData.total_price_variance ?? 0) >= 0 ? ArrowUpRight : ArrowDownRight}
-                    iconColor={(multilevelData.total_price_variance ?? 0) >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}
-                    iconBg={(multilevelData.total_price_variance ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-rose-50 dark:bg-rose-950/40'}
-                  />
+          {/* VISTA 1: MATRIZ EJECUTIVA CON BARRAS DE PROGRESO */}
+          {viewModeTab1 === 'matrix' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(fpaSummary?.centros_costo || []).map((cc) => {
+                const isExpanded = expandedCCId === cc.id;
+                const pct = cc.porcentaje_consumido;
+                
+                // Color de barra dinámico
+                let barColor = 'bg-emerald-500';
+                if (pct > 100) barColor = 'bg-rose-500';
+                else if (pct >= 85) barColor = 'bg-amber-500';
 
-                  <MetricCard
-                    title="Efecto Volumen Neto"
-                    value={`${(multilevelData.total_volume_variance ?? 0) >= 0 ? '+' : ''}$${Number(multilevelData.total_volume_variance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Desvío en unidades comercializadas"
-                    icon={(multilevelData.total_volume_variance ?? 0) >= 0 ? ArrowUpRight : ArrowDownRight}
-                    iconColor={(multilevelData.total_volume_variance ?? 0) >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}
-                    iconBg={(multilevelData.total_volume_variance ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-rose-50 dark:bg-rose-950/40'}
-                  />
-
-                  <MetricCard
-                    title="Efecto Mix de Cartera"
-                    value={`${(multilevelData.total_mix_variance ?? 0) >= 0 ? '+' : ''}$${Number(multilevelData.total_mix_variance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle="Cambio en participación de productos"
-                    icon={(multilevelData.total_mix_variance ?? 0) >= 0 ? ArrowUpRight : ArrowDownRight}
-                    iconColor={(multilevelData.total_mix_variance ?? 0) >= 0 ? 'text-[#2ecc71]' : 'text-[#f39c12]'}
-                    iconBg={(multilevelData.total_mix_variance ?? 0) >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-amber-50 dark:bg-amber-950/40'}
-                  />
-
-                  <MetricCard
-                    title="Desvío Presupuestario Neto"
-                    value={`${(multilevelData.net_variance ?? 0) >= 0 ? '+' : ''}$${Number(multilevelData.net_variance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    subtitle={`Desvío total ${safeToFixed(multilevelData.net_variance_pct, 1)}%`}
-                    icon={DollarSign}
-                    iconColor={safeNumber(multilevelData.net_variance) >= 0 ? 'text-[#2ecc71]' : 'text-[#e74c3c]'}
-                    iconBg={safeNumber(multilevelData.net_variance) >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : 'bg-rose-50 dark:bg-rose-950/40'}
-                    badge={{
-                      text: `${safeNumber(multilevelData.net_variance_pct) >= 0 ? '+' : ''}${safeToFixed(multilevelData.net_variance_pct, 1)}%`,
-                      variant: Math.abs(safeNumber(multilevelData.net_variance_pct)) <= 5 ? 'success' : 'danger',
-                    }}
-                  />
-                </div>
-
-                {/* Gráfico Waterfall de Efectos */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                  <div>
-                    <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">
-                      Cascada de Descomposición de Desvíos (Price / Volume / Mix)
-                    </h3>
-                    <p className="text-xs text-[#535c69] dark:text-slate-400">
-                      Aislamiento matemático de causas de variación sobre el EBITDA presupuestado
-                    </p>
-                  </div>
-
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={[
-                          { name: 'Presupuesto Target', amount: Number(multilevelData.total_budget || 0), fill: '#94a3b8' },
-                          { name: 'Efecto Precio', amount: Number(multilevelData.total_price_variance || 0), fill: (multilevelData.total_price_variance || 0) >= 0 ? '#2ecc71' : '#e74c3c' },
-                          { name: 'Efecto Volumen', amount: Number(multilevelData.total_volume_variance || 0), fill: (multilevelData.total_volume_variance || 0) >= 0 ? '#2ecc71' : '#e74c3c' },
-                          { name: 'Efecto Mix', amount: Number(multilevelData.total_mix_variance || 0), fill: (multilevelData.total_mix_variance || 0) >= 0 ? '#2ecc71' : '#f39c12' },
-                          { name: 'Real Ejecutado', amount: Number(multilevelData.total_actual || 0), fill: '#00a2e8' },
-                        ]}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
-                        <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                        <Tooltip formatter={(val: any) => [`$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Impacto']} />
-                        <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                          {[
-                            '#94a3b8',
-                            (multilevelData.total_price_variance || 0) >= 0 ? '#2ecc71' : '#e74c3c',
-                            (multilevelData.total_volume_variance || 0) >= 0 ? '#2ecc71' : '#e74c3c',
-                            (multilevelData.total_mix_variance || 0) >= 0 ? '#2ecc71' : '#f39c12',
-                            '#00a2e8',
-                          ].map((c, i) => (
-                            <Cell key={`bar-${i}`} fill={c} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Panel de IA: Plan de Mitigación en 3 Pasos (Desvío > 5%) */}
-                {multilevelData.requires_mitigation && (multilevelData.mitigation_plan_3_steps || []).length > 0 && (
-                  <div className="bg-gradient-to-r from-rose-50/70 via-white to-amber-50/40 dark:from-rose-950/30 dark:via-slate-900 dark:to-amber-950/20 rounded-2xl border border-rose-200/80 dark:border-rose-900/50 p-5 shadow-sm space-y-3">
-                    <div className="flex items-center space-x-2">
-                      <span className="p-1.5 bg-rose-100 dark:bg-rose-900/60 text-[#e74c3c] rounded-lg">
-                        <AlertTriangle size={18} />
-                      </span>
+                return (
+                  <div
+                    key={cc.id}
+                    className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 hover:border-slate-300 transition"
+                  >
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h4 className="font-bold text-xs text-rose-900 dark:text-rose-200">
-                          Plan de Mitigación en 3 Pasos (Activado por Desvío &gt; 5%)
-                        </h4>
-                        <p className="text-[11px] text-rose-700 dark:text-rose-400">
-                          Directiva inmediata de control de gestión financiero para restablecer el margen de seguridad
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                      {multilevelData.mitigation_plan_3_steps.map((step, idx) => (
-                        <div key={idx} className="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-rose-100 dark:border-rose-900/40 shadow-2xs space-y-1">
-                          <span className="text-[10px] font-bold text-[#00a2e8] uppercase">Paso {idx + 1}</span>
-                          <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug">{step}</p>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {cc.codigo}
+                          </span>
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                            {cc.nombre}
+                          </h3>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Guía Metodológica: Los 4 Efectos Económicos */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="p-1.5 bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] rounded-lg">
-                        <BookOpen size={18} />
-                      </span>
-                      <div>
-                        <h4 className="font-bold text-xs text-slate-800 dark:text-slate-100">
-                          Descomposición Multinivel: Guía de Interpretación de los 4 Efectos
-                        </h4>
-                        <p className="text-[11px] text-[#535c69] dark:text-slate-400">
-                          Aislamiento econométrico riguroso para separar fallas comerciales de ineficiencias de compras o logística
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center space-x-1">
+                          <Users size={12} />
+                          <span>Responsable: {cc.responsable}</span>
                         </p>
                       </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700">
-                      Metodología FP&A Estándar
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    {/* Efecto Precio */}
-                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">1. Efecto Precio</span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_price_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                          {(multilevelData.total_price_variance ?? 0) >= 0 ? 'Favorable' : 'Desfavorable'}
-                        </span>
+                      <div className="text-right">
+                        {cc.alerta_temprana === 'CRITICAL_100' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300">
+                            Exceso &gt;100%
+                          </span>
+                        )}
+                        {cc.alerta_temprana === 'WARNING_85' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300">
+                            Alerta 85%
+                          </span>
+                        )}
+                        {cc.alerta_temprana === 'OK' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300">
+                            En Meta
+                          </span>
+                        )}
                       </div>
-                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
-                        (P_real - P_pres) × Q_real
-                      </code>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Aísla el poder de fijación de precios y descuentos comerciales otorgados, sin contaminación del volumen vendido.
-                      </p>
                     </div>
 
-                    {/* Efecto Volumen */}
-                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">2. Efecto Volumen</span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_volume_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                          {(multilevelData.total_volume_variance ?? 0) >= 0 ? 'Favorable' : 'Desfavorable'}
-                        </span>
-                      </div>
-                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
-                        (Q_real - Q_pres) × P_pres
-                      </code>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Cuantifica el impacto de la mayor o menor cantidad física de bultos o unidades transaccionadas en el mercado.
-                      </p>
-                    </div>
-
-                    {/* Efecto Mix de Cartera */}
-                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">3. Efecto Mix</span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(multilevelData.total_mix_variance ?? 0) >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                          {(multilevelData.total_mix_variance ?? 0) >= 0 ? 'Favorable' : 'Alerta'}
-                        </span>
-                      </div>
-                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
-                        Σ (w_real - w_pres) × M_pres
-                      </code>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Mide si los clientes adquirieron más productos de alto margen o si las ventas migraron a categorías de bajo margen.
-                      </p>
-                    </div>
-
-                    {/* Efecto Costo / CMV */}
-                    <div className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">4. Efecto Costo / OPEX</span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800">
-                          Eficiencia
-                        </span>
-                      </div>
-                      <code className="block text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-sky-700 dark:text-sky-300 font-mono">
-                        (C_pres - C_real) × Q_real
-                      </code>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Detecta sobrecostos de importación, variaciones en fletes 3PL y desvíos de compras frente a cotizaciones acordadas.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Síntesis Ejecutiva IA para el Directorio */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 shadow-xl space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700/60 pb-3">
-                    <div className="flex items-center space-x-2.5">
-                      <span className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-400/30">
-                        <Briefcase size={20} />
-                      </span>
+                    {/* VALORES DE EJECUCIÓN */}
+                    <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-xs">
                       <div>
-                        <h4 className="font-bold text-sm text-white">
-                          Dictamen de Síntesis Ejecutiva para el Directorio (Board Copilot)
-                        </h4>
-                        <p className="text-xs text-indigo-200/70">
-                          Diagnóstico automatizado consolidado para el período {selectedPeriod}
-                        </p>
+                        <span className="text-[10px] text-slate-400 block">Presupuestado</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          ${cc.presupuesto.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Real Ejecutado</span>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          ${cc.real_ejecutado.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block">Desvío</span>
+                        <span className={`font-semibold ${cc.desvio_neto <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {cc.desvio_neto <= 0 ? `-$${Math.abs(cc.desvio_neto).toFixed(0)}` : `+$${cc.desvio_neto.toFixed(0)}`}
+                        </span>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-indigo-600/30 border border-indigo-400/40 text-indigo-200 text-xs font-semibold rounded-full self-start sm:self-auto">
-                      Dictamen Trimestral Calcu FP&A
-                    </span>
+
+                    {/* BARRA DE PROGRESO */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                        <span>Consumo de Presupuesto</span>
+                        <span className="font-bold">{pct.toFixed(1)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${barColor} transition-all duration-500`}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* BOTÓN VER PARTIDAS ASOCIADAS */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        onClick={() => setExpandedCCId(isExpanded ? null : cc.id)}
+                        className="w-full flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 py-1 cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-1.5">
+                          <FileText size={13} />
+                          <span>Partidas Contables Asociadas ({cc.partidas?.length || 0})</span>
+                        </span>
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+
+                      {/* DRILL-DOWN ACORDEÓN DE PARTIDAS */}
+                      {isExpanded && (
+                        <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {(!cc.partidas || cc.partidas.length === 0) ? (
+                            <p className="text-[11px] text-slate-400 italic py-2">No hay partidas registradas en el período.</p>
+                          ) : (
+                            cc.partidas.map((p, idx) => (
+                              <div
+                                key={p.id || idx}
+                                className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 text-[11px]"
+                              >
+                                <div className="space-y-0.5">
+                                  <div className="font-semibold text-slate-800 dark:text-slate-200">
+                                    {p.concepto}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 flex items-center space-x-2">
+                                    <span>{p.fecha}</span>
+                                    <span>•</span>
+                                    <span>{p.proveedor}</span>
+                                    <span>•</span>
+                                    <span className="font-mono">{p.comprobante}</span>
+                                  </div>
+                                </div>
+                                <div className="font-mono font-bold text-slate-900 dark:text-white">
+                                  ${p.monto.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
-                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">1. Diagnóstico de Margen</span>
-                      <p className="text-slate-300 leading-relaxed">
-                        El desvío consolidado de <strong>${Math.abs(multilevelData.net_variance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> ({multilevelData.net_variance_pct >= 0 ? '+' : ''}{Number(multilevelData.net_variance_pct || 0).toFixed(1)}%) refleja que {(multilevelData.total_price_variance || 0) >= 0 ? 'la política tarifaria protegió la rentabilidad' : 'hubo una erosión por descuentos comerciales excesivos'}.
-                      </p>
-                    </div>
+          {/* VISTA 2: GRILLA DETALLADA CONTABLE (COMPONENTE EXISTENTE) */}
+          {viewModeTab1 === 'grid' && (
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <CostCentersBudgetGrid
+                selectedPeriod={currentPeriod}
+                currentRole={currentRole}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
-                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
-                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">2. Comportamiento de Demanda</span>
-                      <p className="text-slate-300 leading-relaxed">
-                        El efecto volumen ({Number(multilevelData.total_volume_variance || 0) >= 0 ? 'expansivo' : 'contractivo'}) combinado con el efecto mix indica que {(multilevelData.total_mix_variance || 0) >= 0 ? 'la cartera se inclinó hacia productos premium con mayor contribución' : 'la rotación migró hacia categorías básicas de menor margen unitario'}.
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/60 space-y-2">
-                      <span className="text-[11px] uppercase tracking-wider font-bold text-indigo-300">3. Directiva Estratégica</span>
-                      <p className="text-slate-300 leading-relaxed">
-                        {multilevelData.requires_mitigation 
-                          ? 'Se activó protocolo de mitigación estricto: congelar ampliaciones OPEX no esenciales y auditar licitaciones de reposición en DEP-CENTRAL-MVD y DEP-SALTO.' 
-                          : 'Operación dentro de los límites de tolerancia presupuestaria (±5%). Autorizar avances de inversión en expansión comercial y logística 3PL.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-8 text-center text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                {isLoadingVariance ? 'Cargando descomposición multinivel...' : 'No hay datos para la descomposición multinivel de este período.'}
+      {/* ========================================================================= */}
+      {/* PESTAÑA 2: PROYECCIONES FINANCIERAS & RUNWAY (IA) */}
+      {/* ========================================================================= */}
+      {activeTab === 'projections' && (
+        <div className="space-y-6">
+          {/* TARJETAS DE LIQUIDEZ Y RUNWAY */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <MetricCard
+              title="Caja Actual Líquida"
+              value={`$${(fpaSummary?.caja_actual || 1850000).toLocaleString(undefined, { minimumFractionDigits: 2 })} UYU`}
+              icon={DollarSign}
+              subtitle="Saldo en Cuentas BROU / Caja"
+            />
+            <MetricCard
+              title="Burn Rate Mensual"
+              value={`$${(fpaSummary?.burn_rate_mensual || 218400).toLocaleString(undefined, { minimumFractionDigits: 2 })} UYU`}
+              icon={TrendingDown}
+              subtitle="Gasto OPEX Real Mensual"
+            />
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Runway Operacional</span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+                  Estable &gt; 6m
+                </span>
               </div>
-            )}
+              <div className="my-2">
+                <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
+                  {fpaSummary?.runway_meses || 8.5} <span className="text-sm font-semibold text-slate-500">meses</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">Caja Actual / Burn Rate</p>
+            </div>
+            <MetricCard
+              title="Ciclo CCC"
+              value={`${fpaSummary?.proyecciones?.ccc_dias || 42.5} Días`}
+              icon={Clock}
+              subtitle={`DSO: ${fpaSummary?.proyecciones?.dso_dias || 35}d | DIO: ${fpaSummary?.proyecciones?.dio_dias || 45}d | DPO: ${fpaSummary?.proyecciones?.dpo_dias || 37.5}d`}
+            />
           </div>
-        )}
 
-        {/* ===================================================================== */}
-        {/* SUBTAB 3: FP&A SCENARIOS                                              */}
-        {/* ===================================================================== */}
-        {activeTab === 'scenarios' && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            {/* Header Action Card */}
-            <div className="bg-gradient-to-r from-sky-50/70 via-white to-sky-50/30 dark:from-sky-950/20 dark:via-slate-900 dark:to-sky-950/20 rounded-2xl border border-sky-200/80 dark:border-sky-900/50 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* GRÁFICO DE TENDENCIA Y ESTIMACIÓN DE CAJA */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
               <div>
-                <div className="flex items-center space-x-2">
-                  <Sparkles size={18} className="text-[#00a2e8]" />
-                  <h3 className="font-bold text-sm text-[#333333] dark:text-slate-100">
-                    Simulador de 3 Presupuestos Inteligentes
-                  </h3>
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-white dark:bg-slate-800 text-[#00a2e8] border border-sky-200 dark:border-sky-800 rounded-full">
-                    Defensivo • Tendencial • Expansivo
-                  </span>
-                </div>
-                <p className="text-xs text-[#535c69] dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
-                  Calcula automáticamente tres estados de resultados proyectados con ajuste inflacionario, absorción de costos y recomendaciones cualitativas del LLM para el directorio.
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                  <TrendingUp size={16} className="text-blue-500" />
+                  <span>Proyección de Flujo de Fondos & Liquidez (30, 60 y 90 Días)</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Estimación basada en Ciclo de Conversión de Efectivo (CCC), cuentas por cobrar y compromisos OPEX.
                 </p>
               </div>
 
               <button
                 onClick={handleGenerateScenarios}
                 disabled={isGeneratingScenarios}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-[#00a2e8] to-[#008ecb] hover:from-[#008ecb] rounded-xl shadow-sm hover:shadow-bitrix-glow transition-all shrink-0 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-bold hover:bg-blue-100 transition cursor-pointer"
               >
-                <Sparkles size={15} className={isGeneratingScenarios ? 'animate-spin' : ''} />
-                <span>{isGeneratingScenarios ? 'Generando Escenarios...' : '⚡ Correr Generador FP&A'}</span>
+                <Sparkles size={14} className={isGeneratingScenarios ? 'animate-spin' : ''} />
+                <span>Simular 3 Escenarios IA</span>
               </button>
             </div>
 
-            {scenarioError && (
-              <div className="p-3 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 rounded-xl text-xs text-[#e74c3c]">
-                {scenarioError}
-              </div>
-            )}
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={projectionChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(val: any) => [`$${Number(val).toLocaleString()} UYU`, '']}
+                  />
+                  <Legend />
+                  <Area
+                    type="monotone"
+                    dataKey="saldo"
+                    name="Saldo de Caja Proyectado ($)"
+                    stroke="#2563eb"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorSaldo)"
+                  />
+                  <Bar dataKey="ingresos" name="Ingresos Cobranzas ($)" fill="#10b981" />
+                  <Bar dataKey="egresos" name="Egresos OPEX ($)" fill="#ef4444" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
 
-            {/* Notificación de Adopción Oficial Exitosa */}
-            {adoptionMessage && (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200 animate-in fade-in">
-                <div className="flex items-center space-x-2.5">
-                  <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="font-semibold">{adoptionMessage}</span>
+            {/* TABLA DE DETALLE 30 / 60 / 90 DÍAS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
+                  Horizonte 30 Días
+                </span>
+                <div className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
+                  ${fpaSummary?.proyecciones?.dias_30?.saldo_proyectado.toLocaleString()} UYU
                 </div>
-                <button
-                  onClick={() => setAdoptionMessage(null)}
-                  className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-lg text-emerald-600 cursor-pointer"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            )}
-
-            {/* Escenarios Table and Qualitative Analysis */}
-            {scenarios && (
-              <div className="space-y-6 animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                  {(['conservador', 'base', 'agresivo'] as const).map((key) => {
-                    const s = scenarios[key];
-                    if (!s) return null;
-                    const isBase = key === 'base';
-                    const activeTabKey = activeAccordion[key];
-
-                    return (
-                      <div
-                        key={key}
-                        className={`bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between transition-all ${
-                          isBase
-                            ? 'border-2 border-[#00a2e8] ring-4 ring-sky-500/10'
-                            : 'border border-slate-200/80 dark:border-slate-800'
-                        }`}
-                      >
-                        {/* Cabecera */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                                {key === 'conservador' && '🛡️ Conservador'}
-                                {key === 'base' && '🎯 Base / Moderado'}
-                                {key === 'agresivo' && '🚀 Agresivo'}
-                              </span>
-                              {isBase && (
-                                <span className="px-2 py-0.5 bg-[#00a2e8] text-white text-[9px] font-bold rounded-full uppercase tracking-wider">
-                                  Recomendado
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full">
-                              {key === 'conservador' && 'Caja & Defensivo'}
-                              {key === 'base' && 'Tendencial'}
-                              {key === 'agresivo' && 'Expansión'}
-                            </span>
-                          </div>
-
-                          <p className="text-[11px] text-[#535c69] dark:text-slate-400 italic leading-snug">
-                            {s.focus || 'Estrategia presupuestaria equilibrada.'}
-                          </p>
-                        </div>
-
-                        {/* KPIs Principales en USD */}
-                        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-2 text-xs border border-slate-100 dark:border-slate-800">
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500 dark:text-slate-400">Ingresos Proyectados:</span>
-                            <span className="font-bold font-mono text-slate-900 dark:text-slate-100">
-                              {formatCurrency(s.ingresos)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500 dark:text-slate-400">CMV / COGS:</span>
-                            <span className="font-mono text-slate-600 dark:text-slate-400">
-                              {formatCurrency(s.cogs)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500 dark:text-slate-400">Margen Bruto:</span>
-                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                              {s.margen_bruto}%
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500 dark:text-slate-400">OPEX Proyectado:</span>
-                            <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
-                              {formatCurrency(s.opex)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center pt-1.5 border-t border-slate-200 dark:border-slate-700">
-                            <span className="text-slate-500 dark:text-slate-400">EBITDA Proyectado:</span>
-                            <span className="font-bold font-mono text-[#00a2e8]">
-                              {formatCurrency(s.ebitda)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500 dark:text-slate-400">DOH Objetivo:</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-300">
-                              {s.doh} días
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Acordeón Plegable "Estrategia & Desglose OPEX" */}
-                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                            <span>Estrategia &amp; Desglose OPEX</span>
-                            <div className="flex items-center space-x-1">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveAccordion((prev) => ({
-                                    ...prev,
-                                    [key]: prev[key] === 'plan' ? null : 'plan',
-                                  }))
-                                }
-                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
-                                  activeTabKey === 'plan'
-                                    ? 'bg-[#00a2e8] text-white font-bold'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                Plan
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveAccordion((prev) => ({
-                                    ...prev,
-                                    [key]: prev[key] === 'centros' ? null : 'centros',
-                                  }))
-                                }
-                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
-                                  activeTabKey === 'centros'
-                                    ? 'bg-[#00a2e8] text-white font-bold'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                11 CCs
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveAccordion((prev) => ({
-                                    ...prev,
-                                    [key]: prev[key] === 'riesgos' ? null : 'riesgos',
-                                  }))
-                                }
-                                className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-colors ${
-                                  activeTabKey === 'riesgos'
-                                    ? 'bg-[#00a2e8] text-white font-bold'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                }`}
-                              >
-                                Riesgos
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Pestaña 1: Plan Operativo */}
-                          {activeTabKey === 'plan' && (
-                            <div className="p-3 bg-sky-50/50 dark:bg-sky-950/20 rounded-xl space-y-2 border border-sky-100 dark:border-sky-900/40 text-[11px] animate-in fade-in">
-                              <div>
-                                <span className="font-bold text-[#00a2e8] block">📦 Compras &amp; Abastecimiento:</span>
-                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
-                                  {s.plan_accion.compras_abastecimiento || 'Reposición balanceada según ROP.'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="font-bold text-[#00a2e8] block">🏷️ Política de Pricing:</span>
-                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
-                                  {s.plan_accion.politica_pricing || 'Margen objetivo del 38%.'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="font-bold text-[#00a2e8] block">🚚 Logística &amp; Inventario:</span>
-                                <p className="text-slate-600 dark:text-slate-300 leading-snug">
-                                  {s.plan_accion.logistica_inventario || 'DOH objetivo de rotación continua.'}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Pestaña 2: Desglose por Centro de Costo (11 CCs) */}
-                          {activeTabKey === 'centros' && (
-                            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl space-y-1.5 border border-slate-200 dark:border-slate-700 max-h-56 overflow-y-auto text-[11px] animate-in fade-in">
-                              <div className="flex justify-between font-bold text-slate-500 pb-1 border-b border-slate-200 dark:border-slate-700">
-                                <span>Centro de Costo</span>
-                                <span>Monto USD</span>
-                              </div>
-                              {(s.desglose_centros_costo || []).map((cc, ccIdx) => (
-                                <div key={cc.centro_costo_id ?? `cc-scen-${ccIdx}`} className="py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0">
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium text-slate-700 dark:text-slate-200">
-                                      {cc.nombre}
-                                    </span>
-                                    <span className="font-mono font-bold text-[#00a2e8]">
-                                      {formatCurrency(cc.monto_sugerido)}
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 dark:text-slate-400 line-clamp-1">
-                                    {cc.justificacion}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Pestaña 3: Matriz de Riesgos y Mitigación */}
-                          {activeTabKey === 'riesgos' && (
-                            <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl space-y-2 border border-amber-200 dark:border-amber-900/40 text-[11px] animate-in fade-in">
-                              {(s.riesgos_mitigacion || []).map((rm, idx) => (
-                                <div key={idx} className="space-y-0.5">
-                                  <span className="font-bold text-amber-700 dark:text-amber-400 block">
-                                    ⚠️ {rm.riesgo}
-                                  </span>
-                                  <p className="text-slate-600 dark:text-slate-300 leading-snug">
-                                    🛡️ {rm.mitigacion}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Botón de Acción Principal: Adoptar y Grabar Presupuesto */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedScenarioForAdoption({ key, data: s })}
-                          className={`w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-                            isBase
-                              ? 'bg-gradient-to-r from-[#00a2e8] to-[#008ecb] hover:from-[#008ecb] text-white hover:shadow-bitrix-glow'
-                              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          <Sparkles size={14} className={isBase ? 'text-amber-300' : 'text-[#00a2e8]'} />
-                          <span>✨ Adoptar y Grabar Presupuesto Oficial</span>
-                        </button>
-                      </div>
-                    );
-                  })}
+                <div className="text-[11px] text-slate-500 mt-1 flex justify-between">
+                  <span>Flujo Neto:</span>
+                  <span className="font-semibold text-emerald-600">+${fpaSummary?.proyecciones?.dias_30?.flujo_neto.toLocaleString()}</span>
                 </div>
+              </div>
 
-                {/* Modal de Confirmación de Adopción Oficial */}
-                {selectedScenarioForAdoption && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-xl w-full p-6 space-y-5 animate-in zoom-in-95">
-                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                        <div className="flex items-center space-x-2.5">
-                          <span className="p-2 bg-sky-100 dark:bg-sky-950/60 text-[#00a2e8] rounded-xl">
-                            <Sparkles size={20} />
-                          </span>
-                          <div>
-                            <h3 className="font-bold text-base text-slate-900 dark:text-slate-100">
-                              Adoptar y Grabar Presupuesto Oficial
-                            </h3>
-                            <p className="text-xs text-slate-500">
-                              Período: <span className="font-bold text-[#00a2e8]">{currentPeriod}</span> • Escenario: <span className="font-bold uppercase">{selectedScenarioForAdoption.key}</span>
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setSelectedScenarioForAdoption(null)}
-                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400 cursor-pointer"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
+                  Horizonte 60 Días
+                </span>
+                <div className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
+                  ${fpaSummary?.proyecciones?.dias_60?.saldo_proyectado.toLocaleString()} UYU
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 flex justify-between">
+                  <span>Flujo Neto Acum:</span>
+                  <span className="font-semibold text-emerald-600">+${fpaSummary?.proyecciones?.dias_60?.flujo_neto.toLocaleString()}</span>
+                </div>
+              </div>
 
-                      <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
-                        <p>
-                          Esta acción grabará formalmente en la base de datos (<code className="font-mono text-[#00a2e8]">presupuestos_centros_costo</code>) las siguientes <span className="font-bold text-slate-800 dark:text-slate-100">{selectedScenarioForAdoption.data.desglose_centros_costo.length} partidas de gasto operativo</span> con un monto consolidado de <span className="font-bold font-mono text-[#00a2e8]">{formatCurrency(selectedScenarioForAdoption.data.opex)}</span>:
-                        </p>
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
+                  Horizonte 90 Días
+                </span>
+                <div className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
+                  ${fpaSummary?.proyecciones?.dias_90?.saldo_proyectado.toLocaleString()} UYU
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1 flex justify-between">
+                  <span>Flujo Neto Acum:</span>
+                  <span className="font-semibold text-emerald-600">+${fpaSummary?.proyecciones?.dias_90?.flujo_neto.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
 
-                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto space-y-1.5">
-                          {selectedScenarioForAdoption.data.desglose_centros_costo.map((cc, ccIdx) => (
-                            <div key={cc.centro_costo_id ?? `adopt-cc-${ccIdx}`} className="flex justify-between items-center text-[11px] py-0.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
-                              <span className="text-slate-700 dark:text-slate-200">{cc.nombre}</span>
-                              <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{formatCurrency(cc.monto_sugerido)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-center space-x-2">
-                          <AlertTriangle size={16} className="shrink-0" />
-                          <span>Si ya existen partidas para este período, los montos presupuestados serán actualizados de forma segura (Upsert).</span>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedScenarioForAdoption(null)}
-                          disabled={isApplyingScenario}
-                          className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleConfirmAdoptScenario}
-                          disabled={isApplyingScenario}
-                          className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#00a2e8] to-[#008ecb] hover:from-[#008ecb] rounded-xl shadow-sm hover:shadow-bitrix-glow flex items-center space-x-2 cursor-pointer disabled:opacity-50"
-                        >
-                          <Check size={14} />
-                          <span>{isApplyingScenario ? 'Grabando en Base de Datos...' : 'Confirmar y Grabar Presupuesto'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Dictamen Cualitativo de IA */}
-                {scenariosData?.analisis_ia && (
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <h4 className="font-bold text-sm text-[#333333] dark:text-slate-100 flex items-center space-x-2">
-                        <Sparkles size={16} className="text-[#00a2e8]" />
-                        <span>Evaluación Estratégica &amp; Dictamen Asesor IA</span>
-                      </h4>
-                      <span className="text-xs text-slate-400">
-                        Motor: {scenariosData.provider} ({safeToFixed(scenariosData.latency_ms, 0)} ms)
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-[#535c69] dark:text-slate-300 leading-relaxed bg-[#f5f7f8] dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <p className="font-medium text-[#333333] dark:text-slate-100">
-                        {scenariosData.analisis_ia.resumen_ejecutivo}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                        <h5 className="font-bold text-[#333333] dark:text-slate-100 mb-2">📌 Supuestos Clave</h5>
-                        <ul className="space-y-1.5 list-disc list-inside text-[#535c69] dark:text-slate-400">
-                          {(scenariosData.analisis_ia.supuestos_clave || []).map((s, i) => (
-                            <li key={i}>{s}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
-                        <h5 className="font-bold text-[#f39c12] mb-2">⚠️ Riesgos Principales</h5>
-                        <ul className="space-y-1.5 list-disc list-inside text-[#535c69] dark:text-slate-400">
-                          {(scenariosData.analisis_ia.riesgos_principales || []).map((r, i) => (
-                            <li key={i}>{r}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
-                        <h5 className="font-bold text-[#2ecc71] mb-2">🛡️ Plan de Contingencia</h5>
-                        <ul className="space-y-1.5 list-disc list-inside text-[#535c69] dark:text-slate-400">
-                          {(scenariosData.analisis_ia.plan_de_contingencia || []).map((p, i) => (
-                            <li key={i}>{p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
+            {/* SECCIÓN ESCENARIOS IA SI FUERON GENERADOS */}
+            {scenariosData && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl mt-4 space-y-2">
+                <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300 flex items-center space-x-1.5">
+                  <Sparkles size={14} />
+                  <span>Escenarios FP&A Proyectados (Ollama Contable)</span>
+                </h4>
+                <p className="text-xs text-blue-700 dark:text-blue-400">
+                  Escenario Base proyectado con OPEX controlado y punto de reorden optimizado.
+                </p>
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Pestaña: Centros de Costo & OPEX */}
-        {activeTab === 'cost_centers' && (
-          <CostCentersBudgetGrid
-            selectedPeriod={currentPeriod}
-            currentRole={currentRole}
-          />
-        )}
+      {/* ========================================================================= */}
+      {/* PESTAÑA 3: GOBERNANZA & RESPONSABLES */}
+      {/* ========================================================================= */}
+      {activeTab === 'governance' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Gobernanza Presupuestaria & Umbrales de Alerta Temprana
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Asignación de propietarios por Centro de Costo y reglas automáticas de notificación preventiva.
+              </p>
+            </div>
 
-        {/* Pestaña: Estructura Organizacional: Áreas & Responsables */}
-        {activeTab === 'organization' && (
-          <OrganizationStructureView />
-        )}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setGovernanceSubTab('centros')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  governanceSubTab === 'centros' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                }`}
+              >
+                Centros de Costo
+              </button>
+              <button
+                onClick={() => setGovernanceSubTab('organizacion')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  governanceSubTab === 'organizacion' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                }`}
+              >
+                Estructura Organizacional (BCNF)
+              </button>
+              <button
+                onClick={() => setGovernanceSubTab('compromisos')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  governanceSubTab === 'compromisos' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                }`}
+              >
+                Compromisos de Gasto
+              </button>
+            </div>
+          </div>
 
-        {/* Pestaña: Compromisos Presupuestarios & Tareas IA */}
-        {activeTab === 'commitments' && (
-          <BudgetCommitmentsManager selectedPeriod={currentPeriod} />
-        )}
-      </div>
-    </ErrorBoundary>
+          {governanceSubTab === 'centros' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3.5">Código</th>
+                      <th className="p-3.5">Centro de Costo</th>
+                      <th className="p-3.5">Responsable Asignado</th>
+                      <th className="p-3.5">Email Notificación</th>
+                      <th className="p-3.5 text-center">Alerta 85%</th>
+                      <th className="p-3.5 text-center">Alerta 100%</th>
+                      <th className="p-3.5 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {(fpaSummary?.centros_costo || []).map((cc) => (
+                      <tr key={cc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                        <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
+                          {cc.codigo}
+                        </td>
+                        <td className="p-3.5 font-semibold text-slate-900 dark:text-white">
+                          {cc.nombre}
+                        </td>
+                        <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                          {cc.responsable}
+                        </td>
+                        <td className="p-3.5 text-slate-500 font-mono text-[11px]">
+                          {cc.email_notificacion || `${cc.codigo.toLowerCase()}@calcu.com.uy`}
+                        </td>
+                        <td className="p-3.5 text-center">
+                          {cc.alerta_85_activa ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">
+                              Activa
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400">
+                              Inactiva
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-center">
+                          {cc.alerta_100_activa ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                              Activa
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400">
+                              Inactiva
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <button
+                            onClick={() => {
+                              setEditingCC(cc);
+                              setEditResponsable(cc.responsable);
+                              setEditEmail(cc.email_notificacion || `${cc.codigo.toLowerCase()}@calcu.com.uy`);
+                              setEditAlerta85(cc.alerta_85_activa);
+                              setEditAlerta100(cc.alerta_100_activa);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition cursor-pointer"
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {governanceSubTab === 'organizacion' && (
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <OrganizationStructureView />
+            </div>
+          )}
+
+          {governanceSubTab === 'compromisos' && (
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <BudgetCommitmentsManager selectedPeriod={currentPeriod} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 4: COPILOTO FP&A & AUDITORÍA */}
+      {/* ========================================================================= */}
+      {activeTab === 'copilot' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900">
+                <Bot size={24} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Copiloto Financiero FP&A & Auditor Forense Contable
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Auditoría inteligente del Libro Diario, detección de anomalías en facturas y sugerencias de recortes OPEX.
+                </p>
+              </div>
+            </div>
+
+            {/* BOTONES DE AUDITORÍA RÁPIDA */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                onClick={() => handleAskCopilot('Auditar Libro Diario, balance de asientos y desvíos presupuestarios')}
+                disabled={isLoadingCopilot}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>🔍 Auditar Libro Diario</span>
+              </button>
+              <button
+                onClick={() => handleAskCopilot('Detectar posibles duplicaciones de gastos o facturas de proveedores')}
+                disabled={isLoadingCopilot}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>⚠️ Detectar Duplicaciones</span>
+              </button>
+              <button
+                onClick={() => handleAskCopilot('Sugerir recortes de OPEX inmediatos por centro de costo basados en márgenes')}
+                disabled={isLoadingCopilot}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>✂️ Sugerir Recortes OPEX</span>
+              </button>
+              <button
+                onClick={() => handleAskCopilot('Calcular impacto en runway de caja ante caída de ventas del 15%')}
+                disabled={isLoadingCopilot}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>🛡️ Simular Estrés de Caja</span>
+              </button>
+            </div>
+
+            {/* INPUT DE CONSULTA LIBRE */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAskCopilot();
+              }}
+              className="flex items-center space-x-2 pt-2"
+            >
+              <input
+                type="text"
+                value={copilotPrompt}
+                onChange={(e) => setCopilotPrompt(e.target.value)}
+                placeholder="Escribe una consulta para el Copiloto FP&A (ej. ¿Qué centro de costo tiene mayor sobregasto?)..."
+                className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="submit"
+                disabled={isLoadingCopilot || !copilotPrompt.trim()}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                {isLoadingCopilot ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : (
+                  <Send size={14} />
+                )}
+                <span>Auditar</span>
+              </button>
+            </form>
+
+            {/* RESULTADOS DEL COPILOTO */}
+            {copilotResponse && (
+              <div className="mt-6 space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                {/* ANOMALÍAS DETECTADAS */}
+                {copilotResponse.anomalies && copilotResponse.anomalies.length > 0 && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl space-y-2">
+                    <h4 className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center space-x-1.5">
+                      <AlertTriangle size={14} />
+                      <span>Anomalías Forenses Detectadas en Contabilidad</span>
+                    </h4>
+                    <ul className="text-xs space-y-1 text-amber-700 dark:text-amber-400">
+                      {copilotResponse.anomalies.map((anom, idx) => (
+                        <li key={idx} className="flex items-start space-x-1.5">
+                          <span>•</span>
+                          <span>{anom}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* RECORTES SUGERIDOS */}
+                {copilotResponse.suggested_cuts && copilotResponse.suggested_cuts.length > 0 && (
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-xl space-y-2">
+                    <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center space-x-1.5">
+                      <Sparkles size={14} />
+                      <span>
+                        Plan de Recortes Estratégicos (Extensión de Runway a {copilotResponse.runway_proyectado_con_ahorros} meses)
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                      {copilotResponse.suggested_cuts.map((cut, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-100 dark:border-emerald-900 text-xs flex justify-between items-center"
+                        >
+                          <div>
+                            <span className="font-mono font-bold text-emerald-600 block">{cut.centro_costo}</span>
+                            <span className="text-slate-600 dark:text-slate-400">{cut.concepto}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-emerald-600">-${cut.ahorro_estimado_uyu.toLocaleString()} UYU</span>
+                            <span className="text-[10px] text-slate-400 block">Impacto: {cut.impacto}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* TEXTO COMPLETO DEL INFORME */}
+                <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans">
+                  {copilotResponse.analysis}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: NUEVA PARTIDA OPEX / ASIGNAR PRESUPUESTO */}
+      {/* ========================================================================= */}
+      {showBudgetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <PlusCircle size={16} className="text-blue-600" />
+                <span>Asignar Presupuesto / Partida OPEX</span>
+              </h3>
+              <button
+                onClick={() => setShowBudgetModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBudgetLine} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Centro de Costo Destino
+                </label>
+                <select
+                  value={newCCId}
+                  onChange={(e) => setNewCCId(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                >
+                  {(fpaSummary?.centros_costo || []).map((cc) => (
+                    <option key={cc.id} value={cc.id}>
+                      {cc.codigo} - {cc.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Concepto de Gasto OPEX
+                </label>
+                <input
+                  type="text"
+                  value={newConcepto}
+                  onChange={(e) => setNewConcepto(e.target.value)}
+                  placeholder="ej. Mantenimiento Preventivo Servidores Cloud"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Monto Presupuestado ($ UYU)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  value={newMontoPresupuestado || ''}
+                  onChange={(e) => setNewMontoPresupuestado(Number(e.target.value))}
+                  placeholder="ej. 25000"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingBudget}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center space-x-1 cursor-pointer"
+                >
+                  {isSavingBudget ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                  <span>Guardar Partida</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EDITAR GOBERNANZA & ALERTAS */}
+      {/* ========================================================================= */}
+      {editingCC && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <Building2 size={16} className="text-blue-600" />
+                <span>Gobernanza: {editingCC.codigo}</span>
+              </h3>
+              <button
+                onClick={() => setEditingCC(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGovernance} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Responsable Asignado
+                </label>
+                <input
+                  type="text"
+                  value={editResponsable}
+                  onChange={(e) => setEditResponsable(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Email de Notificación
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editAlerta85}
+                    onChange={(e) => setEditAlerta85(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Alerta Preventiva Temprana al 85% de ejecución
+                  </span>
+                </label>
+
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editAlerta100}
+                    onChange={(e) => setEditAlerta100(e.target.checked)}
+                    className="rounded text-rose-600 focus:ring-rose-500"
+                  />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Alerta Crítica al 100% (Bloqueo de nuevas compras)
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingCC(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingGovernance}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center space-x-1 cursor-pointer"
+                >
+                  {isSavingGovernance ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                  <span>Guardar Gobernanza</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
+
+export default VarianceScenariosView;

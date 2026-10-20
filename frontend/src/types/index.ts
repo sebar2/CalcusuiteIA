@@ -3249,3 +3249,94 @@ export interface CybersecCopilotResponse {
 
 
 
+
+
+// ============================================================================
+// FINANZAS & CONTROL FP&A (CONEXIÓN CONTABILIDAD ➔ PRESUPUESTOS Y COPILOTO IA)
+// ============================================================================
+
+export interface FpaCostCenterPartida {
+  id: string;
+  tipo: string;
+  fecha: string;
+  concepto: string;
+  proveedor: string;
+  monto: number;
+  moneda: string;
+  comprobante: string;
+  estado: string;
+}
+
+export interface FpaCostCenterSummary {
+  id: number;
+  codigo: string;
+  nombre: string;
+  responsable: string;
+  email_notificacion?: string;
+  alerta_85_activa: boolean;
+  alerta_100_activa: boolean;
+  presupuesto: number;
+  real_ejecutado: number;
+  desvio_neto: number;
+  desvio_porcentual: number;
+  porcentaje_consumido: number;
+  alerta_temprana: 'OK' | 'WARNING_85' | 'CRITICAL_100';
+  semaforo: 'VERDE' | 'AMARILLO' | 'ROJO';
+  partidas: FpaCostCenterPartida[];
+}
+
+export interface FpaCashProjections {
+  dias_30: { saldo_proyectado: number; ingresos_est: number; egresos_est: number; flujo_neto: number };
+  dias_60: { saldo_proyectado: number; ingresos_est: number; egresos_est: number; flujo_neto: number };
+  dias_90: { saldo_proyectado: number; ingresos_est: number; egresos_est: number; flujo_neto: number };
+  ccc_dias: number;
+  dso_dias: number;
+  dio_dias: number;
+  dpo_dias: number;
+}
+
+export interface FpaSummaryResponse {
+  periodo: string;
+  presupuesto_total: number;
+  real_ejecutado_total: number;
+  desvio_neto: number;
+  desvio_porcentual: number;
+  semaforo: 'VERDE' | 'AMARILLO' | 'ROJO';
+  tolerancia_pct: number;
+  caja_actual: number;
+  burn_rate_mensual: number;
+  runway_meses: number;
+  centros_costo: FpaCostCenterSummary[];
+  proyecciones: FpaCashProjections;
+}
+
+export interface FpaBudgetLinePayload {
+  centro_costo_id: number;
+  periodo: string;
+  concepto_opex: string;
+  monto_presupuestado: number;
+  monto_real?: number;
+}
+
+export interface FpaGovernancePayload {
+  centro_costo_id: number;
+  responsable?: string;
+  email_notificacion?: string;
+  alerta_85_activa?: boolean;
+  alerta_100_activa?: boolean;
+}
+
+export interface FpaCopilotResponse {
+  periodo: string;
+  prompt: string;
+  summary: FpaSummaryResponse;
+  anomalies: string[];
+  suggested_cuts: Array<{
+    centro_costo: string;
+    concepto: string;
+    ahorro_estimado_uyu: number;
+    impacto: string;
+  }>;
+  analysis: string;
+  runway_proyectado_con_ahorros: number;
+}

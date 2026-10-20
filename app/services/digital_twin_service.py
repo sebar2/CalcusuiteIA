@@ -1,12 +1,12 @@
 import logging
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 
-from app.models.entities import Warehouse, WarehouseSlot, Product, Inventory, StockLocationBatch
+from app.models.entities import Warehouse, WarehouseSlot, WarehouseRack, Product, Inventory, StockLocationBatch
 from app.models.logistics_entities import LogisticsClientInventory
 from app.engine.inventory import calculate_rop, calculate_doh
 
@@ -33,6 +33,20 @@ class DigitalTwinService:
                 cls._init_3pl_warehouses(db)
             elif scope == "SUPPLY_CHAIN":
                 cls._init_supply_chain_warehouses(db)
+
+        # Backfill coordenadas espaciales para slots terrestres existentes sin pos_x_m
+        unpositioned = db.query(WarehouseSlot).filter(WarehouseSlot.pos_x_m.is_(None)).all()
+        for s in unpositioned:
+            c_char = s.cuerpo.replace("Cuerpo", "").strip() or "A"
+            c_idx = ord(c_char[0].upper()) - 65 if c_char else 0
+            default_x = Decimal(str(-14.0 + c_idx * 7.0)).quantize(Decimal("0.0001"))
+            s.pos_x_m = default_x
+            s.pos_z_m = Decimal("0.0000")
+            s.position_x = default_x
+            s.position_y = Decimal("0.0000")
+            s.position_z = Decimal("0.0000")
+            s.rotation_y_deg = Decimal("0.0000")
+            s.bays_count = 2
 
         db.commit()
 
@@ -400,6 +414,13 @@ class DigitalTwinService:
                             rack_depth_m=Decimal("1.2000"),
                             levels_count=4,
                             max_rack_weight_kg=Decimal("3000.0000"),
+                            pos_x_m=Decimal(str(-14.0 + (ord(cuerpo[0].upper()) - 65) * 7.0)).quantize(Decimal("0.0001")),
+                            pos_z_m=Decimal("0.0000"),
+                            rotation_y_deg=Decimal("0.0000"),
+                            bays_count=2,
+                            position_x=Decimal(str(-14.0 + (ord(cuerpo[0].upper()) - 65) * 7.0)).quantize(Decimal("0.0001")),
+                            position_y=Decimal("0.0000"),
+                            position_z=Decimal("0.0000"),
                             # Geometría Paramétrica de Caja
                             box_width_m=box_w,
                             box_height_m=box_h,
@@ -562,6 +583,615 @@ class DigitalTwinService:
         }
 
     @classmethod
+    def _check_rack_collision(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        exclude_cuerpo: str,
+        target_x: Decimal,
+        target_z: Decimal,
+        target_extent_x: Decimal,
+        target_extent_z: Decimal,
+    ):
+        """
+        Valida que la caja envolvente 2D (AABB) de un rack no colisione con otras estanterías existentes.
+        """
+        clean_ex = exclude_cuerpo.replace("Cuerpo", "").strip().upper()
+        slots = db.query(WarehouseSlot).filter(WarehouseSlot.warehouse_id == warehouse_id).all()
+        by_cuerpo: Dict[str, List[WarehouseSlot]] = {}
+        for s in slots:
+            c_clean = s.cuerpo.replace("Cuerpo", "").strip().upper()
+            if c_clean != clean_ex:
+                by_cuerpo.setdefault(s.cuerpo, []).append(s)
+
+        for other_cuerpo, other_slots in by_cuerpo.items():
+            sample = other_slots[0]
+            c_idx = ord(sample.cuerpo[0].upper()) - 65 if sample.cuerpo else 0
+            other_rw = sample.rack_width_m or Decimal("2.4000")
+            other_rd = sample.rack_depth_m or Decimal("1.2000")
+            other_bays = getattr(sample, "bays_count", 2) or 2
+            other_rot = getattr(sample, "rotation_y_deg", Decimal("0.0000")) or Decimal("0.0000")
+
+            if sample.pos_x_m is not None:
+                other_px = sample.pos_x_m
+            elif sample.position_x is not None:
+                other_px = sample.position_x
+            else:
+                other_px = Decimal(str(-14.0 + c_idx * 7.0)).quantize(Decimal("0.0001"))
+
+            if sample.pos_z_m is not None:
+                other_pz = sample.pos_z_m
+            elif sample.position_z is not None:
+                other_pz = sample.position_z
+            else:
+                other_pz = Decimal("0.0000")
+
+            if other_rot in (Decimal("90"), Decimal("270"), Decimal("90.0000"), Decimal("270.0000")):
+                other_ext_x = other_rw / Decimal("2.0")
+                other_ext_z = (other_rd * Decimal(str(other_bays))) / Decimal("2.0")
+            else:
+                other_ext_x = (other_rd * Decimal(str(other_bays))) / Decimal("2.0")
+                other_ext_z = other_rw / Decimal("2.0")
+
+            overlap_x = max(target_x - target_extent_x, other_px - other_ext_x) < min(target_x + target_extent_x, other_px + other_ext_x) - Decimal("0.1000")
+            overlap_z = max(target_z - target_extent_z, other_pz - other_ext_z) < min(target_z + target_extent_z, other_pz + other_ext_z) - Decimal("0.1000")
+
+            if overlap_x and overlap_z:
+                raise ValueError(
+                    f"Colisión detectada: El rack se superpone con la estantería '{other_cuerpo}' "
+                    f"(X={other_px}m, Z={other_pz}m) en la posición (X={target_x}m, Z={target_z}m)."
+                )
+
+    @classmethod
+    def create_rack(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        rack_code: str,
+        rack_width_m: Any,
+        rack_height_m: Any,
+        rack_depth_m: Any,
+        levels_count: int,
+        max_weight_kg: Any,
+        zone_code: str = "GENERAL",
+        racks_count: int = 2,
+        positions_per_level: int = 3,
+        pos_x_m: Optional[Any] = None,
+        pos_z_m: Optional[Any] = None,
+        rotation_y_deg: Optional[Any] = None,
+        bays_count: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Crea de forma transaccional (ACID) una nueva estanteria / cuerpo de racks en el deposito,
+        generando todas sus posiciones y slots fisicos con precision Decimal (Numeric(14, 4)),
+        recalculando el volumen y capacidad total del deposito.
+        """
+        wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        if not wh:
+            raise ValueError(f"El deposito con ID '{warehouse_id}' no existe.")
+
+        rw_dec = Decimal(str(rack_width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        rh_dec = Decimal(str(rack_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        rd_dec = Decimal(str(rack_depth_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        mrw_dec = Decimal(str(max_weight_kg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        lev_cnt = max(1, int(levels_count))
+        rks_cnt = max(1, int(racks_count))
+        pos_cnt = max(1, int(positions_per_level))
+        bays_cnt = max(1, int(bays_count or racks_count or 2))
+        raw_cuerpo = rack_code.strip()
+        cuerpo_clean = raw_cuerpo.replace("Cuerpo", "").strip() or raw_cuerpo
+        cuerpo_name = raw_cuerpo if raw_cuerpo.upper().startswith("CUERPO") else f"Cuerpo {raw_cuerpo}"
+
+        c_char = cuerpo_clean[0].upper() if cuerpo_clean else "A"
+        c_idx = ord(c_char) - 65 if c_char.isalpha() else 0
+        default_x = Decimal(str(-14.0 + (c_idx % 5) * 7.0)).quantize(Decimal("0.0001"))
+        default_z = Decimal(str((c_idx // 5) * 8.0)).quantize(Decimal("0.0001"))
+
+        px_dec = Decimal(str(pos_x_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if pos_x_m is not None else default_x
+        pz_dec = Decimal(str(pos_z_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if pos_z_m is not None else default_z
+        rot_dec = Decimal(str(rotation_y_deg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP) if rotation_y_deg is not None else Decimal("0.0000")
+
+        if rw_dec <= Decimal("0") or rh_dec <= Decimal("0") or rd_dec <= Decimal("0") or mrw_dec <= Decimal("0"):
+            raise ValueError("Las dimensiones y capacidad del rack deben ser estrictamente positivas (> 0) / estrictamente positivo.")
+
+        # Verificar si ya existe este cuerpo en el deposito
+        existing = (
+            db.query(WarehouseSlot)
+            .filter(
+                WarehouseSlot.warehouse_id == warehouse_id,
+                (WarehouseSlot.cuerpo == raw_cuerpo) | (WarehouseSlot.cuerpo == cuerpo_clean) | (WarehouseSlot.cuerpo == cuerpo_name),
+            )
+            .first()
+        )
+        if existing:
+            raise ValueError(f"Ya existe una estanteria o cuerpo con el codigo '{rack_code}' en '{warehouse_id}'.")
+
+        # Límites del depósito
+        wh_half_w = (wh.width_m or Decimal("50.0000")) / Decimal("2.0")
+        wh_half_l = (wh.length_m or Decimal("100.0000")) / Decimal("2.0")
+        if rot_dec in (Decimal("90"), Decimal("270"), Decimal("90.0000"), Decimal("270.0000")):
+            extent_x = rw_dec / Decimal("2.0")
+            extent_z = (rd_dec * Decimal(str(bays_cnt))) / Decimal("2.0")
+        else:
+            extent_x = (rd_dec * Decimal(str(bays_cnt))) / Decimal("2.0")
+            extent_z = rw_dec / Decimal("2.0")
+
+        if (
+            (px_dec - extent_x < -wh_half_w)
+            or (px_dec + extent_x > wh_half_w)
+            or (pz_dec - extent_z < -wh_half_l)
+            or (pz_dec + extent_z > wh_half_l)
+        ):
+            raise ValueError(
+                f"Límites del depósito excedidos: El rack sobresale de las dimensiones del galpón "
+                f"({wh.width_m}m x {wh.length_m}m). Coordenadas propuestas: X={px_dec}m, Z={pz_dec}m."
+            )
+
+        # Validar colisión 2D contra otros racks existentes
+        cls._check_rack_collision(db, warehouse_id, cuerpo_clean, px_dec, pz_dec, extent_x, extent_z)
+
+        # Calculo de capacidades por nivel y por slot (ACID & Matematica Pura)
+        clear_height_per_level = (rh_dec / Decimal(str(lev_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        vol_per_slot = (rw_dec * rd_dec * clear_height_per_level / Decimal(str(pos_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        weight_per_level = (mrw_dec / Decimal(str(lev_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        peso_max_per_slot = (weight_per_level / Decimal(str(pos_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        total_rack_vol_m3 = (rw_dec * rh_dec * rd_dec * Decimal(str(rks_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        new_slots = []
+        for rk_idx in range(1, rks_cnt + 1):
+            rk_str = f"{rk_idx:02d}"
+            for niv in range(1, lev_cnt + 1):
+                for pos in range(1, pos_cnt + 1):
+                    slot_code = f"{cuerpo_clean}-{rk_str}-{niv:02d}-{pos:02d}"
+                    slot_id = f"{warehouse_id}:{slot_code}"
+
+                    slot = WarehouseSlot(
+                        id=slot_id,
+                        warehouse_id=warehouse_id,
+                        module_scope=wh.module_scope,
+                        slot_code=slot_code,
+                        cuerpo=cuerpo_clean,
+                        rack=rk_str,
+                        nivel=niv,
+                        posicion=pos,
+                        estado="VACIA",
+                        sku=None,
+                        lote=None,
+                        descripcion=f"Slot {slot_code} ({zone_code})",
+                        cantidad=Decimal("0.0000"),
+                        peso_actual_kg=Decimal("0.0000"),
+                        peso_max_kg=peso_max_per_slot,
+                        volumen_actual_m3=Decimal("0.0000"),
+                        volumen_max_m3=vol_per_slot,
+                        altura_m=clear_height_per_level,
+                        valor_estimado=Decimal("0.0000"),
+                        pallets_count=0,
+                        cajas_count=0,
+                        rack_width_m=rw_dec,
+                        rack_height_m=rh_dec,
+                        rack_depth_m=rd_dec,
+                        levels_count=lev_cnt,
+                        max_rack_weight_kg=mrw_dec,
+                        pos_x_m=px_dec,
+                        pos_z_m=pz_dec,
+                        rotation_y_deg=rot_dec,
+                        bays_count=bays_cnt,
+                        position_x=px_dec,
+                        position_y=Decimal("0.0000"),
+                        position_z=pz_dec,
+                        box_width_m=Decimal("0.4000"),
+                        box_height_m=Decimal("0.3000"),
+                        box_length_m=Decimal("0.4000"),
+                        unit_weight_kg=Decimal("0.0000"),
+                        units_count=0,
+                        material_retenido=False,
+                        material_calidad=False,
+                    )
+                    new_slots.append(slot)
+                    db.add(slot)
+
+        # Crear o actualizar registro en WarehouseRack
+        rack_entity = WarehouseRack(
+            id=f"{warehouse_id}:{cuerpo_clean}",
+            warehouse_id=warehouse_id,
+            rack_code=rack_code,
+            zone_code=zone_code,
+            pos_x_m=px_dec,
+            pos_z_m=pz_dec,
+            rotation_y_deg=rot_dec,
+            rack_width_m=rw_dec,
+            rack_height_m=rh_dec,
+            rack_depth_m=rd_dec,
+            levels_count=lev_cnt,
+            bays_count=bays_cnt,
+            max_weight_kg=mrw_dec,
+        )
+        db.add(rack_entity)
+
+        # Actualizar capacidad global del deposito
+        wh.volumen_max_m3 = (wh.volumen_max_m3 + total_rack_vol_m3).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        wh.capacidad_unidades += len(new_slots) * 10
+        wh.capacidad_peso_kg = (wh.capacidad_peso_kg + mrw_dec * Decimal(str(rks_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Rack '{rack_code}' creado exitosamente con {len(new_slots)} slots.",
+            "warehouse_id": warehouse_id,
+            "zone_code": zone_code,
+            "rack_code": rack_code,
+            "cuerpo": cuerpo_clean,
+            "slots_created": len(new_slots),
+            "pos_x_m": float(px_dec),
+            "pos_z_m": float(pz_dec),
+            "rotation_y_deg": float(rot_dec),
+            "rack_width_m": float(rw_dec),
+            "rack_height_m": float(rh_dec),
+            "rack_depth_m": float(rd_dec),
+            "levels_count": lev_cnt,
+            "bays_count": bays_cnt,
+            "max_rack_weight_kg": float(mrw_dec),
+            "clear_height_per_level_m": float(clear_height_per_level),
+            "volumen_por_slot_m3": float(vol_per_slot),
+            "peso_max_por_slot_kg": float(peso_max_per_slot),
+            "volumen_total_rack_m3": float(total_rack_vol_m3),
+        }
+
+    @classmethod
+    def transform_rack(
+        cls,
+        db: Session,
+        rack_identifier: str,
+        warehouse_id: Optional[str] = None,
+        pos_x_m: Optional[Any] = None,
+        pos_z_m: Optional[Any] = None,
+        rotation_y_deg: Optional[Any] = None,
+        rack_width_m: Optional[Any] = None,
+        rack_height_m: Optional[Any] = None,
+        rack_depth_m: Optional[Any] = None,
+        levels_count: Optional[int] = None,
+        max_weight_kg: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Traslada espacialmente (pos_x_m, pos_z_m, rotation_y_deg) y/o redimensiona un RACK ENTERO
+        (con todas sus cajas y lotes adentro) de forma transaccional (ACID), validando límites de nave y colisiones 2D.
+        """
+        wh_target = warehouse_id
+        cuerpo_target = rack_identifier
+        if ":" in rack_identifier:
+            parts = rack_identifier.split(":", 1)
+            if not wh_target:
+                wh_target = parts[0]
+            cuerpo_target = parts[1]
+
+        clean_c = cuerpo_target.replace("Cuerpo", "").strip() or cuerpo_target
+
+        query = db.query(WarehouseSlot)
+        if wh_target:
+            query = query.filter(WarehouseSlot.warehouse_id == wh_target)
+
+        slots = (
+            query.filter(
+                (WarehouseSlot.cuerpo == cuerpo_target)
+                | (WarehouseSlot.cuerpo == clean_c)
+                | (WarehouseSlot.cuerpo == f"Cuerpo {clean_c}")
+                | (WarehouseSlot.rack == cuerpo_target)
+                | (WarehouseSlot.id.like(f"%:{cuerpo_target}%"))
+            )
+            .all()
+        )
+
+        if not slots:
+            raise ValueError(f"No se encontraron estanterias ni slots para el rack '{rack_identifier}'.")
+
+        wh_id = slots[0].warehouse_id
+        wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
+        if not wh:
+            raise ValueError(f"El deposito asociado '{wh_id}' no existe.")
+
+        old_rw = slots[0].rack_width_m
+        old_rh = slots[0].rack_height_m
+        old_rd = slots[0].rack_depth_m
+        racks_count = len(set(s.rack for s in slots)) or 1
+        old_rack_total_vol = (old_rw * old_rh * old_rd * Decimal(str(racks_count))).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+
+        new_rw = (
+            Decimal(str(rack_width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if rack_width_m is not None
+            else old_rw
+        )
+        new_rh = (
+            Decimal(str(rack_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if rack_height_m is not None
+            else old_rh
+        )
+        new_rd = (
+            Decimal(str(rack_depth_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if rack_depth_m is not None
+            else old_rd
+        )
+        new_levels = (
+            max(1, int(levels_count))
+            if levels_count is not None
+            else (slots[0].levels_count or 4)
+        )
+        new_max_wt = (
+            Decimal(str(max_weight_kg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if max_weight_kg is not None
+            else slots[0].max_rack_weight_kg
+        )
+
+        if new_rw <= Decimal("0") or new_rh <= Decimal("0") or new_rd <= Decimal("0") or new_max_wt <= Decimal("0"):
+            raise ValueError("Las dimensiones y capacidad del rack deben ser estrictamente positivas (> 0) / estrictamente positivo.")
+
+        cur_px = slots[0].pos_x_m if slots[0].pos_x_m is not None else (slots[0].position_x or Decimal("0.0000"))
+        cur_pz = slots[0].pos_z_m if slots[0].pos_z_m is not None else (slots[0].position_z or Decimal("0.0000"))
+        cur_rot = getattr(slots[0], "rotation_y_deg", Decimal("0.0000")) or Decimal("0.0000")
+
+        new_px = (
+            Decimal(str(pos_x_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if pos_x_m is not None
+            else cur_px
+        )
+        new_pz = (
+            Decimal(str(pos_z_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if pos_z_m is not None
+            else cur_pz
+        )
+        new_rot = (
+            Decimal(str(rotation_y_deg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            if rotation_y_deg is not None
+            else cur_rot
+        )
+        bays = getattr(slots[0], "bays_count", 2) or racks_count or 2
+
+        # Límites del depósito
+        wh_half_w = (wh.width_m or Decimal("50.0000")) / Decimal("2.0")
+        wh_half_l = (wh.length_m or Decimal("100.0000")) / Decimal("2.0")
+
+        if new_rot in (Decimal("90"), Decimal("270"), Decimal("90.0000"), Decimal("270.0000")):
+            extent_x = new_rw / Decimal("2.0")
+            extent_z = (new_rd * Decimal(str(bays))) / Decimal("2.0")
+        else:
+            extent_x = (new_rd * Decimal(str(bays))) / Decimal("2.0")
+            extent_z = new_rw / Decimal("2.0")
+
+        if (
+            (new_px - extent_x < -wh_half_w)
+            or (new_px + extent_x > wh_half_w)
+            or (new_pz - extent_z < -wh_half_l)
+            or (new_pz + extent_z > wh_half_l)
+        ):
+            raise ValueError(
+                f"Límites del depósito excedidos: El rack sobresale de las dimensiones del galpón "
+                f"({wh.width_m}m x {wh.length_m}m). Coordenadas propuestas: X={new_px}m, Z={new_pz}m."
+            )
+
+        # Validar colisión 2D contra otros racks
+        cls._check_rack_collision(db, wh.id, slots[0].cuerpo, new_px, new_pz, extent_x, extent_z)
+
+        # Cálculo de capacidades por nivel y por slot
+        clear_height_per_level = (new_rh / Decimal(str(new_levels))).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+        vol_per_slot = (new_rw * new_rd * clear_height_per_level / Decimal("3.0")).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+        peso_max_per_slot = (new_max_wt / Decimal(str(new_levels)) / Decimal("3.0")).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+        new_rack_total_vol = (new_rw * new_rh * new_rd * Decimal(str(racks_count))).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+
+        delta_vol = new_rack_total_vol - old_rack_total_vol
+        wh.volumen_max_m3 = (wh.volumen_max_m3 + delta_vol).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+
+        deviations_found = 0
+        for s in slots:
+            s.rack_width_m = new_rw
+            s.rack_height_m = new_rh
+            s.rack_depth_m = new_rd
+            s.levels_count = new_levels
+            s.max_rack_weight_kg = new_max_wt
+            s.volumen_max_m3 = vol_per_slot
+            s.peso_max_kg = peso_max_per_slot
+            s.altura_m = clear_height_per_level
+            s.pos_x_m = new_px
+            s.pos_z_m = new_pz
+            s.rotation_y_deg = new_rot
+            s.position_x = new_px
+            s.position_z = new_pz
+            s.bays_count = bays
+
+            # Validación de alertas físicas en vivo si la posición está ocupada
+            if s.estado == "OCUPADA":
+                devs = []
+                if s.box_height_m > clear_height_per_level or s.altura_m > clear_height_per_level:
+                    devs.append("EXCESO_ALTURA")
+                if s.volumen_actual_m3 > s.volumen_max_m3:
+                    devs.append("EXCESO_VOLUMEN")
+                if s.peso_actual_kg > s.peso_max_kg:
+                    devs.append("EXCESO_PESO")
+                if devs:
+                    deviations_found += 1
+                    s.desvios = " + ".join(devs)
+                elif s.desvios in ("EXCESO_ALTURA", "EXCESO_VOLUMEN", "EXCESO_PESO"):
+                    s.desvios = None
+
+        # Actualizar o insertar fila en WarehouseRack
+        rack_entity = (
+            db.query(WarehouseRack)
+            .filter(
+                WarehouseRack.warehouse_id == wh.id,
+                (WarehouseRack.rack_code == slots[0].cuerpo)
+                | (WarehouseRack.rack_code == clean_c)
+                | (WarehouseRack.rack_code == f"Cuerpo {clean_c}"),
+            )
+            .first()
+        )
+        if rack_entity:
+            rack_entity.pos_x_m = new_px
+            rack_entity.pos_z_m = new_pz
+            rack_entity.rotation_y_deg = new_rot
+            rack_entity.rack_width_m = new_rw
+            rack_entity.rack_height_m = new_rh
+            rack_entity.rack_depth_m = new_rd
+            rack_entity.levels_count = new_levels
+            rack_entity.max_weight_kg = new_max_wt
+            rack_entity.bays_count = bays
+        else:
+            rack_entity = WarehouseRack(
+                id=f"{wh.id}:{slots[0].cuerpo}",
+                warehouse_id=wh.id,
+                rack_code=slots[0].cuerpo,
+                zone_code="GENERAL",
+                pos_x_m=new_px,
+                pos_z_m=new_pz,
+                rotation_y_deg=new_rot,
+                rack_width_m=new_rw,
+                rack_height_m=new_rh,
+                rack_depth_m=new_rd,
+                levels_count=new_levels,
+                bays_count=bays,
+                max_weight_kg=new_max_wt,
+            )
+            db.add(rack_entity)
+
+        all_wh_slots = db.query(WarehouseSlot).filter(WarehouseSlot.warehouse_id == wh.id).all()
+        occupied_vol = sum((s.volumen_actual_m3 for s in all_wh_slots), Decimal("0.0000"))
+        free_volume_m3 = (wh.volumen_max_m3 - occupied_vol).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Rack '{rack_identifier}' trasladado/redimensionado exitosamente en {wh.nombre}.",
+            "rack_id": rack_identifier,
+            "rack_identifier": rack_identifier,
+            "warehouse_id": wh.id,
+            "cuerpo": slots[0].cuerpo,
+            "total_slots_actualizados": len(slots),
+            "pos_x_m": float(new_px),
+            "pos_z_m": float(new_pz),
+            "position_x": float(new_px),
+            "position_y": 0.0,
+            "position_z": float(new_pz),
+            "rotation_y_deg": float(new_rot),
+            "rack_width_m": float(new_rw),
+            "rack_height_m": float(new_rh),
+            "rack_depth_m": float(new_rd),
+            "levels_count": new_levels,
+            "bays_count": bays,
+            "max_weight_kg": float(new_max_wt),
+            "clear_height_per_level_m": float(clear_height_per_level),
+            "volumen_por_slot_m3": float(vol_per_slot),
+            "peso_max_por_slot_kg": float(peso_max_per_slot),
+            "volumen_total_rack_m3": float(new_rack_total_vol),
+            "warehouse_volumen_max_m3": float(wh.volumen_max_m3),
+            "warehouse_volumen_libre_m3": float(free_volume_m3),
+            "desvios_detectados": deviations_found,
+        }
+
+    @classmethod
+    def update_rack_by_id(
+        cls,
+        db: Session,
+        rack_id: str,
+        warehouse_id: Optional[str] = None,
+        rack_width_m: Optional[Any] = None,
+        rack_height_m: Optional[Any] = None,
+        rack_depth_m: Optional[Any] = None,
+        levels_count: Optional[int] = None,
+        max_weight_kg: Optional[Any] = None,
+        position_x: Optional[Any] = None,
+        position_y: Optional[Any] = None,
+        position_z: Optional[Any] = None,
+        pos_x_m: Optional[Any] = None,
+        pos_z_m: Optional[Any] = None,
+        rotation_y_deg: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Alias retrocompatible que delega en transform_rack.
+        """
+        target_px = pos_x_m if pos_x_m is not None else position_x
+        target_pz = pos_z_m if pos_z_m is not None else position_z
+        return cls.transform_rack(
+            db=db,
+            rack_identifier=rack_id,
+            warehouse_id=warehouse_id,
+            pos_x_m=target_px,
+            pos_z_m=target_pz,
+            rotation_y_deg=rotation_y_deg,
+            rack_width_m=rack_width_m,
+            rack_height_m=rack_height_m,
+            rack_depth_m=rack_depth_m,
+            levels_count=levels_count,
+            max_weight_kg=max_weight_kg,
+        )
+
+    @classmethod
+    def get_racks(cls, db: Session, warehouse_id: str) -> List[Dict[str, Any]]:
+        """
+        Devuelve el listado consolidado de estructuras de Rack en el almacén con sus coordenadas de planta.
+        """
+        slots = db.query(WarehouseSlot).filter(WarehouseSlot.warehouse_id == warehouse_id).all()
+        by_cuerpo: Dict[str, List[WarehouseSlot]] = {}
+        for s in slots:
+            by_cuerpo.setdefault(s.cuerpo, []).append(s)
+
+        res = []
+        for cuerpo, c_slots in by_cuerpo.items():
+            sample = c_slots[0]
+            tot = len(c_slots)
+            ocu = sum(1 for s in c_slots if s.estado == "OCUPADA")
+            vac = sum(1 for s in c_slots if s.estado == "VACIA")
+            blo = sum(1 for s in c_slots if s.estado == "BLOQUEADA")
+            c_idx = ord(cuerpo[0].upper()) - 65 if cuerpo else 0
+            if sample.pos_x_m is not None:
+                px = float(sample.pos_x_m)
+            elif sample.position_x is not None:
+                px = float(sample.position_x)
+            else:
+                px = float(-14.0 + c_idx * 7.0)
+
+            if sample.pos_z_m is not None:
+                pz = float(sample.pos_z_m)
+            elif sample.position_z is not None:
+                pz = float(sample.position_z)
+            else:
+                pz = 0.0
+
+            rot = float(getattr(sample, "rotation_y_deg", 0.0) or 0.0)
+            res.append({
+                "rack_id": f"{warehouse_id}:{cuerpo}",
+                "cuerpo": cuerpo,
+                "rack_code": f"Cuerpo {cuerpo}" if not cuerpo.startswith("Cuerpo") else cuerpo,
+                "warehouse_id": warehouse_id,
+                "pos_x_m": px,
+                "pos_z_m": pz,
+                "rotation_y_deg": rot,
+                "rack_width_m": float(sample.rack_width_m),
+                "rack_height_m": float(sample.rack_height_m),
+                "rack_depth_m": float(sample.rack_depth_m),
+                "levels_count": sample.levels_count,
+                "bays_count": getattr(sample, "bays_count", 2) or 2,
+                "max_weight_kg": float(sample.max_rack_weight_kg),
+                "total_slots": tot,
+                "occupied_slots": ocu,
+                "free_slots": vac,
+                "blocked_slots": blo,
+            })
+        return res
+
+    @classmethod
     def update_rack_dimensions(
         cls,
         db: Session,
@@ -577,11 +1207,15 @@ class DigitalTwinService:
         Actualiza la geometría paramétrica de toda una estantería / cuerpo
         y evalúa en vivo las reglas de exceso de altura, volumen y sobrepeso.
         """
+        if float(rack_width_m) <= 0 or float(rack_height_m) <= 0 or float(rack_depth_m) <= 0 or float(max_rack_weight_kg) <= 0 or int(levels_count) <= 0:
+            raise ValueError("Las dimensiones y capacidad del rack deben ser estrictamente positivas (> 0) / estrictamente positivo.")
+
+        clean_c = cuerpo.replace("Cuerpo", "").strip() or cuerpo
         slots = (
             db.query(WarehouseSlot)
             .filter(
                 WarehouseSlot.warehouse_id == warehouse_id,
-                WarehouseSlot.cuerpo == cuerpo,
+                (WarehouseSlot.cuerpo == cuerpo) | (WarehouseSlot.cuerpo == clean_c) | (WarehouseSlot.cuerpo == f"Cuerpo {clean_c}"),
             )
             .all()
         )
@@ -1313,6 +1947,14 @@ class DigitalTwinService:
                 "rack_depth_m": float(getattr(s, "rack_depth_m", 1.2)),
                 "levels_count": getattr(s, "levels_count", 4),
                 "max_rack_weight_kg": float(getattr(s, "max_rack_weight_kg", 3000.0)),
+                # Coordenadas Espaciales Reales del Rack
+                "pos_x_m": float(s.pos_x_m) if getattr(s, "pos_x_m", None) is not None else (float(s.position_x) if getattr(s, "position_x", None) is not None else None),
+                "pos_z_m": float(s.pos_z_m) if getattr(s, "pos_z_m", None) is not None else (float(s.position_z) if getattr(s, "position_z", None) is not None else None),
+                "rotation_y_deg": float(getattr(s, "rotation_y_deg", 0.0) or 0.0),
+                "bays_count": getattr(s, "bays_count", 2) or 2,
+                "position_x": float(s.position_x) if getattr(s, "position_x", None) is not None else (float(s.pos_x_m) if getattr(s, "pos_x_m", None) is not None else None),
+                "position_y": float(s.position_y) if getattr(s, "position_y", None) is not None else 0.0,
+                "position_z": float(s.position_z) if getattr(s, "position_z", None) is not None else (float(s.pos_z_m) if getattr(s, "pos_z_m", None) is not None else None),
                 # Geometría Paramétrica de Caja
                 "box_width_m": float(getattr(s, "box_width_m", 0.4)),
                 "box_height_m": float(getattr(s, "box_height_m", 0.3)),
@@ -1509,7 +2151,7 @@ class DigitalTwinService:
         source_slot_code: str,
         target_warehouse_id: str,
         target_slot_code: str,
-        cantidad_a_mover: Optional[float] = None,
+        cantidad_a_mover: Optional[Union[Decimal, float]] = None,
         mover_lote_completo: bool = True,
     ) -> Dict[str, Any]:
         src = (

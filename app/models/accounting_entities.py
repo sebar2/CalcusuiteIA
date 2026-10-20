@@ -112,14 +112,16 @@ class JournalEntry(Base):
     total_debe: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     total_haber: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     balanceado: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    cost_center_id: Mapped[Optional[int]] = mapped_column(ForeignKey("centros_costo.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     lines: Mapped[List["JournalLine"]] = relationship(back_populates="entry_rel", cascade="all, delete-orphan")
+    cost_center_rel: Mapped[Optional["CentroCosto"]] = relationship("CentroCosto", foreign_keys=[cost_center_id])
 
 
 class JournalLine(Base):
     """
-    Línea individual de imputación contable (Cuenta, Debe, Haber).
+    Línea individual de imputación contable (Cuenta, Debe, Haber, Centro de Costo).
     """
     __tablename__ = "journal_lines"
 
@@ -129,8 +131,14 @@ class JournalLine(Base):
     cuenta_nombre: Mapped[str] = mapped_column(String(150), nullable=False)
     debe: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.00"), nullable=False)
     haber: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal("0.00"), nullable=False)
+    cost_center_id: Mapped[Optional[int]] = mapped_column(ForeignKey("centros_costo.id"), nullable=True, index=True)
 
     entry_rel: Mapped["JournalEntry"] = relationship(back_populates="lines")
+    cost_center_rel: Mapped[Optional["CentroCosto"]] = relationship("CentroCosto", foreign_keys=[cost_center_id])
+
+
+# Alias universal para interoperabilidad
+JournalItem = JournalLine
 
 
 class SystemUser(Base):
@@ -198,4 +206,3 @@ class CollectionCase(Base):
         lazy="selectin"
     )
     cliente_rel: Mapped[Optional["Client"]] = relationship("Client", foreign_keys=[cliente_id])
-

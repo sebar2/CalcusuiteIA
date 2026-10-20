@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 from app.database.session import init_db, SessionLocal
 from app.services.etl_service import ETLService
@@ -23,6 +24,7 @@ from app.api.v1.integrations import router as integrations_router
 from app.api.v1.omnichannel import router as omnichannel_router
 from app.api.v1.tenants import router as tenants_router
 from app.api.v1.digital_twin import router as digital_twin_router
+from app.api.v1.fpa import router as fpa_router
 from app.services.security_agent import security_agent
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -142,7 +144,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={
             "error": "ValidationError",
             "status_code": status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "detail": exc.errors(),
+            "detail": jsonable_encoder(exc.errors()),
             "path": str(request.url)
         }
     )
@@ -199,21 +201,19 @@ app.include_router(integrations_router)
 app.include_router(omnichannel_router)
 app.include_router(tenants_router)
 app.include_router(digital_twin_router, prefix="/api/v1")
+app.include_router(fpa_router, prefix="/api/v1")
 
-# WebSocket Hub para Gemelo Digital 3D en /ws/digital-twin
-from app.api.v1.digital_twin import ws_manager
-from fastapi import WebSocket, WebSocketDisconnect
+# WebSocket Hub para Gemelo Digital 3D en /api/v1/digital-twin/ws y /ws/digital-twin
+from app.api.v1.digital_twin import ws_manager, handle_digital_twin_ws
+from fastapi import WebSocket
+
+@app.websocket("/api/v1/digital-twin/ws")
+async def api_v1_digital_twin_ws(websocket: WebSocket):
+    await handle_digital_twin_ws(websocket)
 
 @app.websocket("/ws/digital-twin")
 async def root_digital_twin_ws(websocket: WebSocket):
-    await ws_manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
-    except Exception:
-        ws_manager.disconnect(websocket)
+    await handle_digital_twin_ws(websocket)
 
 
 

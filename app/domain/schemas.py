@@ -2368,6 +2368,54 @@ class WarehouseDimensionsUpdate(BaseModel):
     clear_height_m: float = Field(..., gt=0, description="Altura libre de techo en metros")
 
 
+class CreateRackPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    warehouse_id: str = Field(..., min_length=1, description="ID del deposito donde se creara el rack")
+    zone_code: Optional[str] = Field(default="GENERAL", description="Codigo de zona del almacen")
+    rack_code: str = Field(..., min_length=1, max_length=50, description="Codigo del rack o cuerpo")
+    rack_width_m: Decimal = Field(default=Decimal("2.4000"), gt=Decimal("0"), description="Ancho estructural en metros")
+    rack_height_m: Decimal = Field(default=Decimal("6.0000"), gt=Decimal("0"), description="Altura total en metros")
+    rack_depth_m: Decimal = Field(default=Decimal("1.2000"), gt=Decimal("0"), description="Profundidad de estanteria en metros")
+    levels_count: int = Field(default=4, ge=1, le=20, description="Cantidad de niveles")
+    max_weight_kg: Decimal = Field(default=Decimal("3000.0000"), gt=Decimal("0"), description="Capacidad maxima de carga en kg")
+    racks_count: int = Field(default=2, ge=1, le=10, description="Cantidad de bastidores o estanterias en el cuerpo")
+    bays_count: Optional[int] = Field(default=2, ge=1, le=10, description="Cantidad de bastidores o bahías")
+    positions_per_level: int = Field(default=3, ge=1, le=10, description="Cantidad de posiciones por nivel")
+    pos_x_m: Optional[Decimal] = Field(default=Decimal("0.0000"), description="Coordenada X en metros dentro del galpon")
+    pos_z_m: Optional[Decimal] = Field(default=Decimal("0.0000"), description="Coordenada Z en metros dentro del galpon")
+    rotation_y_deg: Optional[Decimal] = Field(default=Decimal("0.0000"), description="Orientacion en grados (0, 90, 180, 270)")
+
+
+class RackUpdatePayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    warehouse_id: Optional[str] = Field(None, description="ID del deposito (opcional si se infiere del rack o cuerpo)")
+    rack_width_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Ancho de estanteria en metros (> 0)")
+    rack_height_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Altura de estanteria en metros (> 0)")
+    rack_depth_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Profundidad de estanteria en metros (> 0)")
+    levels_count: Optional[int] = Field(None, ge=1, le=20, description="Cantidad de niveles verticales")
+    max_weight_kg: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Capacidad maxima de carga en kg (> 0)")
+    bays_count: Optional[int] = Field(None, ge=1, le=10, description="Cantidad de bastidores o bahias")
+    pos_x_m: Optional[Decimal] = Field(None, description="Coordenada X en metros para reubicacion espacial")
+    pos_z_m: Optional[Decimal] = Field(None, description="Coordenada Z en metros para reubicacion espacial")
+    rotation_y_deg: Optional[Decimal] = Field(None, description="Orientacion en grados (0, 90, 180, 270)")
+    position_x: Optional[Decimal] = Field(None, description="Coordenada X en metros para reubicacion espacial")
+    position_y: Optional[Decimal] = Field(None, description="Coordenada Y en metros para reubicacion espacial")
+    position_z: Optional[Decimal] = Field(None, description="Coordenada Z en metros para reubicacion espacial")
+
+
+class RackTransformPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    warehouse_id: Optional[str] = Field(None, description="ID del deposito (opcional si se infiere del rack o cuerpo)")
+    pos_x_m: Optional[Decimal] = Field(None, description="Nueva coordenada X en metros dentro del piso del galpon")
+    pos_z_m: Optional[Decimal] = Field(None, description="Nueva coordenada Z en metros dentro del piso del galpon")
+    rotation_y_deg: Optional[Decimal] = Field(None, description="Orientacion en grados (0, 90, 180, 270)")
+    rack_width_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Ancho de estanteria en metros (> 0)")
+    rack_height_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Altura de estanteria en metros (> 0)")
+    rack_depth_m: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Profundidad de estanteria en metros (> 0)")
+    levels_count: Optional[int] = Field(None, ge=1, le=20, description="Cantidad de niveles verticales")
+    max_weight_kg: Optional[Decimal] = Field(None, gt=Decimal("0"), description="Capacidad maxima de carga en kg (> 0)")
+
+
 class RackDimensionsUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     rack_width_m: float = Field(..., gt=0, description="Ancho de sección del rack en metros")

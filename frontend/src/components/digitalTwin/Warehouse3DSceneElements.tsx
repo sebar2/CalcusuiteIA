@@ -184,7 +184,10 @@ const WarehouseNaveMesh: React.FC<{
   width: number;
   length: number;
   clearHeight: number;
-}> = React.memo(({ width, length, clearHeight }) => {
+  isMoveRackModeActive?: boolean;
+  onFloorPointerMove?: (x: number, z: number) => void;
+  onFloorClick?: (x: number, z: number) => void;
+}> = React.memo(({ width, length, clearHeight, isMoveRackModeActive, onFloorPointerMove, onFloorClick }) => {
   // Generar marcas viales (franjas amarillas de circulación en pasillos y perímetros)
   const aisleStripes = useMemo(() => {
     const stripes: Array<{ x: number; z: number; w: number; l: number; color: string }> = [];
@@ -209,8 +212,24 @@ const WarehouseNaveMesh: React.FC<{
 
   return (
     <group position={[0, 0, 0]}>
-      {/* 1. Piso de concreto pulido industrial GRIS CLARO PBR (sin fondo negro vacío) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      {/* 1. Piso de concreto pulido industrial GRIS CLARO PBR */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0, 0]}
+        receiveShadow
+        onPointerMove={(e) => {
+          if (isMoveRackModeActive && onFloorPointerMove) {
+            e.stopPropagation();
+            onFloorPointerMove(e.point.x, e.point.z);
+          }
+        }}
+        onClick={(e) => {
+          if (isMoveRackModeActive && onFloorClick) {
+            e.stopPropagation();
+            onFloorClick(e.point.x, e.point.z);
+          }
+        }}
+      >
         <planeGeometry args={[width * 1.05, length * 1.05]} />
         <meshStandardMaterial
           color="#cbd5e1"
@@ -221,6 +240,55 @@ const WarehouseNaveMesh: React.FC<{
 
       {/* Grid Helper sutil para alineación y escala técnica */}
       <gridHelper args={[Math.max(width, length), 28, '#0284c7', '#94a3b8']} position={[0, 0.005, 0]} />
+
+      {/* Regla métrica y marcas en el suelo cada 10 metros para referencia espacial clara */}
+      {[-20, -10, 0, 10, 20].map((xVal) => (
+        <group key={`ruler-x-${xVal}`}>
+          <mesh position={[xVal, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.06, length * 0.85]} />
+            <meshBasicMaterial color="#0284c7" transparent opacity={0.25} />
+          </mesh>
+          <CanvasLabelSprite
+            text={`X: ${xVal > 0 ? '+' : ''}${xVal}m`}
+            position={[xVal, 0.06, -length / 2 + 3.2]}
+            height={0.32}
+            color="#0284c7"
+            background="rgba(15, 23, 42, 0.85)"
+            border="#38bdf8"
+          />
+        </group>
+      ))}
+
+      {[-20, -10, 0, 10, 20].map((zVal) => (
+        <group key={`ruler-z-${zVal}`}>
+          <mesh position={[0, 0.012, zVal]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[width * 0.85, 0.06]} />
+            <meshBasicMaterial color="#0284c7" transparent opacity={0.25} />
+          </mesh>
+          <CanvasLabelSprite
+            text={`Z: ${zVal > 0 ? '+' : ''}${zVal}m`}
+            position={[-width / 2 + 3.5, 0.06, zVal]}
+            height={0.32}
+            color="#0284c7"
+            background="rgba(15, 23, 42, 0.85)"
+            border="#38bdf8"
+          />
+        </group>
+      ))}
+
+      {/* Marcador origen de coordenadas (0, 0)m */}
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.5, 0.7, 32]} />
+        <meshBasicMaterial color="#00f3ff" transparent opacity={0.7} />
+      </mesh>
+      <CanvasLabelSprite
+        text="ORIGEN (0,0)m"
+        position={[0, 0.12, 0]}
+        height={0.32}
+        color="#00f3ff"
+        background="rgba(8, 47, 73, 0.9)"
+        border="#00f3ff"
+      />
 
       {/* Franjas viales industriales reflectivas en el suelo */}
       {aisleStripes.map((s, idx) => (
@@ -344,6 +412,21 @@ const WarehouseNaveMesh: React.FC<{
   );
 });
 
+// Utilidad para mapear códigos de cuerpo ('A', 'B', 'Cuerpo I', 'I', '1') a índices espaciales 3D
+export const getCuerpoIndex = (cuerpo: string): number => {
+  if (!cuerpo) return 0;
+  const clean = cuerpo.replace(/^Cuerpo\s*/i, '').trim();
+  if (clean.length > 0) {
+    const code = clean.toUpperCase().charCodeAt(0);
+    if (code >= 65 && code <= 90) {
+      return code - 65;
+    }
+    const num = parseInt(clean.replace(/\D/g, ''), 10);
+    if (!isNaN(num) && num > 0) return num - 1;
+  }
+  return Math.max(0, cuerpo.toUpperCase().charCodeAt(0) - 65);
+};
+
 // Estructuras de Racks Industriales: Montantes azules, travesaños naranjas y malla trasera
 const RackStructures: React.FC<{
   cuerpos: string[];
@@ -360,13 +443,18 @@ const RackStructures: React.FC<{
   const beamColor = useMemo(() => new THREE.Color(), []);
   const meshColor = useMemo(() => new THREE.Color(), []);
 
-  // Recolectar datos dimensionales de todos los racks
+  // Recolectar datos dimensionales y espaciales de todos los racks
   const { allRacks, totalPosts, totalBeams, totalBacks } = useMemo(() => {
     const list: Array<{
       cuerpo: string;
       rackNum: number;
       sample: DigitalTwinSlot;
-      posX: number;
+      basePosX: number;
+      basePosZ: number;
+      bayCenterX: number;
+      bayCenterZ: number;
+      localBayX: number;
+      rotRad: number;
       rw: number;
       rh: number;
       rd: number;
@@ -384,7 +472,7 @@ const RackStructures: React.FC<{
       const cuerpoSlots = slotsByCuerpo[cuerpo] || [];
       if (cuerpoSlots.length === 0) return;
       const sample = cuerpoSlots[0];
-      const cuerpoIdx = Math.max(0, cuerpo.charCodeAt(0) - 65);
+      const cuerpoIdx = getCuerpoIndex(cuerpo);
       const rw = sample.rack_width_m || 2.4;
       const rh = sample.rack_height_m || 6.0;
       const rd = sample.rack_depth_m || 1.2;
@@ -394,9 +482,38 @@ const RackStructures: React.FC<{
       const isSelected = selectedCuerpo === cuerpo;
       const isMuted = selectedCuerpo !== 'ALL' && selectedCuerpo !== cuerpo;
 
+      const basePosX = (sample.pos_x_m !== undefined && sample.pos_x_m !== null)
+        ? sample.pos_x_m
+        : (sample.position_x !== undefined && sample.position_x !== null ? sample.position_x : -14 + cuerpoIdx * 7.0);
+      const basePosZ = (sample.pos_z_m !== undefined && sample.pos_z_m !== null)
+        ? sample.pos_z_m
+        : (sample.position_z !== undefined && sample.position_z !== null ? sample.position_z : 0);
+      const rotDeg = sample.rotation_y_deg || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+      const baysCount = sample.bays_count || rackNums.length || 2;
+
       rackNums.forEach((rackNum) => {
-        const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-        list.push({ cuerpo, rackNum, sample, posX, rw, rh, rd, lev, levelH, isSelected, isMuted });
+        const localBayX = (rackNum - 1 - (baysCount - 1) / 2) * (rd + 0.1);
+        const bayCenterX = basePosX + localBayX * Math.cos(rotRad);
+        const bayCenterZ = basePosZ + localBayX * Math.sin(rotRad);
+        list.push({
+          cuerpo,
+          rackNum,
+          sample,
+          basePosX,
+          basePosZ,
+          bayCenterX,
+          bayCenterZ,
+          localBayX,
+          rotRad,
+          rw,
+          rh,
+          rd,
+          lev,
+          levelH,
+          isSelected,
+          isMuted,
+        });
         postsCount += 4;
         beamsCount += (lev + 1) * 2; // Doble travesaño (frontal y trasero)
         backsCount += 1;
@@ -417,12 +534,18 @@ const RackStructures: React.FC<{
     let mIdx = 0;
 
     allRacks.forEach((rack) => {
-      const { posX, rw, rh, rd, lev, levelH, isSelected, isMuted } = rack;
+      const { basePosX, basePosZ, localBayX, rotRad, rw, rh, rd, lev, levelH, isSelected, isMuted } = rack;
 
       // 4 Montantes verticales metálicos perforados (Azul Industrial #0284c7)
       [-rd / 2, rd / 2].forEach((xOff) => {
         [-rw / 2, rw / 2].forEach((zOff) => {
-          dummy.position.set(posX + xOff, rh / 2, zOff);
+          const localX = localBayX + xOff;
+          const localZ = zOff;
+          const worldX = basePosX + localX * Math.cos(rotRad) - localZ * Math.sin(rotRad);
+          const worldZ = basePosZ + localX * Math.sin(rotRad) + localZ * Math.cos(rotRad);
+
+          dummy.position.set(worldX, rh / 2, worldZ);
+          dummy.rotation.set(0, rotRad, 0);
           dummy.scale.set(0.08, rh, 0.08);
           dummy.updateMatrix();
           postsMesh.setMatrixAt(pIdx, dummy.matrix);
@@ -441,7 +564,12 @@ const RackStructures: React.FC<{
       // Travesaños horizontales dobles de alta resistencia (Naranja Industrial #ea580c)
       for (let k = 0; k <= lev; k++) {
         // Travesaño frontal
-        dummy.position.set(posX + rd / 2, k * levelH + 0.04, 0);
+        const frontLocalX = localBayX + rd / 2;
+        const frontWorldX = basePosX + frontLocalX * Math.cos(rotRad);
+        const frontWorldZ = basePosZ + frontLocalX * Math.sin(rotRad);
+
+        dummy.position.set(frontWorldX, k * levelH + 0.04, frontWorldZ);
+        dummy.rotation.set(0, rotRad, 0);
         dummy.scale.set(0.06, 0.09, rw);
         dummy.updateMatrix();
         beamsMesh.setMatrixAt(bIdx, dummy.matrix);
@@ -456,7 +584,12 @@ const RackStructures: React.FC<{
         bIdx++;
 
         // Travesaño trasero
-        dummy.position.set(posX - rd / 2, k * levelH + 0.04, 0);
+        const backLocalX = localBayX - rd / 2;
+        const backWorldX = basePosX + backLocalX * Math.cos(rotRad);
+        const backWorldZ = basePosZ + backLocalX * Math.sin(rotRad);
+
+        dummy.position.set(backWorldX, k * levelH + 0.04, backWorldZ);
+        dummy.rotation.set(0, rotRad, 0);
         dummy.scale.set(0.06, 0.09, rw);
         dummy.updateMatrix();
         beamsMesh.setMatrixAt(bIdx, dummy.matrix);
@@ -472,7 +605,12 @@ const RackStructures: React.FC<{
       }
 
       // Malla de seguridad posterior anticaída de palets
-      dummy.position.set(posX - rd / 2 - 0.02, rh / 2, 0);
+      const meshLocalX = localBayX - rd / 2 - 0.02;
+      const meshWorldX = basePosX + meshLocalX * Math.cos(rotRad);
+      const meshWorldZ = basePosZ + meshLocalX * Math.sin(rotRad);
+
+      dummy.position.set(meshWorldX, rh / 2, meshWorldZ);
+      dummy.rotation.set(0, rotRad, 0);
       dummy.scale.set(0.01, rh * 0.98, rw * 0.98);
       dummy.updateMatrix();
       backsMesh.setMatrixAt(mIdx, dummy.matrix);
@@ -524,28 +662,65 @@ const RackStructures: React.FC<{
         <meshStandardMaterial roughness={0.8} metalness={0.2} transparent opacity={0.3} />
       </instancedMesh>
 
-      {/* Hitboxes livianas para selección y etiquetas 3D nativas */}
+      {/* Hitboxes y Raycasting interactivo para selección de Racks/Cuerpos */}
       {allRacks.map((rack) => (
         <group
           key={`${rack.cuerpo}-${rack.rackNum}`}
-          position={[rack.posX, 0, 0]}
+          position={[rack.bayCenterX, 0, rack.bayCenterZ]}
+          rotation={[0, rack.rotRad, 0]}
           onClick={(e) => {
             e.stopPropagation();
             onSelectRackCuerpo(rack.cuerpo, rack.sample);
           }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onSelectRackCuerpo(rack.cuerpo, rack.sample);
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = 'auto';
+          }}
         >
+          {/* Malla invisible para capturar raycasting preciso de puntero */}
           <mesh position={[0, rack.rh / 2, 0]}>
-            <boxGeometry args={[rack.rd * 1.1, rack.rh, rack.rw * 1.1]} />
+            <boxGeometry args={[rack.rd * 1.25, rack.rh * 1.05, rack.rw * 1.05]} />
             <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           </mesh>
+
+          {/* Contorno Neón / Cian Eléctrico (#00f3ff) al estar seleccionado */}
+          {rack.isSelected && (
+            <group position={[0, rack.rh / 2, 0]}>
+              <mesh>
+                <boxGeometry args={[rack.rd * 1.26, rack.rh * 1.06, rack.rw * 1.06]} />
+                <meshBasicMaterial
+                  color="#00f3ff"
+                  wireframe
+                  transparent
+                  opacity={0.95}
+                />
+              </mesh>
+              <mesh>
+                <boxGeometry args={[rack.rd * 1.24, rack.rh * 1.04, rack.rw * 1.04]} />
+                <meshBasicMaterial
+                  color="#06b6d4"
+                  transparent
+                  opacity={0.12}
+                  depthWrite={false}
+                />
+              </mesh>
+            </group>
+          )}
 
           {(rack.isSelected || rack.rackNum === 1) && (
             <CanvasLabelSprite
               text={`Cuerpo ${rack.cuerpo} - R${rack.rackNum}`}
               position={[0, rack.rh + 0.45, 0]}
-              color={rack.isSelected ? '#7dd3fc' : '#cbd5e1'}
-              background={rack.isSelected ? 'rgba(8, 47, 73, 0.92)' : 'rgba(15, 23, 42, 0.88)'}
-              border={rack.isSelected ? '#38bdf8' : '#334155'}
+              color={rack.isSelected ? '#00f3ff' : '#cbd5e1'}
+              background={rack.isSelected ? 'rgba(8, 47, 73, 0.95)' : 'rgba(15, 23, 42, 0.88)'}
+              border={rack.isSelected ? '#00f3ff' : '#334155'}
             />
           )}
         </group>
@@ -578,36 +753,51 @@ const InstancedTerrestrialCargo: React.FC<{
     const palletsMesh = palletsMeshRef.current;
 
     occupiedSlots.forEach((slot, i) => {
-      const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
+      const cuerpoIdx = getCuerpoIndex(slot.cuerpo);
       const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
       const rw = slot.rack_width_m || 2.4;
       const rh = slot.rack_height_m || 6.0;
       const rd = slot.rack_depth_m || 1.2;
       const lev = Math.max(1, slot.levels_count || 4);
       const levelH = rh / lev;
+      const baysCount = slot.bays_count || 2;
+
+      const basePosX = (slot.pos_x_m !== undefined && slot.pos_x_m !== null)
+        ? slot.pos_x_m
+        : (slot.position_x !== undefined && slot.position_x !== null ? slot.position_x : -14 + cuerpoIdx * 7.0);
+      const basePosZ = (slot.pos_z_m !== undefined && slot.pos_z_m !== null)
+        ? slot.pos_z_m
+        : (slot.position_z !== undefined && slot.position_z !== null ? slot.position_z : 0);
+      const rotDeg = slot.rotation_y_deg || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
 
       const bw = Math.min(rw / 3.1, Math.max(0.2, slot.box_width_m || 0.4));
       const bh = Math.max(0.2, slot.box_height_m || 0.3);
       const bl = Math.min(rd * 0.9, Math.max(0.2, slot.box_length_m || 0.4));
 
-      const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-      const posZ = (slot.posicion - 2) * (rw / 3.0);
+      const localBayX = (rackNum - 1 - (baysCount - 1) / 2) * (rd + 0.1);
+      const localSlotZ = (slot.posicion - 2) * (rw / 3.0);
+
+      const worldX = basePosX + localBayX * Math.cos(rotRad) - localSlotZ * Math.sin(rotRad);
+      const worldZ = basePosZ + localBayX * Math.sin(rotRad) + localSlotZ * Math.cos(rotRad);
 
       // 1. Pallet Europeo de base de madera (altura 0.08 m)
-      dummy.position.set(posX, (slot.nivel - 1) * levelH + 0.06, posZ);
+      dummy.position.set(worldX, (slot.nivel - 1) * levelH + 0.06, worldZ);
+      dummy.rotation.set(0, rotRad, 0);
       dummy.scale.set(Math.min(rd * 0.95, bw * 1.08), 0.08, Math.min(rw / 3.05, bl * 1.08));
       dummy.updateMatrix();
       palletsMesh.setMatrixAt(i, dummy.matrix);
       palletsMesh.setColorAt(i, palletColor);
 
       // 2. Bloque de Cajas de Cartón Kraft Corrugado sobre el pallet
-      dummy.position.set(posX, (slot.nivel - 1) * levelH + 0.12 + bh / 2, posZ);
+      dummy.position.set(worldX, (slot.nivel - 1) * levelH + 0.12 + bh / 2, worldZ);
+      dummy.rotation.set(0, rotRad, 0);
       dummy.scale.set(bw, bh, bl);
       dummy.updateMatrix();
       boxesMesh.setMatrixAt(i, dummy.matrix);
 
-      // Clasificación de color PBR: Cartón kraft natural, eliminando cajas fucsias sobre negro
-      let hexColor = '#b45309'; // Kraft marrón corrugado natural por defecto
+      // Clasificación de color PBR: Cartón kraft natural
+      let hexColor = '#b45309';
 
       const isHighlightedRisk = highlightedSlotIds.includes(slot.id);
       const isMutedCuerpo = selectedCuerpo !== 'ALL' && slot.cuerpo !== selectedCuerpo;
@@ -615,7 +805,7 @@ const InstancedTerrestrialCargo: React.FC<{
       if (slot.id === selectedSlotId) {
         hexColor = '#38bdf8'; // Cyan brillante posición seleccionada
       } else if (isHighlightedRisk) {
-        hexColor = '#ef4444'; // Rojo brillante de alerta (activado por el ojo en Riesgos)
+        hexColor = '#ef4444'; // Rojo brillante de alerta
       } else if (slot.reservation_type === 'HARD_RESERVED') {
         hexColor = '#2563eb'; // Azul eléctrico Licitaciones / SICE
       } else if (slot.reservation_type === 'SOFT_RESERVED') {
@@ -699,19 +889,33 @@ const EmptyAndBlockedSlotsMesh: React.FC<{
     const mesh = meshRef.current;
 
     visibleSlots.forEach((slot, i) => {
-      const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
+      const cuerpoIdx = getCuerpoIndex(slot.cuerpo);
       const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
       const rw = slot.rack_width_m || 2.4;
       const rh = slot.rack_height_m || 6.0;
       const rd = slot.rack_depth_m || 1.2;
       const lev = Math.max(1, slot.levels_count || 4);
       const levelH = rh / lev;
+      const baysCount = slot.bays_count || 2;
 
-      const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-      const posZ = (slot.posicion - 2) * (rw / 3.0);
+      const basePosX = (slot.pos_x_m !== undefined && slot.pos_x_m !== null)
+        ? slot.pos_x_m
+        : (slot.position_x !== undefined && slot.position_x !== null ? slot.position_x : -14 + cuerpoIdx * 7.0);
+      const basePosZ = (slot.pos_z_m !== undefined && slot.pos_z_m !== null)
+        ? slot.pos_z_m
+        : (slot.position_z !== undefined && slot.position_z !== null ? slot.position_z : 0);
+      const rotDeg = slot.rotation_y_deg || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+
+      const localBayX = (rackNum - 1 - (baysCount - 1) / 2) * (rd + 0.1);
+      const localSlotZ = (slot.posicion - 2) * (rw / 3.0);
       const posY = (slot.nivel - 1) * levelH + levelH / 2;
 
-      dummy.position.set(posX, posY, posZ);
+      const worldX = basePosX + localBayX * Math.cos(rotRad) - localSlotZ * Math.sin(rotRad);
+      const worldZ = basePosZ + localBayX * Math.sin(rotRad) + localSlotZ * Math.cos(rotRad);
+
+      dummy.position.set(worldX, posY, worldZ);
+      dummy.rotation.set(0, rotRad, 0);
       dummy.scale.set(rd * 0.9, levelH * 0.85, rw / 3.1);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
@@ -749,6 +953,52 @@ const EmptyAndBlockedSlotsMesh: React.FC<{
     </instancedMesh>
   );
 });
+
+// Previsualización Holográfica (Ghost) de Estantería Completa durante el Modo Traslado
+export const RackGhostPreview: React.FC<{
+  position: [number, number, number];
+  rotationY: number;
+  width: number;
+  height: number;
+  depth: number;
+  baysCount: number;
+  isValid: boolean;
+}> = ({ position, rotationY, width, height, depth, baysCount, isValid }) => {
+  const totalDepth = depth * baysCount + (baysCount - 1) * 0.1;
+  const color = isValid ? '#00f3ff' : '#ef4444';
+
+  return (
+    <group position={position} rotation={[0, (rotationY * Math.PI) / 180, 0]}>
+      {/* Caja volumétrica holográfica */}
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[totalDepth, height, width]} />
+        <meshBasicMaterial
+          color={color}
+          wireframe
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[totalDepth * 0.98, height * 0.98, width * 0.98]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.22}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* Cartel flotante indicando coordenadas y estado de factibilidad */}
+      <CanvasLabelSprite
+        text={`${isValid ? '✓ UBICACIÓN LIBRE' : '✗ LÍMITE / COLISIÓN'}: X=${position[0].toFixed(1)}m, Z=${position[2].toFixed(1)}m`}
+        position={[0, height + 0.65, 0]}
+        color={isValid ? '#00f3ff' : '#fca5a5'}
+        background={isValid ? 'rgba(8, 47, 73, 0.95)' : 'rgba(69, 10, 10, 0.95)'}
+        border={color}
+      />
+    </group>
+  );
+};
 
 // Casco Buque Portacontenedores para Tránsito Marítimo
 const ContainerShipHull: React.FC = React.memo(() => {
@@ -918,6 +1168,12 @@ export interface WarehouseCanvasSceneProps {
   cameraViewPreset?: 'ISOMETRIC' | 'TOP' | 'FRONT' | 'AISLE' | 'DOCK' | null;
   highlightedSlotIds?: string[];
   focusTargetPosition?: [number, number, number] | null;
+  isMoveRackModeActive?: boolean;
+  movingRackCuerpo?: string | null;
+  ghostPosition?: [number, number, number] | null;
+  isGhostValid?: boolean;
+  onFloorPointerMove?: (x: number, z: number) => void;
+  onFloorClick?: (x: number, z: number) => void;
 }
 
 export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.memo(({
@@ -936,8 +1192,28 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
   cameraViewPreset = null,
   highlightedSlotIds = [],
   focusTargetPosition = null,
+  isMoveRackModeActive = false,
+  movingRackCuerpo = null,
+  ghostPosition = null,
+  isGhostValid = true,
+  onFloorPointerMove,
+  onFloorClick,
 }) => {
   const orbitControlsRef = useRef<any>(null);
+
+  // Datos dimensionales del rack en movimiento para el ghost preview
+  const movingRackDetails = useMemo(() => {
+    if (!movingRackCuerpo) return null;
+    const cSlots = slotsByCuerpo[movingRackCuerpo] || [];
+    if (cSlots.length === 0) return null;
+    const sample = cSlots[0];
+    const rw = sample.rack_width_m || 2.4;
+    const rh = sample.rack_height_m || 6.0;
+    const rd = sample.rack_depth_m || 1.2;
+    const bays = sample.bays_count || 2;
+    const rot = sample.rotation_y_deg || 0;
+    return { rw, rh, rd, bays, rot };
+  }, [movingRackCuerpo, slotsByCuerpo]);
 
   return (
     <Canvas
@@ -951,10 +1227,10 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
         position: isMaritimeScene ? [18, 16, 26] : [20, 18, 28],
         fov: 42,
       }}
-      shadows={{ type: THREE.PCFSoftShadowMap }}
+      shadows={{ type: THREE.PCFShadowMap }}
       onCreated={({ gl }) => {
         gl.shadowMap.enabled = true;
-        gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        gl.shadowMap.type = THREE.PCFShadowMap;
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.toneMappingExposure = 1.15;
       }}
@@ -1027,6 +1303,9 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
               width={selectedWarehouse?.width_m || 50}
               length={selectedWarehouse?.length_m || 70}
               clearHeight={selectedWarehouse?.clear_height_m || 10.5}
+              isMoveRackModeActive={isMoveRackModeActive}
+              onFloorPointerMove={onFloorPointerMove}
+              onFloorClick={onFloorClick}
             />
             <RackStructures
               cuerpos={uniqueCuerpos}
@@ -1047,6 +1326,19 @@ export const WarehouseCanvasScene: React.FC<WarehouseCanvasSceneProps> = React.m
               selectedSlotId={inspectedSlotId}
               onSelectSlot={onSelectSlot}
             />
+
+            {/* Previsualización holográfica durante el Modo Traslado de Rack */}
+            {isMoveRackModeActive && ghostPosition && movingRackDetails && (
+              <RackGhostPreview
+                position={ghostPosition}
+                rotationY={movingRackDetails.rot}
+                width={movingRackDetails.rw}
+                height={movingRackDetails.rh}
+                depth={movingRackDetails.rd}
+                baysCount={movingRackDetails.bays}
+                isValid={isGhostValid}
+              />
+            )}
           </group>
         )}
       </Suspense>

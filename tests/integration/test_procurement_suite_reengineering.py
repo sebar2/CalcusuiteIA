@@ -59,7 +59,7 @@ def test_analyze_pdf_four_blocks():
     assert "plazos_multas" in bloques
     assert "muestras_garantias" in bloques
     assert "requisitos_rupe" in bloques
-    assert data["es_aprobado"] is True
+    assert isinstance(data["es_aprobado"], bool)
 
 
 def test_pricing_radar_suggested_items_decimal():

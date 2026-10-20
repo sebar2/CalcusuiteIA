@@ -33,6 +33,7 @@ import {
   Eye,
   Table,
   ChevronDown,
+  ChevronUp,
   ArrowLeft,
   Play,
   Pause,
@@ -47,7 +48,7 @@ import {
   Check,
 } from 'lucide-react';
 
-import { WarehouseCanvasScene } from './Warehouse3DSceneElements';
+import { WarehouseCanvasScene, getCuerpoIndex } from './Warehouse3DSceneElements';
 import type {
   DigitalTwinWarehouse,
   DigitalTwinSlot,
@@ -93,7 +94,34 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   const [showEmptySlots, setShowEmptySlots] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'OPERATIVO' | 'RIESGOS' | 'CAPACIDAD'>('OPERATIVO');
 
+  // Pestaña Activa en Ficha Lateral Derecha: RACK COMPLETO vs CASILLERO INDIVIDUAL
+  const [activeRightPanelTab, setActiveRightPanelTab] = useState<'RACK' | 'SLOT'>('RACK');
+
+  // Modo Traslado Espacial de Rack Entero en el Piso 3D
+  const [isMoveRackModeActive, setIsMoveRackModeActive] = useState<boolean>(false);
+  const [ghostPosition, setGhostPosition] = useState<[number, number, number] | null>(null);
+  const [isGhostValid, setIsGhostValid] = useState<boolean>(true);
+
   // Inspection & Editing
+  // Active Selected Rack/Cuerpo state from 3D Raycasting
+  const [selectedRackInfo, setSelectedRackInfo] = useState<{
+    rack_id: string;
+    cuerpo: string;
+    zone_code: string;
+    rack_width_m: number;
+    rack_height_m: number;
+    rack_depth_m: number;
+    levels_count: number;
+    max_weight_kg: number;
+    pos_x_m?: number;
+    pos_z_m?: number;
+    rotation_y_deg?: number;
+    position_x?: number;
+    position_y?: number;
+    position_z?: number;
+    total_slots?: number;
+  } | null>(null);
+
   const [inspectedSlot, setInspectedSlot] = useState<DigitalTwinSlot | null>(null);
   const [slotEditForm, setSlotEditForm] = useState<{
     estado: string;
@@ -107,6 +135,14 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     rack_width_m: number;
     rack_height_m: number;
     rack_depth_m: number;
+    levels_count: number;
+    max_rack_weight_kg: number;
+    pos_x_m?: number;
+    pos_z_m?: number;
+    rotation_y_deg?: number;
+    position_x?: number;
+    position_y?: number;
+    position_z?: number;
     real_product_id: number | null;
   }>({
     estado: 'VACIA',
@@ -120,6 +156,14 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     rack_width_m: 2.4,
     rack_height_m: 6.0,
     rack_depth_m: 1.2,
+    levels_count: 4,
+    max_rack_weight_kg: 3000.0,
+    pos_x_m: 0,
+    pos_z_m: 0,
+    rotation_y_deg: 0,
+    position_x: undefined,
+    position_y: undefined,
+    position_z: undefined,
     real_product_id: null,
   });
   const [productSearchQuery, setProductSearchQuery] = useState<string>('');
@@ -130,6 +174,31 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   const [cameraViewPreset, setCameraViewPreset] = useState<'ISOMETRIC' | 'TOP' | 'FRONT' | 'AISLE' | 'DOCK' | null>(null);
   const [focusTargetPosition, setFocusTargetPosition] = useState<[number, number, number] | null>(null);
   const [highlightedRiskType, setHighlightedRiskType] = useState<string | null>(null);
+
+  // Interactive 3D Relocation Mode
+  const [isInteractiveRelocationActive, setIsInteractiveRelocationActive] = useState<boolean>(false);
+  const [relocationSourceSlot, setRelocationSourceSlot] = useState<DigitalTwinSlot | null>(null);
+
+  // Free Coordinates Matrix State & Location Guide
+  const [isFreeCoordsOpen, setIsFreeCoordsOpen] = useState<boolean>(true);
+  const [freeCoordFilter, setFreeCoordFilter] = useState<string>('');
+  const [freeCoordCuerpo, setFreeCoordCuerpo] = useState<string>('ALL');
+
+  // Create Rack Modal State
+  const [isCreateRackModalOpen, setIsCreateRackModalOpen] = useState<boolean>(false);
+  const [isCreatingRack, setIsCreatingRack] = useState<boolean>(false);
+  const [createRackForm, setCreateRackForm] = useState({
+    warehouse_id: '',
+    zone_code: 'GENERAL',
+    rack_code: '',
+    rack_width_m: 2.4,
+    rack_height_m: 6.0,
+    rack_depth_m: 1.2,
+    levels_count: 4,
+    max_weight_kg: 3000.0,
+    racks_count: 2,
+    positions_per_level: 3,
+  });
 
   // Dropdown menus states in top bar
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -176,8 +245,13 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   const [isSyncingInventory, setIsSyncingInventory] = useState<boolean>(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  // WebSocket Live
-  const [wsConnected, setWsConnected] = useState<boolean>(false);
+  // WebSocket Live & Resiliencia con Reconexión Automática / Backoff Exponencial y Polling de Respaldo
+  const [wsStatus, setWsStatus] = useState<'connected' | 'connecting' | 'reconnecting' | 'polling' | 'disconnected'>('connecting');
+  const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const isUnmountedRef = useRef<boolean>(false);
   const [liveArrivalAlert, setLiveArrivalAlert] = useState<{
     message: string;
     slot_code: string;
@@ -211,6 +285,11 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
         rack_width_m: inspectedSlot.rack_width_m || 2.4,
         rack_height_m: inspectedSlot.rack_height_m || 6.0,
         rack_depth_m: inspectedSlot.rack_depth_m || 1.2,
+        levels_count: inspectedSlot.levels_count || 4,
+        max_rack_weight_kg: inspectedSlot.max_rack_weight_kg || 3000.0,
+        position_x: (inspectedSlot as any).position_x,
+        position_y: (inspectedSlot as any).position_y,
+        position_z: (inspectedSlot as any).position_z,
         real_product_id: inspectedSlot.real_product_id || null,
       });
       setProductSearchQuery(inspectedSlot.sku || '');
@@ -270,36 +349,128 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     }
   }, [selectedWarehouseId, loadWarehouseData]);
 
-  // WebSocket Live Hub
+  // WebSocket Live Hub con Reconexión Automática, Backoff Exponencial y Polling Silencioso de Respaldo
   useEffect(() => {
+    isUnmountedRef.current = false;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const INITIAL_BACKOFF_MS = 3000;
     const wsUrl = `${getWsBaseUrl()}/api/v1/digital-twin/ws`;
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => setWsConnected(false);
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'LIVE_ARRIVAL') {
-            setLiveArrivalAlert({
-              message: data.message,
-              slot_code: data.slot_code,
-              sku: data.sku,
-              units: data.units,
-            });
-            if (selectedWarehouseId) loadWarehouseData(selectedWarehouseId);
-            setTimeout(() => setLiveArrivalAlert(null), 8000);
-          }
-        } catch (e) {
-          console.error('WebSocket parse error:', e);
+
+    const startPollingFallback = () => {
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+      setWsStatus('polling');
+      // Polling silencioso controlado cada 30s
+      pollingIntervalRef.current = setInterval(() => {
+        if (!isUnmountedRef.current && selectedWarehouseId) {
+          loadWarehouseData(selectedWarehouseId);
         }
-      };
-    } catch (err) {
-      console.warn('WebSocket connection not supported in this context:', err);
-    }
+      }, 30000);
+    };
+
+    const connectWebSocket = () => {
+      if (isUnmountedRef.current) return;
+
+      // Limpiar conexión previa si existiera
+      if (wsRef.current) {
+        try {
+          wsRef.current.onclose = null;
+          wsRef.current.onerror = null;
+          wsRef.current.close();
+        } catch {
+          // No-op
+        }
+        wsRef.current = null;
+      }
+
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (isUnmountedRef.current) return;
+          setWsStatus('connected');
+          setReconnectAttempt(0);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+        };
+
+        ws.onclose = () => {
+          if (isUnmountedRef.current) return;
+    
+          setReconnectAttempt((prev) => {
+            const nextAttempt = prev + 1;
+            if (nextAttempt <= MAX_RECONNECT_ATTEMPTS) {
+              setWsStatus('reconnecting');
+              const delay = Math.min(INITIAL_BACKOFF_MS * Math.pow(1.2, nextAttempt - 1), 10000);
+              reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
+            } else {
+              startPollingFallback();
+            }
+            return nextAttempt;
+          });
+        };
+
+        ws.onerror = () => {
+          // Intercepción silenciosa de error de socket para evitar saturar la consola del navegador
+            };
+
+        ws.onmessage = (event) => {
+          if (isUnmountedRef.current) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'LIVE_ARRIVAL') {
+              setLiveArrivalAlert({
+                message: data.message,
+                slot_code: data.slot_code,
+                sku: data.sku,
+                units: data.units,
+              });
+              if (selectedWarehouseId) loadWarehouseData(selectedWarehouseId);
+              setTimeout(() => {
+                if (!isUnmountedRef.current) setLiveArrivalAlert(null);
+              }, 8000);
+            } else if (data.type === 'HEARTBEAT') {
+              try {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: 'pong' }));
+                }
+              } catch {
+                // Silenciado
+              }
+            }
+          } catch {
+            // Silenciado
+          }
+        };
+      } catch {
+        startPollingFallback();
+      }
+    };
+
+    connectWebSocket();
+
     return () => {
-      if (ws) ws.close();
+      isUnmountedRef.current = true;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (wsRef.current) {
+        try {
+          wsRef.current.onclose = null;
+          wsRef.current.onerror = null;
+          wsRef.current.close();
+        } catch {
+          // No-op
+        }
+        wsRef.current = null;
+      }
     };
   }, [selectedWarehouseId, loadWarehouseData]);
 
@@ -329,6 +500,34 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     });
     return map;
   }, [slots]);
+
+  // Matriz de Coordenadas Libres y Disponibilidad
+  const availableEmptySlots = useMemo(() => {
+    return slots.filter((s) => s.estado === 'VACIA');
+  }, [slots]);
+
+  const uniqueCuerposWithEmpty = useMemo(() => {
+    const set = new Set<string>();
+    availableEmptySlots.forEach((s) => {
+      if (s.cuerpo) set.add(s.cuerpo);
+    });
+    return Array.from(set).sort();
+  }, [availableEmptySlots]);
+
+  const filteredFreeSlots = useMemo(() => {
+    return availableEmptySlots.filter((s) => {
+      if (freeCoordCuerpo !== 'ALL' && s.cuerpo !== freeCoordCuerpo) return false;
+      if (freeCoordFilter) {
+        const q = freeCoordFilter.trim().toLowerCase();
+        return (
+          s.slot_code.toLowerCase().includes(q) ||
+          (s.cuerpo && s.cuerpo.toLowerCase().includes(q)) ||
+          `n${s.nivel}`.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [availableEmptySlots, freeCoordCuerpo, freeCoordFilter]);
 
   // Computación de Riesgos y Posiciones Afectadas
   const riskSlotsMap = useMemo(() => {
@@ -427,31 +626,225 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       .slice(0, 6);
   }, [productSearchQuery, realProducts]);
 
-  // Fly-to slot helper
+  // Fly-to slot helper (Calcula coordenadas espaciales reales considerando pos_x_m, pos_z_m y rotación)
   const flyToSlot = useCallback((slot: DigitalTwinSlot) => {
     setInspectedSlot(slot);
     setSelectedCuerpo(slot.cuerpo);
 
-    const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
+    const cuerpoIdx = getCuerpoIndex(slot.cuerpo);
     const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
     const rw = slot.rack_width_m || 2.4;
     const rh = slot.rack_height_m || 6.0;
     const rd = slot.rack_depth_m || 1.2;
     const lev = Math.max(1, slot.levels_count || 4);
     const levelH = rh / lev;
+    const baysCount = slot.bays_count || 2;
 
-    const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-    const posZ = (slot.posicion - 2) * (rw / 3.0);
+    const basePosX = (slot.pos_x_m !== undefined && slot.pos_x_m !== null)
+      ? slot.pos_x_m
+      : (slot.position_x !== undefined && slot.position_x !== null ? slot.position_x : -14 + cuerpoIdx * 7.0);
+    const basePosZ = (slot.pos_z_m !== undefined && slot.pos_z_m !== null)
+      ? slot.pos_z_m
+      : (slot.position_z !== undefined && slot.position_z !== null ? slot.position_z : 0);
+    const rotDeg = slot.rotation_y_deg || 0;
+    const rotRad = (rotDeg * Math.PI) / 180;
+
+    const localBayX = (rackNum - 1 - (baysCount - 1) / 2) * (rd + 0.1);
+    const localSlotZ = (slot.posicion - 2) * (rw / 3.0);
+    const posX = basePosX + localBayX * Math.cos(rotRad) - localSlotZ * Math.sin(rotRad);
+    const posZ = basePosZ + localBayX * Math.sin(rotRad) + localSlotZ * Math.cos(rotRad);
     const posY = (slot.nivel - 1) * levelH + 0.15;
 
     setFocusTargetPosition([posX, posY, posZ]);
   }, []);
 
-  // Guardar Cambios en Ficha de Posición
+  // Validación de Colisión 2D AABB y Límites de Nave en Cliente para Holograma de Rack
+  const checkClientCollisionAndBounds = useCallback(
+    (targetX: number, targetZ: number, rotDeg: number, targetCuerpo: string) => {
+      if (!selectedWarehouse) return true;
+      const movingSlots = slotsByCuerpo[targetCuerpo] || [];
+      const sample = movingSlots[0];
+      const rw = sample?.rack_width_m || slotEditForm.rack_width_m || 2.4;
+      const rd = sample?.rack_depth_m || slotEditForm.rack_depth_m || 1.2;
+      const bays = sample?.bays_count || 2;
+
+      const isRot90 = rotDeg === 90 || rotDeg === 270;
+      const extX = isRot90 ? rw / 2 : (rd * bays) / 2;
+      const extZ = isRot90 ? (rd * bays) / 2 : rw / 2;
+
+      // 1. Límites del depósito
+      const halfW = (selectedWarehouse.width_m || 50) / 2;
+      const halfL = (selectedWarehouse.length_m || 70) / 2;
+      if (
+        targetX - extX < -halfW ||
+        targetX + extX > halfW ||
+        targetZ - extZ < -halfL ||
+        targetZ + extZ > halfL
+      ) {
+        return false;
+      }
+
+      // 2. Colisión con otros racks
+      const cleanTarget = targetCuerpo.replace(/^Cuerpo\s*/i, '').trim().toUpperCase();
+      for (const [cName, cSlots] of Object.entries(slotsByCuerpo)) {
+        const cleanOther = cName.replace(/^Cuerpo\s*/i, '').trim().toUpperCase();
+        if (cleanOther === cleanTarget || cSlots.length === 0) continue;
+        const otherSample = cSlots[0];
+        const otherCIdx = getCuerpoIndex(cName);
+        const otherRw = otherSample.rack_width_m || 2.4;
+        const otherRd = otherSample.rack_depth_m || 1.2;
+        const otherBays = otherSample.bays_count || 2;
+        const otherRot = otherSample.rotation_y_deg || 0;
+        const otherPx = otherSample.pos_x_m ?? otherSample.position_x ?? (-14 + otherCIdx * 7.0);
+        const otherPz = otherSample.pos_z_m ?? otherSample.position_z ?? 0;
+
+        const otherIsRot90 = otherRot === 90 || otherRot === 270;
+        const otherExtX = otherIsRot90 ? otherRw / 2 : (otherRd * otherBays) / 2;
+        const otherExtZ = otherIsRot90 ? (otherRd * otherBays) / 2 : otherRw / 2;
+
+        const overlapX =
+          Math.max(targetX - extX, otherPx - otherExtX) <
+          Math.min(targetX + extX, otherPx + otherExtX) - 0.1;
+        const overlapZ =
+          Math.max(targetZ - extZ, otherPz - otherExtZ) <
+          Math.min(targetZ + extZ, otherPz + otherExtZ) - 0.1;
+
+        if (overlapX && overlapZ) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [selectedWarehouse, slotsByCuerpo, slotEditForm]
+  );
+
+  // Mover puntero sobre el piso 3D durante el Modo Traslado de Rack
+  const handleFloorPointerMove = useCallback(
+    (x: number, z: number) => {
+      if (!isMoveRackModeActive) return;
+      const snapX = Math.round(x * 2) / 2; // Snap a retícula de 0.5m
+      const snapZ = Math.round(z * 2) / 2;
+      const activeCuerpo = selectedRackInfo?.cuerpo || selectedCuerpo;
+      const rot = slotEditForm.rotation_y_deg ?? 0;
+      const isValid = checkClientCollisionAndBounds(snapX, snapZ, rot, activeCuerpo);
+      setGhostPosition([snapX, 0, snapZ]);
+      setIsGhostValid(isValid);
+    },
+    [isMoveRackModeActive, selectedRackInfo, selectedCuerpo, slotEditForm.rotation_y_deg, checkClientCollisionAndBounds]
+  );
+
+  // Ejecutar Traslado Atómico del Rack Completo en Backend y Frontend
+  const handleExecuteTransformRack = async (
+    rackIdentifier: string,
+    targetX: number,
+    targetZ: number,
+    targetRot?: number
+  ) => {
+    if (!selectedWarehouseId || !rackIdentifier || rackIdentifier === 'ALL') return;
+    setIsSavingSlot(true);
+    try {
+      const rot = targetRot !== undefined ? targetRot : (slotEditForm.rotation_y_deg ?? 0);
+      await digitalTwinApi.transformRack(rackIdentifier, {
+        warehouse_id: selectedWarehouseId,
+        pos_x_m: targetX,
+        pos_z_m: targetZ,
+        rotation_y_deg: rot,
+        rack_width_m: slotEditForm.rack_width_m,
+        rack_height_m: slotEditForm.rack_height_m,
+        rack_depth_m: slotEditForm.rack_depth_m,
+        levels_count: slotEditForm.levels_count || 4,
+        max_weight_kg: slotEditForm.max_rack_weight_kg || 3000.0,
+      });
+
+      // Actualizar estado reactivo local de slots de inmediato para refresco visual instantáneo en 3D
+      setSlots((prev) =>
+        prev.map((s) => {
+          const cClean = s.cuerpo.replace(/^Cuerpo\s*/i, '').trim().toUpperCase();
+          const targetClean = rackIdentifier.replace(/^Cuerpo\s*/i, '').trim().toUpperCase();
+          if (cClean === targetClean) {
+            return {
+              ...s,
+              pos_x_m: targetX,
+              pos_z_m: targetZ,
+              position_x: targetX,
+              position_z: targetZ,
+              rotation_y_deg: rot,
+              rack_width_m: slotEditForm.rack_width_m,
+              rack_height_m: slotEditForm.rack_height_m,
+              rack_depth_m: slotEditForm.rack_depth_m,
+              levels_count: slotEditForm.levels_count || 4,
+              max_rack_weight_kg: slotEditForm.max_rack_weight_kg || 3000.0,
+            };
+          }
+          return s;
+        })
+      );
+
+      setSelectedRackInfo((prev) =>
+        prev
+          ? {
+              ...prev,
+              pos_x_m: targetX,
+              pos_z_m: targetZ,
+              rotation_y_deg: rot,
+              position_x: targetX,
+              position_z: targetZ,
+            }
+          : null
+      );
+
+      setSlotEditForm((prev) => ({
+        ...prev,
+        pos_x_m: targetX,
+        pos_z_m: targetZ,
+        rotation_y_deg: rot,
+        position_x: targetX,
+        position_z: targetZ,
+      }));
+
+      setSyncToast(`Rack ${rackIdentifier} reubicado en piso (X=${targetX.toFixed(1)}m, Z=${targetZ.toFixed(1)}m, Rot=${rot}°).`);
+      setTimeout(() => setSyncToast(null), 4000);
+
+      // Cargar en background para sincronizar cálculos de volumen libre y desvíos
+      await loadWarehouseData(selectedWarehouseId);
+      if (onTransferSuccess) onTransferSuccess();
+    } catch (err: any) {
+      console.error('Error transforming rack:', err);
+      const detail = err?.response?.data?.detail || err?.message || 'Error al trasladar rack';
+      alert(`Error de Traslado Espacial: ${detail}`);
+    } finally {
+      setIsSavingSlot(false);
+    }
+  };
+
+  // Clic en el suelo del almacén 3D para asentar el rack
+  const handleFloorClick = useCallback(
+    async (x: number, z: number) => {
+      if (!isMoveRackModeActive) return;
+      const snapX = Math.round(x * 2) / 2;
+      const snapZ = Math.round(z * 2) / 2;
+      const activeCuerpo = selectedRackInfo?.cuerpo || selectedCuerpo;
+      const rot = slotEditForm.rotation_y_deg ?? 0;
+
+      const isValid = checkClientCollisionAndBounds(snapX, snapZ, rot, activeCuerpo);
+      if (!isValid) {
+        alert("No es posible asentar el rack aquí: colisiona con otra estantería o excede los límites perimetrales del depósito.");
+        return;
+      }
+
+      await handleExecuteTransformRack(activeCuerpo, snapX, snapZ, rot);
+      setIsMoveRackModeActive(false);
+    },
+    [isMoveRackModeActive, selectedRackInfo, selectedCuerpo, slotEditForm.rotation_y_deg, checkClientCollisionAndBounds]
+  );
+
+  // Guardar Cambios en Ficha de Posición y Geometría de Estantería
   const handleSaveSlot = async () => {
     if (!inspectedSlot) return;
     setIsSavingSlot(true);
     try {
+      // 1. Guardar especificaciones físicas de contenido del slot
       await digitalTwinApi.updateSlotItemSpecs(inspectedSlot.id, {
         box_width_m: slotEditForm.box_width_m,
         box_height_m: slotEditForm.box_height_m,
@@ -466,18 +859,138 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
         rack_depth_m: slotEditForm.rack_depth_m,
       });
 
-      // Refrescar datos
+      // 2. Si se ajustaron dimensiones o coordenadas estructurales del rack, actualizar en PostgreSQL 16 via transform_rack
+      const targetRackId = selectedRackInfo?.rack_id || inspectedSlot.cuerpo;
+      if (selectedWarehouseId && targetRackId) {
+        await digitalTwinApi.transformRack(targetRackId, {
+          warehouse_id: selectedWarehouseId,
+          pos_x_m: slotEditForm.pos_x_m ?? slotEditForm.position_x ?? 0,
+          pos_z_m: slotEditForm.pos_z_m ?? slotEditForm.position_z ?? 0,
+          rotation_y_deg: slotEditForm.rotation_y_deg ?? 0,
+          rack_width_m: slotEditForm.rack_width_m,
+          rack_height_m: slotEditForm.rack_height_m,
+          rack_depth_m: slotEditForm.rack_depth_m,
+          levels_count: slotEditForm.levels_count || 4,
+          max_weight_kg: slotEditForm.max_rack_weight_kg || 3000.0,
+        });
+      }
+
+      // Refrescar datos y renderizado 3D en vivo
       if (selectedWarehouseId) {
         await loadWarehouseData(selectedWarehouseId);
       }
       if (onTransferSuccess) onTransferSuccess();
-      setSyncToast(`Posición ${inspectedSlot.slot_code} actualizada exitosamente.`);
+      setSyncToast(`Posición ${inspectedSlot.slot_code} y medidas de estantería guardadas con éxito.`);
       setTimeout(() => setSyncToast(null), 4000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving slot specs:', err);
-      alert('Error al guardar especificaciones del slot');
+      const detail = err?.response?.data?.detail || err?.message || 'Error al guardar especificaciones';
+      alert(`Error al guardar: ${detail}`);
     } finally {
       setIsSavingSlot(false);
+    }
+  };
+
+  // Guardar Cambios Exclusivo para Estructura de Rack Seleccionada
+  const handleSaveRackStructureOnly = async () => {
+    const rackId = selectedRackInfo?.rack_id || selectedCuerpo;
+    if (!rackId || rackId === 'ALL') return;
+    const targetX = slotEditForm.pos_x_m ?? slotEditForm.position_x ?? 0;
+    const targetZ = slotEditForm.pos_z_m ?? slotEditForm.position_z ?? 0;
+    const targetRot = slotEditForm.rotation_y_deg ?? 0;
+    await handleExecuteTransformRack(rackId, targetX, targetZ, targetRot);
+  };
+
+  // Reubicación Interactiva Directa en 3D
+  const handleExecuteRelocation = async (sourceSlot: DigitalTwinSlot, targetSlot: DigitalTwinSlot) => {
+    if (sourceSlot.id === targetSlot.id) {
+      alert("La posición de destino debe ser diferente a la posición origen.");
+      return;
+    }
+    if (targetSlot.estado === 'BLOQUEADA') {
+      alert(`La posición de destino ${targetSlot.slot_code} está BLOQUEADA por mantenimiento.`);
+      return;
+    }
+    if (targetSlot.estado === 'OCUPADA') {
+      const confirmMove = window.confirm(
+        `La posición de destino ${targetSlot.slot_code} ya está OCUPADA (${targetSlot.sku || 'Carga'}). ¿Deseas transferir de todos modos?`
+      );
+      if (!confirmMove) return;
+    }
+    setIsSavingSlot(true);
+    try {
+      await digitalTwinApi.transferStock({
+        source_warehouse_id: sourceSlot.warehouse_id,
+        source_slot_code: sourceSlot.slot_code,
+        target_warehouse_id: targetSlot.warehouse_id,
+        target_slot_code: targetSlot.slot_code,
+        mover_lote_completo: true,
+      });
+
+      if (selectedWarehouseId) {
+        await loadWarehouseData(selectedWarehouseId);
+      }
+      setIsInteractiveRelocationActive(false);
+      setRelocationSourceSlot(null);
+      setSyncToast(`Carga de ${sourceSlot.slot_code} reubicada exitosamente en ${targetSlot.slot_code}`);
+      setTimeout(() => setSyncToast(null), 4000);
+      if (onTransferSuccess) onTransferSuccess();
+    } catch (err: any) {
+      console.error('Error in interactive relocation:', err);
+      alert(`Error al reubicar carga: ${err?.response?.data?.detail || err?.message || 'Error desconocido'}`);
+    } finally {
+      setIsSavingSlot(false);
+    }
+  };
+
+  // Alta de Nuevo Rack Transaccional en 3D
+  const handleCreateRack = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createRackForm.rack_code.trim()) {
+      alert("Por favor ingresa un código para el nuevo rack o cuerpo (ej. Cuerpo I).");
+      return;
+    }
+    if (
+      createRackForm.rack_width_m <= 0 ||
+      createRackForm.rack_height_m <= 0 ||
+      createRackForm.rack_depth_m <= 0 ||
+      createRackForm.max_weight_kg <= 0 ||
+      createRackForm.levels_count <= 0
+    ) {
+      alert("Todas las dimensiones y capacidades deben ser números estrictamente positivos (> 0).");
+      return;
+    }
+    setIsCreatingRack(true);
+    try {
+      const targetWh = createRackForm.warehouse_id || selectedWarehouseId;
+      const res = await digitalTwinApi.createRack({
+        warehouse_id: targetWh,
+        zone_code: createRackForm.zone_code || 'GENERAL',
+        rack_code: createRackForm.rack_code.trim(),
+        rack_width_m: createRackForm.rack_width_m,
+        rack_height_m: createRackForm.rack_height_m,
+        rack_depth_m: createRackForm.rack_depth_m,
+        levels_count: createRackForm.levels_count,
+        max_weight_kg: createRackForm.max_weight_kg,
+        racks_count: createRackForm.racks_count,
+        positions_per_level: createRackForm.positions_per_level,
+      });
+
+      // Recargar datos para que InstancedMesh redibuje en caliente
+      await loadWarehouseData(targetWh);
+
+      // Enfocar el nuevo cuerpo creado
+      const cleanCuerpo = res.cuerpo || createRackForm.rack_code.replace(/^Cuerpo\s*/i, '').trim();
+      setSelectedCuerpo(cleanCuerpo);
+
+      setIsCreateRackModalOpen(false);
+      setSyncToast(`Rack ${createRackForm.rack_code} creado e instanciado en 3D exitosamente (${res.slots_created} slots).`);
+      setTimeout(() => setSyncToast(null), 4000);
+    } catch (err: any) {
+      console.error('Error creating rack:', err);
+      alert(`Error al crear rack: ${err?.response?.data?.detail || err?.message || 'Error desconocido'}`);
+    } finally {
+      setIsCreatingRack(false);
     }
   };
 
@@ -560,7 +1073,22 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
           <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="hidden sm:inline">Simulación activa</span>
-            <span className="text-[10px] text-slate-400 font-mono ml-1">({wsConnected ? 'Hub Live' : 'Local'})</span>
+            {wsStatus === 'connected' && (
+              <span className="text-[10px] text-emerald-400 font-mono ml-1 font-bold">🟢 En Línea</span>
+            )}
+            {wsStatus === 'reconnecting' && (
+              <span className="text-[10px] text-amber-400 font-mono ml-1 animate-pulse font-bold">
+                🔌 Reconectando ({reconnectAttempt}/5)...
+              </span>
+            )}
+            {wsStatus === 'polling' && (
+              <span className="text-[10px] text-sky-400 font-mono ml-1 font-bold">
+                🔄 Modo Respaldo (Sync)
+              </span>
+            )}
+            {wsStatus === 'disconnected' && (
+              <span className="text-[10px] text-slate-400 font-mono ml-1">Local</span>
+            )}
             {isLoading && <RefreshCw size={11} className="animate-spin text-sky-400 ml-1" />}
           </div>
 
@@ -574,6 +1102,19 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
         {/* Menús Desplegables Limpios */}
         <div className="flex items-center space-x-1 sm:space-x-1.5" ref={dropdownRef}>
+          {/* Botón Rápido Crear Rack */}
+          <button
+            onClick={() => {
+              setCreateRackForm((prev) => ({ ...prev, warehouse_id: selectedWarehouseId }));
+              setIsCreateRackModalOpen(true);
+            }}
+            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-sky-600/90 hover:bg-sky-500 text-white flex items-center gap-1.5 shadow-sm transition"
+            title="Crear un nuevo rack o cuerpo en este almacén"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">+ Crear Rack</span>
+          </button>
+
           {/* Ubicaciones */}
           <div className="relative">
             <button
@@ -604,6 +1145,19 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                     {w.id === selectedWarehouseId && <Check size={14} className="text-sky-400" />}
                   </button>
                 ))}
+                <div className="border-t border-slate-800 mt-1 pt-1">
+                  <button
+                    onClick={() => {
+                      setActiveDropdown(null);
+                      setCreateRackForm((prev) => ({ ...prev, warehouse_id: selectedWarehouseId }));
+                      setIsCreateRackModalOpen(true);
+                    }}
+                    className="w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold text-sky-400 hover:bg-sky-500/10 flex items-center gap-2 transition"
+                  >
+                    <Plus size={14} className="text-sky-400" />
+                    <span>+ Crear Nuevo Rack / Cuerpo</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -803,7 +1357,14 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
             isMaritimeScene={isMaritimeScene}
             slots={slots}
             inspectedSlotId={inspectedSlot?.id || null}
-            onSelectSlot={(slot) => flyToSlot(slot)}
+            onSelectSlot={(slot) => {
+              if (isInteractiveRelocationActive && relocationSourceSlot) {
+                handleExecuteRelocation(relocationSourceSlot, slot);
+                return;
+              }
+              flyToSlot(slot);
+              setActiveRightPanelTab('SLOT');
+            }}
             selectedWarehouse={selectedWarehouse}
             uniqueCuerpos={uniqueCuerpos}
             slotsByCuerpo={slotsByCuerpo}
@@ -811,13 +1372,143 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
             onSelectRackCuerpo={(cuerpo, sample) => {
               setSelectedCuerpo(cuerpo);
               flyToSlot(sample);
+              const rw = sample.rack_width_m || 2.4;
+              const rh = sample.rack_height_m || 6.0;
+              const rd = sample.rack_depth_m || 1.2;
+              const lev = sample.levels_count || 4;
+              const maxWt = sample.max_rack_weight_kg || 3000.0;
+              const cuerpoSlots = slots.filter((s) => s.cuerpo === cuerpo);
+              const zone = sample.descripcion?.match(/\((.*?)\)/)?.[1] || 'GENERAL';
+              const cuerpoIdx = getCuerpoIndex(cuerpo);
+              const px = sample.pos_x_m ?? (sample as any).position_x ?? (-14 + cuerpoIdx * 7.0);
+              const pz = sample.pos_z_m ?? (sample as any).position_z ?? 0;
+              const rot = sample.rotation_y_deg ?? 0;
+
+              setSelectedRackInfo({
+                rack_id: cuerpo,
+                cuerpo,
+                zone_code: zone,
+                rack_width_m: rw,
+                rack_height_m: rh,
+                rack_depth_m: rd,
+                levels_count: lev,
+                max_weight_kg: maxWt,
+                pos_x_m: px,
+                pos_z_m: pz,
+                rotation_y_deg: rot,
+                position_x: px,
+                position_y: 0,
+                position_z: pz,
+                total_slots: cuerpoSlots.length,
+              });
+
+              setSlotEditForm((prev) => ({
+                ...prev,
+                rack_width_m: rw,
+                rack_height_m: rh,
+                rack_depth_m: rd,
+                levels_count: lev,
+                max_rack_weight_kg: maxWt,
+                pos_x_m: px,
+                pos_z_m: pz,
+                rotation_y_deg: rot,
+                position_x: px,
+                position_y: 0,
+                position_z: pz,
+              }));
+              setActiveRightPanelTab('RACK');
             }}
             showEmptySlots={showEmptySlots}
             rotationMode={rotationMode}
             cameraViewPreset={cameraViewPreset}
             highlightedSlotIds={highlightedSlotIds}
             focusTargetPosition={focusTargetPosition}
+            isMoveRackModeActive={isMoveRackModeActive}
+            movingRackCuerpo={selectedRackInfo?.cuerpo || selectedCuerpo}
+            ghostPosition={ghostPosition}
+            isGhostValid={isGhostValid}
+            onFloorPointerMove={handleFloorPointerMove}
+            onFloorClick={handleFloorClick}
           />
+
+          {/* HUD: MODO TRASLADO DE RACK ENTERO EN PISO 3D */}
+          {isMoveRackModeActive && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 border-2 border-cyan-400 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-4 backdrop-blur-md animate-in fade-in slide-in-from-top-3 max-w-xl w-full mx-auto">
+              <div className="flex items-center gap-3">
+                <span className="w-3.5 h-3.5 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                <div className="text-xs">
+                  <div className="font-bold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>🏗️ Modo Traslado de Rack Activo</span>
+                    <span className="font-mono bg-cyan-950 text-cyan-200 px-1.5 py-0.5 rounded border border-cyan-500/40">
+                      Cuerpo {selectedRackInfo?.cuerpo || selectedCuerpo}
+                    </span>
+                  </div>
+                  <p className="text-slate-300 mt-0.5">
+                    Mueve el cursor sobre el piso para previsualizar y haz <strong className="text-white">clic en el suelo</strong> para asentar el rack completo y sus cajas.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMoveRackModeActive(false)}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shrink-0 transition shadow-lg"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* HUD: MODO REUBICACIÓN INTERACTIVO 3D */}
+          {isInteractiveRelocationActive && relocationSourceSlot && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 border border-indigo-500 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex flex-col gap-2 backdrop-blur-md animate-in fade-in slide-in-from-top-3 max-w-xl w-full mx-auto">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ArrowRightLeft className="text-indigo-400 animate-pulse shrink-0" size={16} />
+                  <div className="text-xs">
+                    <span className="font-bold text-indigo-300 uppercase tracking-wide">Modo Reubicación 3D:</span>
+                    <span className="text-slate-200 ml-1.5">
+                      Reubicando <strong className="text-white font-mono">{relocationSourceSlot.slot_code}</strong>. Clic en visor 3D o elige una libre:
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsInteractiveRelocationActive(false);
+                    setRelocationSourceSlot(null);
+                  }}
+                  className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700 shrink-0"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              {/* Sugerencias Rápidas de Coordenadas Libres en HUD */}
+              {availableEmptySlots.length > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-thin scrollbar-thumb-slate-700">
+                  <span className="text-[10px] text-emerald-400 font-semibold shrink-0 flex items-center gap-1">
+                    <Compass size={11} /> Libres:
+                  </span>
+                  {availableEmptySlots.slice(0, 7).map((freeSlot) => (
+                    <button
+                      key={freeSlot.id}
+                      onClick={() => handleExecuteRelocation(relocationSourceSlot, freeSlot)}
+                      className="px-2 py-0.5 rounded-md bg-emerald-950/80 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/50 text-[10px] font-mono font-bold transition shrink-0"
+                      title={`Reubicar a ${freeSlot.slot_code} (Cuerpo ${freeSlot.cuerpo}, Nivel ${freeSlot.nivel})`}
+                    >
+                      {freeSlot.slot_code}
+                    </button>
+                  ))}
+                  {availableEmptySlots.length > 7 && (
+                    <button
+                      onClick={() => setIsFreeCoordsOpen(true)}
+                      className="text-[10px] text-slate-400 hover:text-emerald-300 font-mono shrink-0 underline ml-1"
+                    >
+                      +{availableEmptySlots.length - 7} más en panel lateral
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* RECUADRO FLOTANTE: "CONTEXTO 3D" (ESQUINA SUPERIOR IZQUIERDA) */}
           <div className="absolute top-3 left-3 z-20 pointer-events-none">
@@ -1404,242 +2095,838 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
             </div>
 
             {/* ------------------------------------------------------ */}
-            {/* BLOQUE 5: FICHA DE POSICIÓN / EDICIÓN DIRECTA GUIADA   */}
+            {/* BLOQUE 5: DETALLE ESTRUCTURAL Y DE UBICACIÓN (2 PESTAÑAS) */}
             {/* ------------------------------------------------------ */}
-            {inspectedSlot ? (
-              <div className="bg-slate-900/95 border-2 border-sky-500/40 rounded-2xl p-4 shadow-xl space-y-3.5 animate-in slide-in-from-bottom-2">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
+            <div className="bg-slate-900/95 border-2 border-cyan-500/50 rounded-2xl p-4 shadow-2xl space-y-4">
+              {/* Selector de Pestañas Superiores: RACK COMPLETO vs CASILLERO INDIVIDUAL */}
+              <div className="flex border-b border-slate-800 bg-slate-950/80 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveRightPanelTab('RACK')}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    activeRightPanelTab === 'RACK'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Building2 size={14} className={activeRightPanelTab === 'RACK' ? 'text-cyan-400' : 'text-slate-500'} />
+                  <span className="truncate">🏗️ RACK COMPLETO {selectedRackInfo ? `(${selectedRackInfo.cuerpo})` : ''}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveRightPanelTab('SLOT')}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                    activeRightPanelTab === 'SLOT'
+                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Boxes size={14} className={activeRightPanelTab === 'SLOT' ? 'text-sky-400' : 'text-slate-500'} />
+                  <span className="truncate">📦 CASILLERO {inspectedSlot ? `(${inspectedSlot.slot_code})` : ''}</span>
+                </button>
+              </div>
+
+              {/* PESTAÑA A: 🏗️ RACK / ESTANTERÍA COMPLETA */}
+              {activeRightPanelTab === 'RACK' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <div className="flex items-center gap-2">
+                      {selectedRackInfo && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRackInfo(null)}
+                          className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                          title="Deseleccionar rack"
+                        >
+                          <ArrowLeft size={14} />
+                        </button>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] text-slate-400 uppercase font-bold">Rack Activo:</label>
+                          <select
+                            value={selectedRackInfo?.cuerpo || selectedCuerpo}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSelectedCuerpo(val);
+                              const sample = slotsByCuerpo[val]?.[0];
+                              if (sample) {
+                                flyToSlot(sample);
+                                const rw = sample.rack_width_m || 2.4;
+                                const rh = sample.rack_height_m || 6.0;
+                                const rd = sample.rack_depth_m || 1.2;
+                                const lev = sample.levels_count || 4;
+                                const maxWt = sample.max_rack_weight_kg || 3000.0;
+                                const cuerpoSlots = slots.filter((s) => s.cuerpo === val);
+                                const zone = sample.descripcion?.match(/\((.*?)\)/)?.[1] || 'GENERAL';
+                                const cIdx = getCuerpoIndex(val);
+                                const px = sample.pos_x_m ?? (sample as any).position_x ?? (-14 + cIdx * 7.0);
+                                const pz = sample.pos_z_m ?? (sample as any).position_z ?? 0;
+                                const rot = sample.rotation_y_deg ?? 0;
+
+                                setSelectedRackInfo({
+                                  rack_id: val,
+                                  cuerpo: val,
+                                  zone_code: zone,
+                                  rack_width_m: rw,
+                                  rack_height_m: rh,
+                                  rack_depth_m: rd,
+                                  levels_count: lev,
+                                  max_weight_kg: maxWt,
+                                  pos_x_m: px,
+                                  pos_z_m: pz,
+                                  rotation_y_deg: rot,
+                                  position_x: px,
+                                  position_y: 0,
+                                  position_z: pz,
+                                  total_slots: cuerpoSlots.length,
+                                });
+
+                                setSlotEditForm((prev) => ({
+                                  ...prev,
+                                  rack_width_m: rw,
+                                  rack_height_m: rh,
+                                  rack_depth_m: rd,
+                                  levels_count: lev,
+                                  max_rack_weight_kg: maxWt,
+                                  pos_x_m: px,
+                                  pos_z_m: pz,
+                                  rotation_y_deg: rot,
+                                  position_x: px,
+                                  position_y: 0,
+                                  position_z: pz,
+                                }));
+                              }
+                            }}
+                            className="bg-slate-950 border border-slate-700 text-cyan-300 font-bold rounded-lg px-2 py-1 text-xs focus:outline-hidden"
+                          >
+                            {uniqueCuerpos.map((c) => (
+                              <option key={c} value={c}>
+                                Cuerpo {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Zona: {selectedRackInfo?.zone_code || 'GENERAL'} · {slotsByCuerpo[selectedRackInfo?.cuerpo || selectedCuerpo]?.length || 0} Slots
+                        </span>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse">
+                      ESTRUCTURA 3D ACTIVA
+                    </span>
+                  </div>
+
+                  {/* Control de Posición Espacial en Piso (X, Z y Rotación) */}
+                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5">
+                    <label className="text-[11px] font-bold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
+                      <Compass size={14} className="text-cyan-400" />
+                      <span>Coordenadas en el Piso (m) y Orientación</span>
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Eje X (m) */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Posición X (m)</span>
+                        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newX = (slotEditForm.pos_x_m ?? 0) - 1.0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_x_m: newX, position_x: newX }));
+                            }}
+                            className="px-2.5 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                            title="Desplazar -1 metro en X"
+                          >
+                            -1m
+                          </button>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={slotEditForm.pos_x_m ?? 0}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_x_m: val, position_x: val }));
+                            }}
+                            className="w-full bg-transparent text-center font-mono font-bold text-xs text-white focus:outline-hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newX = (slotEditForm.pos_x_m ?? 0) + 1.0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_x_m: newX, position_x: newX }));
+                            }}
+                            className="px-2.5 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                            title="Desplazar +1 metro en X"
+                          >
+                            +1m
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Eje Z (m) */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Posición Z (m)</span>
+                        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newZ = (slotEditForm.pos_z_m ?? 0) - 1.0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_z_m: newZ, position_z: newZ }));
+                            }}
+                            className="px-2.5 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                            title="Desplazar -1 metro en Z"
+                          >
+                            -1m
+                          </button>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={slotEditForm.pos_z_m ?? 0}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_z_m: val, position_z: val }));
+                            }}
+                            className="w-full bg-transparent text-center font-mono font-bold text-xs text-white focus:outline-hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newZ = (slotEditForm.pos_z_m ?? 0) + 1.0;
+                              setSlotEditForm((prev) => ({ ...prev, pos_z_m: newZ, position_z: newZ }));
+                            }}
+                            className="px-2.5 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                            title="Desplazar +1 metro en Z"
+                          >
+                            +1m
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Orientación / Rotación */}
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] text-slate-400 block font-semibold">Giro / Orientación Angular</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSlotEditForm((prev) => ({ ...prev, rotation_y_deg: 0 }))}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition ${
+                            (slotEditForm.rotation_y_deg ?? 0) === 0
+                              ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
+                              : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <RotateCw size={12} />
+                          <span>0° (Eje X)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSlotEditForm((prev) => ({ ...prev, rotation_y_deg: 90 }))}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-semibold border flex items-center justify-center gap-1.5 transition ${
+                            (slotEditForm.rotation_y_deg ?? 0) === 90
+                              ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
+                              : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <RotateCw size={12} />
+                          <span>90° (Eje Z)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Botón Principal: Modo Mover RACK Entero haciendo Clic en el Piso 3D */}
                     <button
-                      onClick={() => setInspectedSlot(null)}
-                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-                      title="Volver al resumen general"
+                      type="button"
+                      onClick={() => {
+                        setIsMoveRackModeActive(!isMoveRackModeActive);
+                        if (!isMoveRackModeActive) {
+                          setSyncToast('Modo Traslado de Rack Activo: Haz clic en cualquier punto del piso 3D para asentar la estructura.');
+                        } else {
+                          setSyncToast(null);
+                        }
+                      }}
+                      className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition shadow-lg ${
+                        isMoveRackModeActive
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white border-amber-400 shadow-amber-900/40 animate-pulse'
+                          : 'bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400 shadow-cyan-900/40'
+                      }`}
                     >
-                      <ArrowLeft size={14} />
+                      <Compass size={15} />
+                      <span>
+                        {isMoveRackModeActive
+                          ? '🎯 Moviendo... Haz Clic en el Piso 3D (o clic aquí para cancelar)'
+                          : '🎯 Mover RACK Entero haciendo Clic en el Piso 3D'}
+                      </span>
                     </button>
-                    <div>
-                      <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
-                        <span>Ubicación {inspectedSlot.slot_code}</span>
-                        <span className="text-xs text-sky-400 font-mono font-normal">({inspectedSlot.cuerpo}-R{inspectedSlot.rack}-N{inspectedSlot.nivel})</span>
-                      </h3>
+                  </div>
+
+                  {/* Dimensiones Estructurales del Rack */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-300 uppercase">Dimensiones de Estantería (m)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Ancho (m)</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.5"
+                          value={slotEditForm.rack_width_m}
+                          onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_width_m: parseFloat(e.target.value) || 2.4 })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Alto (m)</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1.0"
+                          value={slotEditForm.rack_height_m}
+                          onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_height_m: parseFloat(e.target.value) || 6.0 })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block mb-0.5">Profundidad (m)</span>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.5"
+                          value={slotEditForm.rack_depth_m}
+                          onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_depth_m: parseFloat(e.target.value) || 1.2 })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    slotEditForm.estado === 'OCUPADA' ? 'bg-emerald-500/20 text-emerald-400' : slotEditForm.estado === 'VACIA' ? 'bg-slate-800 text-slate-300' : 'bg-rose-500/20 text-rose-400'
-                  }`}>
-                    {slotEditForm.estado}
-                  </span>
-                </div>
 
-                {/* Selector de Estado */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Estado Operativo</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {['VACIA', 'OCUPADA', 'BLOQUEADA', 'CALIDAD', 'RESERVADA'].map((st) => (
-                      <button
-                        key={st}
-                        onClick={() => setSlotEditForm({ ...slotEditForm, estado: st })}
-                        className={`py-1 text-[11px] font-semibold rounded-lg border transition ${
-                          slotEditForm.estado === st
-                            ? 'bg-sky-600 border-sky-400 text-white'
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {st}
-                      </button>
-                    ))}
+                  {/* Niveles y Carga Máxima */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Niveles (1-12)</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="12"
+                        value={slotEditForm.levels_count || 4}
+                        onChange={(e) => setSlotEditForm({ ...slotEditForm, levels_count: parseInt(e.target.value) || 4 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Carga Máx (kg)</span>
+                      <input
+                        type="number"
+                        step="100"
+                        min="100"
+                        value={slotEditForm.max_rack_weight_kg || 3000}
+                        onChange={(e) => setSlotEditForm({ ...slotEditForm, max_rack_weight_kg: parseFloat(e.target.value) || 3000 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Buscador Predictivo de SKU Real (>= 3 chars) */}
-                <div className="space-y-1 relative">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Material / SKU Calcu</label>
-                  <input
-                    type="text"
-                    value={productSearchQuery}
-                    onChange={(e) => {
-                      setProductSearchQuery(e.target.value);
-                      setSlotEditForm({ ...slotEditForm, sku: e.target.value });
-                    }}
-                    placeholder="Escribe >= 3 letras de SKU o Nombre..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-sky-500"
-                  />
-                  {productSuggestions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-14 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1 z-50 space-y-1">
-                      {productSuggestions.map((prod) => (
-                        <button
-                          key={prod.id}
-                          onClick={() => {
-                            setSlotEditForm({
-                              ...slotEditForm,
-                              sku: prod.sku,
-                              descripcion: prod.nombre,
-                              real_product_id: prod.id,
-                              estado: 'OCUPADA',
-                            });
-                            setProductSearchQuery(prod.sku);
-                          }}
-                          className="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 text-xs flex justify-between items-center"
-                        >
+                  {/* Resumen Calculado en Vivo */}
+                  <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-slate-500">Volumen Rack: </span>
+                      <span className="font-semibold text-cyan-300">
+                        {(slotEditForm.rack_width_m * slotEditForm.rack_height_m * slotEditForm.rack_depth_m * 2).toFixed(2)} m³
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Altura / Nivel: </span>
+                      <span className="font-semibold text-white">
+                        {(slotEditForm.rack_height_m / Math.max(1, slotEditForm.levels_count || 4)).toFixed(2)} m
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Sugerencias Rápidas de Zonas Libres en el Piso */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-400 uppercase block">
+                      🗺️ Sugerencias de Zonas Libres en Nave
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { name: 'Norte Central', x: 0, z: -10 },
+                        { name: 'Sur Central', x: 0, z: 10 },
+                        { name: 'Pasillo Oeste', x: -14, z: 8 },
+                        { name: 'Pasillo Este', x: 14, z: 8 },
+                      ].map((zone) => {
+                        const rot = slotEditForm.rotation_y_deg ?? 0;
+                        const activeCuerpo = selectedRackInfo?.cuerpo || selectedCuerpo;
+                        const isAvail = checkClientCollisionAndBounds(zone.x, zone.z, rot, activeCuerpo);
+                        return (
+                          <button
+                            key={zone.name}
+                            type="button"
+                            disabled={!isAvail}
+                            onClick={() => {
+                              setSlotEditForm((prev) => ({
+                                ...prev,
+                                pos_x_m: zone.x,
+                                pos_z_m: zone.z,
+                                position_x: zone.x,
+                                position_z: zone.z,
+                              }));
+                              handleExecuteTransformRack(activeCuerpo, zone.x, zone.z, rot);
+                            }}
+                            className={`p-1.5 rounded-lg text-left text-[11px] border flex justify-between items-center transition ${
+                              isAvail
+                                ? 'bg-slate-950 border-slate-800 hover:border-cyan-500/60 text-slate-200'
+                                : 'bg-slate-950/40 border-slate-900 text-slate-600 cursor-not-allowed'
+                            }`}
+                          >
+                            <div>
+                              <div className="font-semibold truncate">{zone.name}</div>
+                              <div className="text-[9px] text-slate-500 font-mono">({zone.x}m, {zone.z}m)</div>
+                            </div>
+                            <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
+                              isAvail ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-600'
+                            }`}>
+                              {isAvail ? 'Libre' : 'Ocupada'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Botón Guardar Cambios del Rack en PostgreSQL 16 */}
+                  <button
+                    onClick={handleSaveRackStructureOnly}
+                    disabled={isSavingSlot}
+                    className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-900/30 transition"
+                  >
+                    <Save size={14} />
+                    <span>{isSavingSlot ? 'Guardando en PostgreSQL 16...' : 'Guardar Transformación y Posición en PostgreSQL 16'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* PESTAÑA B: 📦 CAJA / CASILLERO INDIVIDUAL */}
+              {activeRightPanelTab === 'SLOT' && (
+                <div className="space-y-3.5 animate-in fade-in duration-150">
+                  {inspectedSlot ? (
+                    <>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setInspectedSlot(null)}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                            title="Volver al resumen general"
+                          >
+                            <ArrowLeft size={14} />
+                          </button>
                           <div>
-                            <span className="font-mono font-bold text-sky-400">{prod.sku}</span>
-                            <span className="text-slate-300 ml-1.5">{prod.nombre}</span>
+                            <h3 className="font-bold text-sm text-white flex items-center gap-1.5">
+                              <span>Ubicación {inspectedSlot.slot_code}</span>
+                              <span className="text-xs text-sky-400 font-mono font-normal">
+                                ({inspectedSlot.cuerpo}-R{inspectedSlot.rack}-N{inspectedSlot.nivel})
+                              </span>
+                            </h3>
                           </div>
-                          <span className="text-[10px] text-slate-500">${prod.precio_lista}</span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            slotEditForm.estado === 'OCUPADA'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : slotEditForm.estado === 'VACIA'
+                              ? 'bg-slate-800 text-slate-300'
+                              : 'bg-rose-500/20 text-rose-400'
+                          }`}
+                        >
+                          {slotEditForm.estado}
+                        </span>
+                      </div>
+
+                      {/* Selector de Estado */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase">Estado Operativo</label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {['VACIA', 'OCUPADA', 'BLOQUEADA', 'CALIDAD', 'RESERVADA'].map((st) => (
+                            <button
+                              key={st}
+                              onClick={() => setSlotEditForm({ ...slotEditForm, estado: st })}
+                              className={`py-1 text-[11px] font-semibold rounded-lg border transition ${
+                                slotEditForm.estado === st
+                                  ? 'bg-sky-600 border-sky-400 text-white'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Buscador Predictivo de SKU Real (>= 3 chars) */}
+                      <div className="space-y-1 relative">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase">Material / SKU Calcu</label>
+                        <input
+                          type="text"
+                          value={productSearchQuery}
+                          onChange={(e) => {
+                            setProductSearchQuery(e.target.value);
+                            setSlotEditForm({ ...slotEditForm, sku: e.target.value });
+                          }}
+                          placeholder="Escribe >= 3 letras de SKU o Nombre..."
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-sky-500"
+                        />
+                        {productSuggestions.length > 0 && (
+                          <div className="absolute left-0 right-0 top-14 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1 z-50 space-y-1">
+                            {productSuggestions.map((prod) => (
+                              <button
+                                key={prod.id}
+                                onClick={() => {
+                                  setSlotEditForm({
+                                    ...slotEditForm,
+                                    sku: prod.sku,
+                                    descripcion: prod.nombre,
+                                    real_product_id: prod.id,
+                                    estado: 'OCUPADA',
+                                  });
+                                  setProductSearchQuery(prod.sku);
+                                }}
+                                className="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 text-xs flex justify-between items-center"
+                              >
+                                <div>
+                                  <span className="font-mono font-bold text-sky-400">{prod.sku}</span>
+                                  <span className="text-slate-300 ml-1.5">{prod.nombre}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-500">${prod.precio_lista}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Steppers Numéricos: Cajas & Peso */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-slate-400 uppercase">Cantidad Cajas</label>
+                          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                            <button
+                              onClick={() => setSlotEditForm({ ...slotEditForm, cajas_count: Math.max(0, slotEditForm.cajas_count - 1) })}
+                              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <input
+                              type="number"
+                              value={slotEditForm.cajas_count}
+                              onChange={(e) => setSlotEditForm({ ...slotEditForm, cajas_count: Math.max(0, parseInt(e.target.value) || 0) })}
+                              className="w-full bg-transparent text-center font-bold text-xs text-white focus:outline-hidden"
+                            />
+                            <button
+                              onClick={() => setSlotEditForm({ ...slotEditForm, cajas_count: slotEditForm.cajas_count + 1 })}
+                              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold text-slate-400 uppercase">Peso Unitario (kg)</label>
+                          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                            <button
+                              onClick={() => setSlotEditForm({ ...slotEditForm, unit_weight_kg: Math.max(0.5, slotEditForm.unit_weight_kg - 1) })}
+                              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
+                            >
+                              <Minus size={13} />
+                            </button>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={slotEditForm.unit_weight_kg}
+                              onChange={(e) => setSlotEditForm({ ...slotEditForm, unit_weight_kg: Math.max(0, parseFloat(e.target.value) || 0) })}
+                              className="w-full bg-transparent text-center font-bold text-xs text-white focus:outline-hidden"
+                            />
+                            <button
+                              onClick={() => setSlotEditForm({ ...slotEditForm, unit_weight_kg: slotEditForm.unit_weight_kg + 1 })}
+                              className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
+                            >
+                              <Plus size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Medidas de Caja (Ancho x Alto x Largo) */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400 uppercase">Medidas Caja (Ancho x Alto x Largo en m)</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={slotEditForm.box_width_m}
+                            onChange={(e) => setSlotEditForm({ ...slotEditForm, box_width_m: parseFloat(e.target.value) || 0.4 })}
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                            title="Ancho caja (m)"
+                          />
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={slotEditForm.box_height_m}
+                            onChange={(e) => setSlotEditForm({ ...slotEditForm, box_height_m: parseFloat(e.target.value) || 0.3 })}
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                            title="Alto caja (m)"
+                          />
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={slotEditForm.box_length_m}
+                            onChange={(e) => setSlotEditForm({ ...slotEditForm, box_length_m: parseFloat(e.target.value) || 0.4 })}
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
+                            title="Largo caja (m)"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botones de Acción Directa de Casillero */}
+                      <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={handleSaveSlot}
+                          disabled={isSavingSlot}
+                          className="flex-1 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition"
+                        >
+                          <Save size={14} />
+                          <span>{isSavingSlot ? 'Guardando...' : 'Guardar Casillero'}</span>
                         </button>
-                      ))}
+
+                        <button
+                          onClick={() => {
+                            if (!inspectedSlot) return;
+                            if (isInteractiveRelocationActive) {
+                              setIsInteractiveRelocationActive(false);
+                              setRelocationSourceSlot(null);
+                              setSyncToast(null);
+                            } else {
+                              setIsInteractiveRelocationActive(true);
+                              setRelocationSourceSlot(inspectedSlot);
+                              setIsFreeCoordsOpen(true);
+                              setSyncToast(`Modo Reubicación 3D Activo: Haz clic en la posición destino en el visor 3D o elige una coordenada libre.`);
+                            }
+                          }}
+                          className={`py-2 px-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 border transition ${
+                            isInteractiveRelocationActive && relocationSourceSlot?.id === inspectedSlot?.id
+                              ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg animate-pulse'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                          }`}
+                          title="Habilitar modo interactivo de reubicación de slots en el visor 3D"
+                        >
+                          <ArrowRightLeft size={14} />
+                          <span>{isInteractiveRelocationActive && relocationSourceSlot?.id === inspectedSlot?.id ? 'Reubicando...' : 'Transferir Stock'}</span>
+                        </button>
+
+                        <button
+                          onClick={handleEmptySlot}
+                          disabled={isSavingSlot}
+                          className="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1.5 border border-rose-500/30 transition"
+                          title="Vaciar slot y liberar espacio"
+                        >
+                          <Trash2 size={14} />
+                          <span>Vaciar</span>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 text-center space-y-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                      <Boxes size={28} className="text-slate-600 mx-auto" />
+                      <p className="text-xs text-slate-400">
+                        Ningún casillero individual seleccionado. Haz clic sobre cualquier caja o posición vacía en el visor 3D para editarla o transferir mercancía.
+                      </p>
+                      {slotsByCuerpo[selectedRackInfo?.cuerpo || selectedCuerpo]?.length > 0 && (
+                        <div className="space-y-1 text-left pt-2">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold">
+                            Casilleros en Cuerpo {selectedRackInfo?.cuerpo || selectedCuerpo}:
+                          </span>
+                          <div className="grid grid-cols-3 gap-1">
+                            {slotsByCuerpo[selectedRackInfo?.cuerpo || selectedCuerpo].slice(0, 6).map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => {
+                                  flyToSlot(s);
+                                  setActiveRightPanelTab('SLOT');
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-mono text-sky-400 truncate text-center"
+                              >
+                                {s.slot_code}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+              )}
+            </div>
 
-                {/* Steppers Numéricos: Cajas & Peso */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-400 uppercase">Cantidad Cajas</label>
-                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <button
-                        onClick={() => setSlotEditForm({ ...slotEditForm, cajas_count: Math.max(0, slotEditForm.cajas_count - 1) })}
-                        className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
-                      >
-                        <Minus size={13} />
-                      </button>
-                      <input
-                        type="number"
-                        value={slotEditForm.cajas_count}
-                        onChange={(e) => setSlotEditForm({ ...slotEditForm, cajas_count: Math.max(0, parseInt(e.target.value) || 0) })}
-                        className="w-full bg-transparent text-center font-bold text-xs text-white focus:outline-hidden"
-                      />
-                      <button
-                        onClick={() => setSlotEditForm({ ...slotEditForm, cajas_count: slotEditForm.cajas_count + 1 })}
-                        className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
-                      >
-                        <Plus size={13} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-400 uppercase">Peso Unitario (kg)</label>
-                    <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                      <button
-                        onClick={() => setSlotEditForm({ ...slotEditForm, unit_weight_kg: Math.max(0.5, slotEditForm.unit_weight_kg - 1) })}
-                        className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
-                      >
-                        <Minus size={13} />
-                      </button>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={slotEditForm.unit_weight_kg}
-                        onChange={(e) => setSlotEditForm({ ...slotEditForm, unit_weight_kg: Math.max(0, parseFloat(e.target.value) || 0) })}
-                        className="w-full bg-transparent text-center font-bold text-xs text-white focus:outline-hidden"
-                      />
-                      <button
-                        onClick={() => setSlotEditForm({ ...slotEditForm, unit_weight_kg: slotEditForm.unit_weight_kg + 1 })}
-                        className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white"
-                      >
-                        <Plus size={13} />
-                      </button>
-                    </div>
+            {/* ------------------------------------------------------ */}
+            {/* BLOQUE 5C: MATRIZ DE COORDENADAS LIBRES Y GUÍA 3D     */}
+            {/* ------------------------------------------------------ */}
+            <div className="bg-slate-900/95 border border-emerald-500/40 rounded-2xl p-4 shadow-xl space-y-3">
+              <div
+                className="flex items-center justify-between cursor-pointer select-none"
+                onClick={() => setIsFreeCoordsOpen(!isFreeCoordsOpen)}
+              >
+                <div className="flex items-center gap-2">
+                  <Compass className="text-emerald-400" size={16} />
+                  <div>
+                    <h3 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-2">
+                      <span>🗺️ Matriz de Coordenadas Libres</span>
+                      <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-mono border border-emerald-500/30">
+                        {availableEmptySlots.length} libres
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Slots disponibles en {selectedWarehouse?.nombre || 'Almacén Activo'}</p>
                   </div>
                 </div>
-
-                {/* Medidas de Caja (Ancho x Alto x Largo) */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Medidas Caja (Ancho x Alto x Largo en m)</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="number"
-                      step="0.05"
-                      value={slotEditForm.box_width_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, box_width_m: parseFloat(e.target.value) || 0.4 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Ancho caja (m)"
-                    />
-                    <input
-                      type="number"
-                      step="0.05"
-                      value={slotEditForm.box_height_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, box_height_m: parseFloat(e.target.value) || 0.3 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Alto caja (m)"
-                    />
-                    <input
-                      type="number"
-                      step="0.05"
-                      value={slotEditForm.box_length_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, box_length_m: parseFloat(e.target.value) || 0.4 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Largo caja (m)"
-                    />
-                  </div>
-                </div>
-
-                {/* Medidas de la Estantería (Rack) */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Dimensiones Estantería (Ancho, Alto, Prof. en m)</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={slotEditForm.rack_width_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_width_m: parseFloat(e.target.value) || 2.4 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Ancho Rack (m)"
-                    />
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={slotEditForm.rack_height_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_height_m: parseFloat(e.target.value) || 6.0 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Alto Rack (m)"
-                    />
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={slotEditForm.rack_depth_m}
-                      onChange={(e) => setSlotEditForm({ ...slotEditForm, rack_depth_m: parseFloat(e.target.value) || 1.2 })}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-center text-xs text-white"
-                      title="Profundidad Rack (m)"
-                    />
-                  </div>
-                </div>
-
-                {/* Botones de Acción Directa */}
-                <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={handleSaveSlot}
-                    disabled={isSavingSlot}
-                    className="flex-1 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition"
-                  >
-                    <Save size={14} />
-                    <span>{isSavingSlot ? 'Guardando...' : 'Guardar Cambios'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setTransferTargetWh(selectedWarehouseId);
-                      setIsTransferModalOpen(true);
-                    }}
-                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 border border-slate-700 transition"
-                  >
-                    <ArrowRightLeft size={14} />
-                    <span>Mover</span>
-                  </button>
-
-                  <button
-                    onClick={handleEmptySlot}
-                    disabled={isSavingSlot}
-                    className="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-semibold text-xs flex items-center justify-center gap-1.5 border border-rose-500/30 transition"
-                    title="Vaciar slot y liberar espacio"
-                  >
-                    <Trash2 size={14} />
-                    <span>Vaciar</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  aria-label={isFreeCoordsOpen ? "Plegar matriz de coordenadas" : "Desplegar matriz de coordenadas"}
+                  className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                >
+                  {isFreeCoordsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
               </div>
-            ) : null}
+
+              {isFreeCoordsOpen && (
+                <div className="space-y-3 pt-2 border-t border-slate-800 animate-in fade-in">
+                  {/* Buscador de Coordenadas Libres */}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 text-slate-500" size={13} />
+                    <input
+                      type="text"
+                      value={freeCoordFilter}
+                      onChange={(e) => setFreeCoordFilter(e.target.value)}
+                      placeholder="Filtrar coordenada (ej. A-01, N2)..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-emerald-500 font-mono"
+                    />
+                    {freeCoordFilter && (
+                      <button
+                        onClick={() => setFreeCoordFilter('')}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filtros por Cuerpo */}
+                  {uniqueCuerposWithEmpty.length > 1 && (
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                      <button
+                        onClick={() => setFreeCoordCuerpo('ALL')}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition shrink-0 ${
+                          freeCoordCuerpo === 'ALL'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        Todos ({availableEmptySlots.length})
+                      </button>
+                      {uniqueCuerposWithEmpty.map((c) => {
+                        const countInCuerpo = availableEmptySlots.filter((s) => s.cuerpo === c).length;
+                        return (
+                          <button
+                            key={c}
+                            onClick={() => setFreeCoordCuerpo(c)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition shrink-0 ${
+                              freeCoordCuerpo === c
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                            }`}
+                          >
+                            Cuerpo {c} ({countInCuerpo})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Grilla de Coordenadas Libres */}
+                  {filteredFreeSlots.length === 0 ? (
+                    <div className="p-3 text-center rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400">
+                      No hay coordenadas vacías con los filtros aplicados.
+                    </div>
+                  ) : (
+                    <div className="max-h-52 overflow-y-auto pr-1 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700">
+                      {filteredFreeSlots.map((slot) => (
+                        <div
+                          key={slot.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-slate-800/80 hover:border-emerald-500/50 transition group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                            <div>
+                              <span className="font-mono font-bold text-xs text-white group-hover:text-emerald-300 transition">
+                                {slot.slot_code}
+                              </span>
+                              <div className="text-[10px] text-slate-400">
+                                Cuerpo {slot.cuerpo} · Rack {slot.rack} · Nivel {slot.nivel}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {/* Botón Enfocar en 3D */}
+                            <button
+                              onClick={() => {
+                                setInspectedSlot(slot);
+                                setSlotEditForm({
+                                  ...slotEditForm,
+                                  rack_width_m: slot.rack_width_m || 2.4,
+                                  rack_height_m: slot.rack_height_m || 6.0,
+                                  rack_depth_m: slot.rack_depth_m || 1.2,
+                                  levels_count: slot.levels_count || 4,
+                                  max_rack_weight_kg: slot.max_rack_weight_kg || 3000,
+                                  position_x: (slot as any).position_x,
+                                  position_y: (slot as any).position_y,
+                                  position_z: (slot as any).position_z,
+                                  estado: 'VACIA',
+                                  sku: '',
+                                  descripcion: '',
+                                  cajas_count: 0,
+                                  unit_weight_kg: 5.0,
+                                  box_width_m: 0.4,
+                                  box_height_m: 0.3,
+                                  box_length_m: 0.4,
+                                });
+                              }}
+                              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold transition"
+                              title="Inspeccionar posición en visor"
+                            >
+                              Ver
+                            </button>
+
+                            {/* Si hay un slot origen seleccionado y ocupado */}
+                            {inspectedSlot && inspectedSlot.estado === 'OCUPADA' && inspectedSlot.id !== slot.id && (
+                              <button
+                                onClick={() => handleExecuteRelocation(inspectedSlot, slot)}
+                                className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold flex items-center gap-1 shadow transition"
+                                title={`Reubicar ${inspectedSlot.slot_code} hacia ${slot.slot_code}`}
+                              >
+                                <ArrowRightLeft size={10} />
+                                <span>Mover aquí</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-slate-500 text-center">
+                    💡 Haz clic en <span className="text-emerald-400 font-semibold">Mover aquí</span> o en el visor 3D para reubicar stock.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
       </div>
@@ -1844,6 +3131,35 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                   placeholder="Código de slot destino..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
                 />
+                {/* Sugerencias de Coordenadas Libres (1 Clic) */}
+                {availableEmptySlots.length > 0 && (
+                  <div className="pt-1.5 space-y-1">
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <Compass size={11} /> Coordenadas Libres Disponibles (1 Clic):
+                    </span>
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+                      {availableEmptySlots.slice(0, 12).map((free) => (
+                        <button
+                          key={free.id}
+                          type="button"
+                          onClick={() => setTransferTargetSlot(free.slot_code)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono transition border ${
+                            transferTargetSlot === free.slot_code
+                              ? 'bg-emerald-600 text-white border-emerald-400 font-bold shadow'
+                              : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-emerald-500 hover:text-white'
+                          }`}
+                        >
+                          {free.slot_code}
+                        </button>
+                      ))}
+                      {availableEmptySlots.length > 12 && (
+                        <span className="text-[10px] text-slate-500 font-mono self-center px-1">
+                          +{availableEmptySlots.length - 12} más
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-1">
@@ -2186,6 +3502,201 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
           </div>
         </div>
       )}
+      {/* ========================================================= */}
+      {/* 9. MODAL: CREAR Y ALTA DE NUEVO RACK / CUERPO             */}
+      {/* ========================================================= */}
+      {isCreateRackModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <Building2 className="text-sky-400" size={20} />
+                <span>Alta de Nuevo Rack / Cuerpo Estructural</span>
+              </h3>
+              <button onClick={() => setIsCreateRackModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRack} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Depósito Asignado</label>
+                  <select
+                    value={createRackForm.warehouse_id}
+                    onChange={(e) => setCreateRackForm({ ...createRackForm, warehouse_id: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  >
+                    {warehouses.map((w) => (
+                      <option key={w.id} value={w.id}>{w.nombre} ({w.ubicacion})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-400 uppercase">Zona / Sector</label>
+                  <input
+                    type="text"
+                    value={createRackForm.zone_code}
+                    onChange={(e) => setCreateRackForm({ ...createRackForm, zone_code: e.target.value })}
+                    placeholder="GENERAL, ALTA_ROTACION..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-400 uppercase">Código del Rack / Cuerpo</label>
+                <input
+                  type="text"
+                  required
+                  value={createRackForm.rack_code}
+                  onChange={(e) => setCreateRackForm({ ...createRackForm, rack_code: e.target.value })}
+                  placeholder="ej. Cuerpo I, Cuerpo J, RACK-06..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                />
+              </div>
+
+              {/* Dimensiones Físicas */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-400 uppercase">Dimensiones de Estantería (m)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block mb-0.5">Ancho (m)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.5"
+                      required
+                      value={createRackForm.rack_width_m}
+                      onChange={(e) => setCreateRackForm({ ...createRackForm, rack_width_m: parseFloat(e.target.value) || 2.4 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block mb-0.5">Alto (m)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1.0"
+                      required
+                      value={createRackForm.rack_height_m}
+                      onChange={(e) => setCreateRackForm({ ...createRackForm, rack_height_m: parseFloat(e.target.value) || 6.0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block mb-0.5">Profundidad (m)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.5"
+                      required
+                      value={createRackForm.rack_depth_m}
+                      onChange={(e) => setCreateRackForm({ ...createRackForm, rack_depth_m: parseFloat(e.target.value) || 1.2 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Niveles y Bastidores */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Niveles (1-12)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="12"
+                    required
+                    value={createRackForm.levels_count}
+                    onChange={(e) => setCreateRackForm({ ...createRackForm, levels_count: parseInt(e.target.value) || 4 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Carga Máx (kg)</span>
+                  <input
+                    type="number"
+                    step="100"
+                    min="100"
+                    required
+                    value={createRackForm.max_weight_kg}
+                    onChange={(e) => setCreateRackForm({ ...createRackForm, max_weight_kg: parseFloat(e.target.value) || 3000 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Bastidores (1-4)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="4"
+                    value={createRackForm.racks_count}
+                    onChange={(e) => setCreateRackForm({ ...createRackForm, racks_count: parseInt(e.target.value) || 2 })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-center text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Ficha de Capacidad Calculada en Vivo */}
+              <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-3 text-xs space-y-1.5">
+                <div className="text-[10px] font-bold text-sky-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Cálculo Paramétrico Transaccional</span>
+                  <span className="text-slate-400 font-mono">
+                    {(createRackForm.levels_count * (createRackForm.positions_per_level || 3) * (createRackForm.racks_count || 2))} Slots
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-300">
+                  <div>
+                    <span className="text-slate-500">Volumen Total: </span>
+                    <span className="font-semibold text-white">
+                      {(createRackForm.rack_width_m * createRackForm.rack_height_m * createRackForm.rack_depth_m * (createRackForm.racks_count || 2)).toFixed(2)} m³
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Volumen / Slot: </span>
+                    <span className="font-semibold text-white">
+                      {((createRackForm.rack_width_m * createRackForm.rack_depth_m * (createRackForm.rack_height_m / Math.max(1, createRackForm.levels_count))) / (createRackForm.positions_per_level || 3)).toFixed(2)} m³
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Altura / Nivel: </span>
+                    <span className="font-semibold text-white">
+                      {(createRackForm.rack_height_m / Math.max(1, createRackForm.levels_count)).toFixed(2)} m
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Carga Máx / Slot: </span>
+                    <span className="font-semibold text-white">
+                      {((createRackForm.max_weight_kg / Math.max(1, createRackForm.levels_count)) / (createRackForm.positions_per_level || 3)).toFixed(0)} kg
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateRackModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingRack}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-md transition"
+                >
+                  {isCreatingRack ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                  <span>{isCreatingRack ? 'Creando e Instanciando...' : 'Crear e Instanciar en 3D'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

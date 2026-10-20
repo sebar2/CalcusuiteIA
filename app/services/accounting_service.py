@@ -76,6 +76,11 @@ class AccountingService:
         # Generar Asiento Contable Automático en Libro Diario (Partida Doble)
         AccountingService._create_expense_journal_entry(db, expense)
 
+        # Sincronización Transaccional ACID hacia Presupuestos OPEX
+        if expense.centro_costo_id:
+            periodo_str = expense.fecha.strftime("%Y-%m")
+            AccountingService.sync_opex_for_cost_center(db, expense.centro_costo_id, periodo_str)
+
         # Registrar en Auditoría y Monitoreo
         db.add(AuditLog(
             user_id=user_id,
@@ -99,9 +104,50 @@ class AccountingService:
         return expense
 
     @staticmethod
+    def sync_opex_for_cost_center(db: Session, cost_center_id: int, periodo: str):
+        """
+        Sincronización transaccional (ACID) entre Contabilidad (Expense / JournalEntry)
+        y la ejecución real en PresupuestoCentroCosto (OPEX) para el período dado.
+        Cálculo financiero de alta precisión con decimal.Decimal (ROUND_HALF_UP).
+        """
+        from app.models.entities import PresupuestoCentroCosto
+        from decimal import Decimal, ROUND_HALF_UP
+
+        try:
+            year, month = map(int, periodo.split("-"))
+        except Exception:
+            return
+
+        # Sumatoria exacta de subtotal_neto para el período y centro de costo
+        total_subtotal = db.query(func.sum(Expense.subtotal_neto)).filter(
+            Expense.centro_costo_id == cost_center_id,
+            func.extract('year', Expense.fecha) == year,
+            func.extract('month', Expense.fecha) == month
+        ).scalar() or Decimal("0.0000")
+
+        presupuesto = db.query(PresupuestoCentroCosto).filter(
+            PresupuestoCentroCosto.periodo == periodo,
+            PresupuestoCentroCosto.centro_costo_id == cost_center_id
+        ).first()
+
+        if presupuesto:
+            presupuesto.monto_real = Decimal(str(total_subtotal)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        else:
+            nuevo_pres = PresupuestoCentroCosto(
+                periodo=periodo,
+                centro_costo_id=cost_center_id,
+                concepto_opex=f"OPEX Operativo Ejecutado - {periodo}",
+                monto_presupuestado=Decimal("0.0000"),
+                monto_real=Decimal(str(total_subtotal)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            )
+            db.add(nuevo_pres)
+        db.flush()
+
+    @staticmethod
     def _create_expense_journal_entry(db: Session, expense: Expense):
         """Genera el asiento contable de gasto por partida doble."""
-        asiento_num = (db.query(func.max(JournalEntry.numero_asiento)).scalar() or 0) + 1
+        max_id = db.query(func.max(JournalEntry.id)).scalar() or 0
+        asiento_num = int(max_id) + 1
         
         # Mapeo de cuenta de gasto según categoría
         cat_cuentas = {
@@ -124,18 +170,20 @@ class AccountingService:
             referencia_doc=expense.numero_comprobante or f"Gasto #{expense.id}",
             total_debe=expense.monto_total,
             total_haber=expense.monto_total,
-            balanceado=True
+            balanceado=True,
+            cost_center_id=expense.centro_costo_id
         )
         db.add(entry)
         db.flush()
 
-        # Debe: Gasto Operativo
+        # Debe: Gasto Operativo vinculado al Centro de Costo
         db.add(JournalLine(
             entry_id=entry.id,
             cuenta_codigo=cta_cod,
             cuenta_nombre=cta_nom,
             debe=expense.subtotal_neto,
-            haber=Decimal("0.00")
+            haber=Decimal("0.00"),
+            cost_center_id=expense.centro_costo_id
         ))
 
         # Debe: IVA Crédito Fiscal (Compras)
