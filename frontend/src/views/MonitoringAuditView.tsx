@@ -1157,6 +1157,8 @@ export const MonitoringAuditView: React.FC = () => {
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="edit-user-password"
+                      autoComplete="new-password"
                       placeholder="Dejar vacío para autogenerar o escribir una..."
                       value={userForm.password}
                       onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
@@ -1282,6 +1284,8 @@ export const MonitoringAuditView: React.FC = () => {
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="edit-user-password"
+                      autoComplete="new-password"
                       placeholder="Dejar en blanco para mantener la actual..."
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}

@@ -665,6 +665,8 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
                   </label>
                   <input
                     type="password"
+                    name="new-admin-password"
+                    autoComplete="new-password"
                     required
                     minLength={6}
                     value={newAdminPassword}

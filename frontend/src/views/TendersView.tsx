@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Radio,
@@ -307,12 +307,16 @@ export const TendersView: React.FC<TendersViewProps> = ({
   useEffect(() => {
     const initData = async () => {
       try {
-        const [brouData, savedList, vertsData, modelsData] = await Promise.all([
-          apiService.getBROUExchangeRate().catch(() => ({ rate_used: 40.40 })),
-          apiService.getProcurementSavedTracking().catch(() => []),
-          apiService.getBiddingVerticals().catch(() => null),
-          apiService.getOllamaModels().catch(() => null),
+        const results = await Promise.allSettled([
+          apiService.getBROUExchangeRate(),
+          apiService.getProcurementSavedTracking(),
+          apiService.getBiddingVerticals(),
+          apiService.getOllamaModels(),
         ]);
+        const brouData = results[0].status === 'fulfilled' ? results[0].value : { rate_used: 40.40 };
+        const savedList = results[1].status === 'fulfilled' ? results[1].value : [];
+        const vertsData = results[2].status === 'fulfilled' ? results[2].value : null;
+        const modelsData = results[3].status === 'fulfilled' ? results[3].value : null;
         setTasaBrou(brouData.rate_used || 40.40);
         setSavedTenders(savedList);
         if (vertsData && vertsData.length > 0) setVerticals(vertsData);
@@ -341,17 +345,23 @@ export const TendersView: React.FC<TendersViewProps> = ({
     }
   }, []);
 
+  const callsSearchQueryRef = useRef(callsSearchQuery);
+  callsSearchQueryRef.current = callsSearchQuery;
+  const callsBuyerFilterRef = useRef(callsBuyerFilter);
+  callsBuyerFilterRef.current = callsBuyerFilter;
+
   // Cargar Radar al inicio
-  const fetchRadarCalls = useCallback(async (pageToLoad = 1, append = false) => {
+  const fetchRadarCalls = useCallback(async (pageToLoad = 1, append = false, overrideQuery?: string) => {
     if (append) setIsLoadingMoreCalls(true);
     else setIsLoadingCalls(true);
 
     try {
+      const q = overrideQuery !== undefined ? overrideQuery : callsSearchQueryRef.current;
       const resp = await apiService.getProcurementOpenCalls({
         page: pageToLoad,
         limit: 20,
-        q: callsSearchQuery.trim() || undefined,
-        buyer: callsBuyerFilter.trim() || undefined,
+        q: q.trim() || undefined,
+        buyer: callsBuyerFilterRef.current.trim() || undefined,
         sort: 'closingSoon',
         start_date_from: callsStartDateFrom || undefined,
         start_date_to: callsStartDateTo || undefined,
@@ -376,7 +386,23 @@ export const TendersView: React.FC<TendersViewProps> = ({
       setIsLoadingCalls(false);
       setIsLoadingMoreCalls(false);
     }
-  }, [callsSearchQuery, callsBuyerFilter, callsStartDateFrom, callsStartDateTo, callsEndDateFrom, callsEndDateTo]);
+  }, [callsStartDateFrom, callsStartDateTo, callsEndDateFrom, callsEndDateTo]);
+
+  // Debounce para búsqueda reactiva en Radar SICE (>= 3 chars)
+  useEffect(() => {
+    if (activeTab !== 'radar') return;
+    const q = callsSearchQuery.trim();
+    if (q.length > 0 && q.length < 3) return;
+    const timer = setTimeout(() => {
+      fetchRadarCalls(1, false, q);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [callsSearchQuery, activeTab, fetchRadarCalls]);
+
+  const [callsVisibleCount, setCallsVisibleCount] = useState<number>(24);
+  const displayedOpenCalls = useMemo(() => {
+    return openCalls.slice(0, callsVisibleCount);
+  }, [openCalls, callsVisibleCount]);
 
   useEffect(() => {
     if (activeTab === 'radar' && openCalls.length === 0) {
@@ -807,17 +833,23 @@ export const TendersView: React.FC<TendersViewProps> = ({
   // =========================================================================
   // CARGAS PARA TAB 3: PROVEEDORES
   // =========================================================================
-  const fetchSuppliersData = useCallback(async () => {
+  const supplierSearchQueryRef = useRef(supplierSearchQuery);
+  supplierSearchQueryRef.current = supplierSearchQuery;
+
+  const fetchSuppliersData = useCallback(async (overrideQuery?: string) => {
     setIsLoadingSuppliers(true);
     try {
-      const [searchRes, topRes] = await Promise.all([
-        apiService.getProcurementSuppliers({ search: supplierSearchQuery.trim() || undefined, limit: 15 }),
+      const q = overrideQuery !== undefined ? overrideQuery : supplierSearchQueryRef.current;
+      const results = await Promise.allSettled([
+        apiService.getProcurementSuppliers({ search: q.trim() || undefined, limit: 25 }),
         apiService.getProcurementTopSuppliers(10),
       ]);
-      if (searchRes.success && searchRes.data) {
+      const searchRes = results[0].status === 'fulfilled' ? results[0].value : null;
+      const topRes = results[1].status === 'fulfilled' ? results[1].value : null;
+      if (searchRes && searchRes.success && searchRes.data) {
         setSuppliersList(searchRes.data.suppliers || []);
       }
-      if (topRes.success && Array.isArray(topRes.data)) {
+      if (topRes && topRes.success && Array.isArray(topRes.data)) {
         // setTopSuppliersList
       }
     } catch (err) {
@@ -825,7 +857,18 @@ export const TendersView: React.FC<TendersViewProps> = ({
     } finally {
       setIsLoadingSuppliers(false);
     }
-  }, [supplierSearchQuery]);
+  }, []);
+
+  // Debounce para búsqueda reactiva de Competidores (>= 3 chars)
+  useEffect(() => {
+    if (activeTab !== 'competitors') return;
+    const q = supplierSearchQuery.trim();
+    if (q.length > 0 && q.length < 3) return;
+    const timer = setTimeout(() => {
+      fetchSuppliersData(q);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [supplierSearchQuery, activeTab, fetchSuppliersData]);
 
   useEffect(() => {
     if (activeTab === 'competitors' && suppliersList.length === 0) {
@@ -885,25 +928,102 @@ export const TendersView: React.FC<TendersViewProps> = ({
   // =========================================================================
   // CARGAS PARA TAB 4: COMPRADORES & INTENDENCIAS
   // =========================================================================
-  const fetchBuyersData = useCallback(async () => {
+  const [_intendenciasList, setIntendenciasList] = useState<any[]>([]);
+  const buyersSearchQueryRef = useRef(buyersSearchQuery);
+  buyersSearchQueryRef.current = buyersSearchQuery;
+
+  const fetchBuyersData = useCallback(async (overrideQuery?: string) => {
     setIsLoadingIntendencias(true);
     try {
-      const [bRes, intRes] = await Promise.all([
-        apiService.getProcurementBuyers({ search: buyersSearchQuery.trim() || undefined, limit: 20 }),
+      const q = overrideQuery !== undefined ? overrideQuery : buyersSearchQueryRef.current;
+      const results = await Promise.allSettled([
+        apiService.getProcurementBuyers({ search: q.trim() || undefined, limit: 30 }),
         apiService.getProcurementIntendencias(),
       ]);
-      if (bRes.success && bRes.data) {
-        setBuyersList(bRes.data.buyers || []);
+      const bRes = results[0].status === 'fulfilled' ? results[0].value : null;
+      const intRes = results[1].status === 'fulfilled' ? results[1].value : null;
+
+      const combinedBuyers: any[] = [];
+      const seen = new Set<string>();
+
+      if (bRes && bRes.success && bRes.data && Array.isArray(bRes.data.buyers)) {
+        for (const b of bRes.data.buyers) {
+          const norm = (b.name || '').toLowerCase().trim();
+          if (norm && !seen.has(norm)) {
+            seen.add(norm);
+            combinedBuyers.push(b);
+          }
+        }
       }
-      if (intRes.success && intRes.data) {
-        // setIntendenciasData
+
+      if (intRes && intRes.success && intRes.data && Array.isArray(intRes.data.departments)) {
+        setIntendenciasList(intRes.data.departments);
+        for (const d of intRes.data.departments) {
+          const norm = (d.name || (d as any).nombre_intendencia || '').toLowerCase().trim();
+          if (norm && !seen.has(norm)) {
+            seen.add(norm);
+            combinedBuyers.push(d);
+          }
+        }
       }
+
+      setBuyersList(combinedBuyers);
     } catch (err) {
       console.warn('Error cargando compradores e intendencias:', err);
     } finally {
       setIsLoadingIntendencias(false);
     }
-  }, [buyersSearchQuery]);
+  }, []);
+
+  // Debounce para búsqueda reactiva de Compradores & Intendencias (>= 3 chars)
+  useEffect(() => {
+    if (activeTab !== 'buyers') return;
+    const q = buyersSearchQuery.trim();
+    if (q.length > 0 && q.length < 3) return;
+    const timer = setTimeout(() => {
+      fetchBuyersData(q);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [buyersSearchQuery, activeTab, fetchBuyersData]);
+
+  // Filtrado no bloqueante con useDeferredValue y useMemo
+  const deferredBuyersSearch = useDeferredValue(buyersSearchQuery);
+  const [buyersVisibleCount, setBuyersVisibleCount] = useState<number>(24);
+
+  const filteredBuyersList = useMemo(() => {
+    const q = deferredBuyersSearch.trim().toLowerCase();
+    return buyersList.filter((b: any) => {
+      if (q.length >= 3) {
+        const matchesName = (b.name || '').toLowerCase().includes(q);
+        const matchesDept = (b.departamento || '').toLowerCase().includes(q);
+        const matchesRut = (b.rut || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesDept && !matchesRut) return false;
+      }
+      if (buyerTipoCompraFilter !== 'TODOS') {
+        const mod = (b.tipo_compra_predominante || '').toLowerCase();
+        if (!mod.includes(buyerTipoCompraFilter.toLowerCase())) return false;
+      }
+      if (buyerRubroFilter !== 'TODOS') {
+        const rub = (b.rubro_principal || '').toLowerCase();
+        if (!rub.includes(buyerRubroFilter.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [buyersList, deferredBuyersSearch, buyerTipoCompraFilter, buyerRubroFilter]);
+
+  const displayedBuyersList = useMemo(() => {
+    return filteredBuyersList.slice(0, buyersVisibleCount);
+  }, [filteredBuyersList, buyersVisibleCount]);
+
+  const handleResetBuyersFilter = () => {
+    setBuyersSearchQuery('');
+    setBuyerRubroFilter('TODOS');
+    setBuyerTipoCompraFilter('TODOS');
+    setBuyerStartDate('');
+    setBuyerEndDate('');
+    setBuyersVisibleCount(24);
+    fetchBuyersData('');
+  };
 
   const handleSelectBuyer = async (deptOrBuyer: any) => {
     setIsLoadingBuyerDetail(true);
@@ -1324,7 +1444,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {openCalls.map((call) => {
+                {displayedOpenCalls.map((call) => {
                   const compraId = String(call.compraId);
                   const isSaved = savedTenders.some((s) => s.id === compraId);
                   const startDateStr = (call.tenderPeriod?.startDate || (call as any).datePublished || (call as any).date)
@@ -1507,6 +1627,17 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   );
                 })}
               </div>
+
+              {openCalls.length > displayedOpenCalls.length && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    onClick={() => setCallsVisibleCount((prev) => prev + 24)}
+                    className="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 px-5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <span>Mostrar más licitaciones en pantalla ({openCalls.length - displayedOpenCalls.length} restantes)</span>
+                  </button>
+                </div>
+              )}
 
               {/* Botón Paginación Acumulativa */}
               {openCalls.length < callsTotal && (
@@ -1957,9 +2088,9 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 </div>
 
                 <button
-                  onClick={fetchSuppliersData}
+                  onClick={() => fetchSuppliersData()}
                   disabled={isLoadingSuppliers}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                 >
                   {isLoadingSuppliers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                   <span>Buscar</span>
@@ -2237,22 +2368,15 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 {/* 4. Fechas y Botón Filtrar */}
                 <div className="flex items-end gap-2">
                   <button
-                    onClick={fetchBuyersData}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md"
+                    onClick={() => fetchBuyersData()}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                   >
                     <Search className="w-3.5 h-3.5" />
                     <span>Filtrar</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setBuyersSearchQuery('');
-                      setBuyerRubroFilter('TODOS');
-                      setBuyerTipoCompraFilter('TODOS');
-                      setBuyerStartDate('');
-                      setBuyerEndDate('');
-                      setTimeout(fetchBuyersData, 50);
-                    }}
-                    className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-white"
+                    onClick={handleResetBuyersFilter}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-white cursor-pointer"
                     title="Limpiar filtros"
                   >
                     <RefreshCw className="w-4 h-4" />
@@ -2267,25 +2391,14 @@ export const TendersView: React.FC<TendersViewProps> = ({
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
                 <p className="text-xs">Consultando compradores y plazos de pago SIIF...</p>
               </div>
-            ) : buyersList.length === 0 ? (
+            ) : filteredBuyersList.length === 0 ? (
               <div className="py-8 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 text-xs">
                 No se encontraron organismos que coincidan con los filtros seleccionados.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {buyersList
-                  .filter((b) => {
-                    if (buyerTipoCompraFilter !== 'TODOS') {
-                      const mod = (b.tipo_compra_predominante || '').toLowerCase();
-                      if (!mod.includes(buyerTipoCompraFilter.toLowerCase())) return false;
-                    }
-                    if (buyerRubroFilter !== 'TODOS') {
-                      const rub = (b.rubro_principal || '').toLowerCase();
-                      if (!rub.includes(buyerRubroFilter.toLowerCase())) return false;
-                    }
-                    return true;
-                  })
-                  .map((buyer: any, bIdx: number) => {
+              <div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {displayedBuyersList.map((buyer: any, bIdx: number) => {
                     const dsoDays = buyer.dso_estimado_dias || 45;
                     const semaforo = buyer.dso_semaforo || (dsoDays <= 45 ? 'VERDE' : (dsoDays <= 75 ? 'AMARILLO' : 'ROJO'));
                     const semaforoColor = semaforo === 'VERDE'
@@ -2329,6 +2442,17 @@ export const TendersView: React.FC<TendersViewProps> = ({
                       </div>
                     );
                   })}
+                </div>
+                {filteredBuyersList.length > displayedBuyersList.length && (
+                  <div className="mt-5 text-center">
+                    <button
+                      onClick={() => setBuyersVisibleCount((prev) => prev + 24)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-indigo-300 hover:text-white transition-colors cursor-pointer"
+                    >
+                      Cargar más organismos ({filteredBuyersList.length - displayedBuyersList.length} restantes)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
