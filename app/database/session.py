@@ -96,6 +96,10 @@ def sync_table_columns(conn):
                 conn.commit()
                 logger.info("Migración no destructiva multi-dialecto: columna '%s' añadida a tabla '%s'.", col, table)
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.warning("No se pudo añadir columna '%s' a '%s': %s", col, table, e)
 
     # 1. stock_location_batches (Multi-Depósito, Dual-SKU y Fechas de fabricación)
@@ -185,15 +189,60 @@ def sync_table_columns(conn):
     add_col_if_missing("invoices", "orden_compra_ref", "VARCHAR(50)")
     add_col_if_missing("invoices", "factura_referencia_id", "INTEGER")
 
+    # 7.4.1. Normalización BCNF / 3NF / 1NF
+    add_col_if_missing("commercial_deals", "client_id", "INTEGER")
+    if "collection_cases" in existing_tables and "invoices" in existing_tables and "collection_case_invoices" not in existing_tables:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS collection_case_invoices (
+                    case_id INTEGER NOT NULL REFERENCES collection_cases(id) ON DELETE CASCADE,
+                    invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+                    PRIMARY KEY (case_id, invoice_id)
+                )
+            """))
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.debug("Silenced collection_case_invoices creation: %s", e)
+
+
     # 7.5. Usuarios del Sistema, Multi-Tenancy & 2FA
     add_col_if_missing("system_users", "password_hash", "VARCHAR(255)")
     add_col_if_missing("system_users", "tenant_id", "VARCHAR(50)", "'tenant_calcu_corp'")
     add_col_if_missing("system_users", "two_factor_enabled", "BOOLEAN", "FALSE")
     add_col_if_missing("system_users", "two_factor_secret_encrypted", "VARCHAR(255)")
     add_col_if_missing("system_users", "is_master_superadmin", "BOOLEAN", "FALSE")
+    add_col_if_missing("tenant_accounts", "account_role", "VARCHAR(40)", "'CLIENTE_TENANT'")
 
-
-
+    # 7.6. Jerarquía Inmutable del Superadministrador y Propietario (Sebastian Rodriguez)
+    if "tenant_accounts" in existing_tables and "system_users" in existing_tables:
+        try:
+            conn.execute(text("""
+                UPDATE tenant_accounts 
+                SET account_role = 'PROPIETARIO (OWNER)',
+                    subscription_status = 'ACTIVE_PAID',
+                    license_tier = 'ENTERPRISE_3PL',
+                    simulated_tier = 'ENTERPRISE_3PL',
+                    max_users = 999999
+                WHERE id = 'tenant_calcu_corp'
+            """))
+            conn.execute(text("""
+                UPDATE system_users
+                SET is_master_superadmin = TRUE,
+                    role = 'controller_admin',
+                    puesto = 'Controller General & Propietario'
+                WHERE username IN ('seba', 'sebastian', 'sebar_2@hotmail.com')
+            """))
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.debug("Silenced owner hierarchy sync: %s", e)
 
     # 8. Semilla de Proveedores Uruguay y Servicios Implícitos si la tabla existe
     if "suppliers" in existing_tables:
@@ -213,6 +262,10 @@ def sync_table_columns(conn):
                     """), {"n": n, "rz": rz, "rut": rut, "tip": tip, "p": p, "cn": cn, "cc": cc, "em": em, "ph": ph, "ad": ad, "d": d})
                 conn.commit()
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.warning("No se pudo sembrar proveedores Uy: %s", e)
 
     # 9. Semilla de Catálogo de Servicios Implícitos (Landed Costs)
@@ -236,6 +289,10 @@ def sync_table_columns(conn):
                     """), {"r": r, "c": c, "nom": nom, "costo": costo, "desc": desc, "activo": True})
                 conn.commit()
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.warning("No se pudo sembrar catálogo de servicios implícitos: %s", e)
 
     # 10. Semilla de Catálogo de Productos de Proveedores (PVP / PVM / Costo)
@@ -277,6 +334,10 @@ def sync_table_columns(conn):
                     conn.commit()
                     logger.info("Catálogo inicial de productos de proveedores sembrado exitosamente.")
         except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             logger.warning("No se pudo sembrar catálogo inicial de proveedores: %s", e)
 
 
@@ -1214,6 +1275,10 @@ def seed_multitenant_and_omnichannel(conn):
                 )
             conn.commit()
     except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         logger.warning("No se pudo sembrar tenant_accounts: %s", e)
 
     # 2. Canales del Hub de Integraciones (Sin falsos positivos: PENDING_CREDENTIALS hasta configurar llaves reales)
@@ -1262,6 +1327,10 @@ def seed_multitenant_and_omnichannel(conn):
                 )
         conn.commit()
     except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         logger.warning("No se pudo sembrar integration_configs: %s", e)
 
     # 3. Prospectos Multicanal de Muestra en "1. Prospección" y Mensajes de Chat Omnicanal
@@ -1477,6 +1546,10 @@ def seed_multitenant_and_omnichannel(conn):
                 )
             conn.commit()
     except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         logger.warning("No se pudo sembrar prospectos multicanal y mensajes omnicanal: %s", e)
 
 
@@ -1572,13 +1645,15 @@ def get_db(request: Request = None):
                     resolved_tenant_id = "tenant_demo_sandbox"
                 elif payload.get("tenant_id"):
                     resolved_tenant_id = str(payload.get("tenant_id"))
-            # 2. Comprobar encabezado explícito X-Tenant-Id o X-User-Id
+            # 2. Comprobar encabezado explícito X-Tenant-Id o X-User-Id únicamente en desarrollo/pruebas controladas
             if resolved_tenant_id == "tenant_calcu_corp":
-                header_tenant = request.headers.get("x-tenant-id")
-                if header_tenant:
-                    resolved_tenant_id = header_tenant.strip()
-                elif request.headers.get("x-user-id") == "demo" or request.query_params.get("user_id") == "demo":
-                    resolved_tenant_id = "tenant_demo_sandbox"
+                allow_header_tenant = os.getenv("ENVIRONMENT") != "production" or os.getenv("ALLOW_TEST_HEADER_AUTH") == "1"
+                if allow_header_tenant:
+                    header_tenant = request.headers.get("x-tenant-id")
+                    if header_tenant:
+                        resolved_tenant_id = header_tenant.strip()
+                    elif request.headers.get("x-user-id") == "demo" or request.query_params.get("user_id") == "demo":
+                        resolved_tenant_id = "tenant_demo_sandbox"
         except Exception:
             pass
 

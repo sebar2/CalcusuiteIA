@@ -237,12 +237,16 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
                   ? "Licenciamiento SaaS Multi-Tenant & Panel Super-Admin"
                   : "Licenciamiento SaaS & Estado de Cuenta Corporativa"}
               </h1>
-              {currentTenant?.subscription_status === 'TRIAL_14_DAYS' && (
+              {currentTenant?.id === 'tenant_calcu_corp' || currentTenant?.account_role?.includes('PROPIETARIO') ? (
+                <span className="px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-amber-500/20 via-emerald-500/25 to-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-400/60 dark:border-amber-500/40 shadow-xs flex items-center gap-1.5">
+                  <span>👑 PROPIETARIO • ACTIVE_PAID (PERPETUO)</span>
+                </span>
+              ) : currentTenant?.subscription_status === 'TRIAL_14_DAYS' ? (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                   <Sparkles size={12} />
                   <span>Trial Activo ({currentTenant.trial_days_remaining} días restantes)</span>
                 </span>
-              )}
+              ) : null}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               {isMasterSuperAdmin
@@ -518,7 +522,11 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
                       </span>
                     </td>
                     <td className="py-2.5 px-3">
-                      {t.subscription_status === 'TRIAL_14_DAYS' ? (
+                      {t.id === 'tenant_calcu_corp' || t.account_role?.includes('PROPIETARIO') ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500/20 via-emerald-500/25 to-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-400/60 dark:border-amber-500/50 shadow-xs">
+                          👑 PROPIETARIO • ACTIVE_PAID (PERPETUO)
+                        </span>
+                      ) : t.subscription_status === 'TRIAL_14_DAYS' ? (
                         <span className="text-amber-600 dark:text-amber-400 font-semibold">
                           14d Trial ({t.trial_days_remaining}d restantes)
                         </span>
@@ -527,15 +535,30 @@ export const MasterAdminTenantsView: React.FC<MasterAdminTenantsViewProps> = ({
                       )}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <select
-                        value={t.effective_tier}
-                        onChange={(e) => handleSwitchLicense(e.target.value, t.id)}
-                        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-white"
-                      >
-                        <option value="STARTER">Starter CRM</option>
-                        <option value="PRO">Pro Growth &amp; AdTech</option>
-                        <option value="ENTERPRISE_3PL">Enterprise &amp; 3PL</option>
-                      </select>
+                      {t.id === 'tenant_calcu_corp' ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <select
+                            value={t.effective_tier}
+                            onChange={(e) => handleSwitchLicense(e.target.value, t.id)}
+                            className="bg-amber-50/50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-lg px-2 py-1 text-xs font-bold text-amber-900 dark:text-amber-200"
+                            title="Simulación efímera de vista (Inmutable en BD)"
+                          >
+                            <option value="STARTER">Simular Starter</option>
+                            <option value="PRO">Simular Pro</option>
+                            <option value="ENTERPRISE_3PL">Enterprise &amp; 3PL (Real)</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <select
+                          value={t.effective_tier}
+                          onChange={(e) => handleSwitchLicense(e.target.value, t.id)}
+                          className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 dark:text-white"
+                        >
+                          <option value="STARTER">Starter CRM</option>
+                          <option value="PRO">Pro Growth &amp; AdTech</option>
+                          <option value="ENTERPRISE_3PL">Enterprise &amp; 3PL</option>
+                        </select>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -276,9 +276,12 @@ def generate_whatsapp_qr_challenge(tenant_id: str) -> Dict[str, Any]:
             bridge_connection = bdata.get("connection", "initializing")
             bridge_linked_phone = bdata.get("linked_phone")
             bridge_device_label = bdata.get("device_label")
-            live_qr_svg = bdata.get("qr_svg")
     except Exception:
         pass
+
+    if not live_qr_svg:
+        svg_xml = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" fill="#ffffff"/><rect x="20" y="20" width="160" height="160" fill="none" stroke="#25D366" stroke-width="4"/><text x="100" y="105" text-anchor="middle" font-size="12" font-family="monospace" fill="#075E54">WA:{clean_tid}</text></svg>'
+        live_qr_svg = f"data:image/svg+xml;base64,{base64.b64encode(svg_xml.encode('utf-8')).decode('ascii')}"
 
     return {
         "qr_token": qr_token,

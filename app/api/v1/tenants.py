@@ -82,6 +82,7 @@ class TenantAccountResponse(BaseModel):
     license_tier: str
     simulated_tier: str
     effective_tier: str
+    account_role: str = "CLIENTE_TENANT"
     subscription_status: str
     trial_days_remaining: int
     trial_ends_at: str
@@ -120,8 +121,10 @@ def _to_tenant_response(t: TenantAccount) -> TenantAccountResponse:
         t_end = t_end.replace(tzinfo=timezone.utc)
     days_left = max(0, (t_end - now_utc).days) if t_end else 14
     sim_tier = t.simulated_tier or t.license_tier or "ENTERPRISE_3PL"
-    effective = sim_tier if t.subscription_status == "TRIAL_14_DAYS" else t.license_tier
+    effective = sim_tier if (t.subscription_status == "TRIAL_14_DAYS" or t.simulated_tier) else t.license_tier
     caps = LICENSE_CAPABILITIES.get(effective, LICENSE_CAPABILITIES["ENTERPRISE_3PL"])
+
+    account_role = getattr(t, "account_role", None) or ("PROPIETARIO (OWNER)" if t.id == "tenant_calcu_corp" else "CLIENTE_TENANT")
 
     return TenantAccountResponse(
         id=t.id,
@@ -133,6 +136,7 @@ def _to_tenant_response(t: TenantAccount) -> TenantAccountResponse:
         license_tier=t.license_tier,
         simulated_tier=sim_tier,
         effective_tier=effective,
+        account_role=account_role,
         subscription_status=t.subscription_status,
         trial_days_remaining=days_left,
         trial_ends_at=t_end.strftime("%Y-%m-%d") if t_end else "",
@@ -311,6 +315,24 @@ def update_tenant_license(
         tenant = master_db.query(TenantAccount).filter(TenantAccount.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=404, detail=f"Cuenta '{tenant_id}' no encontrada.")
+
+        # 👑 REGLA DE ORO PROPIETARIO: Inmutabilidad de la cuenta raíz tenant_calcu_corp (Sebastian Rodriguez)
+        if tenant_id == "tenant_calcu_corp":
+            req_sim = payload.simulated_tier or payload.license_tier
+            if req_sim is not None:
+                sim_up = req_sim.upper()
+                if sim_up not in LICENSE_CAPABILITIES:
+                    raise HTTPException(status_code=400, detail=f"Nivel de licencia '{sim_up}' inválido.")
+                tenant.simulated_tier = sim_up
+            
+            tenant.account_role = "PROPIETARIO (OWNER)"
+            tenant.subscription_status = "ACTIVE_PAID"  # Inmutable en DB
+            tenant.license_tier = "ENTERPRISE_3PL"      # Inmutable en DB (nunca se degrada en base de datos)
+            tenant.max_users = 999999
+            tenant.is_active = True
+            master_db.commit()
+            master_db.refresh(tenant)
+            return _to_tenant_response(tenant)
 
         if payload.simulated_tier is not None:
             sim_up = payload.simulated_tier.upper()

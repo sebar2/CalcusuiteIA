@@ -44,7 +44,7 @@ class Settings(BaseModel):
 
     # 5. Uruguay Procurement API (Con la Tuya / SICE / ARCE)
     conlatuya_api_key: str = Field(
-        default_factory=lambda: os.getenv("CONLATUYA_API_KEY", "gk_live_J4ZgEkep_i87ICjgb1xrsvZZfUlEC1R7qlfdU5ZHi")
+        default_factory=lambda: os.getenv("CONLATUYA_API_KEY", "")
     )
     conlatuya_base_url: str = Field(
         default_factory=lambda: os.getenv("CONLATUYA_BASE_URL", "https://conlatuya.checkleaked.cc/api").rstrip("/")
@@ -60,6 +60,8 @@ class Settings(BaseModel):
     def validate_jwt_secret(cls, v: str) -> str:
         if not v or len(v.strip()) < 16:
             raise ValueError("JWT_SECRET_KEY debe tener al menos 16 caracteres para garantizar seguridad criptográfica.")
+        if os.getenv("ENVIRONMENT") == "production" and v == "calcu-enterprise-jwt-secret-key-32-chars-long-2026-prod":
+            raise ValueError("En entorno de producción (ENVIRONMENT=production) es obligatorio definir un JWT_SECRET_KEY único e impredecible en .env.")
         return v.strip()
 
 

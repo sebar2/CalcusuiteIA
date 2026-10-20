@@ -45,6 +45,7 @@ const IntegrationsView = lazy(() => import('./views/IntegrationsView').then(m =>
 const OmnichannelChatView = lazy(() => import('./views/OmnichannelChatView').then(m => ({ default: m.OmnichannelChatView })));
 const MasterAdminTenantsView = lazy(() => import('./views/MasterAdminTenantsView').then(m => ({ default: m.MasterAdminTenantsView })));
 const MercadoLibreView = lazy(() => import('./views/commercial/MercadoLibreView').then(m => ({ default: m.MercadoLibreView })));
+const SettingsView = lazy(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 import { Lock } from 'lucide-react';
 
@@ -707,6 +708,12 @@ export function AppContent() {
             {activeTab === 'monitoring' && (
               <ErrorBoundary fallbackTitle="Error al cargar Módulo de Monitoreo">
                 <MonitoringAuditView />
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'settings' && (
+              <ErrorBoundary fallbackTitle="Error al cargar Módulo de Configuraciones">
+                <SettingsView />
               </ErrorBoundary>
             )}
               </>

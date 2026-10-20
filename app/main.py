@@ -98,10 +98,21 @@ app.add_middleware(
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
+import re
+
+_ALLOWED_ORIGIN_REGEX = re.compile(r"^https?://(localhost|127\.0\.0\.1|100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|.*\.ts\.net)(:\d+)?$")
+_ALLOWED_EXACT_ORIGINS = {
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:8501", "http://127.0.0.1:8501",
+    "http://localhost", "https://localhost",
+    "capacitor://localhost", "ionic://localhost"
+}
+
 def get_cors_headers(request: Request) -> dict:
     origin = request.headers.get("origin")
     headers = {}
-    if origin:
+    if origin and (origin in _ALLOWED_EXACT_ORIGINS or _ALLOWED_ORIGIN_REGEX.match(origin)):
         headers["Access-Control-Allow-Origin"] = origin
         headers["Access-Control-Allow-Credentials"] = "true"
         headers["Access-Control-Allow-Methods"] = "*"

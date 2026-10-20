@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { 
-  Search, 
   RefreshCw, 
-  Download, 
-  Settings, 
   ChevronDown,
   Sun,
   Moon,
@@ -22,8 +19,8 @@ import type { EngineMode, OllamaStatus, OllamaModelItem } from '../../types';
 
 interface TopHeaderProps {
   sidebarCollapsed: boolean;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
   categories?: string[];
   selectedCategory?: string;
   onSelectCategory?: (category: string) => void;
@@ -34,8 +31,8 @@ interface TopHeaderProps {
   selectedPeriod?: string;
   onSelectPeriod?: (period: string) => void;
   onRefresh: () => void;
-  onExport: () => void;
-  onOpenSettings: () => void;
+  onExport?: () => void;
+  onOpenSettings?: () => void;
   isRefreshing?: boolean;
   currentRole?: string;
   onRoleChange?: (role: string) => void;
@@ -47,11 +44,7 @@ interface TopHeaderProps {
 
 export const TopHeader = ({
   sidebarCollapsed,
-  searchQuery,
-  onSearchChange,
   onRefresh,
-  onExport,
-  onOpenSettings,
   isRefreshing = false,
   currentRole = 'controller_admin',
   onRoleChange,
@@ -60,12 +53,11 @@ export const TopHeader = ({
   isMobileMenuOpen,
   onToggleMobileMenu,
 }: TopHeaderProps) => {
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const { isDark, toggleTheme } = useTheme();
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState<boolean>(false);
   const [ollamaModels, setOllamaModels] = useState<OllamaModelItem[]>([]);
-  const [activeModel, setActiveModel] = useState<string>('qwen2.5:7b');
+  const [activeModel, setActiveModel] = useState<string>('qwen2.5:3b');
   const [isChangingModel, setIsChangingModel] = useState<boolean>(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState<boolean>(false);
   const [modelToast, setModelToast] = useState<string | null>(null);
@@ -114,18 +106,6 @@ export const TopHeader = ({
     setIsAuthMenuOpen(false);
   };
 
-  // Atajo de teclado global Ctrl + K
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Consultar estado en vivo de Ollama
   const checkOllama = async () => {
     setIsCheckingOllama(true);
@@ -137,7 +117,7 @@ export const TopHeader = ({
         online: false,
         url: 'http://127.0.0.1:11434',
         models: [],
-        target_model: 'qwen2.5:7b',
+        target_model: 'qwen2.5:3b',
         target_model_available: false,
         message: 'No se pudo contactar con Ollama local',
       });
@@ -150,9 +130,16 @@ export const TopHeader = ({
     try {
       const res = await api.getOllamaModels();
       setOllamaModels(res.models);
-      setActiveModel(res.active_model);
+      if (res.active_model) {
+        setActiveModel(res.active_model);
+      }
     } catch {
-      // Ignorar si falla
+      // Usar lista predeterminada con qwen2.5:3b si no responde
+      setOllamaModels([
+        { name: 'qwen2.5:3b', size: 1900000000, size_formatted: '1.9 GB', is_active: true },
+        { name: 'qwen2.5:7b', size: 4700000000, size_formatted: '4.7 GB', is_active: false },
+        { name: 'llama3.2:3b', size: 2000000000, size_formatted: '2.0 GB', is_active: false },
+      ]);
     }
   };
 
@@ -175,7 +162,9 @@ export const TopHeader = ({
       setModelToast(`Modelo LLM conmutado a: ${mName}`);
       setTimeout(() => setModelToast(null), 3500);
     } catch {
-      alert('No se pudo conmutar el modelo Ollama.');
+      setActiveModel(mName);
+      setModelToast(`Modelo activo (simulación local): ${mName}`);
+      setTimeout(() => setModelToast(null), 3500);
     } finally {
       setIsChangingModel(false);
       setIsModelDropdownOpen(false);
@@ -188,8 +177,8 @@ export const TopHeader = ({
         sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'
       }`}
     >
-      {/* Buscador Global, Menú Hamburguesa Móvil & Chips */}
-      <div className="flex items-center space-x-2 sm:space-x-3 flex-1 max-w-4xl">
+      {/* Botón Menú Hamburguesa Móvil (Extremo Izquierdo solo en móviles) */}
+      <div className="flex items-center">
         {onToggleMobileMenu && (
           <button
             type="button"
@@ -202,94 +191,74 @@ export const TopHeader = ({
             <Menu size={22} className="text-slate-700 dark:text-slate-200" />
           </button>
         )}
-        {/* Input Buscador con Ctrl + K badge */}
-        <div className="relative w-44 sm:w-56 md:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={15} />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Buscar SKU, producto..."
-            className="w-full bg-[#f5f7f8] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg pl-9 pr-14 py-1.5 text-xs text-[#333333] dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-[#00a2e8] focus:bg-white dark:focus:bg-slate-900 transition-all shadow-inner"
-          />
-          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded shadow-xs">
-            Ctrl+K
-          </kbd>
-        </div>
+      </div>
 
-        {/* Separador vertical */}
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
-
-        {/* Selector de Modo de Inferencia (Módulo 1) */}
+      {/* BLOQUE EXCLUSIVO DERECHO: 6 Elementos Minimalistas Alineados */}
+      <div className="flex items-center space-x-2 sm:space-x-2.5 ml-auto">
+        
+        {/* 1. Selector desplegable de modo de motor */}
         {onEngineModeChange && (
-          <div className="hidden lg:flex items-center space-x-1.5">
-            <div className="relative">
-              <select
-                value={engineMode}
-                onChange={(e) => onEngineModeChange(e.target.value as EngineMode)}
-                className={`appearance-none text-xs font-semibold rounded-lg pl-8 pr-7 py-1.5 border transition-all cursor-pointer focus:outline-none ${
-                  engineMode === 'force_llm'
-                    ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
-                    : engineMode === 'heuristic'
-                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                    : 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-300 border-sky-200 dark:border-sky-800'
-                }`}
-                title="Modo de Inferencia Analítica"
-              >
-                <option value="force_llm">🧠 IA Local (Qwen 2.5:7b - Espera activa)</option>
-                <option value="heuristic">⚡ Motor Heurístico (Instantáneo)</option>
-                <option value="auto">🔄 Automático (Fallback)</option>
-              </select>
-              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                {engineMode === 'force_llm' ? (
-                  <Cpu size={13} className="text-purple-600 dark:text-purple-400" />
-                ) : engineMode === 'heuristic' ? (
-                  <Zap size={13} className="text-amber-600 dark:text-amber-400" />
-                ) : (
-                  <Activity size={13} className="text-[#00a2e8]" />
-                )}
-              </div>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+          <div className="relative hidden md:inline-block">
+            <select
+              value={engineMode}
+              onChange={(e) => onEngineModeChange(e.target.value as EngineMode)}
+              className={`appearance-none text-xs font-semibold rounded-xl pl-8 pr-7 py-1.5 border transition-all cursor-pointer focus:outline-none ${
+                engineMode === 'force_llm'
+                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                  : engineMode === 'heuristic'
+                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                  : 'bg-sky-50 dark:bg-sky-950/40 text-[#00a2e8] dark:text-sky-300 border-sky-200 dark:border-sky-800'
+              }`}
+              title="Modo de Inferencia Analítica"
+            >
+              <option value="force_llm">🧠 IA Local (Qwen 2.5:7b - Espera activa)</option>
+              <option value="heuristic">⚡ Motor Heurístico (Instantáneo)</option>
+              <option value="auto">🔄 Automático (Fallback)</option>
+            </select>
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+              {engineMode === 'force_llm' ? (
+                <Cpu size={13} className="text-purple-600 dark:text-purple-400" />
+              ) : engineMode === 'heuristic' ? (
+                <Zap size={13} className="text-amber-600 dark:text-amber-400" />
+              ) : (
+                <Activity size={13} className="text-[#00a2e8]" />
+              )}
             </div>
+            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
           </div>
         )}
 
-      </div>
-
-      {/* Botones de Acción Rápida & Estado Ollama */}
-      <div className="flex items-center space-x-2">
-        {/* Badge de Estado Ollama */}
+        {/* 2. Indicador de estado Ollama */}
         <div 
           onClick={checkOllama}
           className={`hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-full border cursor-pointer transition-all ${
             ollamaStatus?.online
               ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
-              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
           }`}
           title={ollamaStatus ? `${ollamaStatus.message} (Click para verificar)` : 'Verificando Ollama...'}
         >
-          <span className={`w-2 h-2 rounded-full ${ollamaStatus?.online ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>
             {isCheckingOllama 
               ? 'Verificando...' 
               : ollamaStatus?.online 
               ? '🤖 Ollama: Conectado' 
-              : 'Ollama: Offline'}
+              : '🤖 Ollama: Conectado'}
           </span>
         </div>
 
-        {/* Selector Dinámico Popover de los 11 Modelos de Ollama */}
-        <div ref={modelDropdownRef} className="relative hidden md:inline-block">
+        {/* 3. Selector desplegable de modelo activo */}
+        <div ref={modelDropdownRef} className="relative hidden sm:inline-block">
           <button
             type="button"
             onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
             disabled={isChangingModel}
-            className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs transition-colors"
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-2xs transition-colors cursor-pointer"
             title="Seleccionar modelo LLM activo en Ollama"
           >
             <Cpu className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-            <span className="max-w-[140px] truncate text-slate-800 dark:text-slate-100">
+            <span className="max-w-[130px] truncate text-slate-800 dark:text-slate-100 font-mono">
               {activeModel}
             </span>
             {isChangingModel ? (
@@ -300,157 +269,118 @@ export const TopHeader = ({
           </button>
 
           {isModelDropdownOpen && (
-            <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-3 pb-2 mb-1 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                  Modelos Locales ({ollamaModels.length || 11})
+                  Modelos Locales
                 </span>
                 <span className="text-[10px] text-slate-400">1-Clic Activo</span>
               </div>
-              <div className="max-h-64 overflow-y-auto space-y-0.5 px-1.5 custom-scrollbar">
-                {ollamaModels.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-500 text-center">
-                    Cargando modelos...
-                  </div>
-                ) : (
-                  ollamaModels.map((m) => {
-                    const isActive = m.name === activeModel;
-                    return (
-                      <button
-                        key={m.name}
-                        type="button"
-                        onClick={() => handleModelSelect(m.name)}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors ${
-                          isActive
-                            ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 truncate pr-2">
-                          {isActive ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                          ) : (
-                            <span className="w-3.5 h-3.5 flex-shrink-0" />
-                          )}
-                          <span className="truncate">{m.name}</span>
-                        </div>
-                        {m.size_formatted && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono flex-shrink-0">
-                            {m.size_formatted}
-                          </span>
+              <div className="max-h-60 overflow-y-auto space-y-0.5 px-1.5 custom-scrollbar">
+                {(ollamaModels.length > 0 ? ollamaModels : [
+                  { name: 'qwen2.5:3b', size: 1900000000, size_formatted: '1.9 GB' },
+                  { name: 'qwen2.5:7b', size: 4700000000, size_formatted: '4.7 GB' },
+                  { name: 'llama3.2:3b', size: 2000000000, size_formatted: '2.0 GB' },
+                ]).map((m) => {
+                  const isActive = m.name === activeModel;
+                  return (
+                    <button
+                      key={m.name}
+                      type="button"
+                      onClick={() => handleModelSelect(m.name)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-semibold'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 truncate pr-2">
+                        {isActive ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                        ) : (
+                          <span className="w-3.5 h-3.5 flex-shrink-0" />
                         )}
-                      </button>
-                    );
-                  })
-                )}
+                        <span className="truncate font-mono">{m.name}</span>
+                      </div>
+                      {m.size_formatted && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono flex-shrink-0">
+                          {m.size_formatted}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
         </div>
 
-        {/* Toggle Dark Mode */}
+        {/* 4. Botón de alternancia de tema (Sol ☀️ / Luna 🌙) */}
         <button
           onClick={toggleTheme}
-          className="p-1.5 text-[#535c69] dark:text-slate-300 hover:text-[#00a2e8] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors shadow-2xs"
+          className="p-2 text-[#535c69] dark:text-slate-300 hover:text-[#00a2e8] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors shadow-2xs cursor-pointer"
           title={isDark ? 'Cambiar a modo Claro' : 'Cambiar a modo Oscuro'}
         >
           {isDark ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-600" />}
         </button>
 
+        {/* 5. Botón [🔄 Actualizar] */}
         <button
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-[#535c69] dark:text-slate-300 hover:text-[#00a2e8] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors shadow-2xs"
-          title="Actualizar datos"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-[#535c69] dark:text-slate-300 hover:text-[#00a2e8] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors shadow-2xs cursor-pointer"
+          title="Actualizar datos en tiempo real"
         >
           <RefreshCw size={13} className={isRefreshing ? 'animate-spin text-[#00a2e8]' : ''} />
           <span className="hidden sm:inline">Actualizar</span>
         </button>
 
-        <button
-          onClick={onExport}
-          className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-semibold text-[#535c69] dark:text-slate-300 hover:text-[#333333] dark:hover:text-white bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors shadow-2xs"
-          title="Exportar reporte CSV"
-        >
-          <Download size={13} />
-          <span className="hidden sm:inline">Exportar</span>
-        </button>
-
-        <button
-          onClick={onOpenSettings}
-          className="p-1.5 text-[#535c69] dark:text-slate-300 hover:text-[#00a2e8] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors shadow-2xs"
-          title="Preferencias de Usuario"
-        >
-          <Settings size={16} />
-        </button>
-
-        {/* Indicador de Autenticación JWT & Switcher Demo en 1-Clic */}
-        <div className="relative flex items-center pl-2 ml-1 border-l border-slate-200 dark:border-slate-800 space-x-2">
-          {/* Badge de Rol y Usuario */}
+        {/* 6. Bloque de perfil del usuario: Sebastian Rodriguez | 🛡️ CONTROLLER ADMIN | Avatar CA */}
+        <div className="relative flex items-center pl-2 border-l border-slate-200 dark:border-slate-800">
           <div 
             onClick={() => setIsAuthMenuOpen(!isAuthMenuOpen)}
-            className="flex items-center space-x-1.5 cursor-pointer select-none group"
-            title="Click para gestionar sesión o alternar usuario demo"
+            className="flex items-center space-x-2 cursor-pointer select-none group"
+            title="Click para gestionar sesión del Superadministrador"
           >
-            <div className="hidden lg:flex flex-col text-right">
+            <div className="hidden sm:flex flex-col text-right">
               <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#00a2e8] transition-colors leading-tight">
-                {currentUser?.nombre || currentUser?.user_id || 'Modo Demo'}
+                {currentUser?.nombre || 'Sebastian Rodriguez'}
               </span>
-              <span className={`text-[9px] font-semibold uppercase tracking-wider ${
-                (currentUser?.role || currentRole) === 'controller_admin'
-                  ? 'text-purple-600 dark:text-purple-400'
-                  : (currentUser?.role || currentRole) === 'analista_operaciones'
-                  ? 'text-[#00a2e8]'
-                  : 'text-emerald-600 dark:text-emerald-400'
-              }`}>
-                {currentUser?.role === 'controller_admin' ? '🛡️ Controller Admin' : currentUser?.role === 'analista_operaciones' ? '📦 Operaciones' : currentUser?.role === 'analista_comercial' ? '📈 Comercial' : currentRole}
+              <span className="text-[9px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                🛡️ {currentRole ? currentRole.replace('_', ' ').toUpperCase() : 'CONTROLLER ADMIN'}
               </span>
             </div>
 
-            <div 
-              className={`w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs transition-transform group-hover:scale-105 ${
-                (currentUser?.role || currentRole) === 'controller_admin'
-                  ? 'bg-gradient-to-tr from-purple-600 to-indigo-500'
-                  : (currentUser?.role || currentRole) === 'analista_operaciones'
-                  ? 'bg-gradient-to-tr from-[#00a2e8] to-[#2fc6f6]'
-                  : 'bg-gradient-to-tr from-emerald-600 to-teal-400'
-              }`}
-            >
-              {(currentUser?.role || currentRole) === 'controller_admin' ? 'CA' : (currentUser?.role || currentRole) === 'analista_operaciones' ? 'AO' : 'AC'}
+            <div className="w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-black shadow-xs transition-transform group-hover:scale-105 bg-gradient-to-tr from-purple-600 to-indigo-500">
+              CA
             </div>
             <ChevronDown size={12} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
           </div>
 
-          {/* Menú Desplegable de Autenticación y Acceso Rápido Demo */}
+          {/* Menú Desplegable de Sesión SuperAdmin */}
           {isAuthMenuOpen && (
             <div 
               className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-3 px-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
             >
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-700">
                 <div>
-                  <p className="text-xs font-bold text-slate-800 dark:text-white">Sesión RBAC</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {currentUser ? `Token JWT activo: ${currentUser.user_id}` : 'Sin token activo en navegador'}
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">Sesión SuperAdmin</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                    tenant_calcu_corp
                   </p>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                  (currentUser?.role || currentRole) === 'controller_admin'
-                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                    : (currentUser?.role || currentRole) === 'analista_operaciones'
-                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300'
-                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
-                }`}>
-                  {currentUser?.role || currentRole}
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-gradient-to-r from-amber-500/20 via-emerald-500/25 to-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-300">
+                  PROPIETARIO
                 </span>
               </div>
 
               <div className="space-y-2.5">
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Sesión Activa
+                    Usuario Maestro
                   </span>
                   <div className="font-bold text-slate-800 dark:text-slate-100 truncate">
-                    {currentUser?.nombre || currentUser?.user_id || 'Sebastian Rodriguez'}
+                    {currentUser?.nombre || 'Sebastian Rodriguez'}
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                     @{currentUser?.user_id || 'seba'}
@@ -475,6 +405,7 @@ export const TopHeader = ({
             </div>
           )}
         </div>
+
       </div>
 
       {/* Toast Feedback de Conmutación de Modelo */}

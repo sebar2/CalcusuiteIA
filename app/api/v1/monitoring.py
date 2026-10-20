@@ -272,3 +272,15 @@ def ask_monitoring_copilot(
     """Consulta al Agente IA Gemini para análisis de métricas y extracción de reportes."""
     return MonitoringService.ask_monitoring_ai(db, payload.prompt)
 
+
+@router.post("/cybersec-copilot", response_model=Dict[str, Any])
+def ask_monitoring_cybersec_copilot(
+    payload: AICopilotQuerySchema,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user)
+):
+    """Consulta al Copiloto IA Guardián de Ciberseguridad (SecOps Copilot ISO 27001)."""
+    from app.services.settings_service import SettingsService
+    return SettingsService.run_cybersec_ai_copilot_audit(db, payload.prompt, user_id=current_user.user_id)
+
+

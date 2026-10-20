@@ -157,8 +157,13 @@ import type {
   MeliSyncStockResponse,
   MeliSellerReputationResponse,
   MeliItemAnalyticsResponse,
-  MeliMyItemsResponse,
   MeliOrdersResponse,
+  MeliMyItemsResponse,
+  NetworkTelemetryResponse,
+  AIVaultConfigResponse,
+  JITSupportSessionItem,
+  TenantOperationalParams,
+  CybersecCopilotResponse,
 } from '../types';
 
 export const CUSTOM_API_STORAGE_KEY = 'calcu_custom_api_url';
@@ -487,6 +492,69 @@ export const apiService = {
 
   async saveUserPreferences(preferences: Partial<UserPreferences>): Promise<UserPreferences> {
     const res = await apiClient.post<UserPreferences>('/api/v1/settings/preferences', preferences);
+    return res.data;
+  },
+
+  // Telemetría de Red y Paquetes en Vivo (SuperAdmin)
+  async getNetworkTelemetry(): Promise<NetworkTelemetryResponse> {
+    const res = await apiClient.get<NetworkTelemetryResponse>('/api/v1/settings/telemetry');
+    return res.data;
+  },
+
+  // Gestión de Motor IA & Bóveda AES-256 (SuperAdmin)
+  async getAIVaultConfig(): Promise<AIVaultConfigResponse> {
+    const res = await apiClient.get<AIVaultConfigResponse>('/api/v1/settings/ai-vault');
+    return res.data;
+  },
+
+  async rotateVaultKeys(): Promise<{ success: boolean; message: string; new_fingerprint: string; rotated_at: string }> {
+    const res = await apiClient.post('/api/v1/settings/ai-vault/rotate-keys');
+    return res.data;
+  },
+
+  async updateAIVaultParams(payload: { endpoint?: string; temperature?: number }): Promise<{ success: boolean }> {
+    const res = await apiClient.post('/api/v1/settings/ai-vault/parameters', payload);
+    return res.data;
+  },
+
+  // Consola de Soporte Técnico Asistido (JIT Impersonation con Aprobación)
+  async getJITSupportSessions(): Promise<JITSupportSessionItem[]> {
+    const res = await apiClient.get<JITSupportSessionItem[]>('/api/v1/settings/jit-support');
+    return res.data;
+  },
+
+  async requestJITSupport(targetTenantId: string, reason: string): Promise<{ success: boolean; session_id: string; message: string; record: JITSupportSessionItem }> {
+    const res = await apiClient.post('/api/v1/settings/jit-support/request', {
+      target_tenant_id: targetTenantId,
+      reason,
+    });
+    return res.data;
+  },
+
+  async actionJITSupport(sessionId: string, action: 'approve' | 'revoke'): Promise<{ success: boolean; status: string; message: string; record: JITSupportSessionItem }> {
+    const res = await apiClient.post('/api/v1/settings/jit-support/action', {
+      session_id: sessionId,
+      action,
+    });
+    return res.data;
+  },
+
+  // Parámetros Operativos del Tenant (DGI, Alertas, Logo)
+  async getTenantOperationalParams(): Promise<TenantOperationalParams> {
+    const res = await apiClient.get<TenantOperationalParams>('/api/v1/settings/tenant-params');
+    return res.data;
+  },
+
+  async updateTenantOperationalParams(params: Partial<TenantOperationalParams>): Promise<{ success: boolean; message: string; parameters: TenantOperationalParams }> {
+    const res = await apiClient.put('/api/v1/settings/tenant-params', params);
+    return res.data;
+  },
+
+  // Copiloto IA de Ciberseguridad (SecOps Copilot ISO 27001)
+  async askCybersecCopilot(prompt: string): Promise<CybersecCopilotResponse> {
+    const res = await apiClient.post<CybersecCopilotResponse>('/api/v1/settings/cybersec-copilot', {
+      prompt,
+    });
     return res.data;
   },
 

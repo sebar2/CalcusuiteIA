@@ -406,9 +406,11 @@ class CommercialDeal(Base):
     costo_adquisicion_estimado: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 4), default=Decimal('0.00'), nullable=True)
     ai_score: Mapped[Optional[int]] = mapped_column(Integer, default=75, nullable=True)
     ai_classification: Mapped[Optional[str]] = mapped_column(String(50), default="WARM", nullable=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     items: Mapped[List["CommercialDealItem"]] = relationship(back_populates="deal", cascade="all, delete-orphan")
+    client_rel: Mapped[Optional["Client"]] = relationship("Client", foreign_keys=[client_id])
 
 
 

@@ -2721,6 +2721,7 @@ export interface TenantAccountItem {
   license_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
   simulated_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
   effective_tier: 'STARTER' | 'PRO' | 'ENTERPRISE_3PL' | string;
+  account_role?: string;
   subscription_status: 'TRIAL_14_DAYS' | 'ACTIVE_PAID' | 'SUSPENDED' | 'EXPIRED' | string;
   trial_days_remaining: number;
   trial_ends_at: string;
@@ -3000,6 +3001,134 @@ export interface MeliOrdersResponse {
   stages_count: Record<MeliKanbanStage, number>;
   fpa_metrics: MeliFpaMetrics;
   paging?: Record<string, any>;
+}
+
+export interface NetworkTelemetryResponse {
+  timestamp: string;
+  mesh_telemetry: {
+    available: boolean;
+    total_nodes: number;
+    direct_p2p_count: number;
+    derp_relay_count: number;
+    all_direct_guaranteed: boolean;
+    mesh_nodes: Array<{
+      id: string;
+      hostname: string;
+      tailscale_ip: string;
+      os: string;
+      status: string;
+      connection_type: string;
+      latency_ms: number;
+      is_derp_relay: boolean;
+      packet_loss_pct: number;
+      last_handshake: string;
+    }>;
+  };
+  websockets_telemetry: {
+    active_streams: number;
+    streams: Array<{
+      channel: string;
+      endpoint: string;
+      status: string;
+      packets_per_sec: number;
+      compression: string;
+      throughput_kbs: number;
+      connected_clients: number;
+      avg_latency_ms: number;
+    }>;
+  };
+  api_core_metrics: {
+    port: number;
+    server: string;
+    status: string;
+    throughput_rps: number;
+    avg_response_time_ms: number;
+    p95_response_time_ms: number;
+    error_rate_5xx_pct: number;
+    uptime: string;
+  };
+  ports_perimeter_audit: {
+    authorized_baseline: number[];
+    detected_open_ports: number[];
+    anomalies_detected: boolean;
+    unauthorized_ports: number[];
+    iso_compliance_score: number;
+    status_label: string;
+  };
+}
+
+export interface AIVaultConfigResponse {
+  ai_engine: {
+    endpoint: string;
+    default_temperature: number;
+    context_window: number;
+    active_model: string;
+    available_models: string[];
+    status: string;
+  };
+  cryptographic_vault: {
+    algorithm: string;
+    status: string;
+    key_fingerprint: string;
+    last_rotation: string;
+    rotation_policy: string;
+    active_vault_keys: number;
+  };
+  webhooks_summary: Array<{
+    channel: string;
+    display_name: string;
+    status: string;
+    is_enabled: boolean;
+    leads_count: number;
+    last_tested: string | null;
+  }>;
+}
+
+export interface JITSupportSessionItem {
+  session_id: string;
+  requested_by: string;
+  target_tenant_id: string;
+  reason: string;
+  status: string;
+  requested_at: string;
+  approved_at?: string | null;
+  expires_at?: string | null;
+  duration_minutes: number;
+  access_token?: string | null;
+}
+
+export interface TenantOperationalParams {
+  idioma: string;
+  moneda_base: string;
+  formato_numerico: string;
+  tema_visual: string;
+  rut_dgi: string;
+  razon_social: string;
+  cfe_serie: string;
+  cfe_sucursal: string;
+  logo_url: string;
+  rop_min_days_alert: number;
+  doh_critical_alert: number;
+  whatsapp_notifications: boolean;
+  email_notifications: boolean;
+}
+
+export interface CybersecCopilotResponse {
+  success: boolean;
+  agent: string;
+  model: string;
+  timestamp: string;
+  query: string;
+  respuesta: string;
+  card_type: string;
+  metrics: {
+    critical_events: number;
+    warning_events: number;
+    open_ports_count: number;
+    port_anomalies_count: number;
+    tenants_count: number;
+    owner_status: string;
+  };
 }
 
 

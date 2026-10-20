@@ -26,6 +26,9 @@ class TenantAccount(Base):
     # Permite al controller_admin cambiar de licencia durante los 14 días de prueba para explorar cada plan
     simulated_tier: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     
+    # Rol de la cuenta / suscripción: 'PROPIETARIO (OWNER)' para tenant_calcu_corp, 'CLIENTE_TENANT' para clientes
+    account_role: Mapped[str] = mapped_column(String(40), default="CLIENTE_TENANT", nullable=False)
+    
     # Estados: 'TRIAL_14_DAYS', 'ACTIVE_PAID', 'SUSPENDED', 'EXPIRED'
     subscription_status: Mapped[str] = mapped_column(String(30), default="TRIAL_14_DAYS", nullable=False)
     trial_starts_at: Mapped[datetime] = mapped_column(

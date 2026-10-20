@@ -127,7 +127,10 @@ class CollectionService:
 
             debtor_list.append(debtor)
 
-            # Sincronizar en collection_cases si existe
+            # Sincronizar en collection_cases si existe (con normalización 1NF en collection_case_invoices)
+            inv_ids = [f["id"] for f in debtor["facturas"]]
+            matched_invs = db.query(Invoice).filter(Invoice.id.in_(inv_ids)).all() if inv_ids else []
+
             case = db.query(CollectionCase).filter(CollectionCase.cliente_rut == rut).first()
             if not case:
                 case = CollectionCase(
@@ -138,14 +141,18 @@ class CollectionService:
                     dias_max_vencido=max_days,
                     monto_total_deuda=Decimal(str(debtor["monto_total_deuda"])),
                     facturas_ids=debtor["facturas_numeros"],
+                    invoices_rel=matched_invs,
                     ultimo_contacto=datetime.now(timezone.utc)
                 )
                 db.add(case)
             else:
+                case.cliente_id = debtor["client_id"]
                 case.etapa = debtor["etapa"]
                 case.dias_max_vencido = max_days
                 case.monto_total_deuda = Decimal(str(debtor["monto_total_deuda"]))
                 case.facturas_ids = debtor["facturas_numeros"]
+                case.invoices_rel = matched_invs
+
         
         try:
             db.commit()

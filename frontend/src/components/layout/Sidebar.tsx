@@ -31,6 +31,7 @@ import {
   Plug,
   Crown,
   ShoppingBag,
+  Settings,
   X,
 } from 'lucide-react';
 
@@ -67,7 +68,8 @@ export type ActiveTab =
   | 'reports' 
   | 'accounting'
   | 'monitoring'
-  | 'etl';
+  | 'etl'
+  | 'settings';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -369,6 +371,13 @@ export const Sidebar = ({
           shortLabel: 'ETL Ingest',
           icon: UploadCloud,
           roles: ['controller_admin', 'operaciones', 'analista_operaciones'],
+        },
+        {
+          id: 'settings',
+          label: 'Configuraciones',
+          shortLabel: 'Configuraciones',
+          icon: Settings,
+          roles: ['controller_admin', 'operaciones', 'analista_operaciones', 'comercial', 'analista_comercial', 'admin_3pl', 'operario_3pl', 'conductor_3pl'],
         },
       ],
     },

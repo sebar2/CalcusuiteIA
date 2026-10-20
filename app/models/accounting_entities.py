@@ -1,7 +1,7 @@
 from typing import Optional, List, Any
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from sqlalchemy import String, Integer, Numeric, ForeignKey, Date, DateTime, Boolean, Text, JSON
+from sqlalchemy import String, Integer, Numeric, ForeignKey, Date, DateTime, Boolean, Text, JSON, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
@@ -158,9 +158,17 @@ class SystemUser(Base):
 
 
 
+collection_case_invoices = Table(
+    "collection_case_invoices",
+    Base.metadata,
+    Column("case_id", Integer, ForeignKey("collection_cases.id", ondelete="CASCADE"), primary_key=True),
+    Column("invoice_id", Integer, ForeignKey("invoices.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class CollectionCase(Base):
     """
-    Expediente de Cobranzas y Gestión de Deudores (Kanban 5 Etapas)
+    Expediente de Cobranzas y Gestión de Deudores (Kanban 5 Etapas - 1NF y 3NF Normalizado)
     1_NUEVO_DEUDOR (1-29d vencido)
     2_CONTACTADO (30-44d vencido)
     3_ADVERTIDO (45-59d vencido)
@@ -182,4 +190,12 @@ class CollectionCase(Base):
     intimacion_enviada: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     estudio_juridico: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Relación normalizada 1NF/3NF
+    invoices_rel: Mapped[List["Invoice"]] = relationship(
+        "Invoice",
+        secondary=collection_case_invoices,
+        lazy="selectin"
+    )
+    cliente_rel: Mapped[Optional["Client"]] = relationship("Client", foreign_keys=[cliente_id])
 

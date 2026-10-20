@@ -135,6 +135,19 @@ def decode_access_token(token: str) -> UserContext:
         )
 
 
+import os
+
+def _is_test_header_auth_allowed() -> bool:
+    """
+    Permite autenticación por cabeceras únicamente en suite de pruebas o desarrollo local.
+    En entorno de producción (ENVIRONMENT=production) queda terminantemente bloqueado.
+    """
+    env = os.getenv("ENVIRONMENT", "development").strip().lower()
+    if env == "production":
+        return False
+    return os.getenv("ALLOW_TEST_HEADER_AUTH", "1") == "1" or os.getenv("TESTING", "0") == "1"
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
@@ -142,14 +155,14 @@ def get_current_user(
 ) -> UserContext:
     """
     Extrae y valida el contexto del usuario.
-    Prioridad 1: Bearer Token JWT criptográfico.
-    Prioridad 2: Header X-User-Role (retrocompatibilidad controlada con pruebas).
-    Fallback seguro: Usuario por defecto para endpoints abiertos.
+    Prioridad 1: Bearer Token JWT criptográfico (obligatorio en producción).
+    Prioridad 2: Header X-User-Role (exclusivo para suite de pruebas en desarrollo/testing).
+    Fallback seguro: Contexto anónimo sin privilegios administrativos.
     """
     if credentials and credentials.credentials:
         return decode_access_token(credentials.credentials)
 
-    if x_user_role:
+    if x_user_role and _is_test_header_auth_allowed():
         clean_role = x_user_role.strip().lower()
         if clean_role not in VALID_ROLES:
             raise HTTPException(
@@ -160,8 +173,8 @@ def get_current_user(
         is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
         return UserContext(user_id=x_user_id or "analista_usuario", role=clean_role, is_master_superadmin=is_super)
 
-    # Fallback predeterminado para endpoints informativos abiertos
-    return UserContext(user_id=x_user_id or "default_user", role=ROLE_CONTROLLER_ADMIN, is_master_superadmin=False)
+    # Fallback seguro: Usuario anónimo sin privilegios administrativos (Cierra VULN-02)
+    return UserContext(user_id="anonymous", role="anonymous", is_master_superadmin=False)
 
 
 def require_roles(allowed_roles: List[str]):
@@ -179,7 +192,7 @@ def require_roles(allowed_roles: List[str]):
 
         if credentials and credentials.credentials:
             user = decode_access_token(credentials.credentials)
-        elif x_user_role:
+        elif x_user_role and _is_test_header_auth_allowed():
             clean_role = x_user_role.strip().lower()
             if clean_role not in VALID_ROLES:
                 raise HTTPException(
@@ -190,7 +203,7 @@ def require_roles(allowed_roles: List[str]):
             is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
             user = UserContext(user_id=x_user_id or "analista_usuario", role=clean_role, is_master_superadmin=is_super)
 
-        if user is None:
+        if user is None or user.role == "anonymous":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Se requiere autenticación Bearer JWT",
@@ -221,7 +234,7 @@ def require_master_superadmin():
         user: Optional[UserContext] = None
         if credentials and credentials.credentials:
             user = decode_access_token(credentials.credentials)
-        elif x_user_id:
+        elif _is_test_header_auth_allowed() and x_user_id:
             clean_uid = x_user_id.strip().lower()
             is_super = clean_uid in {"seba", "sebar_2@hotmail.com"}
             user = UserContext(user_id=clean_uid, role=x_user_role or ROLE_CONTROLLER_ADMIN, is_master_superadmin=is_super)
