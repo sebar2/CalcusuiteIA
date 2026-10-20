@@ -31,7 +31,7 @@ import type {
   WarehouseStockItem,
   UserRole,
 } from '../types';
-import { UniversalWarehouseTwin3D } from '../components/digitalTwin/UniversalWarehouseTwin3D';
+import { KeepAlive, LazyUniversalWarehouseTwin3D, DevRenderProfiler } from '../components/digitalTwin/KeepAliveTwin';
 import { Boxes } from 'lucide-react';
 import { ProductThumbnail } from '../components/common/ProductThumbnail';
 import { ColumnMultiSelect } from '../components/multilocation/ColumnMultiSelect';
@@ -912,7 +912,7 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
           {/* Conmutador Matriz / Gemelo Digital 3D */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
-              onClick={() => setViewMode('MATRIX')}
+              onClick={() => React.startTransition(() => setViewMode('MATRIX'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === 'MATRIX'
                   ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
@@ -923,7 +923,7 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
               <span>📊 Matriz Multi-Depósito</span>
             </button>
             <button
-              onClick={() => setViewMode('3D_TWIN')}
+              onClick={() => React.startTransition(() => setViewMode('3D_TWIN'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === '3D_TWIN'
                   ? 'bg-cyan-600 text-white shadow-xs'
@@ -967,14 +967,16 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
         </div>
       </div>
 
-      {viewMode === '3D_TWIN' ? (
-        <div className="space-y-4">
-          <UniversalWarehouseTwin3D
+      <KeepAlive active={viewMode === '3D_TWIN'} className="space-y-4">
+          <DevRenderProfiler id="UniversalWarehouseTwin3D">
+          <LazyUniversalWarehouseTwin3D
+            active={viewMode === '3D_TWIN'}
             moduleScope="SUPPLY_CHAIN"
             onTransferSuccess={loadData}
           />
-        </div>
-      ) : (
+          </DevRenderProfiler>
+      </KeepAlive>
+      {viewMode === '3D_TWIN' ? null : (
         <div className="space-y-6">
 {/* =====================================================================
           5 CARDS RESUMEN DE LAS FASES LOGÍSTICAS

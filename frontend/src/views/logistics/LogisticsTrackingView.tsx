@@ -112,9 +112,10 @@ export const LogisticsTrackingView: React.FC = () => {
     loadTracking();
     loadActiveOrders();
 
-    // WebSocket persistente para Torre de Control / Flota
+    // WebSocket persistente para Torre de Control / Flota (resiliente a StrictMode)
     let ws: WebSocket | null = null;
     let pollInterval: any = null;
+    let isCancelled = false;
 
     try {
       const wsUrl = `${getWsBaseUrl()}/api/v1/logistics/tracking/ws/fleet`;
@@ -122,11 +123,16 @@ export const LogisticsTrackingView: React.FC = () => {
       fleetWsRef.current = ws;
 
       ws.onopen = () => {
+        if (isCancelled) {
+          ws?.close(1000, 'Unmounted');
+          return;
+        }
         setWsConnected(true);
         setWsMode('websocket');
       };
 
       ws.onmessage = (event) => {
+        if (isCancelled) return;
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'FLEET_SNAPSHOT' && Array.isArray(msg.data)) {
@@ -170,7 +176,16 @@ export const LogisticsTrackingView: React.FC = () => {
     }, 10000);
 
     return () => {
-      if (ws) ws.close();
+      isCancelled = true;
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, 'Component unmounted');
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          ws.onopen = () => {
+            ws?.close(1000, 'Component unmounted');
+          };
+        }
+      }
       if (pollInterval) clearInterval(pollInterval);
     };
   }, []);
@@ -204,7 +219,13 @@ export const LogisticsTrackingView: React.FC = () => {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
       if (driverWsRef.current) {
-        driverWsRef.current.close();
+        if (driverWsRef.current.readyState === WebSocket.OPEN) {
+          driverWsRef.current.close(1000, 'Component unmounted');
+        } else if (driverWsRef.current.readyState === WebSocket.CONNECTING) {
+          driverWsRef.current.onopen = () => {
+            driverWsRef.current?.close(1000, 'Component unmounted');
+          };
+        }
       }
     };
   }, []);

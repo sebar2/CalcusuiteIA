@@ -16,7 +16,7 @@ import {
   Navigation,
   Sparkles,
 } from 'lucide-react';
-import { UniversalWarehouseTwin3D } from '../../components/digitalTwin/UniversalWarehouseTwin3D';
+import { KeepAlive, LazyUniversalWarehouseTwin3D, DevRenderProfiler } from '../../components/digitalTwin/KeepAliveTwin';
 import { logisticsApi } from '../../services/logisticsApi';
 import type {
   LogisticsInventoryItem,
@@ -391,7 +391,7 @@ export const LogisticsInventoryView: React.FC = () => {
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
               type="button"
-              onClick={() => setViewMode('3D_TWIN')}
+              onClick={() => React.startTransition(() => setViewMode('3D_TWIN'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === '3D_TWIN'
                   ? 'bg-sky-600 text-white shadow-xs'
@@ -403,7 +403,7 @@ export const LogisticsInventoryView: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setViewMode('TABLE')}
+              onClick={() => React.startTransition(() => setViewMode('TABLE'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === 'TABLE'
                   ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs'
@@ -461,14 +461,16 @@ export const LogisticsInventoryView: React.FC = () => {
         </div>
       </div>
 
-      {viewMode === '3D_TWIN' ? (
-        <div className="space-y-4">
-          <UniversalWarehouseTwin3D
+      <KeepAlive active={viewMode === '3D_TWIN'} className="space-y-4">
+          <DevRenderProfiler id="UniversalWarehouseTwin3D">
+          <LazyUniversalWarehouseTwin3D
+            active={viewMode === '3D_TWIN'}
             moduleScope="3PL"
             onTransferSuccess={loadData}
           />
-        </div>
-      ) : (
+          </DevRenderProfiler>
+      </KeepAlive>
+      {viewMode === '3D_TWIN' ? null : (
         <div className="space-y-6">
 {/* Hub Central Base Banner */}
       {hub && (

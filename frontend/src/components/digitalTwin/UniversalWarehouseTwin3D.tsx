@@ -1,6 +1,21 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Text } from '@react-three/drei';
+import { WarehouseCanvasScene } from './Warehouse3DSceneElements';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+
+// Suprimir advertencia interna de THREE.Clock en @react-three/fiber hasta que migre a THREE.Timer
+if (typeof (THREE as any).setConsoleFunction === 'function') {
+  (THREE as any).setConsoleFunction((type: string, message: string, ...params: any[]) => {
+    if (type === 'warn' && typeof message === 'string' && message.includes('Clock: This module has been deprecated')) {
+      return;
+    }
+    if (type === 'warn') {
+      console.warn(message, ...params);
+    } else if (type === 'error') {
+      console.error(message, ...params);
+    } else {
+      console.log(message, ...params);
+    }
+  });
+}
 import * as THREE from 'three';
 import {
   Boxes,
@@ -42,6 +57,7 @@ import type {
   FillAIResponse,
 } from '../../services/digitalTwinApi';
 import { digitalTwinApi } from '../../services/digitalTwinApi';
+import { getWsBaseUrl } from '../../services/api';
 
 interface UniversalWarehouseTwin3DProps {
   moduleScope: '3PL' | 'SUPPLY_CHAIN';
@@ -49,428 +65,15 @@ interface UniversalWarehouseTwin3DProps {
   kanbanFilter?: 'ALL' | 'CRITICO_ROP' | 'ALERTA_DOH' | 'OPTIMO';
   onTransferSuccess?: () => void;
   className?: string;
+  /** false = vista oculta (keep-alive): el loop WebGL se detiene por completo. */
+  active?: boolean;
 }
 
 // ==========================================
-// 3D OBJECTS & MESHES (THREE.JS)
+// 3D SCENE DELEGATE (HIGH FIDELITY PBR & CODE-SPLIT)
 // ==========================================
-
-// Parametric Terrestrial Concrete Floor & Walls
-const WarehouseNaveMesh: React.FC<{
-  width: number;
-  length: number;
-  clearHeight: number;
-}> = ({ width, length, clearHeight }) => {
-  return (
-    <group position={[0, 0, 0]}>
-      {/* Ground concrete floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[width, length]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.8} metalness={0.2} />
-      </mesh>
-
-      {/* Safety perimeter line */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <ringGeometry args={[Math.min(width, length) * 0.45, Math.min(width, length) * 0.45 + 0.2, 64]} />
-        <meshBasicMaterial color="#eab308" />
-      </mesh>
-
-      {/* Grid line indicator */}
-      <gridHelper args={[Math.max(width, length), 20, '#38bdf8', '#1e293b']} position={[0, 0.01, 0]} />
-
-      {/* Structural Corner Columns indicating Clear Height */}
-      {[
-        [-width / 2 + 1, -length / 2 + 1],
-        [width / 2 - 1, -length / 2 + 1],
-        [-width / 2 + 1, length / 2 - 1],
-        [width / 2 - 1, length / 2 - 1],
-      ].map(([cx, cz], i) => (
-        <group key={i} position={[cx, clearHeight / 2, cz]}>
-          <mesh>
-            <boxGeometry args={[0.6, clearHeight, 0.6]} />
-            <meshStandardMaterial color="#334155" roughness={0.5} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Perimeter Dock Area */}
-      <group position={[-width / 2 - 3, 0, 0]}>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[6, 0.2, length * 0.8]} />
-          <meshStandardMaterial color="#1e293b" />
-        </mesh>
-        {[-8, 0, 8].map((zPos, idx) => (
-          <group key={idx} position={[1.5, 1.2, zPos]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[4.2, 2.2, 2.2]} />
-              <meshStandardMaterial color="#f8fafc" roughness={0.5} />
-            </mesh>
-            <mesh position={[-2.8, -0.2, 0]}>
-              <boxGeometry args={[1.6, 1.8, 2.0]} />
-              <meshStandardMaterial color="#0284c7" roughness={0.4} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  );
-};
-
-// Structural Racks per Cuerpo
-const RackStructures: React.FC<{
-  cuerpos: string[];
-  slotsByCuerpo: Record<string, DigitalTwinSlot[]>;
-  selectedCuerpo: string;
-  onSelectRackCuerpo: (cuerpo: string, sampleSlot: DigitalTwinSlot) => void;
-}> = ({ cuerpos, slotsByCuerpo, selectedCuerpo, onSelectRackCuerpo }) => {
-  return (
-    <group>
-      {cuerpos.map((cuerpo) => {
-        const cuerpoSlots = slotsByCuerpo[cuerpo] || [];
-        if (cuerpoSlots.length === 0) return null;
-        const sample = cuerpoSlots[0];
-
-        const cuerpoIdx = Math.max(0, cuerpo.charCodeAt(0) - 65);
-        const rw = sample.rack_width_m || 2.4;
-        const rh = sample.rack_height_m || 6.0;
-        const rd = sample.rack_depth_m || 1.2;
-        const lev = sample.levels_count || 4;
-        const levelH = rh / Math.max(1, lev);
-
-        const rackNums = Array.from(new Set(cuerpoSlots.map((s) => parseInt(s.rack.replace(/\D/g, '')) || 1)));
-        const isSelected = selectedCuerpo === cuerpo;
-
-        return (
-          <group key={cuerpo}>
-            {rackNums.map((rackNum) => {
-              const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-              return (
-                <group
-                  key={rackNum}
-                  position={[posX, 0, 0]}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectRackCuerpo(cuerpo, sample);
-                  }}
-                >
-                  {/* Upright posts (4 corner columns) */}
-                  {[-rd / 2, rd / 2].map((xOff, xi) =>
-                    [-rw / 2, rw / 2].map((zOff, zi) => (
-                      <mesh key={`${xi}-${zi}`} position={[xOff, rh / 2, zOff]}>
-                        <boxGeometry args={[0.07, rh, 0.07]} />
-                        <meshStandardMaterial
-                          color={isSelected ? '#38bdf8' : '#475569'}
-                          metalness={0.7}
-                          roughness={0.3}
-                        />
-                      </mesh>
-                    ))
-                  )}
-
-                  {/* Horizontal crossbeams per level */}
-                  {Array.from({ length: lev + 1 }).map((_, k) => (
-                    <mesh key={k} position={[0, k * levelH + 0.04, 0]}>
-                      <boxGeometry args={[rd, 0.05, rw]} />
-                      <meshStandardMaterial
-                        color={isSelected ? '#0284c7' : '#334155'}
-                        metalness={0.6}
-                        roughness={0.4}
-                      />
-                    </mesh>
-                  ))}
-
-                  {/* Header Label */}
-                  <Text
-                    position={[0, rh + 0.4, 0]}
-                    fontSize={0.35}
-                    color={isSelected ? '#38bdf8' : '#94a3b8'}
-                    anchorX="center"
-                    anchorY="middle"
-                  >
-                    {`Cuerpo ${cuerpo} - R${rackNum}`}
-                  </Text>
-                </group>
-              );
-            })}
-          </group>
-        );
-      })}
-    </group>
-  );
-};
-
-// Ultra-Optimized InstancedMesh Cargo Engine for Real Inventory
-const InstancedTerrestrialCargo: React.FC<{
-  slots: DigitalTwinSlot[];
-  selectedSlotId: string | null;
-  onSelectSlot: (slot: DigitalTwinSlot) => void;
-}> = ({ slots, selectedSlotId, onSelectSlot }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const color = useMemo(() => new THREE.Color(), []);
-
-  const occupiedSlots = useMemo(() => {
-    return slots.filter((s) => s.estado === 'OCUPADA' || s.estado === 'RESERVADA');
-  }, [slots]);
-
-  useLayoutEffect(() => {
-    if (!meshRef.current) return;
-    const mesh = meshRef.current;
-
-    occupiedSlots.forEach((slot, i) => {
-      const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
-      const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
-      const rw = slot.rack_width_m || 2.4;
-      const rh = slot.rack_height_m || 6.0;
-      const rd = slot.rack_depth_m || 1.2;
-      const lev = Math.max(1, slot.levels_count || 4);
-      const levelH = rh / lev;
-
-      const bw = Math.min(rw / 3.1, Math.max(0.2, slot.box_width_m || 0.4));
-      const bh = Math.max(0.2, slot.box_height_m || 0.3);
-      const bl = Math.min(rd * 0.9, Math.max(0.2, slot.box_length_m || 0.4));
-
-      const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-      const posY = (slot.nivel - 1) * levelH + bh / 2 + 0.08;
-      const posZ = (slot.posicion - 2) * (rw / 3.0);
-
-      dummy.position.set(posX, posY, posZ);
-      dummy.scale.set(bw, bh, bl);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-
-      // Color coding reactive to ROP / DOH / Reservas / Physical Deviations
-      let hexColor = '#0284c7'; // default blue
-      if (slot.id === selectedSlotId) {
-        hexColor = '#38bdf8'; // glowing cyan
-      } else if (slot.reservation_type === 'HARD_RESERVED') {
-        hexColor = '#2563eb'; // electric solid blue for HARD RESERVED (Licitaciones / SICE)
-      } else if (slot.reservation_type === 'SOFT_RESERVED') {
-        hexColor = '#f59e0b'; // amber for SOFT RESERVED (Cotizaciones B2B)
-      } else if (slot.desvios) {
-        hexColor = '#ec4899'; // pink/magenta deviation
-      } else if (slot.rop_status === 'CRITICO_ROP') {
-        hexColor = '#ef4444'; // critical red
-      } else if (slot.rop_status === 'ALERTA_DOH') {
-        hexColor = '#f59e0b'; // amber
-      } else if (slot.rop_status === 'OPTIMO') {
-        hexColor = '#10b981'; // emerald
-      }
-
-      color.set(hexColor);
-      mesh.setColorAt(i, color);
-    });
-
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) {
-      mesh.instanceColor.needsUpdate = true;
-    }
-  }, [occupiedSlots, selectedSlotId, dummy, color]);
-
-  if (occupiedSlots.length === 0) return null;
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, occupiedSlots.length]}
-      onClick={(e) => {
-        e.stopPropagation();
-        const instanceId = e.instanceId;
-        if (instanceId !== undefined && occupiedSlots[instanceId]) {
-          onSelectSlot(occupiedSlots[instanceId]);
-        }
-      }}
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial roughness={0.35} metalness={0.2} />
-    </instancedMesh>
-  );
-};
-
-// Wireframe Mesh for Empty and Blocked Slots
-const EmptyAndBlockedSlotsMesh: React.FC<{
-  slots: DigitalTwinSlot[];
-  showEmptySlots: boolean;
-  selectedSlotId: string | null;
-  onSelectSlot: (slot: DigitalTwinSlot) => void;
-}> = ({ slots, showEmptySlots, selectedSlotId, onSelectSlot }) => {
-  const targetSlots = useMemo(() => {
-    return slots.filter((s) => {
-      if (s.estado === 'OCUPADA') return false;
-      if (s.estado === 'VACIA' && !showEmptySlots) return false;
-      return true;
-    });
-  }, [slots, showEmptySlots]);
-
-  return (
-    <group>
-      {targetSlots.map((slot) => {
-        const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
-        const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
-        const rw = slot.rack_width_m || 2.4;
-        const rh = slot.rack_height_m || 6.0;
-        const rd = slot.rack_depth_m || 1.2;
-        const lev = Math.max(1, slot.levels_count || 4);
-        const levelH = rh / lev;
-
-        const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
-        const posY = (slot.nivel - 1) * levelH + 0.1;
-        const posZ = (slot.posicion - 2) * (rw / 3.0);
-
-        const isBlocked = slot.estado === 'BLOQUEADA';
-        const isSelected = slot.id === selectedSlotId;
-
-        return (
-          <group
-            key={slot.id}
-            position={[posX, posY, posZ]}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectSlot(slot);
-            }}
-          >
-            <mesh>
-              <boxGeometry args={[rw / 3.2, 0.08, rd * 0.9]} />
-              <meshStandardMaterial
-                color={isSelected ? '#38bdf8' : isBlocked ? '#ef4444' : '#0284c7'}
-                transparent
-                opacity={isSelected ? 0.7 : isBlocked ? 0.6 : 0.25}
-                wireframe={!isSelected}
-              />
-            </mesh>
-          </group>
-        );
-      })}
-    </group>
-  );
-};
-
-// Maritime Shipping Container Component (Alta Mar)
-const MaritimeContainerMesh: React.FC<{
-  slot: DigitalTwinSlot;
-  isSelected: boolean;
-  onSelect: (slot: DigitalTwinSlot) => void;
-}> = ({ slot, isSelected, onSelect }) => {
-  const bayNum = parseInt(slot.cuerpo.replace('BAY-', '')) || 1;
-  const rowNum = parseInt(slot.rack.replace('ROW-', '')) || 1;
-  const tier = slot.nivel;
-  const pos = slot.posicion;
-
-  const is40HQ = slot.tipo_contenedor === '40HQ';
-  const length = is40HQ ? 4.8 : 2.4;
-  const height = is40HQ ? 1.3 : 1.1;
-  const width = 1.1;
-
-  const posX = (bayNum - 2) * 5.8 + (pos - 1.5) * 0.1;
-  const posY = (tier - 1) * (height + 0.05) + 1.2;
-  const posZ = (rowNum - 1.5) * 3.2;
-
-  const containerColors = ['#0284c7', '#059669', '#dc2626', '#d97706', '#475569'];
-  const baseColor = containerColors[(bayNum + rowNum + tier) % containerColors.length];
-
-  return (
-    <group
-      position={[posX, posY, posZ]}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(slot);
-      }}
-    >
-      <mesh>
-        <boxGeometry args={[length, height, width]} />
-        <meshStandardMaterial
-          color={baseColor}
-          roughness={0.4}
-          metalness={0.5}
-          transparent={isSelected}
-          opacity={isSelected ? 0.35 : 1.0}
-          wireframe={isSelected}
-          emissive={isSelected ? '#38bdf8' : '#000000'}
-          emissiveIntensity={isSelected ? 0.6 : 0}
-        />
-      </mesh>
-
-      {isSelected && (
-        <group>
-          {[-length * 0.3, 0, length * 0.3].map((xOffset, i) => (
-            <mesh key={i} position={[xOffset, 0, 0]}>
-              <boxGeometry args={[0.7, height * 0.65, 0.7]} />
-              <meshStandardMaterial color="#fbbf24" roughness={0.3} />
-            </mesh>
-          ))}
-          <Text
-            position={[0, height + 0.4, 0]}
-            fontSize={0.28}
-            color="#38bdf8"
-            anchorX="center"
-            anchorY="middle"
-          >
-            {`${slot.tipo_contenedor || '40HQ'} | ${slot.slot_code}`}
-          </Text>
-        </group>
-      )}
-
-      {!isSelected && (
-        <mesh position={[0, 0, width / 2 + 0.01]}>
-          <planeGeometry args={[length * 0.95, height * 0.9]} />
-          <meshBasicMaterial color="#1e293b" wireframe />
-        </mesh>
-      )}
-    </group>
-  );
-};
-
-// Realistic Container Ship Hull Structure (Alta Mar)
-const ContainerShipHull: React.FC = () => {
-  return (
-    <group position={[0, 0, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[120, 80, 32, 32]} />
-        <meshStandardMaterial
-          color="#0f172a"
-          roughness={0.1}
-          metalness={0.8}
-          transparent
-          opacity={0.85}
-        />
-      </mesh>
-
-      <mesh position={[0, 0.4, 0]}>
-        <boxGeometry args={[22, 0.8, 7.5]} />
-        <meshStandardMaterial color="#991b1b" roughness={0.6} />
-      </mesh>
-
-      <mesh position={[0, 0.9, 0]}>
-        <boxGeometry args={[22.5, 0.4, 7.8]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.4} />
-      </mesh>
-
-      <mesh position={[12.5, 0.7, 0]} rotation={[0, 0, -Math.PI / 12]}>
-        <coneGeometry args={[4.2, 3.5, 4]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.5} />
-      </mesh>
-
-      <group position={[-9.5, 2.5, 0]}>
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[2.5, 3.2, 5]} />
-          <meshStandardMaterial color="#f8fafc" roughness={0.3} />
-        </mesh>
-        <mesh position={[0.8, 1.2, 0]}>
-          <boxGeometry args={[1.0, 0.4, 4.8]} />
-          <meshStandardMaterial color="#0284c7" emissive="#0284c7" emissiveIntensity={0.5} />
-        </mesh>
-        <mesh position={[-0.8, 2.2, 0]}>
-          <cylinderGeometry args={[0.4, 0.5, 1.5, 16]} />
-          <meshStandardMaterial color="#dc2626" />
-        </mesh>
-        <mesh position={[0, 2.2, 0]}>
-          <cylinderGeometry args={[0.05, 0.05, 1.2, 8]} />
-          <meshBasicMaterial color="#64748b" />
-        </mesh>
-      </group>
-    </group>
-  );
-};
+// El motor 3D completo, racks industriales, iluminación PBR, niebla volumétrica y autoelevador
+// se encuentran aislados en Warehouse3DSceneElements para maximizar rendimiento y tree-shaking.
 
 // ==========================================
 // MAIN COMPONENT: UniversalWarehouseTwin3D
@@ -482,6 +85,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   kanbanFilter: propKanbanFilter = 'ALL',
   onTransferSuccess,
   className = '',
+  active = true,
 }) => {
   const [warehouses, setWarehouses] = useState<DigitalTwinWarehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>(
@@ -665,23 +269,29 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     loadRealProducts();
   }, [moduleScope]);
 
-  // WebSocket Live Hub para Gemelo Digital 3D
+  // WebSocket Live Hub para Gemelo Digital 3D (con ciclo de vida resiliente a React StrictMode)
   useEffect(() => {
     let socket: WebSocket | null = null;
     let reconnectTimer: any = null;
+    let isCancelled = false;
 
     const connectWs = () => {
+      if (isCancelled) return;
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host;
-        const wsUrl = `${protocol}//${host}/ws/digital-twin`;
+        const wsBase = getWsBaseUrl();
+        const wsUrl = `${wsBase}/ws/digital-twin`;
         socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
+          if (isCancelled) {
+            socket?.close(1000, 'Unmounted');
+            return;
+          }
           setWsConnected(true);
         };
 
         socket.onmessage = (event) => {
+          if (isCancelled) return;
           try {
             const data = JSON.parse(event.data);
             if (data.event === 'BOX_RECEIVED_LIVE') {
@@ -692,7 +302,9 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                 units: data.units_count,
               });
               loadWarehouseData(selectedWarehouseId);
-              setTimeout(() => setLiveArrivalAlert(null), 6000);
+              setTimeout(() => {
+                if (!isCancelled) setLiveArrivalAlert(null);
+              }, 6000);
             } else if (data.event === 'SLOT_RESERVED' || data.event === 'SLOT_RELEASED') {
               loadWarehouseData(selectedWarehouseId);
             }
@@ -703,7 +315,13 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
         socket.onclose = () => {
           setWsConnected(false);
-          reconnectTimer = setTimeout(connectWs, 5000);
+          if (!isCancelled) {
+            reconnectTimer = setTimeout(connectWs, 5000);
+          }
+        };
+
+        socket.onerror = () => {
+          setWsConnected(false);
         };
       } catch {
         setWsConnected(false);
@@ -712,8 +330,17 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
     connectWs();
     return () => {
-      if (socket) socket.close();
+      isCancelled = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (socket) {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, 'Component unmounted');
+        } else if (socket.readyState === WebSocket.CONNECTING) {
+          socket.onopen = () => {
+            socket?.close(1000, 'Component unmounted');
+          };
+        }
+      }
     };
   }, [selectedWarehouseId]);
 
@@ -733,8 +360,8 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     }
   }, [selectedWarehouse]);
 
-  // Rack clicked in 3D
-  const handleSelectRackCuerpo = (cuerpo: string, sampleSlot: DigitalTwinSlot) => {
+  // Rack clicked in 3D (useCallback para preservar pureza de React.memo)
+  const handleSelectRackCuerpo = useCallback((cuerpo: string, sampleSlot: DigitalTwinSlot) => {
     setSelectedRackCuerpo(cuerpo);
     setRackEngForm({
       rack_width_m: sampleSlot.rack_width_m || 2.4,
@@ -744,10 +371,10 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       max_rack_weight_kg: sampleSlot.max_rack_weight_kg || 3000.0,
     });
     setIsRackEngModalOpen(true);
-  };
+  }, []);
 
-  // Box / Slot clicked in 3D
-  const handleSelectSlot = (slot: DigitalTwinSlot) => {
+  // Box / Slot clicked in 3D (useCallback para preservar pureza de React.memo)
+  const handleSelectSlot = useCallback((slot: DigitalTwinSlot) => {
     setInspectedSlot(slot);
     setSlotItemForm({
       box_width_m: slot.box_width_m || 0.4,
@@ -759,7 +386,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       lote: slot.lote || '',
       descripcion: slot.descripcion || '',
     });
-  };
+  }, []);
 
   // Save Warehouse Dimensions
   const handleSaveWarehouseDimensions = async () => {
@@ -1198,69 +825,19 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       {/* ==================================================== */}
       <div className="relative flex-1 w-full h-full flex overflow-hidden">
         <div className="flex-1 relative w-full h-full bg-slate-950">
-          <Canvas
-            camera={{
-              position: isMaritimeScene ? [16, 14, 22] : [18, 16, 24],
-              fov: 45,
-            }}
-            shadows
-          >
-            <ambientLight intensity={0.8} />
-            <directionalLight
-              position={[25, 35, 25]}
-              intensity={1.3}
-              castShadow
-            />
-            <pointLight position={[-10, 15, -10]} intensity={0.5} color="#38bdf8" />
-
-            <OrbitControls
-              makeDefault
-              enableDamping
-              dampingFactor={0.08}
-              maxPolarAngle={Math.PI / 2.05}
-              minDistance={3}
-              maxDistance={90}
-            />
-
-            {isMaritimeScene ? (
-              <group>
-                <ContainerShipHull />
-                {slots.map((slot) => (
-                  <MaritimeContainerMesh
-                    key={slot.id}
-                    slot={slot}
-                    isSelected={inspectedSlot?.id === slot.id}
-                    onSelect={(s) => handleSelectSlot(s)}
-                  />
-                ))}
-              </group>
-            ) : (
-              <group>
-                <WarehouseNaveMesh
-                  width={selectedWarehouse?.width_m || 50}
-                  length={selectedWarehouse?.length_m || 70}
-                  clearHeight={selectedWarehouse?.clear_height_m || 10.5}
-                />
-                <RackStructures
-                  cuerpos={uniqueCuerpos}
-                  slotsByCuerpo={slotsByCuerpo}
-                  selectedCuerpo={selectedCuerpo}
-                  onSelectRackCuerpo={handleSelectRackCuerpo}
-                />
-                <InstancedTerrestrialCargo
-                  slots={slots}
-                  selectedSlotId={inspectedSlot?.id || null}
-                  onSelectSlot={handleSelectSlot}
-                />
-                <EmptyAndBlockedSlotsMesh
-                  slots={slots}
-                  showEmptySlots={showEmptySlots}
-                  selectedSlotId={inspectedSlot?.id || null}
-                  onSelectSlot={handleSelectSlot}
-                />
-              </group>
-            )}
-          </Canvas>
+          <WarehouseCanvasScene
+            active={active}
+            isMaritimeScene={isMaritimeScene}
+            slots={slots}
+            inspectedSlotId={inspectedSlot?.id || null}
+            onSelectSlot={handleSelectSlot}
+            selectedWarehouse={selectedWarehouse}
+            uniqueCuerpos={uniqueCuerpos}
+            slotsByCuerpo={slotsByCuerpo}
+            selectedCuerpo={selectedCuerpo}
+            onSelectRackCuerpo={handleSelectRackCuerpo}
+            showEmptySlots={showEmptySlots}
+          />
 
           {/* Toast / Notification Banner for Sync */}
           {syncToast && (

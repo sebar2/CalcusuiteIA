@@ -17,7 +17,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { apiService, getCurrentRole } from '../services/api';
-import { UniversalWarehouseTwin3D } from '../components/digitalTwin/UniversalWarehouseTwin3D';
+import { KeepAlive, LazyUniversalWarehouseTwin3D, DevRenderProfiler } from '../components/digitalTwin/KeepAliveTwin';
 import { Boxes } from 'lucide-react';
 import { OrderDetailModal } from '../components/supply/OrderDetailModal';
 import { ColumnMultiSelect } from '../components/multilocation/ColumnMultiSelect';
@@ -320,7 +320,7 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
           {/* Conmutador [Kanban ROP/DOH | Gemelo Digital 3D] */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
-              onClick={() => setViewMode('KANBAN')}
+              onClick={() => React.startTransition(() => setViewMode('KANBAN'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === 'KANBAN'
                   ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs'
@@ -331,7 +331,7 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
               <span>📋 Kanban ROP/DOH</span>
             </button>
             <button
-              onClick={() => setViewMode('3D_TWIN')}
+              onClick={() => React.startTransition(() => setViewMode('3D_TWIN'))}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === '3D_TWIN'
                   ? 'bg-sky-600 text-white shadow-xs'
@@ -393,8 +393,7 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
         </div>
       )}
 
-      {viewMode === '3D_TWIN' ? (
-        <div className="space-y-4">
+      <KeepAlive active={viewMode === '3D_TWIN'} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-xl gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-300">Iluminación 3D por Estado Kanban:</span>
@@ -435,13 +434,16 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
             </div>
           </div>
 
-          <UniversalWarehouseTwin3D
+          <DevRenderProfiler id="UniversalWarehouseTwin3D">
+          <LazyUniversalWarehouseTwin3D
+            active={viewMode === '3D_TWIN'}
             moduleScope="SUPPLY_CHAIN"
             kanbanFilter={kanbanTwinFilter}
             onTransferSuccess={fetchKanban}
           />
-        </div>
-      ) : (
+          </DevRenderProfiler>
+      </KeepAlive>
+      {viewMode === '3D_TWIN' ? null : (
         <div className="space-y-6">
 {/* Kanban Board Container: 6 Etapas con scroll horizontal suave */}
       <div className="overflow-x-auto pb-4">
