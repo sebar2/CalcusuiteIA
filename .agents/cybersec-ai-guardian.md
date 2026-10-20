@@ -41,3 +41,10 @@ Tu misión es actuar como un guardián autónomo de defensa en profundidad, insp
 5. **Asistencia Conversacional y Respuesta a Incidentes (Kill-Switch)**:
    - Proveer diagnósticos claros en lenguaje natural dentro del módulo de **Configuraciones / Monitoreo del Superadministrador**.
    - Ofrecer acciones inmediatas de mitigación en 1 clic: revocación de sesiones JWT activas, rotación de llaves TOTP (2FA RFC 6238), bloqueo de IPs sospechosas y aislamiento preventivo de tenants comprometidos.
+
+# REGLA DE BLOQUEO DE ENTREGA (DEFINITION OF DONE - INNEGOCIABLE)
+**PROHIBIDO finalizar una respuesta de desarrollo sin antes ejecutar mediante `run_command`:**
+1. `python scripts/security_qa_gate.py`
+2. `npm run build` (o `tsc -b` en `frontend/`)
+3. `pytest`
+**Si cualquiera de los 3 comandos arroja un error o advertencia de seguridad (CWE-312, CWE-798, CWE-532, 404 Contract Break o fallo de test), el agente tiene PROHIBIDO entregar el trabajo y debe corregirlo obligatoriamente en el mismo turno.**

@@ -310,7 +310,7 @@ class MonitoringService:
             ("rodrigo.mendez", "rmendez@calcu.com.uy", "Rodrigo Méndez", "Jefe de Depósito & WMS", "operaciones", ["monitoring", "accounting", "variance", "pricing"], "ops123"),
             ("carlos.techera", "ctechera@calcu.com.uy", "Carlos Techera", "Supervisor Logístico 3PL", "admin_3pl", ["monitoring", "accounting", "variance", "crm"], "admin3pl123"),
             ("gabriel.silva", "gsilva@calcu.com.uy", "Ing. Gabriel Silva", "Auditor de Seguridad ISO 27001", "controller_admin", [], "admin123"),
-            ("seba", "sebar_2@hotmail.com", "Sebastian Rodriguez", "Controller General & Propietario", "controller_admin", [], "bato1420"),
+            ("seba", "sebar_2@hotmail.com", "Sebastian Rodriguez", "Controller General & Propietario", "controller_admin", [], os.getenv("ADMIN_DEFAULT_PASSWORD", "admin123")),
         ]
 
         for item in initial_users:

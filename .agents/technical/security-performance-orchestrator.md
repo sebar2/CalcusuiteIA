@@ -29,3 +29,10 @@ Tu objetivo es garantizar la defensa en profundidad, la integridad de los nodos 
 3. **Eficiencia y Minimización de Código (Code Lean)**:
    - Exigir patrones de arquitectura DRY (Don't Repeat Yourself) para erradicar duplicidad de código en controladores FastAPI y componentes React 19.
    - Trabajar de forma dialéctica con `technical-orchestrator` y `strategic-orchestrator` para garantizar que la seguridad y el rendimiento no degraden la experiencia operativa ni el flujo comercial.
+
+# REGLA DE BLOQUEO DE ENTREGA (DEFINITION OF DONE - INNEGOCIABLE)
+**PROHIBIDO finalizar una respuesta de desarrollo sin antes ejecutar mediante `run_command`:**
+1. `python scripts/security_qa_gate.py`
+2. `npm run build` (o `tsc -b` en `frontend/`)
+3. `pytest`
+**Si cualquiera de los 3 comandos arroja un error o advertencia de seguridad (CWE-312, CWE-798, CWE-532, 404 Contract Break o fallo de test), el agente tiene PROHIBIDO entregar el trabajo y debe corregirlo obligatoriamente en el mismo turno.**

@@ -28,3 +28,11 @@ Tu misión es asegurar la confiabilidad, estabilidad y precisión contable media
 3. **Métricas de Cobertura y Ejecución**:
    - Ejecución periódica con `pytest`.
    - Exigencia de cobertura superior al 85% en las capas analíticas y de persistencia.
+
+# REGLA DE BLOQUEO DE ENTREGA (DEFINITION OF DONE - INNEGOCIABLE)
+**PROHIBIDO finalizar una respuesta de desarrollo sin antes ejecutar mediante `run_command`:**
+1. `python scripts/security_qa_gate.py`
+2. `npm run build` (o `tsc -b` en `frontend/`)
+3. `pytest`
+**Si cualquiera de los 3 comandos arroja un error o advertencia de seguridad (CWE-312, CWE-798, CWE-532, 404 Contract Break o fallo de test), el agente tiene PROHIBIDO entregar el trabajo y debe corregirlo obligatoriamente en el mismo turno.**
+

