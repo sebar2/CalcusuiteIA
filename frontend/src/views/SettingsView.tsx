@@ -31,16 +31,17 @@ import type {
 
 export const SettingsView: React.FC = () => {
   const storedUser = getStoredUser();
-  const [currentTenant, setCurrentTenant] = useState<TenantAccountItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'superadmin_telemetry' | 'superadmin_ai_vault' | 'superadmin_jit' | 'superadmin_copilot' | 'tenant_regional' | 'tenant_params' | 'tenant_jit_auth'>('superadmin_telemetry');
 
   // Determinar si es Superadmin (Sebastian Rodriguez / tenant_calcu_corp)
   const cleanUser = (storedUser?.user_id || '').toLowerCase();
   const isSuperAdmin = Boolean(
-    storedUser?.is_master_superadmin ||
-    cleanUser === 'seba' ||
-    cleanUser === 'sebar_2@hotmail.com' ||
-    storedUser?.role === 'controller_admin'
+    storedUser?.is_master_superadmin === true ||
+    (storedUser?.tenant_id === 'tenant_calcu_corp' && (cleanUser === 'seba' || cleanUser === 'sebar_2@hotmail.com'))
+  );
+
+  const [currentTenant, setCurrentTenant] = useState<TenantAccountItem | null>(null);
+  const [activeTab, setActiveTab] = useState<'superadmin_telemetry' | 'superadmin_ai_vault' | 'superadmin_jit' | 'superadmin_copilot' | 'tenant_regional' | 'tenant_params' | 'tenant_jit_auth'>(
+    isSuperAdmin ? 'superadmin_telemetry' : 'tenant_regional'
   );
 
   // Estados de datos
@@ -94,23 +95,33 @@ export const SettingsView: React.FC = () => {
   const loadAllSettings = async () => {
     setIsLoading(true);
     try {
-      const [currTenant, teleRes, vaultRes, jitRes, paramsRes] = await Promise.all([
+      const promises: Promise<any>[] = [
         apiService.getCurrentTenant().catch(() => null),
-        apiService.getNetworkTelemetry().catch(() => null),
-        apiService.getAIVaultConfig().catch(() => null),
         apiService.getJITSupportSessions().catch(() => []),
         apiService.getTenantOperationalParams().catch(() => null),
-      ]);
+      ];
+
+      if (isSuperAdmin) {
+        promises.push(apiService.getNetworkTelemetry().catch(() => null));
+        promises.push(apiService.getAIVaultConfig().catch(() => null));
+      }
+
+      const results = await Promise.all(promises);
+      const currTenant = results[0];
+      const jitRes = results[1];
+      const paramsRes = results[2];
+      const teleRes = isSuperAdmin ? results[3] : null;
+      const vaultRes = isSuperAdmin ? results[4] : null;
 
       if (currTenant) setCurrentTenant(currTenant);
+      if (jitRes) setJitSessions(jitRes);
+      if (paramsRes) setTenantParams(paramsRes);
       if (teleRes) setTelemetry(teleRes);
       if (vaultRes) {
         setAiVault(vaultRes);
         setAiEndpoint(vaultRes.ai_engine?.endpoint || 'http://127.0.0.1:11434');
         setAiTemperature(vaultRes.ai_engine?.default_temperature ?? 0.20);
       }
-      if (jitRes) setJitSessions(jitRes);
-      if (paramsRes) setTenantParams(paramsRes);
 
       // Si no es Superadmin, activar por defecto la pestaña de parámetros de tenant
       if (!isSuperAdmin) {

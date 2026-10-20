@@ -219,3 +219,33 @@ def test_settings_cybersec_ai_copilot_audit(client, admin_headers):
     assert mon_res.status_code == 200
     assert mon_res.json()["success"] is True
     assert mon_res.json()["agent"] == "Cybersec AI Guardian (SecOps Copilot)"
+
+
+def test_tenant_admin_and_demo_forbidden_from_superadmin_settings(client, tenant_admin_headers):
+    """Verifica que un admin de tenant regular o usuario demo NO pueda acceder a telemetría, bóveda ni SecOps."""
+    # 1. Telemetría de Red ZTNA
+    res_tel = client.get("/api/v1/settings/telemetry", headers=tenant_admin_headers)
+    assert res_tel.status_code == 403
+
+    # 2. Configuración de Bóveda y LLM
+    res_vault = client.get("/api/v1/settings/ai-vault", headers=tenant_admin_headers)
+    assert res_vault.status_code == 403
+
+    # 3. Rotación de llaves AES-256
+    res_rot = client.post("/api/v1/settings/ai-vault/rotate-keys", headers=tenant_admin_headers)
+    assert res_rot.status_code == 403
+
+    # 4. Solicitud de impersonación JIT (solo superadmin pide acceso)
+    res_jit = client.post("/api/v1/settings/jit-support/request", json={"target_tenant_id": "tenant_distsur", "reason": "Test"}, headers=tenant_admin_headers)
+    assert res_jit.status_code == 403
+
+    # 5. Copiloto IA de Ciberseguridad SecOps
+    res_cop = client.post("/api/v1/settings/cybersec-copilot", json={"prompt": "Auditar"}, headers=tenant_admin_headers)
+    assert res_cop.status_code == 403
+
+    res_mon_cop = client.post("/api/v1/monitoring/cybersec-copilot", json={"prompt": "Auditar"}, headers=tenant_admin_headers)
+    assert res_mon_cop.status_code == 403
+
+    # 6. Sus propios parámetros operativos de tenant SÍ son accesibles
+    res_own = client.get("/api/v1/settings/tenant-params", headers=tenant_admin_headers)
+    assert res_own.status_code == 200

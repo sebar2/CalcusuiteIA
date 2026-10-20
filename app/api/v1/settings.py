@@ -21,6 +21,15 @@ from app.services.settings_service import SettingsService
 
 router = APIRouter(prefix="/api/v1/settings", tags=["Configuración & Preferencias"])
 
+def _require_superadmin_user(user: UserContext) -> None:
+    clean_user = user.user_id.lower()
+    if not (user.is_master_superadmin or clean_user in {"seba", "sebar_2@hotmail.com"}):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Esta funcionalidad está reservada exclusivamente para el Superadministrador Maestro (Sebastian Rodriguez)."
+        )
+
+
 
 # ============================================================================
 # 1. PREFERENCIAS DE USUARIO (PREEXISTENTES / RETROCOMPATIBILIDAD)
@@ -120,6 +129,7 @@ def update_user_preferences(
 def get_network_telemetry(
     user: UserContext = Depends(get_current_user)
 ):
+    _require_superadmin_user(user)
     return SettingsService.get_network_telemetry()
 
 
@@ -140,6 +150,7 @@ def get_ai_and_vault(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
+    _require_superadmin_user(user)
     return SettingsService.get_ai_and_vault_config(db)
 
 
@@ -151,6 +162,7 @@ def rotate_vault_keys(
     db: Session = Depends(get_db),
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
 ):
+    _require_superadmin_user(user)
     return SettingsService.rotate_vault_keys(db, user_id=user.user_id)
 
 
@@ -162,6 +174,7 @@ def update_ai_parameters(
     payload: AIPerformanceUpdateSchema,
     user: UserContext = Depends(require_roles([ROLE_CONTROLLER_ADMIN])),
 ):
+    _require_superadmin_user(user)
     return SettingsService.update_ai_parameters(endpoint=payload.endpoint, temperature=payload.temperature)
 
 
@@ -295,6 +308,7 @@ def ask_cybersec_copilot(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ):
+    _require_superadmin_user(user)
     return SettingsService.run_cybersec_ai_copilot_audit(
         db=db,
         prompt=payload.prompt,

@@ -34,6 +34,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { getStoredUser } from '../../services/api';
 
 export type ActiveTab = 
   | 'control_room' 
@@ -107,6 +108,13 @@ export const Sidebar = ({
   isMobileOpen = false,
   onCloseMobile,
 }: SidebarProps) => {
+  const storedUser = getStoredUser();
+  const cleanUser = (storedUser?.user_id || '').toLowerCase();
+  const isSuperAdmin = Boolean(
+    storedUser?.is_master_superadmin === true ||
+    (storedUser?.tenant_id === 'tenant_calcu_corp' && (cleanUser === 'seba' || cleanUser === 'sebar_2@hotmail.com'))
+  );
+
   const sections: NavSection[] = [
     {
       title: 'Supply Chain & Logística',
@@ -397,6 +405,7 @@ export const Sidebar = ({
       ...sec,
       items: sec.items.filter((item) => {
         if (restrictedModules && restrictedModules.includes(item.id)) return false;
+        if (item.id === 'tenants_admin' && !isSuperAdmin) return false;
         if (currentRole === 'controller_admin') return true;
         return item.roles.includes(currentRole);
       }),

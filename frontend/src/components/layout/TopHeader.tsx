@@ -78,6 +78,24 @@ export const TopHeader = ({
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => getStoredUser());
   const [isAuthMenuOpen, setIsAuthMenuOpen] = useState<boolean>(false);
 
+  const cleanUserId = (currentUser?.user_id || '').toLowerCase();
+  const isSuperAdmin = Boolean(
+    currentUser?.is_master_superadmin === true ||
+    (currentUser?.tenant_id === 'tenant_calcu_corp' && (cleanUserId === 'seba' || cleanUserId === 'sebar_2@hotmail.com'))
+  );
+
+  const userInitials = currentUser?.nombre
+    ? currentUser.nombre
+        .split(' ')
+        .filter(Boolean)
+        .map((n: string) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : isSuperAdmin
+    ? 'SR'
+    : 'CA';
+
   useEffect(() => {
     const handleLoginEvent = (e: Event) => {
       const customEvent = e as CustomEvent<StoredUser>;
@@ -335,61 +353,73 @@ export const TopHeader = ({
           <span className="hidden sm:inline">Actualizar</span>
         </button>
 
-        {/* 6. Bloque de perfil del usuario: Sebastian Rodriguez | 🛡️ CONTROLLER ADMIN | Avatar CA */}
+        {/* 6. Bloque de perfil del usuario */}
         <div className="relative flex items-center pl-2 border-l border-slate-200 dark:border-slate-800">
           <div 
             onClick={() => setIsAuthMenuOpen(!isAuthMenuOpen)}
             className="flex items-center space-x-2 cursor-pointer select-none group"
-            title="Click para gestionar sesión del Superadministrador"
+            title={isSuperAdmin ? "Click para gestionar sesión del Superadministrador" : "Click para gestionar sesión"}
           >
             <div className="hidden sm:flex flex-col text-right">
               <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 group-hover:text-[#00a2e8] transition-colors leading-tight">
-                {currentUser?.nombre || 'Sebastian Rodriguez'}
+                {currentUser?.nombre || (isSuperAdmin ? 'Sebastian Rodriguez' : 'Usuario')}
               </span>
               <span className="text-[9px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                🛡️ {currentRole ? currentRole.replace('_', ' ').toUpperCase() : 'CONTROLLER ADMIN'}
+                🛡️ {isSuperAdmin ? 'CONTROLLER ADMIN (PROPIETARIO)' : (currentRole ? currentRole.replace('_', ' ').toUpperCase() : 'CONTROLLER ADMIN')}
               </span>
             </div>
 
-            <div className="w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-black shadow-xs transition-transform group-hover:scale-105 bg-gradient-to-tr from-purple-600 to-indigo-500">
-              CA
+            <div className={`w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-black shadow-xs transition-transform group-hover:scale-105 ${
+              isSuperAdmin 
+                ? 'bg-gradient-to-tr from-amber-600 to-emerald-600' 
+                : 'bg-gradient-to-tr from-blue-600 to-indigo-500'
+            }`}>
+              {userInitials}
             </div>
             <ChevronDown size={12} className="text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-colors" />
           </div>
 
-          {/* Menú Desplegable de Sesión SuperAdmin */}
+          {/* Menú Desplegable de Sesión */}
           {isAuthMenuOpen && (
             <div 
               className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-3 px-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
             >
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-700">
                 <div>
-                  <p className="text-xs font-bold text-slate-800 dark:text-white">Sesión SuperAdmin</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">
+                    {isSuperAdmin ? 'Sesión SuperAdmin' : (currentUser?.company_name || 'Sesión de Cuenta')}
+                  </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                    tenant_calcu_corp
+                    {currentUser?.tenant_id || (isSuperAdmin ? 'tenant_calcu_corp' : 'tenant_sandbox')}
                   </p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-gradient-to-r from-amber-500/20 via-emerald-500/25 to-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-300">
-                  PROPIETARIO
-                </span>
+                {isSuperAdmin ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-gradient-to-r from-amber-500/20 via-emerald-500/25 to-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-300">
+                    👑 PROPIETARIO
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/40">
+                    {currentUser?.subscription_status === 'ACTIVE_PAID' ? 'ACTIVO' : 'TRIAL 14D'}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2.5">
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                    Usuario Maestro
+                    {isSuperAdmin ? 'Usuario Maestro' : 'Usuario de Cuenta'}
                   </span>
                   <div className="font-bold text-slate-800 dark:text-slate-100 truncate">
-                    {currentUser?.nombre || 'Sebastian Rodriguez'}
+                    {currentUser?.nombre || (isSuperAdmin ? 'Sebastian Rodriguez' : 'Usuario Demo')}
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                    @{currentUser?.user_id || 'seba'}
+                    @{currentUser?.user_id || (isSuperAdmin ? 'seba' : 'demo')}
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-1.5 px-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                   <Shield size={12} />
-                  <span>Auditoría ISO 27001 Activa</span>
+                  <span>{isSuperAdmin ? 'Auditoría ISO 27001 Activa' : 'Aislamiento de Tenant Activo'}</span>
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -280,6 +280,12 @@ def ask_monitoring_cybersec_copilot(
     current_user: UserContext = Depends(get_current_user)
 ):
     """Consulta al Copiloto IA Guardián de Ciberseguridad (SecOps Copilot ISO 27001)."""
+    clean_user = current_user.user_id.lower()
+    if not (current_user.is_master_superadmin or clean_user in {"seba", "sebar_2@hotmail.com"}):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Esta funcionalidad está reservada exclusivamente para el Superadministrador Maestro."
+        )
     from app.services.settings_service import SettingsService
     return SettingsService.run_cybersec_ai_copilot_audit(db, payload.prompt, user_id=current_user.user_id)
 
