@@ -17,6 +17,8 @@ import {
   Building2,
 } from 'lucide-react';
 import { apiService, getCurrentRole } from '../services/api';
+import { UniversalWarehouseTwin3D } from '../components/digitalTwin/UniversalWarehouseTwin3D';
+import { Boxes } from 'lucide-react';
 import { OrderDetailModal } from '../components/supply/OrderDetailModal';
 import { ColumnMultiSelect } from '../components/multilocation/ColumnMultiSelect';
 import type {
@@ -75,6 +77,8 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
   const [poSuggestionsModalOpen, setPoSuggestionsModalOpen] = useState<boolean>(false);
   const [poSuggestions, setPoSuggestions] = useState<PurchaseOrderSuggestionsResponse | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'KANBAN' | '3D_TWIN'>('KANBAN');
+  const [kanbanTwinFilter, setKanbanTwinFilter] = useState<'ALL' | 'CRITICO_ROP' | 'ALERTA_DOH' | 'OPTIMO'>('ALL');
 
   const fetchKanban = async () => {
     setIsLoading(true);
@@ -313,6 +317,32 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Conmutador [Kanban ROP/DOH | Gemelo Digital 3D] */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('KANBAN')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'KANBAN'
+                  ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <GitPullRequest size={14} />
+              <span>📋 Kanban ROP/DOH</span>
+            </button>
+            <button
+              onClick={() => setViewMode('3D_TWIN')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === '3D_TWIN'
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Boxes size={14} />
+              <span>🧊 Gemelo Digital 3D</span>
+            </button>
+          </div>
+
           <button
             onClick={handleOpenPoSuggestions}
             className="flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all hover:scale-[1.02]"
@@ -363,7 +393,57 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
         </div>
       )}
 
-      {/* Kanban Board Container: 6 Etapas con scroll horizontal suave */}
+      {viewMode === '3D_TWIN' ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-xl gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300">Iluminación 3D por Estado Kanban:</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setKanbanTwinFilter('ALL')}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold ${kanbanTwinFilter === 'ALL' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                >
+                  Todos los Racks
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKanbanTwinFilter('CRITICO_ROP')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold ${kanbanTwinFilter === 'CRITICO_ROP' ? 'bg-red-600 text-white' : 'bg-slate-800 text-red-400 hover:text-white'}`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+                  🔴 Crítico ROP (Quebrado)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKanbanTwinFilter('ALERTA_DOH')}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold ${kanbanTwinFilter === 'ALERTA_DOH' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-amber-400 hover:text-white'}`}
+                >
+                  🟠 Alerta ROH / DOH Alto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKanbanTwinFilter('OPTIMO')}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold ${kanbanTwinFilter === 'OPTIMO' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-emerald-400 hover:text-white'}`}
+                >
+                  🟢 Óptimo / En Tránsito Marítimo
+                </button>
+              </div>
+            </div>
+            <div className="text-xs text-sky-400 font-medium">
+              🚢 Nodo Marítimo 3D (Alta Mar) y Depósitos Terrestres Sincronizados
+            </div>
+          </div>
+
+          <UniversalWarehouseTwin3D
+            moduleScope="SUPPLY_CHAIN"
+            kanbanFilter={kanbanTwinFilter}
+            onTransferSuccess={fetchKanban}
+          />
+        </div>
+      ) : (
+        <div className="space-y-6">
+{/* Kanban Board Container: 6 Etapas con scroll horizontal suave */}
       <div className="overflow-x-auto pb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 min-w-[1450px]">
           {kanban?.stages.map((stage: SupplyKanbanStage) => {
@@ -610,6 +690,9 @@ export const SupplyKanbanView: React.FC<SupplyKanbanViewProps> = ({
       </div>
 
       {/* Modal de Detalle y Edición de Orden */}
+              </div>
+      )}
+
       <OrderDetailModal
         isOpen={isModalOpen}
         order={selectedOrder}

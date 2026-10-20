@@ -22,6 +22,7 @@ from app.api.v1.leads import router as leads_router
 from app.api.v1.integrations import router as integrations_router
 from app.api.v1.omnichannel import router as omnichannel_router
 from app.api.v1.tenants import router as tenants_router
+from app.api.v1.digital_twin import router as digital_twin_router
 from app.services.security_agent import security_agent
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -197,6 +198,7 @@ app.include_router(leads_router, prefix="/api/v1")
 app.include_router(integrations_router)
 app.include_router(omnichannel_router)
 app.include_router(tenants_router)
+app.include_router(digital_twin_router, prefix="/api/v1")
 
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)

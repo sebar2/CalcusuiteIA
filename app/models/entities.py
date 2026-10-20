@@ -522,11 +522,63 @@ class Warehouse(Base):
     id: Mapped[str] = mapped_column(String(50), primary_key=True) # ej. 'dep-central', 'loc-pocitos'
     nombre: Mapped[str] = mapped_column(String(100), nullable=False)
     tipo: Mapped[str] = mapped_column(String(30), default="SUCURSAL", nullable=False)
+    module_scope: Mapped[str] = mapped_column(String(30), default="SUPPLY_CHAIN", nullable=False, index=True) # '3PL' o 'SUPPLY_CHAIN'
     ubicacion: Mapped[str] = mapped_column(String(150), nullable=False)
     pais: Mapped[Optional[str]] = mapped_column(String(100), default="Uruguay", nullable=True)
     capacidad_unidades: Mapped[int] = mapped_column(Integer, default=10000, nullable=False)
+    superficie_m2: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1200.0000'), nullable=False)
+    volumen_max_m3: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('7200.0000'), nullable=False)
+    capacidad_peso_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('500000.0000'), nullable=False)
+    altura_max_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('8.5000'), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+
+    slots: Mapped[List["WarehouseSlot"]] = relationship(back_populates="warehouse_rel", cascade="all, delete-orphan")
+
+
+class WarehouseSlot(Base):
+    """
+    Entidad Posición 3D / Slot de Depósito (Gemelo Digital Universal)
+    Soporta racks en tierra (ej. F-01-01-01) y contenedores marítimos (Buque-Bahía-Fila-Nivel)
+    """
+    __tablename__ = "warehouse_slots"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True) # ej. 'DEP-CENTRAL-MVD:F-01-01-01'
+    warehouse_id: Mapped[str] = mapped_column(String(50), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_scope: Mapped[str] = mapped_column(String(30), default="SUPPLY_CHAIN", nullable=False, index=True) # '3PL' o 'SUPPLY_CHAIN'
+    slot_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True) # ej. 'F-01-01-01' o 'VESSEL-BAY01-R02-T03'
+    cuerpo: Mapped[str] = mapped_column(String(30), nullable=False, index=True) # 'A', 'B', 'F', 'BAY-01'
+    rack: Mapped[str] = mapped_column(String(30), nullable=False) # '01', '02', 'ROW-01'
+    nivel: Mapped[int] = mapped_column(Integer, nullable=False) # 1, 2, 3, 4
+    posicion: Mapped[int] = mapped_column(Integer, nullable=False) # 1, 2, 3, 4
+    estado: Mapped[str] = mapped_column(String(30), default="VACIA", nullable=False, index=True) # 'VACIA', 'OCUPADA', 'BLOQUEADA', 'RESERVADA'
+    sku: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    lote: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    descripcion: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cantidad: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    peso_actual_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    peso_max_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1000.0000'), nullable=False)
+    volumen_actual_m3: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    volumen_max_m3: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1.8000'), nullable=False)
+    altura_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1.6000'), nullable=False)
+    valor_estimado: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    pallets_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cajas_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Atributos de nodo marítimo (Alta Mar)
+    tipo_contenedor: Mapped[Optional[str]] = mapped_column(String(30), nullable=True) # '40HQ', '20ST', 'LCL'
+    eta_arribo: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    costo_landed: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    # Control de Calidad y Riesgos
+    desvios: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 'EXCESO_PESO', 'EXCESO_VOLUMEN', 'EXCESO_ALTURA'
+    material_retenido: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    material_calidad: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fecha_vencimiento: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Sincronización Kanban ROP/DOH
+    rop_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True) # 'CRITICO_ROP', 'ALERTA_DOH', 'OPTIMO'
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=True)
+
+    warehouse_rel: Mapped["Warehouse"] = relationship(back_populates="slots")
 
 
 class Client(Base):

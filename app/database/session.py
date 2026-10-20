@@ -148,6 +148,13 @@ def sync_table_columns(conn):
     add_col_if_missing("categorias", "created_at", "TIMESTAMP")
     add_col_if_missing("productos", "image_url", "VARCHAR(500)")
 
+    # 6.1. Warehouses (Multi-Depósito Gemelo Digital 3D & Module Scope)
+    add_col_if_missing("warehouses", "module_scope", "VARCHAR(30)", "'SUPPLY_CHAIN'")
+    add_col_if_missing("warehouses", "superficie_m2", "NUMERIC(14, 4)", "1200.0000")
+    add_col_if_missing("warehouses", "volumen_max_m3", "NUMERIC(14, 4)", "7200.0000")
+    add_col_if_missing("warehouses", "capacidad_peso_kg", "NUMERIC(14, 4)", "500000.0000")
+    add_col_if_missing("warehouses", "altura_max_m", "NUMERIC(14, 4)", "8.5000")
+
     # 7. ordenes_compra (Plaza Local / Reventa)
     add_col_if_missing("ordenes_compra", "tipo_orden", "VARCHAR(30)", "'IMPORTACION'")
     add_col_if_missing("ordenes_compra", "fecha_disponible", "DATE")
@@ -1579,6 +1586,8 @@ class TenantConnectionManager:
             if DATABASE_URL.startswith("postgresql"):
                 # En PostgreSQL usamos schema-per-tenant sobre el motor principal
                 schema_safe = "".join(c for c in clean_tid if c.isalnum() or c == "_")
+                if not schema_safe:
+                    schema_safe = "tenant_custom"
                 with engine.connect() as conn:
                     conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_safe}"'))
                     conn.commit()

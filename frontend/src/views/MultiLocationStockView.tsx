@@ -31,6 +31,8 @@ import type {
   WarehouseStockItem,
   UserRole,
 } from '../types';
+import { UniversalWarehouseTwin3D } from '../components/digitalTwin/UniversalWarehouseTwin3D';
+import { Boxes } from 'lucide-react';
 import { ProductThumbnail } from '../components/common/ProductThumbnail';
 import { ColumnMultiSelect } from '../components/multilocation/ColumnMultiSelect';
 import { ReventaBatchModal } from '../components/multilocation/ReventaBatchModal';
@@ -57,6 +59,7 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [selectedOrigenTipo, setSelectedOrigenTipo] = useState<string>('ALL');
   const [hideTestBatches, setHideTestBatches] = useState<boolean>(true); // Limpieza visual activa por defecto
+  const [viewMode, setViewMode] = useState<'MATRIX' | '3D_TWIN'>('MATRIX');
 
   // Modal / Panel: Master de Almacenes Uruguay (Metros cúbicos, ocupación y valorización)
   const [isMasterAlmacenesOpen, setIsMasterAlmacenesOpen] = useState<boolean>(false);
@@ -906,6 +909,32 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Conmutador Matriz / Gemelo Digital 3D */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setViewMode('MATRIX')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'MATRIX'
+                  ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Ship size={14} />
+              <span>📊 Matriz Multi-Depósito</span>
+            </button>
+            <button
+              onClick={() => setViewMode('3D_TWIN')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === '3D_TWIN'
+                  ? 'bg-cyan-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Boxes size={14} />
+              <span>🧊 Gemelo Digital 3D</span>
+            </button>
+          </div>
+
           <button
             onClick={handleAutoArrive}
             className="flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-950/60 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-800 transition-all shadow-xs"
@@ -938,7 +967,16 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
         </div>
       </div>
 
-      {/* =====================================================================
+      {viewMode === '3D_TWIN' ? (
+        <div className="space-y-4">
+          <UniversalWarehouseTwin3D
+            moduleScope="SUPPLY_CHAIN"
+            onTransferSuccess={loadData}
+          />
+        </div>
+      ) : (
+        <div className="space-y-6">
+{/* =====================================================================
           5 CARDS RESUMEN DE LAS FASES LOGÍSTICAS
       ===================================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
@@ -2223,6 +2261,9 @@ export const MultiLocationStockView: React.FC<MultiLocationStockViewProps> = ({ 
       )}
 
       {/* Modal: Cargar Lote Reventa / Plaza */}
+              </div>
+      )}
+
       <ReventaBatchModal
         isOpen={isReventaModalOpen}
         onClose={() => setIsReventaModalOpen(false)}
