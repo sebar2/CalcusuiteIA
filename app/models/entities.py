@@ -599,6 +599,15 @@ class WarehouseSlot(Base):
 
     # Sincronización Kanban ROP/DOH
     rop_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True) # 'CRITICO_ROP', 'ALERTA_DOH', 'OPTIMO'
+
+    # Doble Candado SICE / B2B (Reserva Física 3D) & Trazabilidad QR
+    reservation_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True) # None, 'SOFT_RESERVED', 'HARD_RESERVED'
+    reservation_order_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True) # ID SICE o Cotización B2B
+    reserved_organism: Mapped[Optional[str]] = mapped_column(String(200), nullable=True) # Organismo estatal o cliente
+    reserved_by_user: Mapped[Optional[str]] = mapped_column(String(100), nullable=True) # Usuario reservante
+    reserved_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    qr_signed_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # HMAC-SHA256 Token de Recepción
+
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=True)
 

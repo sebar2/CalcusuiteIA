@@ -22,6 +22,10 @@ import {
   RefreshCw,
   CheckCircle2,
   Link2,
+  Lock,
+  Unlock,
+  QrCode,
+  Truck,
 } from 'lucide-react';
 import type {
   DigitalTwinWarehouse,
@@ -33,6 +37,9 @@ import type {
   WarehouseDimensionsUpdatePayload,
   RackDimensionsUpdatePayload,
   SlotItemSpecsUpdatePayload,
+  PlacedBox3D,
+  ContainerLoadPlanResponse,
+  FillAIResponse,
 } from '../../services/digitalTwinApi';
 import { digitalTwinApi } from '../../services/digitalTwinApi';
 
@@ -203,7 +210,7 @@ const InstancedTerrestrialCargo: React.FC<{
   const color = useMemo(() => new THREE.Color(), []);
 
   const occupiedSlots = useMemo(() => {
-    return slots.filter((s) => s.estado === 'OCUPADA');
+    return slots.filter((s) => s.estado === 'OCUPADA' || s.estado === 'RESERVADA');
   }, [slots]);
 
   useLayoutEffect(() => {
@@ -232,10 +239,14 @@ const InstancedTerrestrialCargo: React.FC<{
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
-      // Color coding reactive to ROP / DOH / Physical Deviations
+      // Color coding reactive to ROP / DOH / Reservas / Physical Deviations
       let hexColor = '#0284c7'; // default blue
       if (slot.id === selectedSlotId) {
         hexColor = '#38bdf8'; // glowing cyan
+      } else if (slot.reservation_type === 'HARD_RESERVED') {
+        hexColor = '#2563eb'; // electric solid blue for HARD RESERVED (Licitaciones / SICE)
+      } else if (slot.reservation_type === 'SOFT_RESERVED') {
+        hexColor = '#f59e0b'; // amber for SOFT RESERVED (Cotizaciones B2B)
       } else if (slot.desvios) {
         hexColor = '#ec4899'; // pink/magenta deviation
       } else if (slot.rop_status === 'CRITICO_ROP') {
@@ -496,6 +507,45 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   const [transferMoveAll, setTransferMoveAll] = useState<boolean>(true);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState<boolean>(false);
 
+  // WebSocket Live Hub State
+  const [wsConnected, setWsConnected] = useState<boolean>(false);
+  const [liveArrivalAlert, setLiveArrivalAlert] = useState<{
+    message: string;
+    slot_code: string;
+    sku: string;
+    units: number;
+  } | null>(null);
+
+  // 1. Simulador 3D de Cubicaje & AI Filler
+  const [isLoadPlannerModalOpen, setIsLoadPlannerModalOpen] = useState<boolean>(false);
+  const [loadPlanContainerType, setLoadPlanContainerType] = useState<'40HQ' | '20ST' | 'TRUCK_3PL'>('40HQ');
+  const [enforceLifoRoute, setEnforceLifoRoute] = useState<boolean>(true);
+  const [loadPlanData, setLoadPlanData] = useState<ContainerLoadPlanResponse | null>(null);
+  const [aiFillerData, setAiFillerData] = useState<FillAIResponse | null>(null);
+  const [isCalculatingPlan, setIsCalculatingPlan] = useState<boolean>(false);
+  const [isFillingAI, setIsFillingAI] = useState<boolean>(false);
+
+  // 2. Reserva Física 3D (Doble Candado)
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState<boolean>(false);
+  const [reserveForm, setReserveForm] = useState<{
+    reservation_type: 'SOFT_RESERVED' | 'HARD_RESERVED';
+    order_id: string;
+    organism: string;
+    duration_days: number;
+  }>({
+    reservation_type: 'HARD_RESERVED',
+    order_id: 'SICE-LIC-2026-088',
+    organism: 'Intendencia de Montevideo',
+    duration_days: 7,
+  });
+  const [isReserving, setIsReserving] = useState<boolean>(false);
+
+  // 4. Recepción Inteligente QR
+  const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
+  const [qrTokenGenerated, setQrTokenGenerated] = useState<string>('');
+  const [qrScanInput, setQrScanInput] = useState<string>('');
+  const [isScanningQR, setIsScanningQR] = useState<boolean>(false);
+
   const [isRiskModalOpen, setIsRiskModalOpen] = useState<boolean>(false);
 
   const [isAiSlottingModalOpen, setIsAiSlottingModalOpen] = useState<boolean>(false);
@@ -615,6 +665,58 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     loadRealProducts();
   }, [moduleScope]);
 
+  // WebSocket Live Hub para Gemelo Digital 3D
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimer: any = null;
+
+    const connectWs = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsUrl = `${protocol}//${host}/ws/digital-twin`;
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          setWsConnected(true);
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.event === 'BOX_RECEIVED_LIVE') {
+              setLiveArrivalAlert({
+                message: `¡Ingreso QR Confirmado en Vivo! SKU ${data.sku}`,
+                slot_code: data.slot_code,
+                sku: data.sku,
+                units: data.units_count,
+              });
+              loadWarehouseData(selectedWarehouseId);
+              setTimeout(() => setLiveArrivalAlert(null), 6000);
+            } else if (data.event === 'SLOT_RESERVED' || data.event === 'SLOT_RELEASED') {
+              loadWarehouseData(selectedWarehouseId);
+            }
+          } catch {
+            // ignore
+          }
+        };
+
+        socket.onclose = () => {
+          setWsConnected(false);
+          reconnectTimer = setTimeout(connectWs, 5000);
+        };
+      } catch {
+        setWsConnected(false);
+      }
+    };
+
+    connectWs();
+    return () => {
+      if (socket) socket.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, [selectedWarehouseId]);
+
   useEffect(() => {
     if (selectedWarehouseId) {
       loadWarehouseData(selectedWarehouseId);
@@ -701,6 +803,133 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       alert(`Error al actualizar especificaciones de caja: ${err.response?.data?.detail || err.message}`);
     } finally {
       setIsSavingSlotItem(false);
+    }
+  };
+
+  // Handlers para Cubicaje 3D y Relleno IA 98%
+  const handleRunLoadPlanner = async (ctype = loadPlanContainerType) => {
+    try {
+      setIsCalculatingPlan(true);
+      setAiFillerData(null);
+      // Extraer ítems del almacén actual o lote muestra
+      const sampleItems = slots
+        .filter((s) => s.estado === 'OCUPADA' && s.cantidad > 0)
+        .slice(0, 15)
+        .map((s, idx) => ({
+          sku: s.sku || `SKU-${idx + 1}`,
+          description: s.descripcion || `Item ${idx + 1}`,
+          box_width_m: s.box_width_m || 0.4,
+          box_height_m: s.box_height_m || 0.3,
+          box_length_m: s.box_length_m || 0.4,
+          unit_weight_kg: s.unit_weight_kg || 8.0,
+          units_count: Math.min(30, Math.max(5, s.cajas_count || 10)),
+          stop_number: (idx % 3) + 1,
+        }));
+
+      const plan = await digitalTwinApi.planContainerLoad(
+        ctype,
+        sampleItems.length > 0 ? sampleItems : [
+          { sku: 'VALV-IND-A1', description: 'Válvula 2"', box_width_m: 0.4, box_height_m: 0.3, box_length_m: 0.4, unit_weight_kg: 10, units_count: 40, stop_number: 1 },
+          { sku: 'FILT-HYD-500', description: 'Filtro Hidráulico', box_width_m: 0.4, box_height_m: 0.3, box_length_m: 0.4, unit_weight_kg: 7, units_count: 35, stop_number: 2 },
+        ],
+        enforceLifoRoute
+      );
+      setLoadPlanData(plan);
+      setIsLoadPlannerModalOpen(true);
+    } catch (err: any) {
+      alert(`Error al calcular cubicaje: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsCalculatingPlan(false);
+    }
+  };
+
+  const handleRunAIFiller = async () => {
+    if (!loadPlanData) return;
+    try {
+      setIsFillingAI(true);
+      const fillRes = await digitalTwinApi.fillContainerAI(loadPlanContainerType, loadPlanData);
+      setAiFillerData(fillRes);
+      // Combinar cajas colocadas con las sugeridas por IA para visualización completa
+      setLoadPlanData({
+        ...loadPlanData,
+        occupied_volume_pct: fillRes.projected_volume_pct,
+        occupied_weight_pct: fillRes.projected_weight_pct,
+        total_volume_m3: loadPlanData.total_volume_m3 + fillRes.filler_volume_m3,
+        total_weight_kg: loadPlanData.total_weight_kg + fillRes.filler_weight_kg,
+        placed_boxes: [...loadPlanData.placed_boxes, ...fillRes.filler_boxes],
+      });
+    } catch (err: any) {
+      alert(`Error en recomendador IA: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsFillingAI(false);
+    }
+  };
+
+  // Handlers para Doble Candado (SOFT / HARD)
+  const handleReserveSlot = async () => {
+    if (!inspectedSlot) return;
+    try {
+      setIsReserving(true);
+      await digitalTwinApi.reserveSlot({
+        warehouse_id: inspectedSlot.warehouse_id,
+        slot_code: inspectedSlot.slot_code,
+        reservation_type: reserveForm.reservation_type,
+        order_id: reserveForm.order_id,
+        organism: reserveForm.organism,
+        duration_days: reserveForm.duration_days,
+      });
+      await loadWarehouseData(selectedWarehouseId);
+      setIsReserveModalOpen(false);
+      setSyncToast(`Posición ${inspectedSlot.slot_code} bloqueada bajo ${reserveForm.reservation_type}`);
+    } catch (err: any) {
+      alert(`Error al reservar slot: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsReserving(false);
+    }
+  };
+
+  const handleReleaseSlot = async () => {
+    if (!inspectedSlot) return;
+    try {
+      await digitalTwinApi.releaseSlot(inspectedSlot.warehouse_id, inspectedSlot.slot_code, true);
+      await loadWarehouseData(selectedWarehouseId);
+      setSyncToast(`Reserva liberada para ${inspectedSlot.slot_code}`);
+    } catch (err: any) {
+      alert(`Error al liberar slot: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  // Handlers para QR
+  const handleOpenQRModal = async () => {
+    if (!inspectedSlot) return;
+    try {
+      const qrRes = await digitalTwinApi.generateQRLabel({
+        warehouse_id: inspectedSlot.warehouse_id,
+        slot_code: inspectedSlot.slot_code,
+        sku: inspectedSlot.sku || 'SKU-SAMPLE-2026',
+        lote: inspectedSlot.lote || 'LOT-2026-AUTO',
+        units_count: inspectedSlot.cajas_count || 24,
+      });
+      setQrTokenGenerated(qrRes.qr_token);
+      setQrScanInput(qrRes.qr_token);
+      setIsQRModalOpen(true);
+    } catch (err: any) {
+      alert(`Error al generar QR: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  const handleExecuteScanQR = async () => {
+    if (!qrScanInput) return;
+    try {
+      setIsScanningQR(true);
+      const res = await digitalTwinApi.scanQRReceive(qrScanInput);
+      await loadWarehouseData(selectedWarehouseId);
+      setSyncToast(`¡Recepción exitosa! ${res.units_count} unidades en ${res.slot_code}`);
+      setIsQRModalOpen(false);
+    } catch (err: any) {
+      alert(`Error al escanear QR: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsScanningQR(false);
     }
   };
 
@@ -931,6 +1160,23 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
           </button>
 
           <button
+            onClick={() => handleRunLoadPlanner()}
+            disabled={isCalculatingPlan}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-semibold rounded-lg shadow-md transition"
+            title="Simulador 3D de Cubicaje de Contenedores y Camiones con Relleno IA 98%"
+          >
+            <Truck className="w-3.5 h-3.5 text-purple-200" />
+            <span>Cubicaje &amp; Relleno IA 98%</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/90 rounded-lg border border-slate-700 text-xs">
+            <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className="text-[11px] font-semibold text-slate-300">
+              {wsConnected ? 'Live WS' : 'Offline'}
+            </span>
+          </div>
+
+          <button
             onClick={() => {
               if (inspectedSlot) {
                 setTransferTargetWh(selectedWarehouseId === 'TRANSITO-MAR' ? 'DEP-CENTRAL-MVD' : selectedWarehouseId);
@@ -1027,6 +1273,17 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
             </div>
           )}
 
+          {/* Banner de Recepción en Vivo vía WebSockets */}
+          {liveArrivalAlert && (
+            <div className="absolute top-16 right-4 z-40 bg-emerald-950/95 border-2 border-emerald-400 text-emerald-100 p-3.5 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
+              <PackageCheck className="w-6 h-6 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-xs">{liveArrivalAlert.message}</div>
+                <div className="text-[11px] text-emerald-300">Posición: {liveArrivalAlert.slot_code} | {liveArrivalAlert.units} unidades asignadas</div>
+              </div>
+            </div>
+          )}
+
           {/* Floating HUD Pill for Selected 3D Slot */}
           {inspectedSlot && (
             <div className="absolute top-4 left-4 max-w-sm bg-slate-900/95 backdrop-blur-md border border-sky-500/50 rounded-xl p-3.5 shadow-2xl z-20 animate-in fade-in slide-in-from-top-2">
@@ -1094,6 +1351,25 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                   </div>
                 )}
 
+                {/* Doble Candado: Estado de Reserva */}
+                {inspectedSlot.reservation_type && (
+                  <div className={`p-2.5 rounded-lg border text-xs space-y-1 mt-2 ${
+                    inspectedSlot.reservation_type === 'HARD_RESERVED'
+                      ? 'bg-blue-950/80 border-blue-500 text-blue-200'
+                      : 'bg-amber-950/80 border-amber-500 text-amber-200'
+                  }`}>
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>{inspectedSlot.reservation_type === 'HARD_RESERVED' ? '🔒 RESERVA DURA INTOCABLE' : '🟡 PRE-RESERVA BLANDA'}</span>
+                    </div>
+                    <div className="text-[11px] space-y-0.5">
+                      <div>Organismo: <span className="font-semibold text-white">{inspectedSlot.reserved_organism}</span></div>
+                      <div>Orden/Licitación: <span className="font-mono text-white">{inspectedSlot.reservation_order_id}</span></div>
+                      <div>Usuario: <span className="text-white">{inspectedSlot.reserved_by_user}</span></div>
+                    </div>
+                  </div>
+                )}
+
                 {isMaritimeScene && (
                   <div className="pt-2 border-t border-slate-800 space-y-1 text-sky-200">
                     <div className="flex justify-between">
@@ -1120,8 +1396,37 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                   className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-xs shadow-md transition"
                 >
                   <Settings2 className="w-3.5 h-3.5" />
-                  <span>Editar Caja / SKU</span>
+                  <span>Editar</span>
                 </button>
+
+                {inspectedSlot.reservation_type ? (
+                  <button
+                    onClick={handleReleaseSlot}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-xs shadow-md transition"
+                    title="Liberar candado de reserva"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Liberar</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsReserveModalOpen(true)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-xs shadow-md transition"
+                    title="Bloquear posición bajo licitación SICE o cotización B2B"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Reservar</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleOpenQRModal}
+                  className="px-2 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg text-xs shadow-md transition"
+                  title="Generar o Escanear Etiqueta QR Criptográfica HMAC"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                </button>
+
                 <button
                   onClick={() => {
                     setTransferTargetWh(isMaritimeScene ? 'DEP-CENTRAL-MVD' : selectedWarehouseId);
@@ -1763,6 +2068,377 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                 className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg transition"
               >
                 {isSavingSlotItem ? 'Guardando...' : 'Guardar y Recalcular'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: SIMULADOR 3D DE CUBICAJE & RELLENO IA 98% */}
+      {/* ==================================================== */}
+      {isLoadPlannerModalOpen && loadPlanData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="bg-slate-900 border border-violet-500/40 rounded-2xl max-w-4xl w-full p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-violet-400" />
+                <h3 className="font-bold text-white text-sm">
+                  Simulador 3D de Cubicaje ("Container & Truck Load Planner")
+                </h3>
+              </div>
+              <button onClick={() => setIsLoadPlannerModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Selector de Contenedor y Opciones */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-medium">Contenedor / Vehículo:</span>
+                {(['40HQ', '20ST', 'TRUCK_3PL'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setLoadPlanContainerType(t);
+                      handleRunLoadPlanner(t);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                      loadPlanContainerType === t
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {t === '40HQ' ? 'Contenedor 40HQ' : t === '20ST' ? 'Contenedor 20ST' : 'Camión 3PL'}
+                  </button>
+                ))}
+              </div>
+
+              {loadPlanContainerType === 'TRUCK_3PL' && (
+                <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enforceLifoRoute}
+                    onChange={(e) => {
+                      setEnforceLifoRoute(e.target.checked);
+                      handleRunLoadPlanner();
+                    }}
+                    className="accent-violet-600"
+                  />
+                  <span>Orden LIFO por Ruta</span>
+                </label>
+              )}
+
+              <button
+                onClick={handleRunAIFiller}
+                disabled={isFillingAI || loadPlanData.occupied_volume_pct >= 97.5}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-lg shadow-md transition disabled:opacity-40"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
+                <span>{isFillingAI ? 'Optimizando IA...' : '💡 Rellenar Hueco Libre al 98% (IA)'}</span>
+              </button>
+            </div>
+
+            {/* Métricas de Ocupación y Ejes */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Ocupación Volumétrica</span>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-mono font-bold text-violet-400">
+                    {loadPlanData.occupied_volume_pct.toFixed(1)}%
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {loadPlanData.total_volume_m3.toFixed(1)} / {loadPlanData.specs.volume_m3} m³
+                  </span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full ${
+                      loadPlanData.occupied_volume_pct >= 90 ? 'bg-emerald-500' : 'bg-violet-500'
+                    }`}
+                    style={{ width: `${Math.min(100, loadPlanData.occupied_volume_pct)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Carga en Peso</span>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-mono font-bold text-sky-400">
+                    {loadPlanData.occupied_weight_pct.toFixed(1)}%
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {loadPlanData.total_weight_kg.toFixed(0)} / {loadPlanData.specs.max_weight_kg} kg
+                  </span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full bg-sky-500"
+                    style={{ width: `${Math.min(100, loadPlanData.occupied_weight_pct)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Cajas Embaladas</span>
+                <div className="text-xl font-mono font-bold text-emerald-400">
+                  {loadPlanData.placed_boxes_count} u.
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  {loadPlanData.unfitted_boxes_count} no entraron por límite
+                </p>
+              </div>
+
+              {loadPlanData.axle_distribution ? (
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Distribución por Eje</span>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    Eje Del: <span className="font-bold text-white">{loadPlanData.axle_distribution.front_axle_kg.toFixed(0)} kg</span>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-300">
+                    Eje Tras: <span className="font-bold text-white">{loadPlanData.axle_distribution.rear_axle_kg.toFixed(0)} kg</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-400">✓ Distribución Equilibrada</span>
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Margen Contribución IA</span>
+                  <div className="text-xl font-mono font-bold text-emerald-400">
+                    +${aiFillerData ? aiFillerData.estimated_margin_contribution_usd.toFixed(0) : '0'} USD
+                  </div>
+                  <p className="text-[10px] text-slate-400">Beneficio neto flete aprovechado</p>
+                </div>
+              )}
+            </div>
+
+            {/* Rationale de IA si se ejecutó el relleno */}
+            {aiFillerData && (
+              <div className="p-3 bg-emerald-950/70 border border-emerald-500/50 rounded-xl text-xs space-y-1 text-emerald-200">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Sugerencia del Optimizador IA (qwen2.5 / Heurística Logística):</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">{aiFillerData.ai_rationale}</p>
+              </div>
+            )}
+
+            {/* Listado de Cajas Colocadas */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                <span>Coordenadas de Estiba 3D ({loadPlanData.placed_boxes.length} cajas ubicadas)</span>
+                <span className="text-[10px] text-slate-400">Verde: Sugerido por IA</span>
+              </h4>
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] sticky top-0">
+                    <tr>
+                      <th className="py-1.5 px-3">Caja ID</th>
+                      <th className="py-1.5 px-3">SKU</th>
+                      <th className="py-1.5 px-3">Coord (X, Y, Z)</th>
+                      <th className="py-1.5 px-3">Medidas (m)</th>
+                      <th className="py-1.5 px-3">Peso</th>
+                      <th className="py-1.5 px-3">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {loadPlanData.placed_boxes.slice(0, 100).map((b: PlacedBox3D) => (
+                      <tr key={b.box_id} className={b.is_filler ? 'bg-emerald-950/30' : ''}>
+                        <td className="py-1 px-3 font-mono text-slate-400">{b.box_id}</td>
+                        <td className="py-1 px-3 font-semibold text-slate-200">{b.sku}</td>
+                        <td className="py-1 px-3 font-mono text-slate-300">
+                          {b.x_m.toFixed(2)}, {b.y_m.toFixed(2)}, {b.z_m.toFixed(2)}
+                        </td>
+                        <td className="py-1 px-3 text-slate-400">
+                          {b.box_width_m} × {b.box_height_m} × {b.box_length_m}
+                        </td>
+                        <td className="py-1 px-3 font-mono text-slate-300">{b.unit_weight_kg} kg</td>
+                        <td className="py-1 px-3">
+                          {b.is_filler ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              IA-FILL 98%
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                              Base
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsLoadPlannerModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: RESERVA FÍSICA 3D (DOBLE CANDADO) */}
+      {/* ==================================================== */}
+      {isReserveModalOpen && inspectedSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-blue-500/40 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-white text-sm">Reserva Física 3D: Doble Candado</h3>
+              </div>
+              <button onClick={() => setIsReserveModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1.5 font-semibold">Tipo de Candado de Reserva:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReserveForm({ ...reserveForm, reservation_type: 'HARD_RESERVED' })}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      reserveForm.reservation_type === 'HARD_RESERVED'
+                        ? 'bg-blue-950 border-blue-500 text-blue-200'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1">
+                      <span>🔵 Reserva Dura</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Licitación ganada SICE. Bloqueo 423 intocable.</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReserveForm({ ...reserveForm, reservation_type: 'SOFT_RESERVED' })}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      reserveForm.reservation_type === 'SOFT_RESERVED'
+                        ? 'bg-amber-950 border-amber-500 text-amber-200'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1">
+                      <span>🟡 Pre-Reserva</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Cotización B2B caliente. Advertencia visual.</p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Organismo Público o Cliente B2B:</label>
+                <input
+                  type="text"
+                  value={reserveForm.organism}
+                  onChange={(e) => setReserveForm({ ...reserveForm, organism: e.target.value })}
+                  placeholder="ej. Intendencia de Montevideo, UTE, Hospital Maciel"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">ID Licitación / Cotización:</label>
+                <input
+                  type="text"
+                  value={reserveForm.order_id}
+                  onChange={(e) => setReserveForm({ ...reserveForm, order_id: e.target.value })}
+                  placeholder="ej. SICE-LIC-2026-088"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Plazo de Reserva (días):</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={reserveForm.duration_days}
+                  onChange={(e) => setReserveForm({ ...reserveForm, duration_days: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsReserveModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleReserveSlot}
+                disabled={isReserving}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-lg transition"
+              >
+                {isReserving ? 'Bloqueando...' : 'Confirmar Candado en 3D'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: RECEPCIÓN INTELIGENTE CON QR FIRMADO HMAC */}
+      {/* ==================================================== */}
+      {isQRModalOpen && inspectedSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-purple-500/40 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-white text-sm">Etiqueta QR Firmada HMAC-SHA256</h3>
+              </div>
+              <button onClick={() => setIsQRModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-950 rounded-lg border border-purple-900/50 space-y-1.5">
+                <span className="text-[10px] uppercase font-bold text-purple-300">Token Criptográfico Generado:</span>
+                <p className="font-mono text-[11px] text-white break-all bg-slate-900 p-2 rounded border border-slate-800">
+                  {qrTokenGenerated}
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Firmado con clave maestra SHA256 contra adulteración física.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Escanear / Validar Token QR:</label>
+                <textarea
+                  rows={2}
+                  value={qrScanInput}
+                  onChange={(e) => setQrScanInput(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsQRModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handleExecuteScanQR}
+                disabled={isScanningQR}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-lg transition"
+              >
+                {isScanningQR ? 'Validando...' : '📷 Confirmar Ingreso en Vivo'}
               </button>
             </div>
           </div>

@@ -50,6 +50,15 @@ export interface DigitalTwinSlot {
   material_calidad: boolean;
   fecha_vencimiento: string | null;
   rop_status: 'CRITICO_ROP' | 'ALERTA_DOH' | 'OPTIMO' | null;
+
+  // Doble Candado SICE / Cotizador B2B
+  reservation_type?: 'SOFT_RESERVED' | 'HARD_RESERVED' | null;
+  reservation_order_id?: string | null;
+  reserved_organism?: string | null;
+  reserved_by_user?: string | null;
+  reserved_until?: string | null;
+  qr_signed_token?: string | null;
+
   // Propiedades paramétricas reales
   rack_width_m?: number;
   rack_height_m?: number;
@@ -208,6 +217,137 @@ export interface SyncRealInventoryResponse {
   valor_estimado_total: number;
 }
 
+// ==========================================
+// 1. SIMULADOR 3D DE CUBICAJE & BOTÓN IA 98%
+// ==========================================
+
+export interface PlacedBox3D {
+  box_id: string;
+  sku: string;
+  description: string;
+  x_m: number;
+  y_m: number;
+  z_m: number;
+  box_width_m: number;
+  box_height_m: number;
+  box_length_m: number;
+  unit_weight_kg: number;
+  stop_number: number;
+  is_filler: boolean;
+  status?: string;
+  color?: string;
+}
+
+export interface ContainerLoadPlanResponse {
+  container_type: '20ST' | '40HQ' | 'TRUCK_3PL';
+  specs: {
+    length_m: number;
+    width_m: number;
+    height_m: number;
+    max_weight_kg: number;
+    volume_m3: number;
+  };
+  total_volume_m3: number;
+  total_weight_kg: number;
+  occupied_volume_pct: number;
+  occupied_weight_pct: number;
+  remaining_volume_m3: number;
+  remaining_weight_kg: number;
+  placed_boxes_count: number;
+  unfitted_boxes_count: number;
+  placed_boxes: PlacedBox3D[];
+  unfitted_boxes: any[];
+  axle_distribution?: {
+    front_axle_kg: number;
+    front_axle_limit_kg: number;
+    rear_axle_kg: number;
+    rear_axle_limit_kg: number;
+    balanced: boolean;
+    lifo_enforced: boolean;
+  };
+}
+
+export interface FillAIResponse {
+  success: boolean;
+  container_type: string;
+  target_occupancy_pct: number;
+  initial_volume_pct: number;
+  projected_volume_pct: number;
+  projected_weight_pct: number;
+  filler_boxes_count: number;
+  filler_volume_m3: number;
+  filler_weight_kg: number;
+  estimated_additional_cost_usd: number;
+  estimated_additional_revenue_usd: number;
+  estimated_margin_contribution_usd: number;
+  suggested_skus_breakdown: { sku: string; units_suggested: number }[];
+  filler_boxes: PlacedBox3D[];
+  ai_rationale: string;
+}
+
+// ==========================================
+// 2. RESERVAS DOBLE CANDADO (SOFT / HARD)
+// ==========================================
+
+export interface ReserveSlotPayload {
+  warehouse_id: string;
+  slot_code: string;
+  reservation_type: 'SOFT_RESERVED' | 'HARD_RESERVED';
+  order_id: string;
+  organism: string;
+  user_name?: string;
+  duration_days?: number;
+}
+
+// ==========================================
+// 3. TIPO DE CAMBIO BROU & FACTURACIÓN 3PL
+// ==========================================
+
+export interface ExchangeRateConfig {
+  provider: string;
+  official_rate_uyu: number;
+  manual_rate_uyu: number;
+  use_manual: boolean;
+  effective_rate_uyu: number;
+  last_sync: string;
+}
+
+export interface BimonetaryBillingCalculation {
+  client_id: number;
+  client_rut?: string;
+  client_razon_social?: string;
+  moneda_contrato: 'USD' | 'UYU';
+  exchange_rate_uyu: number;
+  dias_almacenaje: number;
+  pallets: number;
+  m3: number;
+  picking_movements: number;
+  subtotal_almacenaje_usd: number;
+  subtotal_almacenaje_uyu: number;
+  subtotal_picking_usd: number;
+  subtotal_picking_uyu: number;
+  subtotal_flete_usd: number;
+  subtotal_flete_uyu: number;
+  subtotal_neto_usd: number;
+  subtotal_neto_uyu: number;
+  iva_22_usd: number;
+  iva_22_uyu: number;
+  total_facturar_usd: number;
+  total_facturar_uyu: number;
+  items: any[];
+}
+
+export interface IssueBimonetaryInvoicePayload {
+  client_id: number;
+  dias_almacenaje?: number;
+  pallets?: number;
+  m3?: number;
+  picking_movements?: number;
+  distancia_km?: number;
+  moneda_facturacion?: 'USD' | 'UYU';
+  forma_pago?: string;
+}
+
 export const digitalTwinApi = {
   getWarehouses: async (scope?: '3PL' | 'SUPPLY_CHAIN'): Promise<DigitalTwinWarehouse[]> => {
     const params = scope ? { module_scope: scope } : {};
@@ -287,6 +427,103 @@ export const digitalTwinApi = {
       `${API_BASE}/sync-real-inventory`,
       payload
     );
+    return res.data;
+  },
+
+  // 1. Simulador 3D de Cubicaje & AI Filler
+  planContainerLoad: async (
+    containerType: '20ST' | '40HQ' | 'TRUCK_3PL',
+    items: any[],
+    enforceLifo: boolean = false
+  ): Promise<ContainerLoadPlanResponse> => {
+    const res = await axios.post<ContainerLoadPlanResponse>(`${API_BASE}/container-load-planner`, {
+      container_type: containerType,
+      items,
+      enforce_lifo: enforceLifo,
+    });
+    return res.data;
+  },
+
+  fillContainerAI: async (
+    containerType: '20ST' | '40HQ' | 'TRUCK_3PL',
+    currentPlan: ContainerLoadPlanResponse,
+    candidateSkus?: any[],
+    targetOccupancyPct: number = 98.0
+  ): Promise<FillAIResponse> => {
+    const res = await axios.post<FillAIResponse>(`${API_BASE}/container-load-planner/fill-ai`, {
+      container_type: containerType,
+      current_load_plan: currentPlan,
+      candidate_skus: candidateSkus,
+      target_occupancy_pct: targetOccupancyPct,
+    });
+    return res.data;
+  },
+
+  // 2. Reservas Doble Candado (SOFT / HARD)
+  reserveSlot: async (payload: ReserveSlotPayload): Promise<any> => {
+    const res = await axios.post(`${API_BASE}/reserve-slot`, payload);
+    return res.data;
+  },
+
+  releaseSlot: async (warehouse_id: string, slot_code: string, is_controller_admin: boolean = true): Promise<any> => {
+    const res = await axios.post(`${API_BASE}/release-slot`, {
+      warehouse_id,
+      slot_code,
+      is_controller_admin,
+    });
+    return res.data;
+  },
+
+  // 3. Recepción QR Criptográfico HMAC-SHA256
+  generateQRLabel: async (payload: {
+    warehouse_id: string;
+    slot_code: string;
+    sku: string;
+    lote: string;
+    units_count: number;
+  }): Promise<any> => {
+    const res = await axios.post(`${API_BASE}/generate-qr-label`, payload);
+    return res.data;
+  },
+
+  scanQRReceive: async (qrToken: string): Promise<any> => {
+    const res = await axios.post(`${API_BASE}/scan-qr-receive`, { qr_token: qrToken });
+    return res.data;
+  },
+
+  // 4. Tipo de Cambio BROU & Liquidación 3PL
+  getExchangeRateConfig: async (): Promise<ExchangeRateConfig> => {
+    const res = await axios.get<ExchangeRateConfig>('/api/v1/settings/exchange-rate');
+    return res.data;
+  },
+
+  updateExchangeRateConfig: async (payload: {
+    manual_rate_uyu?: number;
+    official_rate_uyu?: number;
+    use_manual?: boolean;
+  }): Promise<ExchangeRateConfig> => {
+    const res = await axios.post<ExchangeRateConfig>('/api/v1/settings/exchange-rate', payload);
+    return res.data;
+  },
+
+  calculateBimonetaryBilling: async (payload: {
+    client_id: number;
+    dias_almacenaje?: number;
+    pallets?: number;
+    m3?: number;
+    picking_movements?: number;
+    distancia_km?: number;
+    manual_exchange_rate?: number;
+  }): Promise<BimonetaryBillingCalculation> => {
+    const res = await axios.post<BimonetaryBillingCalculation>(
+      '/api/v1/logistics/billing/calculate-bimonetary',
+      payload
+    );
+    return res.data;
+  },
+
+  issueBimonetaryInvoice: async (payload: IssueBimonetaryInvoicePayload): Promise<any> => {
+    const res = await axios.post('/api/v1/logistics/billing/issue-bimonetary-invoice', payload);
     return res.data;
   },
 };

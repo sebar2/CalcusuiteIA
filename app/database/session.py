@@ -170,6 +170,18 @@ def sync_table_columns(conn):
     add_col_if_missing("warehouse_slots", "unit_weight_kg", "NUMERIC(14, 4)", "5.0000")
     add_col_if_missing("warehouse_slots", "units_count", "INTEGER", "1")
     add_col_if_missing("warehouse_slots", "real_product_id", "INTEGER")
+    add_col_if_missing("warehouse_slots", "reservation_type", "VARCHAR(30)")
+    add_col_if_missing("warehouse_slots", "reservation_order_id", "VARCHAR(100)")
+    add_col_if_missing("warehouse_slots", "reserved_organism", "VARCHAR(200)")
+    add_col_if_missing("warehouse_slots", "reserved_by_user", "VARCHAR(100)")
+    add_col_if_missing("warehouse_slots", "reserved_until", "TIMESTAMP")
+    add_col_if_missing("warehouse_slots", "qr_signed_token", "VARCHAR(255)")
+
+    # 6.3. Logistics Clients (Bimonetaria & Tarifas 3PL)
+    add_col_if_missing("logistics_clients", "moneda_contrato", "VARCHAR(10)", "'USD'")
+    add_col_if_missing("logistics_clients", "tarifa_m3_dia", "NUMERIC(14, 4)", "0.8500")
+    add_col_if_missing("logistics_clients", "tarifa_pallet_dia", "NUMERIC(14, 4)", "1.2000")
+    add_col_if_missing("logistics_clients", "tarifa_picking_movimiento", "NUMERIC(14, 4)", "2.5000")
 
     # 7. ordenes_compra (Plaza Local / Reventa)
     add_col_if_missing("ordenes_compra", "tipo_orden", "VARCHAR(30)", "'IMPORTACION'")

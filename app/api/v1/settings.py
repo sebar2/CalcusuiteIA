@@ -314,3 +314,36 @@ def ask_cybersec_copilot(
         prompt=payload.prompt,
         user_id=user.user_id
     )
+
+
+# ============================================================================
+# 7. TIPO DE CAMBIO BROU Y MANUAL (BIMONETARIA USD / UYU)
+# ============================================================================
+
+class ExchangeRateUpdateSchema(BaseModel):
+    manual_rate_uyu: Optional[float] = None
+    official_rate_uyu: Optional[float] = None
+    use_manual: Optional[bool] = None
+
+
+@router.get(
+    "/exchange-rate",
+    summary="Obtiene la configuración y cotización del Tipo de Cambio BROU / Manual (Bimonetaria USD/UYU)",
+)
+def get_exchange_rate_config():
+    return SettingsService.get_exchange_rate_config()
+
+
+@router.post(
+    "/exchange-rate",
+    summary="Actualiza la cotización o alternancia del Tipo de Cambio BROU / Manual",
+)
+def update_exchange_rate_config(
+    payload: ExchangeRateUpdateSchema,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+):
+    return SettingsService.update_exchange_rate_config(
+        payload=payload.model_dump(exclude_unset=True),
+        db=db,
+    )

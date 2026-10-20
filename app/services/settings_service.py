@@ -4,7 +4,7 @@ import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from sqlalchemy import text, desc
 
@@ -69,6 +69,42 @@ class SettingsService:
             "email_notifications": False,
         }
     }
+
+    # Tipo de Cambio BROU Oficial y Manual (Bimonetaria USD / UYU)
+    _exchange_rate_config: Dict[str, Any] = {
+        "provider": "BROU",
+        "official_rate_uyu": Decimal("43.2500"),
+        "manual_rate_uyu": Decimal("43.5000"),
+        "use_manual": False,
+        "effective_rate_uyu": Decimal("43.2500"),
+        "last_sync": datetime.now(timezone.utc).isoformat(),
+    }
+
+    @classmethod
+    def get_exchange_rate_config(cls) -> Dict[str, Any]:
+        use_man = bool(cls._exchange_rate_config.get("use_manual", False))
+        eff = cls._exchange_rate_config["manual_rate_uyu"] if use_man else cls._exchange_rate_config["official_rate_uyu"]
+        cls._exchange_rate_config["effective_rate_uyu"] = eff
+        return {
+            "provider": cls._exchange_rate_config["provider"],
+            "official_rate_uyu": float(cls._exchange_rate_config["official_rate_uyu"]),
+            "manual_rate_uyu": float(cls._exchange_rate_config["manual_rate_uyu"]),
+            "use_manual": use_man,
+            "effective_rate_uyu": float(eff),
+            "last_sync": cls._exchange_rate_config["last_sync"],
+        }
+
+    @classmethod
+    def update_exchange_rate_config(cls, payload: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        if "manual_rate_uyu" in payload and payload["manual_rate_uyu"] is not None:
+            cls._exchange_rate_config["manual_rate_uyu"] = Decimal(str(payload["manual_rate_uyu"])).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if "use_manual" in payload and payload["use_manual"] is not None:
+            cls._exchange_rate_config["use_manual"] = bool(payload["use_manual"])
+        if "official_rate_uyu" in payload and payload["official_rate_uyu"] is not None:
+            cls._exchange_rate_config["official_rate_uyu"] = Decimal(str(payload["official_rate_uyu"])).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        cls._exchange_rate_config["last_sync"] = datetime.now(timezone.utc).isoformat()
+        return cls.get_exchange_rate_config()
 
     @classmethod
     def get_network_telemetry(cls) -> Dict[str, Any]:

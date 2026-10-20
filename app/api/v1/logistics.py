@@ -2453,3 +2453,195 @@ def seed_logistics_demo(db: Session):
     db.add_all([ping1, ping2, ping3])
 
     db.commit()
+
+
+# ============================================================================
+# FACTURACIÓN AUTOMÁTICA 3PL BIMONETARIA (USD / UYU) & ASIENTOS CONTABLES
+# ============================================================================
+
+from app.models.accounting_entities import Invoice, InvoiceItem, JournalEntry, JournalLine
+from app.services.settings_service import SettingsService
+
+
+class BimonetaryBillingCalcRequest(BaseModel):
+    client_id: int
+    dias_almacenaje: int = 30
+    pallets: int = 10
+    m3: float = 0.0
+    picking_movements: int = 25
+    distancia_km: float = 0.0
+    manual_exchange_rate: Optional[float] = None
+
+
+class IssueBimonetaryInvoiceRequest(BaseModel):
+    client_id: int
+    dias_almacenaje: int = 30
+    pallets: int = 10
+    m3: float = 0.0
+    picking_movements: int = 25
+    distancia_km: float = 0.0
+    moneda_facturacion: str = "USD"
+    forma_pago: str = "CREDITO_30_DIAS"
+
+
+@router.post("/billing/calculate-bimonetary")
+def calculate_bimonetary_billing(
+    payload: BimonetaryBillingCalcRequest,
+    db: Session = Depends(get_db),
+):
+    client = db.query(LogisticsClient).filter(LogisticsClient.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente 3PL no encontrado.")
+
+    # Obtener tipo de cambio BROU / Manual desde SettingsService
+    if payload.manual_exchange_rate and payload.manual_exchange_rate > 0:
+        eff_fx = Decimal(str(payload.manual_exchange_rate))
+    else:
+        cfg = SettingsService.get_exchange_rate_config()
+        eff_fx = Decimal(str(cfg["effective_rate_uyu"]))
+
+    moneda_contrato = getattr(client, "moneda_contrato", "USD") or "USD"
+    t_pallet = getattr(client, "tarifa_pallet_dia", Decimal("1.2000")) or Decimal("1.2000")
+    t_m3 = getattr(client, "tarifa_m3_dia", Decimal("0.8500")) or Decimal("0.8500")
+    t_picking = getattr(client, "tarifa_picking_movimiento", Decimal("2.5000")) or Decimal("2.5000")
+
+    result = LogisticsEngine.calculate_bimonetary_service_settlement(
+        client_id=client.id,
+        moneda_contrato=moneda_contrato,
+        exchange_rate_uyu=eff_fx,
+        dias_almacenaje=payload.dias_almacenaje,
+        pallets=payload.pallets,
+        m3=payload.m3,
+        picking_movements=payload.picking_movements,
+        tarifa_pallet_dia=t_pallet,
+        tarifa_m3_dia=t_m3,
+        tarifa_picking_movimiento=t_picking,
+        distancia_km=payload.distancia_km,
+        tarifa_flete_base=Decimal("0.0"),
+    )
+    result["client_rut"] = client.rut
+    result["client_razon_social"] = client.razon_social
+    return result
+
+
+@router.post("/billing/issue-bimonetary-invoice")
+def issue_bimonetary_invoice(
+    payload: IssueBimonetaryInvoiceRequest,
+    db: Session = Depends(get_db),
+):
+    client = db.query(LogisticsClient).filter(LogisticsClient.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente 3PL no encontrado.")
+
+    cfg = SettingsService.get_exchange_rate_config()
+    eff_fx = Decimal(str(cfg["effective_rate_uyu"]))
+
+    moneda_contrato = getattr(client, "moneda_contrato", "USD") or "USD"
+    t_pallet = getattr(client, "tarifa_pallet_dia", Decimal("1.2000")) or Decimal("1.2000")
+    t_m3 = getattr(client, "tarifa_m3_dia", Decimal("0.8500")) or Decimal("0.8500")
+    t_picking = getattr(client, "tarifa_picking_movimiento", Decimal("2.5000")) or Decimal("2.5000")
+
+    settlement = LogisticsEngine.calculate_bimonetary_service_settlement(
+        client_id=client.id,
+        moneda_contrato=moneda_contrato,
+        exchange_rate_uyu=eff_fx,
+        dias_almacenaje=payload.dias_almacenaje,
+        pallets=payload.pallets,
+        m3=payload.m3,
+        picking_movements=payload.picking_movements,
+        tarifa_pallet_dia=t_pallet,
+        tarifa_m3_dia=t_m3,
+        tarifa_picking_movimiento=t_picking,
+        distancia_km=payload.distancia_km,
+        tarifa_flete_base=Decimal("0.0"),
+    )
+
+    moneda_fact = payload.moneda_facturacion.upper().strip()
+    if moneda_fact not in ("USD", "UYU"):
+        moneda_fact = "USD"
+
+    m_key = moneda_fact.lower()
+    subtotal = Decimal(str(settlement[f"subtotal_neto_{m_key}"]))
+    iva = Decimal(str(settlement[f"iva_22_{m_key}"]))
+    total = Decimal(str(settlement[f"total_facturar_{m_key}"]))
+
+    num_factura = f"3PL-FAC-{uuid.uuid4().hex[:8].upper()}"
+    invoice = Invoice(
+        numero_factura=num_factura,
+        serie="A",
+        tipo_cfe="e-Factura",
+        fecha_emision=datetime.utcnow().date(),
+        fecha_vencimiento=(datetime.utcnow() + timedelta(days=30)).date(),
+        cliente_nombre=client.razon_social,
+        cliente_rut=client.rut,
+        cliente_documento=client.rut,
+        tipo_documento_receptor="RUT",
+        es_consumidor_final=False,
+        orden_compra_ref=f"SETTLE-{datetime.utcnow().strftime('%Y%m')}",
+        cliente_direccion=client.direccion_central or "Montevideo, Uruguay",
+        moneda=moneda_fact,
+        tipo_cambio=eff_fx,
+        subtotal=subtotal,
+        monto_iva_basico=iva,
+        monto_iva_minimo=Decimal("0.0"),
+        monto_iva_exento=Decimal("0.0"),
+        total=total,
+        estado="EMITIDA",
+        forma_pago=payload.forma_pago,
+        notas=f"Liquidación automática bimonetaria 3PL (TC: {float(eff_fx):.4f})",
+    )
+    db.add(invoice)
+    db.flush()
+
+    # Asiento contable de partida doble BCNF
+    num_asiento = f"AS-3PL-{uuid.uuid4().hex[:6].upper()}"
+    journal_entry = JournalEntry(
+        numero_asiento=num_asiento,
+        fecha=datetime.utcnow().date(),
+        glosa=f"Venta de Servicios 3PL Almacenaje y Picking - {client.razon_social}",
+        tipo_operacion="VENTAS_3PL",
+        referencia_doc=num_factura,
+        total_debe=total,
+        total_haber=total,
+        balanceado=True,
+    )
+    db.add(journal_entry)
+    db.flush()
+
+    line_debe = JournalLine(
+        entry_id=journal_entry.id,
+        cuenta_codigo="1.1.2.01",
+        cuenta_nombre="Deudores por Ventas Servicios Logísticos 3PL",
+        debe=total,
+        haber=Decimal("0.0"),
+    )
+    line_haber_ing = JournalLine(
+        entry_id=journal_entry.id,
+        cuenta_codigo="4.1.1.02",
+        cuenta_nombre="Ingresos Operativos Almacenaje y Logística 3PL",
+        debe=Decimal("0.0"),
+        haber=subtotal,
+    )
+    line_haber_iva = JournalLine(
+        entry_id=journal_entry.id,
+        cuenta_codigo="2.1.2.01",
+        cuenta_nombre="IVA Débito Fiscal 22%",
+        debe=Decimal("0.0"),
+        haber=iva,
+    )
+    db.add_all([line_debe, line_haber_ing, line_haber_iva])
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Factura {num_factura} y Asiento Contable {num_asiento} emitidos correctamente.",
+        "invoice_id": invoice.id,
+        "numero_factura": invoice.numero_factura,
+        "numero_asiento": journal_entry.numero_asiento,
+        "moneda": invoice.moneda,
+        "tipo_cambio": float(eff_fx),
+        "total": float(invoice.total),
+        "subtotal": float(invoice.subtotal),
+        "iva_22": float(invoice.monto_iva_basico),
+        "settlement_breakdown": settlement,
+    }

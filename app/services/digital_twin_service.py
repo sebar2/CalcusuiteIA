@@ -1310,6 +1310,13 @@ class DigitalTwinService:
                 "material_calidad": s.material_calidad,
                 "fecha_vencimiento": s.fecha_vencimiento.isoformat() if s.fecha_vencimiento else None,
                 "rop_status": s.rop_status,
+                # Doble Candado SICE / B2B y QR
+                "reservation_type": s.reservation_type,
+                "reservation_order_id": s.reservation_order_id,
+                "reserved_organism": s.reserved_organism,
+                "reserved_by_user": s.reserved_by_user,
+                "reserved_until": s.reserved_until.isoformat() if s.reserved_until else None,
+                "qr_signed_token": s.qr_signed_token,
                 # Indicadores de SKU Real en Vivo
                 "costo_fob": costo_fob,
                 "costo_landed_calc": costo_landed_calc,
@@ -1495,8 +1502,14 @@ class DigitalTwinService:
             )
             .first()
         )
-        if not src or src.estado != "OCUPADA":
+        if not src or src.estado not in ("OCUPADA", "RESERVADA"):
             raise ValueError(f"Posición origen {source_slot_code} no existe o no tiene mercadería ocupada.")
+
+        if src.reservation_type == "HARD_RESERVED":
+            raise ValueError(
+                f"HTTP 423 Locked: Posición {src.slot_code} posee una RESERVA DURA INTOCABLE (HARD_RESERVED) "
+                f"asignada a '{src.reserved_organism}' (Orden/Licitación: {src.reservation_order_id}). Despacho bloqueado."
+            )
 
         target_id = f"{target_warehouse_id}:{target_slot_code}"
         tgt = db.query(WarehouseSlot).filter(WarehouseSlot.id == target_id).first()
@@ -1660,4 +1673,227 @@ class DigitalTwinService:
             "posiciones_reubicables": min(18, len(occupied)),
             "reduccion_recorrido_picking_pct": 28.5,
             "recomendaciones": ai_recommendations,
+        }
+
+    # ============================================================================
+    # DOBLE CANDADO SICE / B2B & RECEPCIÓN CON QR FIRMADO HMAC-SHA256
+    # ============================================================================
+
+    QR_SECRET_KEY = b"calcu-secure-qr-2026-master-key"
+
+    @classmethod
+    def reserve_slot(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        slot_code: str,
+        reservation_type: str,
+        order_id: str,
+        organism: str,
+        user_name: str,
+        duration_days: int = 7,
+    ) -> Dict[str, Any]:
+        """
+        Bloqueo de Slot 3D con Concurrencia ACID (SELECT ... FOR UPDATE).
+        - SOFT_RESERVED: Pre-reserva blanda con advertencia en 3D e inventario.
+        - HARD_RESERVED: Candado duro intocable que bloquea despacho con HTTP 423.
+        """
+        slot = (
+            db.query(WarehouseSlot)
+            .filter(
+                WarehouseSlot.warehouse_id == warehouse_id,
+                WarehouseSlot.slot_code == slot_code,
+            )
+            .with_for_update()
+            .first()
+        )
+        if not slot:
+            raise ValueError(f"Posición '{slot_code}' no encontrada en '{warehouse_id}'.")
+
+        res_type = reservation_type.upper().strip()
+        if res_type not in ("SOFT_RESERVED", "HARD_RESERVED"):
+            res_type = "SOFT_RESERVED"
+
+        if slot.reservation_type == "HARD_RESERVED" and slot.reservation_order_id != order_id:
+            raise ValueError(
+                f"HTTP 423 Locked: La posición {slot_code} ya se encuentra bajo RESERVA DURA INTOCABLE "
+                f"por la orden {slot.reservation_order_id} ({slot.reserved_organism})."
+            )
+
+        slot.reservation_type = res_type
+        slot.reservation_order_id = order_id
+        slot.reserved_organism = organism
+        slot.reserved_by_user = user_name
+        slot.reserved_until = datetime.now(timezone.utc) + timedelta(days=duration_days)
+        slot.estado = "RESERVADA"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "slot_id": slot.id,
+            "slot_code": slot.slot_code,
+            "warehouse_id": slot.warehouse_id,
+            "reservation_type": slot.reservation_type,
+            "reservation_order_id": slot.reservation_order_id,
+            "reserved_organism": slot.reserved_organism,
+            "reserved_by_user": slot.reserved_by_user,
+            "reserved_until": slot.reserved_until.isoformat() if slot.reserved_until else None,
+            "message": f"Posición {slot_code} reservada exitosamente bajo {res_type} para '{organism}'.",
+        }
+
+    @classmethod
+    def release_slot_reservation(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        slot_code: str,
+        is_controller_admin: bool = False,
+        order_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        slot = (
+            db.query(WarehouseSlot)
+            .filter(
+                WarehouseSlot.warehouse_id == warehouse_id,
+                WarehouseSlot.slot_code == slot_code,
+            )
+            .with_for_update()
+            .first()
+        )
+        if not slot:
+            raise ValueError(f"Posición '{slot_code}' no encontrada en '{warehouse_id}'.")
+
+        if slot.reservation_type == "HARD_RESERVED" and not is_controller_admin:
+            if order_id and slot.reservation_order_id != order_id:
+                raise ValueError("HTTP 423 Locked: Solo el Administrador Controller o la Orden autorizada pueden liberar esta reserva dura.")
+
+        slot.reservation_type = None
+        slot.reservation_order_id = None
+        slot.reserved_organism = None
+        slot.reserved_by_user = None
+        slot.reserved_until = None
+        slot.estado = "OCUPADA" if slot.cantidad > 0 else "VACIA"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "slot_code": slot.slot_code,
+            "warehouse_id": slot.warehouse_id,
+            "estado": slot.estado,
+            "message": f"Reserva de posición {slot_code} liberada exitosamente.",
+        }
+
+    @classmethod
+    def generate_signed_qr_label(
+        cls,
+        warehouse_id: str,
+        slot_code: str,
+        sku: str,
+        lote: str,
+        units_count: int,
+    ) -> Dict[str, Any]:
+        """
+        Genera etiqueta QR con firma criptográfica HMAC-SHA256 para recepción estricta.
+        """
+        import hmac
+        import hashlib
+        import time
+
+        ts = int(time.time())
+        msg = f"{warehouse_id}:{slot_code}:{sku}:{lote}:{units_count}:{ts}".encode("utf-8")
+        signature = hmac.new(cls.QR_SECRET_KEY, msg, hashlib.sha256).hexdigest()[:24]
+        token = f"CALCU-QR:v1:{warehouse_id}:{slot_code}:{sku}:{lote}:{units_count}:{ts}:{signature}"
+
+        return {
+            "qr_token": token,
+            "warehouse_id": warehouse_id,
+            "slot_code": slot_code,
+            "sku": sku,
+            "lote": lote,
+            "units_count": units_count,
+            "timestamp": ts,
+            "signature": signature,
+        }
+
+    @classmethod
+    def verify_and_receive_qr(
+        cls,
+        db: Session,
+        qr_token: str,
+    ) -> Dict[str, Any]:
+        """
+        Valida token QR firmado con HMAC-SHA256 y ubica mercadería en 3D.
+        """
+        import hmac
+        import hashlib
+
+        parts = qr_token.strip().split(":")
+        if len(parts) < 9 or parts[0] != "CALCU-QR":
+            raise ValueError("Token QR con formato inválido.")
+
+        _, version, wh_id, slot_code, sku, lote, units_str, ts_str, sig = parts[:9]
+        units = int(units_str)
+        ts = int(ts_str)
+
+        expected_msg = f"{wh_id}:{slot_code}:{sku}:{lote}:{units}:{ts}".encode("utf-8")
+        expected_sig = hmac.new(cls.QR_SECRET_KEY, expected_msg, hashlib.sha256).hexdigest()[:24]
+
+        if not hmac.compare_digest(sig, expected_sig):
+            raise ValueError("Firma criptográfica HMAC-SHA256 inválida o adulterada.")
+
+        slot = (
+            db.query(WarehouseSlot)
+            .filter(
+                WarehouseSlot.warehouse_id == wh_id,
+                WarehouseSlot.slot_code == slot_code,
+            )
+            .first()
+        )
+        if not slot:
+            wh = db.query(Warehouse).filter(Warehouse.id == wh_id).first()
+            parts_code = slot_code.split("-")
+            slot = WarehouseSlot(
+                id=f"{wh_id}:{slot_code}",
+                warehouse_id=wh_id,
+                module_scope=wh.module_scope if wh else "SUPPLY_CHAIN",
+                slot_code=slot_code,
+                cuerpo=parts_code[0] if len(parts_code) > 0 else "A",
+                rack=parts_code[1] if len(parts_code) > 1 else "01",
+                nivel=int(parts_code[2]) if len(parts_code) > 2 and parts_code[2].isdigit() else 1,
+                posicion=int(parts_code[3]) if len(parts_code) > 3 and parts_code[3].isdigit() else 1,
+                estado="VACIA",
+            )
+            db.add(slot)
+            db.flush()
+
+        slot.sku = sku
+        slot.lote = lote
+        slot.descripcion = f"Ingreso validado QR - {sku}"
+        slot.cantidad = Decimal(str(units))
+        slot.cajas_count = units
+        slot.units_count = units
+        slot.pallets_count = max(1, units // 40)
+        slot.estado = "OCUPADA"
+        slot.qr_signed_token = qr_token
+        slot.volumen_actual_m3 = (slot.box_width_m * slot.box_height_m * slot.box_length_m * Decimal(str(units))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        slot.peso_actual_kg = (slot.unit_weight_kg * Decimal(str(units))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        prod = db.query(Product).filter(Product.sku == sku).first()
+        if prod:
+            slot.real_product_id = prod.id
+            slot.valor_estimado = (slot.cantidad * prod.costo_base).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "warehouse_id": wh_id,
+            "slot_code": slot_code,
+            "sku": sku,
+            "lote": lote,
+            "units_count": units,
+            "cajas_count": slot.cajas_count,
+            "qr_token": qr_token,
+            "message": f"Recepción confirmada de {units} unidades en posición {slot_code}.",
         }

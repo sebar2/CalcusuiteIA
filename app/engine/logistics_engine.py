@@ -239,6 +239,125 @@ class LogisticsEngine:
         )
 
     @classmethod
+    def calculate_bimonetary_service_settlement(
+        cls,
+        client_id: int,
+        moneda_contrato: str, # 'USD' o 'UYU'
+        exchange_rate_uyu: Any,
+        dias_almacenaje: int,
+        pallets: int,
+        m3: float,
+        picking_movements: int,
+        tarifa_pallet_dia: Any,
+        tarifa_m3_dia: Any,
+        tarifa_picking_movimiento: Any,
+        distancia_km: float = 0.0,
+        tarifa_flete_base: Any = Decimal("0.0"),
+    ) -> Dict[str, Any]:
+        fx = cls.to_decimal(exchange_rate_uyu)
+        if fx <= Decimal("0.0"):
+            fx = Decimal("43.2500")
+
+        moneda = moneda_contrato.upper().strip() if moneda_contrato else "USD"
+        if moneda not in ("USD", "UYU"):
+            moneda = "USD"
+
+        t_pallet = cls.to_decimal(tarifa_pallet_dia)
+        t_m3 = cls.to_decimal(tarifa_m3_dia)
+        t_picking = cls.to_decimal(tarifa_picking_movimiento)
+        t_flete = cls.to_decimal(tarifa_flete_base)
+
+        dias = Decimal(str(dias_almacenaje))
+        pallets_cnt = Decimal(str(pallets))
+        m3_cnt = Decimal(str(m3))
+        picking_cnt = Decimal(str(picking_movements))
+
+        # Almacenaje (pallets + m3 si aplica)
+        costo_pallets = dias * pallets_cnt * t_pallet
+        costo_m3 = dias * m3_cnt * t_m3
+        sub_almacenaje = costo_pallets + costo_m3
+        sub_picking = picking_cnt * t_picking
+        sub_flete = t_flete
+
+        sub_neto_base = sub_almacenaje + sub_picking + sub_flete
+
+        if moneda == "USD":
+            sub_usd = sub_neto_base
+            sub_uyu = (sub_neto_base * fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            alm_usd = sub_almacenaje
+            alm_uyu = (sub_almacenaje * fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            pck_usd = sub_picking
+            pck_uyu = (sub_picking * fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            flt_usd = sub_flete
+            flt_uyu = (sub_flete * fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        else:
+            sub_uyu = sub_neto_base
+            sub_usd = (sub_neto_base / fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            alm_uyu = sub_almacenaje
+            alm_usd = (sub_almacenaje / fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            pck_uyu = sub_picking
+            pck_usd = (sub_picking / fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            flt_uyu = sub_flete
+            flt_usd = (sub_flete / fx).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        iva_usd = (sub_usd * Decimal("0.2200")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        iva_uyu = (sub_uyu * Decimal("0.2200")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        tot_usd = (sub_usd + iva_usd).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        tot_uyu = (sub_uyu + iva_uyu).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        items = [
+            {
+                "concepto": f"Almacenaje {dias_almacenaje} días ({pallets} pallets)",
+                "cantidad": float(dias * pallets_cnt),
+                "unidad": "pallet-días",
+                "tarifa_unitaria": float(t_pallet),
+                "subtotal_usd": float(alm_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "subtotal_uyu": float(alm_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            },
+            {
+                "concepto": f"Movimientos y Picking ({picking_movements} ops)",
+                "cantidad": float(picking_cnt),
+                "unidad": "movimientos",
+                "tarifa_unitaria": float(t_picking),
+                "subtotal_usd": float(pck_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "subtotal_uyu": float(pck_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            },
+        ]
+        if sub_flete > 0:
+            items.append({
+                "concepto": f"Flete y Distribución ({distancia_km:.1f} km)",
+                "cantidad": 1.0,
+                "unidad": "viaje",
+                "tarifa_unitaria": float(t_flete),
+                "subtotal_usd": float(flt_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "subtotal_uyu": float(flt_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            })
+
+        return {
+            "client_id": client_id,
+            "moneda_contrato": moneda,
+            "exchange_rate_uyu": float(fx.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)),
+            "dias_almacenaje": dias_almacenaje,
+            "pallets": pallets,
+            "m3": float(m3),
+            "picking_movements": picking_movements,
+            "subtotal_almacenaje_usd": float(alm_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_almacenaje_uyu": float(alm_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_picking_usd": float(pck_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_picking_uyu": float(pck_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_flete_usd": float(flt_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_flete_uyu": float(flt_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_neto_usd": float(sub_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "subtotal_neto_uyu": float(sub_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "iva_22_usd": float(iva_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "iva_22_uyu": float(iva_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "total_facturar_usd": float(tot_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "total_facturar_uyu": float(tot_uyu.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "items": items,
+        }
+
+    @classmethod
     def calculate_route_profitability(
         cls,
         numero_orden: str,

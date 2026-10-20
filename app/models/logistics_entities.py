@@ -34,6 +34,10 @@ class LogisticsClient(Base):
     direccion_central = Column(String(255), nullable=True)
     condiciones_pago = Column(String(100), default="30_DIAS")
     activo = Column(Boolean, default=True)
+    moneda_contrato = Column(String(10), default="USD", nullable=False)
+    tarifa_m3_dia = Column(Numeric(14, 4), default=Decimal("0.8500"), nullable=False)
+    tarifa_pallet_dia = Column(Numeric(14, 4), default=Decimal("1.2000"), nullable=False)
+    tarifa_picking_movimiento = Column(Numeric(14, 4), default=Decimal("2.5000"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relaciones

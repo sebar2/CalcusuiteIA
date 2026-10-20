@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -294,6 +295,8 @@ def transfer_stock_between_slots(
         )
         return result
     except ValueError as e:
+        if "423" in str(e):
+            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(
@@ -320,3 +323,228 @@ def seed_demo_digital_twin(db: Session = Depends(get_db)):
     """
     DigitalTwinService.ensure_default_warehouses_and_slots(db)
     return {"message": "Datos de Gemelo Digital 3D inicializados correctamente."}
+
+from fastapi import WebSocket, WebSocketDisconnect
+from app.engine.inventory import calculate_3d_load_plan, recommend_container_filler_skus
+
+
+# ============================================================================
+# WEBSOCKET CONNECTION MANAGER PARA RECEPCIÓN EN VIVO 3D
+# ============================================================================
+
+class DigitalTwinConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: Dict[str, Any]):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                self.disconnect(connection)
+
+ws_manager = DigitalTwinConnectionManager()
+
+
+@router.websocket("/ws")
+async def digital_twin_websocket(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
+# ============================================================================
+# SIMULADOR 3D DE CUBICAJE (LOAD PLANNER) & BOTÓN IA 98%
+# ============================================================================
+
+class LoadPlanRequest(BaseModel):
+    container_type: str = "40HQ"
+    items: List[Dict[str, Any]]
+    enforce_lifo: bool = False
+
+
+class FillAIRequest(BaseModel):
+    container_type: str = "40HQ"
+    current_load_plan: Dict[str, Any]
+    candidate_skus: Optional[List[Dict[str, Any]]] = None
+    target_occupancy_pct: float = 98.0
+
+
+@router.post("/container-load-planner")
+def plan_container_load(payload: LoadPlanRequest):
+    return calculate_3d_load_plan(
+        container_type=payload.container_type,
+        items=payload.items,
+        enforce_lifo=payload.enforce_lifo,
+    )
+
+
+@router.post("/container-load-planner/fill-ai")
+def fill_container_with_ai(
+    payload: FillAIRequest,
+    db: Session = Depends(get_db),
+):
+    candidates = payload.candidate_skus
+    if not candidates:
+        prods = DigitalTwinService.get_real_products_catalog(db)
+        candidates = [
+            {
+                "sku": p["sku"],
+                "description": p["nombre"],
+                "box_width_m": 0.40,
+                "box_height_m": 0.30,
+                "box_length_m": 0.40,
+                "unit_weight_kg": 6.0,
+                "unit_cost_usd": p["costo_base"],
+                "unit_price_usd": p["precio_lista"],
+                "rop_status": "CRITICO_ROP",
+                "rotation_class": "A",
+            }
+            for p in prods[:10]
+        ]
+
+    return recommend_container_filler_skus(
+        container_type=payload.container_type,
+        current_load_plan=payload.current_load_plan,
+        candidate_skus=candidates,
+        target_occupancy_pct=Decimal(str(payload.target_occupancy_pct)),
+    )
+
+
+# ============================================================================
+# RESERVA FÍSICA 3D: DOBLE CANDADO SICE / COTIZADOR B2B
+# ============================================================================
+
+class ReserveSlotRequest(BaseModel):
+    warehouse_id: str
+    slot_code: str
+    reservation_type: str = "HARD_RESERVED"
+    order_id: str
+    organism: str
+    user_name: str = "Sebastian Rodriguez"
+    duration_days: int = 7
+
+
+class ReleaseSlotRequest(BaseModel):
+    warehouse_id: str
+    slot_code: str
+    is_controller_admin: bool = False
+    order_id: Optional[str] = None
+
+
+@router.post("/reserve-slot")
+async def reserve_warehouse_slot(
+    payload: ReserveSlotRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        res = DigitalTwinService.reserve_slot(
+            db,
+            warehouse_id=payload.warehouse_id,
+            slot_code=payload.slot_code,
+            reservation_type=payload.reservation_type,
+            order_id=payload.order_id,
+            organism=payload.organism,
+            user_name=payload.user_name,
+            duration_days=payload.duration_days,
+        )
+        await ws_manager.broadcast({
+            "event": "SLOT_RESERVED",
+            "warehouse_id": payload.warehouse_id,
+            "slot_code": payload.slot_code,
+            "reservation_type": payload.reservation_type,
+            "organism": payload.organism,
+            "order_id": payload.order_id,
+        })
+        return res
+    except ValueError as e:
+        if "423" in str(e):
+            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/release-slot")
+async def release_warehouse_slot(
+    payload: ReleaseSlotRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        res = DigitalTwinService.release_slot_reservation(
+            db,
+            warehouse_id=payload.warehouse_id,
+            slot_code=payload.slot_code,
+            is_controller_admin=payload.is_controller_admin,
+            order_id=payload.order_id,
+        )
+        await ws_manager.broadcast({
+            "event": "SLOT_RELEASED",
+            "warehouse_id": payload.warehouse_id,
+            "slot_code": payload.slot_code,
+        })
+        return res
+    except ValueError as e:
+        if "423" in str(e):
+            raise HTTPException(status_code=status.HTTP_423_LOCKED, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ============================================================================
+# RECEPCIÓN INTELIGENTE CON QR FIRMADO HMAC-SHA256 & WEBSOCKETS EN VIVO
+# ============================================================================
+
+class GenerateQRRequest(BaseModel):
+    warehouse_id: str
+    slot_code: str
+    sku: str
+    lote: str
+    units_count: int = 24
+
+
+class ScanQRRequest(BaseModel):
+    qr_token: str
+
+
+@router.post("/generate-qr-label")
+def generate_qr_label(payload: GenerateQRRequest):
+    return DigitalTwinService.generate_signed_qr_label(
+        warehouse_id=payload.warehouse_id,
+        slot_code=payload.slot_code,
+        sku=payload.sku,
+        lote=payload.lote,
+        units_count=payload.units_count,
+    )
+
+
+@router.post("/scan-qr-receive")
+async def scan_qr_and_receive(
+    payload: ScanQRRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = DigitalTwinService.verify_and_receive_qr(db, qr_token=payload.qr_token)
+        await ws_manager.broadcast({
+            "event": "BOX_RECEIVED_LIVE",
+            "warehouse_id": result["warehouse_id"],
+            "slot_code": result["slot_code"],
+            "sku": result["sku"],
+            "lote": result["lote"],
+            "units_count": result["units_count"],
+            "cajas_count": result["cajas_count"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

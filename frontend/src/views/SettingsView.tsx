@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Settings,
+  DollarSign,
   Shield,
   Activity,
   Cpu,
@@ -21,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiService, getStoredUser } from '../services/api';
+import { digitalTwinApi, type ExchangeRateConfig } from '../services/digitalTwinApi';
 import type {
   NetworkTelemetryResponse,
   AIVaultConfigResponse,
@@ -63,6 +65,17 @@ export const SettingsView: React.FC = () => {
     whatsapp_notifications: true,
     email_notifications: true,
   });
+
+  // Estado de Tipo de Cambio BROU / Manual (Bimonetaria USD/UYU)
+  const [exchangeRate, setExchangeRate] = useState<ExchangeRateConfig>({
+    provider: 'BROU',
+    official_rate_uyu: 43.25,
+    manual_rate_uyu: 43.50,
+    use_manual: false,
+    effective_rate_uyu: 43.25,
+    last_sync: '',
+  });
+  const [isSavingFx, setIsSavingFx] = useState<boolean>(false);
 
   // Estados de carga y feedback
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -116,6 +129,12 @@ export const SettingsView: React.FC = () => {
       if (currTenant) setCurrentTenant(currTenant);
       if (jitRes) setJitSessions(jitRes);
       if (paramsRes) setTenantParams(paramsRes);
+      try {
+        const fxRes = await digitalTwinApi.getExchangeRateConfig();
+        if (fxRes) setExchangeRate(fxRes);
+      } catch (err) {
+        // silent fallback
+      }
       if (teleRes) setTelemetry(teleRes);
       if (vaultRes) {
         setAiVault(vaultRes);
@@ -223,6 +242,29 @@ export const SettingsView: React.FC = () => {
   };
 
   // Guardar Parámetros Operativos del Tenant
+  const handleSaveExchangeRate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingFx(true);
+    try {
+      const updated = await digitalTwinApi.updateExchangeRateConfig({
+        manual_rate_uyu: Number(exchangeRate.manual_rate_uyu),
+        use_manual: exchangeRate.use_manual,
+      });
+      setExchangeRate(updated);
+      setFeedbackBanner({
+        type: 'success',
+        text: `Tipo de cambio actualizado: 1 USD = $ ${updated.effective_rate_uyu.toFixed(4)} UYU (${updated.use_manual ? 'Manual' : 'BROU'}).`,
+      });
+    } catch {
+      setFeedbackBanner({
+        type: 'error',
+        text: 'Error al actualizar el tipo de cambio BROU.',
+      });
+    } finally {
+      setIsSavingFx(false);
+    }
+  };
+
   const handleSaveTenantParams = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1033,6 +1075,105 @@ export const SettingsView: React.FC = () => {
               Guardar Preferencias Regionales
             </button>
           </form>
+
+          {/* CARD TIPO DE CAMBIO BROU / MANUAL (BIMONETARIA USD/UYU) */}
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  <DollarSign size={18} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Tipo de Cambio BROU & Cotización Bimonetaria (USD ⇄ UYU)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                      Liquidación 3PL
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Controla la cotización bancaria oficial del BROU o establece una tasa manual fija para facturas y liquidaciones 3PL.
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Tasa Efectiva Aplicada</span>
+                <span className="text-lg font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                  1 USD = $ {exchangeRate.effective_rate_uyu.toFixed(4)} UYU
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveExchangeRate} className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Cotización BROU Interbancario</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-mono font-bold text-slate-800 dark:text-slate-200">
+                    $ {exchangeRate.official_rate_uyu.toFixed(4)}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                    BROU API
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">Sincronizado con Banco República</p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Modo de Conversión</span>
+                <div className="flex items-center gap-3 pt-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="use_manual"
+                      checked={!exchangeRate.use_manual}
+                      onChange={() => setExchangeRate(prev => ({ ...prev, use_manual: false }))}
+                      className="accent-emerald-600"
+                    />
+                    <span>BROU Oficial</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="use_manual"
+                      checked={exchangeRate.use_manual}
+                      onChange={() => setExchangeRate(prev => ({ ...prev, use_manual: true }))}
+                      className="accent-emerald-600"
+                    />
+                    <span>Manual Fijo</span>
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-400">Alterna la fuente de cotización</p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Tasa Manual Personalizada</span>
+                  {exchangeRate.use_manual && (
+                    <span className="text-[10px] font-bold text-amber-600">Activo</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-slate-400">$</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="1"
+                    disabled={!exchangeRate.use_manual}
+                    value={exchangeRate.manual_rate_uyu}
+                    onChange={(e) => setExchangeRate(prev => ({ ...prev, manual_rate_uyu: parseFloat(e.target.value) || 0 }))}
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-slate-900 dark:text-white disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingFx}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer whitespace-nowrap shadow-xs"
+                  >
+                    {isSavingFx ? 'Guardando...' : 'Aplicar'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

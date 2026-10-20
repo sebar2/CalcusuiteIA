@@ -200,6 +200,22 @@ app.include_router(omnichannel_router)
 app.include_router(tenants_router)
 app.include_router(digital_twin_router, prefix="/api/v1")
 
+# WebSocket Hub para Gemelo Digital 3D en /ws/digital-twin
+from app.api.v1.digital_twin import ws_manager
+from fastapi import WebSocket, WebSocketDisconnect
+
+@app.websocket("/ws/digital-twin")
+async def root_digital_twin_ws(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
 
 # Montar directorio estático de uploads (imágenes extraídas de Excel y fotos de producto)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
