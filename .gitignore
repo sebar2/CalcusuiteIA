@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 *.env
+.env.example
 
 # Python & Caches
 __pycache__/
@@ -24,31 +25,46 @@ ENV/
 *.sqlite
 *.sqlite3
 calcu.db
+calcu_demo.db
 *.bak
 *.db.bak
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.cache/
-node_modules/
-
-# Binarios y Builds Móviles (Android APK)
-*.apk
-frontend/android/app/build/
-frontend/android/.gradle/
-
+# Logs & Temporales
 *.log
 scratch/
 .DS_Store
 Thumbs.db
-
-# Uploads estáticos de productos
-app/static/uploads/products/*
-!app/static/uploads/products/.gitkeep
-app/static/uploads/omnichannel_media/*
-!app/static/uploads/omnichannel_media/.gitkeep
-
-# Tenants local auth data & secrets
 tenants_data/
+
+# Exclusión de código fuente de desarrollo para repositorio público de presentación
+app/
+frontend/
+tests/
+scripts/
+alembic/
+ui/
+data/
+logs/
+.agents/
+*.bat
+*.ps1
+run.py
+generate_*.py
+docker-compose.yml
+requirements.txt
+pytest.ini
+alembic.ini
+*.docx
+ARCHITECTURE_AND_OPERATIONS_MANUAL.md
+AUDITORIA_TECNICA.md
+INFORME_MAESTRO_OPTIMIZACION.md
+SYSTEM_STATE.md
+Calcu3PL-Logistica.apk
+/Calcu_3PL_Mobile_v2026.apk
+/MANUAL_CALCU_SUITE_IA_CLIENTES_SOCIOS.md
+/MANUAL_CALCU_SUITE_IA_CLIENTES_SOCIOS.pdf
+/MANUAL_COMPLETO_CALCU_2026.pdf
+/MANUAL_DE_USUARIO_CALCU_3PL.pdf
+
+Calcu-Enterprise-SuperAdmin.apk
 
