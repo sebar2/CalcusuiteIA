@@ -1,7 +1,7 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from sqlalchemy import String, Integer, Numeric, ForeignKey, Date, DateTime, CheckConstraint, Boolean, Text
+from sqlalchemy import String, Integer, Numeric, ForeignKey, Date, DateTime, CheckConstraint, Boolean, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
@@ -813,6 +813,36 @@ class BiddingKeyword(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
     vertical_rel: Mapped["BiddingVertical"] = relationship(back_populates="keywords")
+
+
+class ProcurementIndexedCall(Base):
+    """
+    Indexación profunda de Convocatorias y Licitaciones Estatales OCDS (ARCE / SICE / Con la Tuya).
+    Almacena objeto de contratación, items solicitados desglosados, links directos a pliego web y PDF.
+    Rigor financiero: Numeric(14, 4) y Decimal.
+    """
+    __tablename__ = "procurement_indexed_calls"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # compra_id
+    compra_id: Mapped[str] = mapped_column(String(64), index=True)
+    ocid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    titulo: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+    organismo: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    objeto_contratacion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    vertical_id: Mapped[str] = mapped_column(String(50), default="ILUMINACION_EFICIENCIA", nullable=False, index=True)
+    items_solicitados: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, default=list, nullable=True)
+    url_pliego_arce: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    url_pliego_pdf: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    tipo_compra: Mapped[Optional[str]] = mapped_column(String(100), default="Licitación Pública", nullable=True)
+    fecha_apertura: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    fecha_cierre: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    monto_estimado: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
+    moneda: Mapped[str] = mapped_column(String(10), default="UYU", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="ACTIVE", nullable=False)
+    dso_estimado_dias: Mapped[Optional[int]] = mapped_column(Integer, default=45, nullable=True)
+    raw_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
 
 # Re-export de entidades contables, facturación B2B y usuarios con RBAC
 from app.models.accounting_entities import (

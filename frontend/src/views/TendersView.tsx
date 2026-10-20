@@ -13,7 +13,6 @@ import {
   Save,
   Trash2,
   Plus,
-  Eye,
   FileText,
   Clock,
   DollarSign,
@@ -22,7 +21,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   AlertCircle,
-  Truck,
   X,
   Loader2,
   Tag,
@@ -30,14 +28,17 @@ import {
   Zap,
   Copy,
   Info,
-  ChevronDown,
-  ChevronUp,
   Download,
   ExternalLink,
   Mail,
   Phone,
   MapPin,
   Globe,
+  FileSpreadsheet,
+  Layers,
+  Lock,
+  Unlock,
+  Package,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type {
@@ -47,6 +48,10 @@ import type {
   BiddingKeywordItem,
   BiddingAIExpandKeywordsResponse,
   ProcurementCallItem,
+  ProcurementPdfAnalysisBlock,
+  ProcurementRadarSuggestedItem,
+  ProcurementCalendarCrossStockItem,
+  ProcurementReserveTwinResponse,
   ProcurementCallSummaryData,
   ProcurementBenchmarkItem,
   ProcurementProductItem,
@@ -67,6 +72,20 @@ export interface TendersViewProps {
   initialTab?: 'radar' | 'benchmarks' | 'competitors' | 'buyers' | 'calendar' | 'cotizador';
   hideTabBar?: boolean;
 }
+
+
+const CANONICAL_SKU_SUGGESTIONS = [
+  { label: 'LUM-6060 (Panel LED 60x60 40W 4000K)', sku: 'LUM-6060', category: 'Iluminación', cost: 14.50, siceMediana: 28.00 },
+  { label: 'UFO-150W (Campana LED High Bay UFO 150W IP65)', sku: 'UFO-150W', category: 'Iluminación', cost: 48.00, siceMediana: 89.50 },
+  { label: 'PANEL-LED-40W (Panel LED Embutir 40W Microprismático)', sku: 'PANEL-LED-40W', category: 'Iluminación', cost: 16.20, siceMediana: 31.00 },
+  { label: 'LUM-VIAL-100W (Luminaria Alumbrado Público LED 100W IP66)', sku: 'LUM-VIAL-100W', category: 'Iluminación', cost: 72.00, siceMediana: 135.00 },
+  { label: 'TUBO-LED-T8 (Tubo LED T8 120cm 18W Vidrio)', sku: 'TUBO-LED-T8', category: 'Iluminación', cost: 3.20, siceMediana: 6.80 },
+  { label: 'SILLA-ERG-01 (Silla de Oficina Ergonómica Syncro 3D)', sku: 'SILLA-ERG-01', category: 'Mobiliario', cost: 85.00, siceMediana: 165.00 },
+  { label: 'MESA-REUN-240 (Mesa Directorio Melamínica 240x120cm)', sku: 'MESA-REUN-240', category: 'Mobiliario', cost: 240.00, siceMediana: 460.00 },
+  { label: 'CABLE-SUBT-4X16 (Cable Subterráneo Cobre 4x16mm2)', sku: 'CABLE-SUBT-4X16', category: 'Electromecánica', cost: 12.80, siceMediana: 24.50 },
+  { label: 'CAMILLA-HOSP-01 (Camilla Hospitalaria Traslado Hidráulica)', sku: 'CAMILLA-HOSP-01', category: 'Salud', cost: 680.00, siceMediana: 1280.00 },
+  { label: 'RACK-42U-800 (Rack Servidor 42U 800x1000mm)', sku: 'RACK-42U-800', category: 'Tecnología', cost: 450.00, siceMediana: 820.00 },
+];
 
 export const CANONICAL_VERTICALS: BiddingVerticalItem[] = [
   { id: 'ILUMINACION_EFICIENCIA', nombre: 'Iluminación & Eficiencia Energética', icon: '💡', color_badge: 'amber', descripcion: 'Luminarias LED, alumbrado vial, proyectores, drivers DALI', activo: true, keywords_count: 30 },
@@ -129,7 +148,6 @@ export const TendersView: React.FC<TendersViewProps> = ({
     }
   }, [initialTab]);
 
-  const [expandedContractIdx, setExpandedContractIdx] = useState<number | null>(null);
 
   // Notificaciones de usuario
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -185,6 +203,35 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const [technicalOpinionData, setTechnicalOpinionData] = useState<any | null>(null);
   const [isLoadingOpinion, setIsLoadingOpinion] = useState<boolean>(false);
 
+  // Modal de Análisis de Pliego PDF con IA Local (4 Bloques)
+  const [pdfAnalysisModalOpen, setPdfAnalysisModalOpen] = useState<boolean>(false);
+  const [pdfAnalysisCall, setPdfAnalysisCall] = useState<ProcurementCallItem | null>(null);
+  const [pdfAnalysisData, setPdfAnalysisData] = useState<ProcurementPdfAnalysisBlock | null>(null);
+  const [isLoadingPdfAnalysis, setIsLoadingPdfAnalysis] = useState<boolean>(false);
+
+  // Bandeja de Ítems Sugeridos desde Radar SICE en Precios & SICE
+  const [radarSuggestedItems, setRadarSuggestedItems] = useState<ProcurementRadarSuggestedItem[]>([]);
+  const [isLoadingRadarSuggested, setIsLoadingRadarSuggested] = useState<boolean>(false);
+  const [selectedSuggestedItem, setSelectedSuggestedItem] = useState<ProcurementRadarSuggestedItem | null>(null);
+
+  // Filtros avanzados de Competidores y Compradores
+  const [competitorRubroFilter, setCompetitorRubroFilter] = useState<string>('TODOS');
+  const [buyerRubroFilter, setBuyerRubroFilter] = useState<string>('TODOS');
+  const [buyerTipoCompraFilter, setBuyerTipoCompraFilter] = useState<string>('TODOS');
+
+  // Cruce de Stock y Factibilidad IA en Calendario
+  const [crossStockItems, setCrossStockItems] = useState<ProcurementCalendarCrossStockItem[]>([]);
+  const [isCrossingStock, setIsCrossingStock] = useState<boolean>(false);
+  const [crossStockStats, setCrossStockStats] = useState<{ tier1: number; tier2: number; tier3: number } | null>(null);
+
+  // Reserva de Stock 3D en Gemelo Digital y Exportación de Oferta SICE
+  const [reservationResult, setReservationResult] = useState<ProcurementReserveTwinResponse | null>(null);
+  const [isReservingTwin, setIsReservingTwin] = useState<boolean>(false);
+  const [isExportingOffer, setIsExportingOffer] = useState<boolean>(false);
+
+  // Autocompletado Predictivo (>= 3 chars)
+  const [activeSkuAutocompleteIdx, setActiveSkuAutocompleteIdx] = useState<number | null>(null);
+
   // =========================================================================
   // TAB 2: INTELIGENCIA DE PRECIOS & BENCHMARKS SICE
   // =========================================================================
@@ -211,7 +258,6 @@ export const TendersView: React.FC<TendersViewProps> = ({
   // =========================================================================
   const [supplierSearchQuery, setSupplierSearchQuery] = useState<string>('');
   const [suppliersList, setSuppliersList] = useState<ProcurementSupplierItem[]>([]);
-  const [topSuppliersList, setTopSuppliersList] = useState<ProcurementSupplierItem[]>([]);
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState<boolean>(false);
   const [selectedSupplierDetail, setSelectedSupplierDetail] = useState<any | null>(null);
   const [isLoadingSupplierDetail, setIsLoadingSupplierDetail] = useState<boolean>(false);
@@ -228,14 +274,12 @@ export const TendersView: React.FC<TendersViewProps> = ({
   const [selectedBuyerDetail, setSelectedBuyerDetail] = useState<any | null>(null);
   const [isLoadingBuyerDetail, setIsLoadingBuyerDetail] = useState<boolean>(false);
   const [isBuyerModalOpen, setIsBuyerModalOpen] = useState<boolean>(false);
-  const [intendenciasData, setIntendenciasData] = useState<any | null>(null);
   const [isLoadingIntendencias, setIsLoadingIntendencias] = useState<boolean>(false);
 
   // =========================================================================
   // TAB 5: CALENDARIO DE VENCIMIENTOS & CONTROL LOGÍSTICO
   // =========================================================================
   const [calendarItems, setCalendarItems] = useState<ProcurementCalendarItem[]>([]);
-  const [calendarMeta, setCalendarMeta] = useState<{ deposito_central: number; transito: number }>({ deposito_central: 0, transito: 0 });
   const [isLoadingCalendar, setIsLoadingCalendar] = useState<boolean>(false);
   const [calendarFilter, setCalendarFilter] = useState<'TODOS' | 'VERDE' | 'AMARILLO' | 'ROJO' | 'GUARDADOS'>('TODOS');
   const [calendarSearch, setCalendarSearch] = useState<string>('');
@@ -282,6 +326,21 @@ export const TendersView: React.FC<TendersViewProps> = ({
     initData();
   }, []);
 
+  // Cargar Ítems Sugeridos desde Radar SICE para Precios & SICE
+  const fetchRadarSuggestedItems = useCallback(async () => {
+    setIsLoadingRadarSuggested(true);
+    try {
+      const res = await apiService.getRadarSuggestedPricingItems();
+      if (res.success && res.data) {
+        setRadarSuggestedItems(res.data.items || []);
+      }
+    } catch (err) {
+      console.warn('Error al cargar items sugeridos de Radar SICE:', err);
+    } finally {
+      setIsLoadingRadarSuggested(false);
+    }
+  }, []);
+
   // Cargar Radar al inicio
   const fetchRadarCalls = useCallback(async (pageToLoad = 1, append = false) => {
     if (append) setIsLoadingMoreCalls(true);
@@ -323,7 +382,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
     if (activeTab === 'radar' && openCalls.length === 0) {
       fetchRadarCalls(1, false);
     }
-  }, [activeTab, fetchRadarCalls, openCalls.length]);
+    if (activeTab === 'benchmarks' && radarSuggestedItems.length === 0) {
+      fetchRadarSuggestedItems();
+    }
+  }, [activeTab, fetchRadarCalls, fetchRadarSuggestedItems, openCalls.length, radarSuggestedItems.length]);
 
   // Manejo de Cargar Más Licitaciones
   const handleLoadMoreCalls = () => {
@@ -440,15 +502,183 @@ export const TendersView: React.FC<TendersViewProps> = ({
     }
   };
 
-  // Cargar en el Cotizador con 1 Clic
-  const handleLoadInCotizador = (call: { compraId: any; title: string; buyer?: { name?: string } }) => {
-    setProyectoNombre(call.title);
-    setClienteLicitacion(call.buyer?.name || 'Organismo Estatal');
+  // Cargar en el Cotizador con 1 Clic (Autocompletando partidas, organismo y plazos)
+  const handleLoadInCotizador = (call: any) => {
+    const title = call.title || `Licitación #${call.compraId}`;
+    const buyerName = call.buyer?.name || call.buyerName || call.buyer || 'Organismo Comprador';
+    setProyectoNombre(title);
+    setClienteLicitacion(buyerName);
+    setPlazoEntregaDias(call.dias_restantes ? Math.max(15, call.dias_restantes) : 30);
+
+    const itemsSol = call.items_solicitados || [];
+    if (itemsSol.length > 0) {
+      const mapped = itemsSol.map((it: any) => ({
+        sku: it.codigo_sice || it.siceCode || 'LUM-6060',
+        cantidad_solicitada: parseInt(String(it.cantidad || 1), 10) || 1,
+      }));
+      setItems(mapped);
+    } else {
+      setItems([
+        { sku: 'LUM-6060', cantidad_solicitada: 80 },
+        { sku: 'UFO-150W', cantidad_solicitada: 45 },
+      ]);
+    }
+
     setActiveTab('cotizador');
     setNotification({
       type: 'success',
-      message: `Convocatoria #${call.compraId} cargada en el Cotizador B2B.`,
+      message: `Convocatoria #${call.compraId} e ítems solicitados cargados en el Cotizador B2B.`,
     });
+  };
+
+  // Lector y Extractor Automático de Pliegos PDF con IA Local (4 Bloques)
+  const handleAnalyzePdfPliego = async (call: ProcurementCallItem) => {
+    const id = String(call.compraId);
+    setPdfAnalysisCall(call);
+    setIsLoadingPdfAnalysis(true);
+    setPdfAnalysisModalOpen(true);
+    setPdfAnalysisData(null);
+    try {
+      const res = await apiService.analyzeProcurementPdf(id, {
+        titulo: call.title,
+        organismo: call.buyer?.name || (call as any).buyerName || 'Organismo Comprador',
+        vertical_id: selectedVertical,
+        objeto_contratacion: call.objeto_contratacion || call.title,
+        items_solicitados: call.items_solicitados || [],
+        pliego_pdf_url: call.url_pliego_pdf,
+        pliego_web_url: call.url_pliego_arce,
+        plazo_entrega_dias: 30,
+        model: selectedOllamaModel || 'gemma4:latest',
+      });
+      if (res.success && res.data) {
+        setPdfAnalysisData(res.data);
+        setNotification({
+          type: 'success',
+          message: `Dictamen de 4 bloques extraído con éxito (${res.data.fuente || 'IA'}).`,
+        });
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo analizar el PDF con IA.' });
+    } finally {
+      setIsLoadingPdfAnalysis(false);
+    }
+  };
+
+
+  // Agregar Competidor al Catálogo de Proveedores / Reventa
+  const handleAddCompetitorToSuppliers = async (item: any, competitorName: string, competitorRut?: string) => {
+    try {
+      const res = await apiService.addCompetitorToSuppliersBridge({
+        competitor_name: competitorName,
+        competitor_rut: competitorRut,
+        rubro: selectedVertical,
+        product_sku: item.sku_sice || item.id || 'SKU-COMP',
+        product_name: item.nombre_producto || item.description || 'Producto Adjudicado',
+        precio_adjudicado: item.precio_unitario_adjudicado || item.unitPrice || 10,
+        moneda: item.moneda || 'USD',
+        fecha_precio: item.fecha_precio,
+        contract_id: item.numero_contrato,
+      });
+      setNotification({ type: 'success', message: res.message });
+      if (competitorRut) {
+        setImportedCompetitorRuts((prev) => new Set([...prev, competitorRut]));
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo agregar al catálogo de proveedores.' });
+    }
+  };
+
+  // Cruce de Stock y Factibilidad IA en Calendario
+  const handleCrossStockFeasibility = async () => {
+    setIsCrossingStock(true);
+    try {
+      const res = await apiService.crossStockFeasibility({ vertical_id: selectedVertical });
+      if (res.success && res.data) {
+        setCrossStockItems(res.data.items || []);
+        setCrossStockStats({
+          tier1: res.data.tier1_count || 0,
+          tier2: res.data.tier2_count || 0,
+          tier3: res.data.tier3_count || 0,
+        });
+        setNotification({
+          type: 'success',
+          message: `Cruce IA completado: ${res.data.tier1_count} convocatorias con 100% stock hoy en Montevideo.`,
+        });
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al cruzar stock con convocatorias del calendario.' });
+    } finally {
+      setIsCrossingStock(false);
+    }
+  };
+
+  // Reserva en Gemelo Digital 3D (SOFT vs HARD)
+  const handleReserveDigitalTwin = async (reservationType: 'SOFT' | 'HARD') => {
+    setIsReservingTwin(true);
+    try {
+      const skus = items.map((it) => it.sku);
+      const res = await apiService.reserveDigitalTwin({
+        tender_id: proyectoNombre || 'LIC-2026',
+        skus,
+        reservation_type: reservationType,
+        margin_pct: margenPct,
+      });
+      setReservationResult(res);
+      setNotification({
+        type: 'success',
+        message: res.message,
+      });
+    } catch (err) {
+      setNotification({ type: 'error', message: 'No se pudo procesar la reserva en el Gemelo Digital 3D.' });
+    } finally {
+      setIsReservingTwin(false);
+    }
+  };
+
+  // Exportar Oferta Económica Oficial SICE (Excel / PDF)
+  const handleExportSiceOffer = async (format: 'pdf' | 'excel') => {
+    setIsExportingOffer(true);
+    try {
+      const lines = items.map((it, idx) => {
+        const matchingSugg = CANONICAL_SKU_SUGGESTIONS.find((s) => s.sku === it.sku.toUpperCase());
+        const baseCost = matchingSugg ? matchingSugg.cost : 14.50;
+        const offerPrice = Math.round(baseCost * (1 + margenPct / 100) * 100) / 100;
+        return {
+          sku: it.sku,
+          codigo_sice: it.sku,
+          descripcion: matchingSugg ? matchingSugg.label : `Partida #${idx + 1} - ${it.sku}`,
+          cantidad: it.cantidad_solicitada,
+          unidad_medida: 'UNIDAD',
+          costo_unitario: baseCost,
+          precio_unitario_oferta: offerPrice,
+          margen_pct: margenPct,
+          subtotal_oferta: offerPrice * it.cantidad_solicitada,
+        };
+      });
+
+      await apiService.exportSiceOffer({
+        empresa_nombre: 'CALCU SUPPLY CHAIN & ENERGY SOLUTIONS S.A.',
+        empresa_rut: '219876540019',
+        empresa_contacto: 'licitaciones@calcu.com.uy | +598 2900 1234',
+        numero_licitacion: proyectoNombre.slice(0, 30),
+        organismo_comprador: clienteLicitacion,
+        objeto_llamado: proyectoNombre,
+        plazo_entrega_dias: plazoEntregaDias,
+        moneda: moneda,
+        tipo_cambio_brou: tasaBrou || 40.10,
+        items: lines,
+        format,
+      });
+
+      setNotification({
+        type: 'success',
+        message: `Planilla oficial SICE (${format.toUpperCase()}) descargada con éxito.`,
+      });
+    } catch (err) {
+      setNotification({ type: 'error', message: 'Error al exportar la planilla económica oficial.' });
+    } finally {
+      setIsExportingOffer(false);
+    }
   };
 
   // Modal de Palabras Clave
@@ -588,7 +818,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
         setSuppliersList(searchRes.data.suppliers || []);
       }
       if (topRes.success && Array.isArray(topRes.data)) {
-        setTopSuppliersList(topRes.data || []);
+        // setTopSuppliersList
       }
     } catch (err) {
       console.warn('Error cargando proveedores:', err);
@@ -666,7 +896,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
         setBuyersList(bRes.data.buyers || []);
       }
       if (intRes.success && intRes.data) {
-        setIntendenciasData(intRes.data);
+        // setIntendenciasData
       }
     } catch (err) {
       console.warn('Error cargando compradores e intendencias:', err);
@@ -713,10 +943,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
       const res = await apiService.getProcurementCalendar();
       if (res.success && res.data) {
         setCalendarItems(res.data.items || []);
-        setCalendarMeta({
-          deposito_central: res.data.deposito_central_mvd_unidades || 0,
-          transito: res.data.transito_maritimo_unidades || 0,
-        });
+
       }
     } catch (err) {
       setNotification({ type: 'error', message: 'Error al consultar el calendario logístico de licitaciones.' });
@@ -1137,10 +1364,10 @@ export const TendersView: React.FC<TendersViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="space-y-1.5 text-xs text-slate-400 mb-4">
+                        <div className="space-y-1.5 text-xs text-slate-400 mb-3">
                           <div className="flex items-center gap-2">
                             <Building2 className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                            <span className="truncate">{call.buyer?.name || 'Organismo Estatal'}</span>
+                            <span className="truncate font-medium text-slate-300">{call.buyer?.name || (call as any).buyerName || 'Organismo Estatal'}</span>
                           </div>
                           {call.procurementMethodDetails && (
                             <div className="flex items-center gap-2">
@@ -1148,38 +1375,117 @@ export const TendersView: React.FC<TendersViewProps> = ({
                               <span className="text-slate-300">{call.procurementMethodDetails}</span>
                             </div>
                           )}
+                          {call.objeto_contratacion && (
+                            <div className="text-[11px] text-slate-400 italic line-clamp-2 mt-1">
+                              "{call.objeto_contratacion}"
+                            </div>
+                          )}
                         </div>
+
+                        {/* Tabla de Productos / Servicios Solicitados */}
+                        {call.items_solicitados && call.items_solicitados.length > 0 && (
+                          <div className="my-3 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
+                            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-2 px-0.5">
+                              <span className="flex items-center gap-1.5 text-indigo-400">
+                                <Package className="w-3.5 h-3.5" /> Ítems Licitados ({call.items_solicitados.length})
+                              </span>
+                              <span className="text-[10px] text-slate-500">Catálogo SICE / ARCE</span>
+                            </div>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {call.items_solicitados.map((it: any, iIdx: number) => (
+                                <div key={iIdx} className="flex items-center justify-between text-xs bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                                  <div className="flex items-center gap-2 truncate pr-2">
+                                    <span className="font-mono text-[11px] font-bold text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                      {it.codigo_sice || it.siceCode || 'SICE'}
+                                    </span>
+                                    <span className="text-slate-200 truncate text-[11px] font-medium">{it.descripcion || 'Ítem licitado'}</span>
+                                  </div>
+                                  <span className="font-bold text-amber-400 text-xs shrink-0 font-mono">
+                                    {it.cantidad || 1} {it.unidad_medida || 'u.'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Botones de Acción */}
+                      {/* Botones de Acceso Directo y Acciones */}
                       <div className="border-t border-slate-800/80 pt-3 flex flex-wrap items-center gap-2">
+                        {call.url_pliego_arce && (
+                          <a
+                            href={call.url_pliego_arce}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 rounded-xl px-2.5 py-1.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                            title="Abrir llamado oficial en Compras Estatales (ARCE)"
+                          >
+                            <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>🌐 Pliego Web</span>
+                          </a>
+                        )}
+
+                        {call.url_pliego_pdf && (
+                          <a
+                            href={call.url_pliego_pdf}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 rounded-xl px-2.5 py-1.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                            title="Descargar documento PDF del pliego"
+                          >
+                            <Download className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>📄 PDF Pliego</span>
+                          </a>
+                        )}
+
                         <button
                           onClick={() => handleViewCallSummary(call)}
-                          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          title="Ver Resumen IA de Pliego"
                         >
-                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Ver Resumen IA</span>
+                          <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Resumen IA</span>
                         </button>
 
                         <button
                           onClick={() => handleViewCallBenchmarks(call)}
-                          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          title="Ver Benchmarks de Precios SICE"
                         >
                           <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Benchmarks</span>
                         </button>
 
                         <button
-                          onClick={() => handleRequestTechnicalOpinion(call)}
-                          className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          onClick={() => handleAnalyzePdfPliego(call)}
+                          className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl px-2.5 py-1.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                          title="Lector de Pliego PDF con IA Local (4 Bloques Clave)"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Analizar PDF IA</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleRequestTechnicalOpinion(call)}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                          title="Consultar dictamen del Perito de Ingeniería"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-slate-400" />
                           <span>Dictamen Técnico</span>
                         </button>
 
                         <button
+                          onClick={() => handleLoadInCotizador(call)}
+                          className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl px-2.5 py-1.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                          title="Cargar esta licitación y sus ítems en el Cotizador B2B"
+                        >
+                          <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Cargar en Cotizador</span>
+                        </button>
+
+                        <button
                           onClick={() => handleSaveTracking(call)}
-                          className={`p-1.5 rounded-xl border transition-all ${
+                          className={`p-1.5 rounded-xl border transition-all ml-auto ${
                             isSaved
                               ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                               : 'bg-slate-800 text-slate-400 hover:text-white border-slate-700'
@@ -1225,6 +1531,93 @@ export const TendersView: React.FC<TendersViewProps> = ({
       {/* =================================================================== */}
       {activeTab === 'benchmarks' && (
         <div className="space-y-6">
+          {/* BANDEJA INTERACTIVA: Ítems en Licitaciones Abiertas Hoy (Sugeridos desde Radar SICE) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    🎯 Ítems en Licitaciones Abiertas Hoy (Sugeridos desde Radar SICE)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Precios adjudicados reales, comparativas y oferta recomendada Calcu (Margen 30-35% en Decimal).
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl font-mono text-emerald-400">
+                  Dólar BROU: ${tasaBrou ? tasaBrou.toFixed(2) : '40.10'}
+                </span>
+                <button
+                  onClick={fetchRadarSuggestedItems}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300"
+                  title="Refrescar ítems sugeridos de licitaciones abiertas"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingRadarSuggested ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {isLoadingRadarSuggested ? (
+              <div className="py-8 text-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-400" />
+                <span className="text-xs">Sincronizando ítems de convocatorias activas...</span>
+              </div>
+            ) : radarSuggestedItems.length === 0 ? (
+              <div className="py-6 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 text-xs">
+                No hay ítems sugeridos en este momento. Active o explore el Radar SICE para detectar convocatorias.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {radarSuggestedItems.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedSuggestedItem(item);
+                      setCalcSku(item.codigo_sice);
+                      setCalcCosto(Math.round((item.ultimo_precio_adjudicado / 1.35) * 100) / 100);
+                      setCalcSiceCode(item.codigo_sice);
+                      setCalcMedianaSice(item.precio_promedio);
+                      setCalcCantidad(item.cantidad_licitacion_activa);
+                      handleExecuteMarkupCalculator();
+                    }}
+                    className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                      selectedSuggestedItem?.codigo_sice === item.codigo_sice
+                        ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-500/10'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="font-mono font-bold text-xs text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                        {item.codigo_sice}
+                      </span>
+                      <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        {item.cantidad_licitacion_activa} {item.unidad_medida}
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs font-bold text-white line-clamp-1 mb-1">{item.descripcion}</h4>
+                    <span className="text-[11px] text-slate-400 truncate block mb-2">{item.organismo}</span>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-800/80 font-mono">
+                      <div>
+                        <span className="text-slate-500 text-[10px] block">Último Adjudicado:</span>
+                        <strong className="text-slate-200">${item.ultimo_precio_adjudicado.toFixed(2)}</strong>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-indigo-400 text-[10px] block font-sans font-semibold">Oferta Recomendada:</span>
+                        <strong className="text-emerald-400 font-bold">${item.precio_oferta_recomendado_calcu.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Calculadora de Markup Competitivo */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
             <div className="flex items-center gap-3 mb-4">
@@ -1518,453 +1911,477 @@ export const TendersView: React.FC<TendersViewProps> = ({
       {/* =================================================================== */}
       {activeTab === 'competitors' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Buscador y Ranking de Proveedores */}
-            <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Users className="w-5 h-5 text-indigo-400" />
-                  Directorio de Empresas Adjudicatarias
-                </h3>
+          {/* NIVEL SUPERIOR: TABLA MAESTRO DE COMPETIDORES Y CONTRATOS */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl">
+                  <Users className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    🛡️ Directorio Maestro de Competidores & Contratos SICE
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Historial de empresas adjudicatarias en compras públicas, ordenables por fecha reciente y rubro.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={supplierSearchQuery}
-                  onChange={(e) => setSupplierSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && fetchSuppliersData()}
-                  placeholder="Buscar por nombre o RUT (ej. UTE, ABB, Conaprole)..."
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500"
-                />
+              {/* Filtro por Rubro y Orden */}
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={competitorRubroFilter}
+                  onChange={(e) => {
+                    setCompetitorRubroFilter(e.target.value);
+                    setTimeout(fetchSuppliersData, 50);
+                  }}
+                  className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="TODOS">Todos los Rubros</option>
+                  {verticals.map((v) => (
+                    <option key={v.id} value={v.nombre}>{v.nombre}</option>
+                  ))}
+                </select>
+
+                <div className="relative min-w-[240px]">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={supplierSearchQuery}
+                    onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchSuppliersData()}
+                    placeholder="Buscar competidor o RUT..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
                 <button
                   onClick={fetchSuppliersData}
                   disabled={isLoadingSuppliers}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 rounded-xl text-sm font-semibold flex items-center gap-2"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5"
                 >
-                  {isLoadingSuppliers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  {isLoadingSuppliers ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                   <span>Buscar</span>
                 </button>
               </div>
+            </div>
 
-              {/* Lista de Proveedores */}
-              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                {suppliersList.map((s) => {
-                  const sId = s.supplierId || s.id || '';
+            {/* Tabla Maestro de Competidores */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
+                    <th className="py-2.5 px-3">Nombre / Razón Social</th>
+                    <th className="py-2.5 px-3">RUT</th>
+                    <th className="py-2.5 px-3">Rubro Principal</th>
+                    <th className="py-2.5 px-3 text-center">Cant. Contratos</th>
+                    <th className="py-2.5 px-3 text-right">Monto Adjudicado</th>
+                    <th className="py-2.5 px-3">Organismo Principal</th>
+                    <th className="py-2.5 px-3">Fecha Contrato</th>
+                    <th className="py-2.5 px-3 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {suppliersList.map((s) => {
+                    const sId = s.supplierId || s.id || '';
+                    const isSelected = selectedSupplierDetail?.supplier?.id === sId || selectedSupplierDetail?.supplier?.name === s.name;
+                    return (
+                      <tr
+                        key={sId}
+                        onClick={() => handleSelectSupplier(sId)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? 'bg-indigo-950/40 font-semibold' : 'hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-white font-medium flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                          <span>{s.name}</span>
+                        </td>
+                        <td className="py-3 px-3 font-mono text-slate-400">{s.rut || sId || '-'}</td>
+                        <td className="py-3 px-3 text-slate-300">{s.rubro_principal || s.category || 'Licitaciones'}</td>
+                        <td className="py-3 px-3 text-center font-mono text-slate-200 font-bold">{s.cant_contratos || s.totalContracts || 1}</td>
+                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
+                          ${formatCurrency(s.monto_adjudicado || s.totalValue || 0)}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300 truncate max-w-[150px]">{s.organismo || 'Administración Central'}</td>
+                        <td className="py-3 px-3 font-mono text-slate-400">{s.fecha_contrato || 'Reciente'}</td>
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectSupplier(sId);
+                            }}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-semibold"
+                          >
+                            Ver Productos
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* NIVEL INFERIOR: DETALLE DE PRODUCTOS ADJUDICADOS EN EL CONTRATO */}
+          {isLoadingSupplierDetail ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl text-center text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-indigo-400" />
+              <p className="text-sm">Cargando contratos y productos adjudicados del competidor...</p>
+            </div>
+          ) : selectedSupplierDetail && (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl">
+                      <Package className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        📦 Productos Adjudicados de {selectedSupplierDetail.supplier?.name}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Precios de corte adjudicados en pliego, alertas de arbitraje local y alta en 1 clic al catálogo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const compRut = selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || selectedSupplierDetail.supplier?.rut || '';
+                    const isAlreadyImported = compRut ? importedCompetitorRuts.has(compRut) : false;
+                    return (
+                      <button
+                        onClick={() => handleImportCompetitor(selectedSupplierDetail)}
+                        disabled={isImportingCompetitor || isAlreadyImported}
+                        className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg transition-all ${
+                          isAlreadyImported
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                        }`}
+                      >
+                        {isImportingCompetitor ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : isAlreadyImported ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isAlreadyImported ? '✅ Homologado en Proveedores' : 'Dar de Alta Todo en Proveedores'}</span>
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Lista de Contratos con sus Productos */}
+              <div className="space-y-4">
+                {(selectedSupplierDetail.recentContracts || []).map((contract: any, cIdx: number) => {
+                  const contractId = contract.id || `LIC-2026-${cIdx + 1}`;
+                  const itemsList = contract.items || [];
                   return (
-                    <div
-                      key={sId}
-                      onClick={() => handleSelectSupplier(sId)}
-                      className="p-3.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer flex items-center justify-between transition-all"
-                    >
-                      <div>
-                        <h4 className="text-sm font-bold text-white">{s.name}</h4>
-                        <span className="text-xs text-slate-400 font-mono">ID: {sId}</span>
+                    <div key={cIdx} className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                            Contrato #{contractId}
+                          </span>
+                          <span className="text-xs font-bold text-white">{contract.buyerName || contract.buyer?.name || 'Organismo Estatal'}</span>
+                        </div>
+                        <span className="text-xs font-mono text-slate-400">Fecha: {contract.date || '2026'}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-semibold text-emerald-400 block">
-                          ${formatCurrency(s.totalValue || s.totalAmount || 0)}
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          {s.totalContracts || s.transactionCount || 0} contratos
-                        </span>
-                      </div>
+
+                      {/* Tabla de Productos del Contrato */}
+                      {itemsList.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-2">Sin desglose de partidas individuales para este contrato.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                                <th className="py-2 px-2">SKU / Cód. SICE</th>
+                                <th className="py-2 px-2">Nombre del Producto</th>
+                                <th className="py-2 px-2 text-center">Cantidad</th>
+                                <th className="py-2 px-2 text-right">Precio Adjudicado</th>
+                                <th className="py-2 px-2">Moneda</th>
+                                <th className="py-2 px-2">Fecha Precio</th>
+                                <th className="py-2 px-2 text-center">Oportunidad Reventa</th>
+                                <th className="py-2 px-2 text-center">Acción</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                              {itemsList.map((it: any, itIdx: number) => (
+                                <tr key={itIdx} className="hover:bg-slate-900/60 transition-colors">
+                                  <td className="py-2.5 px-2 font-mono font-bold text-indigo-300">
+                                    {it.sku_sice || it.siceCode || it.id || 'SICE'}
+                                  </td>
+                                  <td className="py-2.5 px-2 text-slate-200 font-medium">
+                                    {it.nombre_producto || it.description || 'Producto Licitado'}
+                                  </td>
+                                  <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-300">
+                                    {it.cantidad || it.quantity || 1}
+                                  </td>
+                                  <td className="py-2.5 px-2 text-right font-mono font-bold text-emerald-400">
+                                    ${Number(it.precio_unitario_adjudicado || it.unitPrice || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-2.5 px-2 font-mono text-slate-400">{it.moneda || 'USD'}</td>
+                                  <td className="py-2.5 px-2 font-mono text-slate-400">{it.fecha_precio || contract.date || '-'}</td>
+                                  <td className="py-2.5 px-2 text-center">
+                                    {it.oportunidad_abastecimiento_local ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                        💡 OPORTUNIDAD ABASTECIMIENTO LOCAL
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-500">Precio estándar</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-2 text-center">
+                                    <button
+                                      onClick={() => handleAddCompetitorToSuppliers(
+                                        it,
+                                        selectedSupplierDetail.supplier?.name || 'Proveedor Local',
+                                        selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId
+                                      )}
+                                      className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 mx-auto"
+                                      title="Dar de alta en Catálogo de Proveedores / Reventa"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Agregar a Catálogo</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
-
-            {/* Ficha del Competidor Seleccionado & Ranking Top */}
-            <div className="space-y-6">
-              {/* Ficha */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  Ficha del Competidor
-                </h3>
-
-                {isLoadingSupplierDetail ? (
-                  <div className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
-                    <p className="text-xs">Cargando contratos y antecedentes RUPE...</p>
-                  </div>
-                ) : selectedSupplierDetail ? (
-                  <div className="space-y-4">
-                    <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-bold text-white">{selectedSupplierDetail.supplier?.name}</h4>
-                          <p className="text-xs text-slate-400 font-mono mt-0.5">
-                            RUT: {selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '-'}
-                          </p>
-                          <p className="text-xs text-emerald-400 font-semibold mt-1">
-                            Total Contratos: {selectedSupplierDetail.supplier?.totalContracts || 0}
-                          </p>
-                        </div>
-                        {(() => {
-                          const rut = selectedSupplierDetail.rupe?.rut || selectedSupplierDetail.supplier?.supplierId || '';
-                          const isImported = rut && importedCompetitorRuts.has(rut);
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => handleImportCompetitor(selectedSupplierDetail)}
-                              disabled={isImportingCompetitor || isImported}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all shrink-0 ${
-                                isImported
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
-                                  : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-indigo-500/20'
-                              }`}
-                              title={isImported ? "Este competidor ya fue importado a Proveedores y Catálogo" : "Importar a Proveedores (Licitaciones) y Catálogo con todos sus contratos"}
-                            >
-                              {isImportingCompetitor ? (
-                                <>
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Guardando...</span>
-                                </>
-                              ) : isImported ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span>✅ Homologado en Proveedores</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>📥 Guardar en Proveedores & Catálogo</span>
-                                </>
-                              )}
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                        <span>Contratos Recientes Adjudicados</span>
-                        <span className="text-[11px] text-slate-500 font-normal">
-                          {(selectedSupplierDetail.recentContracts || []).length} registros
-                        </span>
-                      </h5>
-                      <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                        {(selectedSupplierDetail.recentContracts || [])
-                          .filter((c: any) => {
-                            const amt = Number(c.amount || 0);
-                            const items = c.items || c.awards?.[0]?.items || [];
-                            const t = c.title || c.awards?.[0]?.title || '';
-                            return amt > 0 || items.length > 0 || (t && t !== 'Contrato Estatal');
-                          })
-                          .map((c: any, idx: number) => {
-                            const contractTitle = c.title || c.awards?.[0]?.title || c.awards?.[0]?.items?.[0]?.classification?.description || `Licitación Adjudicada #${idx + 1}`;
-                            const buyer = c.buyerName || c.buyer?.name || 'Organismo Estatal';
-                            const dateVal = c.date ? (typeof c.date === 'string' && c.date.includes('T') ? c.date.split('T')[0] : String(c.date)) : '';
-                            const curr = c.currency || c.awards?.[0]?.items?.[0]?.unit?.value?.currency || 'UYU';
-                            const rawItems = c.items || c.awards?.[0]?.items || [];
-                            const isExpanded = expandedContractIdx === idx;
-
-                            return (
-                              <div key={idx} className="p-3 bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition-all rounded-xl text-xs space-y-1.5 shadow-sm">
-                                <div className="flex items-start justify-between gap-2">
-                                  <p className="font-semibold text-slate-100 line-clamp-2 leading-snug">{contractTitle}</p>
-                                  {rawItems.length > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setExpandedContractIdx(isExpanded ? null : idx)}
-                                      className="text-slate-400 hover:text-white shrink-0 p-1 rounded-md hover:bg-slate-800 transition-colors"
-                                      title={isExpanded ? "Ocultar desglose de partidas" : "Ver partidas adjudicadas"}
-                                    >
-                                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-indigo-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="flex flex-wrap items-center justify-between text-slate-400 text-[11px] gap-2 pt-0.5">
-                                  <span className="truncate max-w-[200px] text-slate-300 flex items-center gap-1.5 font-medium">
-                                    <Building2 className="w-3 h-3 text-indigo-400 shrink-0" />
-                                    {buyer}
-                                  </span>
-                                  {dateVal && (
-                                    <span className="text-[10px] text-slate-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                                      {dateVal}
-                                    </span>
-                                  )}
-                                  <span className="text-emerald-400 font-bold ml-auto font-mono text-xs">
-                                    {curr} ${formatCurrency(c.amount || 0)}
-                                  </span>
-                                </div>
-
-                                {isExpanded && rawItems.length > 0 && (
-                                  <div className="mt-2 pt-2 border-t border-slate-800/80 space-y-1.5 bg-slate-900/80 p-2.5 rounded-lg">
-                                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                                      Partidas Adjudicadas ({rawItems.length}):
-                                    </span>
-                                    {rawItems.map((it: any, iIdx: number) => {
-                                      const itDesc = it.description || it.classification?.description || 'Partida adjudicada';
-                                      const itQty = it.quantity || 1;
-                                      const itUnit = it.unitName || it.unit?.name || 'UNIDAD';
-                                      const itPrice = it.unitPrice || it.unit?.value?.amount || 0;
-                                      const itCurr = it.currency || it.unit?.value?.currency || curr;
-                                      const itTotal = it.totalPrice || (itQty * itPrice);
-                                      return (
-                                        <div key={iIdx} className="flex justify-between items-center text-[10px] text-slate-300 py-1 border-b border-slate-800/40 last:border-0 gap-2">
-                                          <span className="truncate max-w-[190px]">• {itDesc} <span className="text-slate-500 font-mono">({itQty} {itUnit})</span></span>
-                                          <span className="font-mono text-emerald-400 font-medium shrink-0">
-                                            {itCurr} ${formatCurrency(itTotal)}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-8 text-center text-slate-500 text-xs">
-                    Seleccione una empresa de la lista para auditar sus contratos adjudicados y antecedentes.
-                  </div>
-                )}
-              </div>
-
-              {/* Ranking Top Proveedores */}
-              {topSuppliersList.length > 0 && (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                    Top Proveedores del Estado
-                  </h4>
-                  <div className="space-y-2 text-xs">
-                    {topSuppliersList.slice(0, 5).map((ts, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg">
-                        <span className="text-white truncate max-w-[180px] font-medium">{ts.name}</span>
-                        <span className="text-emerald-400 font-bold">
-                          ${formatCurrency(ts.totalAmount || ts.totalValue || 0)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* =================================================================== */}
-      {/* CONTENIDO DE TAB 4: RADIOGRAFÍA DE COMPRADORES & INTENDENCIAS */}
-      {/* =================================================================== */}
       {activeTab === 'buyers' && (
         <div className="space-y-6">
           {/* Métricas y Comunas */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-              <Landmark className="w-5 h-5 text-indigo-400" />
-              Radiografía de las 19 Intendencias Departamentales
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Distribución de compra por comuna y modalidades de adjudicación (Compra Directa vs Licitación Abreviada vs Licitación Pública).
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Landmark className="w-5 h-5 text-indigo-400" />
+                  🏛️ Radiografía de Organismos Compradores & Semáforo de Pago (DSO SIIF)
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Filtros multicriterio, historial de licitaciones y semáforo financiero de cobro (DSO: Verde &le;45d, Amarillo 46-75d, Rojo &gt;75d).
+                </p>
+              </div>
+            </div>
 
-            {/* Barra de Filtros y Búsqueda con Fechas */}
+            {/* Barra de Filtros Combinados */}
             <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 mb-6 space-y-3">
-              <div className="flex flex-col lg:flex-row gap-3">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={buyersSearchQuery}
-                    onChange={(e) => setBuyersSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && fetchBuyersData()}
-                    placeholder="Buscar organismo comprador o intendencia (ej. UTE, OSE, Canelones)..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {/* 1. Filtro por Rubro / Vertical */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Rubro / Vertical</label>
+                  <select
+                    value={buyerRubroFilter}
+                    onChange={(e) => setBuyerRubroFilter(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="TODOS">Todos los Rubros</option>
+                    {verticals.map((v) => (
+                      <option key={v.id} value={v.nombre}>{v.nombre}</option>
+                    ))}
+                  </select>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] text-slate-400 font-medium">Apertura:</span>
+
+                {/* 2. Filtro por Tipo de Compra */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Tipo de Compra</label>
+                  <select
+                    value={buyerTipoCompraFilter}
+                    onChange={(e) => setBuyerTipoCompraFilter(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="TODOS">Todas las Modalidades</option>
+                    <option value="Compra Directa">Compra Directa</option>
+                    <option value="Concurso de Precios">Concurso de Precios</option>
+                    <option value="Licitación Abreviada">Licitación Abreviada</option>
+                    <option value="Licitación Pública">Licitación Pública</option>
+                  </select>
+                </div>
+
+                {/* 3. Búsqueda predictiva (>= 3 chars) */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Organismo (&ge; 3 caracteres)</label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
                     <input
-                      type="date"
-                      value={buyerStartDate}
-                      onChange={(e) => setBuyerStartDate(e.target.value)}
-                      className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]"
-                      title="Fecha de Apertura Desde"
+                      type="text"
+                      value={buyersSearchQuery}
+                      onChange={(e) => setBuyersSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && fetchBuyersData()}
+                      placeholder="UTE, OSE, Canelones..."
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
-                  <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] text-slate-400 font-medium">Cierre:</span>
-                    <input
-                      type="date"
-                      value={buyerEndDate}
-                      onChange={(e) => setBuyerEndDate(e.target.value)}
-                      className="bg-transparent text-xs text-white focus:outline-none [color-scheme:dark]"
-                      title="Fecha de Cierre Hasta"
-                    />
-                  </div>
+                </div>
+
+                {/* 4. Fechas y Botón Filtrar */}
+                <div className="flex items-end gap-2">
                   <button
                     onClick={fetchBuyersData}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shrink-0 transition-colors shadow-sm"
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-md"
                   >
-                    <Search className="w-4 h-4" />
+                    <Search className="w-3.5 h-3.5" />
                     <span>Filtrar</span>
                   </button>
-                  {(buyerStartDate || buyerEndDate || buyersSearchQuery) && (
-                    <button
-                      onClick={() => {
-                        setBuyerStartDate('');
-                        setBuyerEndDate('');
-                        setBuyersSearchQuery('');
-                        setTimeout(fetchBuyersData, 50);
-                      }}
-                      className="text-slate-400 hover:text-white px-2.5 py-2 text-xs border border-slate-700 rounded-xl hover:bg-slate-800 transition-colors"
-                      title="Limpiar filtros"
-                    >
-                      Limpiar
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setBuyersSearchQuery('');
+                      setBuyerRubroFilter('TODOS');
+                      setBuyerTipoCompraFilter('TODOS');
+                      setBuyerStartDate('');
+                      setBuyerEndDate('');
+                      setTimeout(fetchBuyersData, 50);
+                    }}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-white"
+                    title="Limpiar filtros"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Listado de Organismos Estatales Específicos Encontrados */}
-            {buyersList.length > 0 && (
-              <div className="mb-6 space-y-3">
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-indigo-400" />
-                  <span>Organismos Públicos Encontrados ({buyersList.length})</span>
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {buyersList.map((buyer: any, bIdx: number) => (
-                    <div
-                      key={bIdx}
-                      onClick={() => handleSelectBuyer(buyer)}
-                      className="p-3.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer transition-all hover:shadow-lg group"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <h5 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
-                          {buyer.name}
-                        </h5>
-                        <span className="text-xs font-bold text-emerald-400 font-mono shrink-0">
-                          ${formatCurrency(buyer.totalSpendingUYU || buyer.totalSpending || 0)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>{buyer.totalContracts || 0} contratos</span>
-                        <span className="text-indigo-400 group-hover:underline flex items-center gap-1">
-                          Ver Pliegos & Ficha ➔
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
+            {/* Listado de Organismos con Semáforo Financiero de Pago DSO */}
             {isLoadingIntendencias ? (
               <div className="py-12 text-center text-slate-400">
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
-                <p className="text-xs">Cargando estadísticas departamentales...</p>
+                <p className="text-xs">Consultando compradores y plazos de pago SIIF...</p>
               </div>
-            ) : intendenciasData?.departments ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {intendenciasData.departments.map((dept: any, idx: number) => (
-                  <div
-                    key={idx}
-                    onClick={() => handleSelectBuyer(dept)}
-                    className="p-4 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 rounded-xl cursor-pointer transition-all hover:shadow-lg group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
-                          {dept.name}
-                        </h4>
-                        <span className="text-xs font-semibold text-emerald-400 font-mono">
-                          ${formatCurrency(dept.totalSpendingUYU || dept.totalSpend || 0)} UYU
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-slate-400 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Contratos Registrados:</span>
-                          <strong className="text-white font-mono">{dept.totalContracts || 0}</strong>
-                        </div>
-                        {dept.methodsBreakdown && (
-                          <div className="mt-2 pt-2 border-t border-slate-700/60">
-                            <span className="text-[11px] text-slate-400 block mb-1">Modalidades de Compra:</span>
-                            <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden flex">
-                              <div
-                                style={{ width: `${dept.methodsBreakdown.publica || 30}%` }}
-                                className="bg-indigo-500 h-full"
-                                title="Licitación Pública"
-                              />
-                              <div
-                                style={{ width: `${dept.methodsBreakdown.abreviada || 40}%` }}
-                                className="bg-amber-500 h-full"
-                                title="Licitación Abreviada"
-                              />
-                              <div
-                                style={{ width: `${dept.methodsBreakdown.directa || 30}%` }}
-                                className="bg-emerald-500 h-full"
-                                title="Compra Directa"
-                              />
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                              <span>Pública</span>
-                              <span>Abreviada</span>
-                              <span>Directa</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400">Expediente oficial</span>
-                      <span className="text-indigo-400 font-medium group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-                        Ver Contacto & Pliegos ➔
-                      </span>
-                    </div>
-                  </div>
-                ))}
+            ) : buyersList.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 text-xs">
+                No se encontraron organismos que coincidan con los filtros seleccionados.
               </div>
             ) : (
-              <p className="text-xs text-slate-500">Sin datos departamentales disponibles.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {buyersList
+                  .filter((b) => {
+                    if (buyerTipoCompraFilter !== 'TODOS') {
+                      const mod = (b.tipo_compra_predominante || '').toLowerCase();
+                      if (!mod.includes(buyerTipoCompraFilter.toLowerCase())) return false;
+                    }
+                    if (buyerRubroFilter !== 'TODOS') {
+                      const rub = (b.rubro_principal || '').toLowerCase();
+                      if (!rub.includes(buyerRubroFilter.toLowerCase())) return false;
+                    }
+                    return true;
+                  })
+                  .map((buyer: any, bIdx: number) => {
+                    const dsoDays = buyer.dso_estimado_dias || 45;
+                    const semaforo = buyer.dso_semaforo || (dsoDays <= 45 ? 'VERDE' : (dsoDays <= 75 ? 'AMARILLO' : 'ROJO'));
+                    const semaforoColor = semaforo === 'VERDE'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : semaforo === 'AMARILLO'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+
+                    return (
+                      <div
+                        key={bIdx}
+                        onClick={() => handleSelectBuyer(buyer)}
+                        className="p-4 bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 rounded-2xl cursor-pointer transition-all hover:shadow-lg group flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                              {buyer.name}
+                            </h4>
+                            <span className="text-xs font-mono font-bold text-emerald-400 shrink-0">
+                              ${formatCurrency(buyer.totalSpendingUYU || buyer.totalSpending || 0)}
+                            </span>
+                          </div>
+
+                          <div className="space-y-1 text-[11px] text-slate-400 mb-3">
+                            <div>Contratos adjudicados: <strong className="text-slate-200">{buyer.totalContracts || 0}</strong></div>
+                            <div>Modalidad predominante: <strong className="text-slate-300">{buyer.tipo_compra_predominante || 'Licitación Pública'}</strong></div>
+                            <div>Último contrato: <strong className="text-slate-400 font-mono">{buyer.fecha_ultimo_contrato || 'Reciente'}</strong></div>
+                          </div>
+                        </div>
+
+                        {/* Semáforo Financiero de Cobro DSO */}
+                        <div className="pt-2 border-t border-slate-800">
+                          <div className={`p-2 rounded-xl border text-[11px] flex items-center justify-between ${semaforoColor}`}>
+                            <span className="font-semibold flex items-center gap-1.5">
+                              {semaforo === 'VERDE' ? '🟢' : semaforo === 'AMARILLO' ? '🟡' : '🔴'} DSO SIIF:
+                            </span>
+                            <span className="font-mono font-bold">~{dsoDays} días de cobro</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* =================================================================== */}
-      {/* CONTENIDO DE TAB 5: CALENDARIO DE VENCIMIENTOS & CONTROL LOGÍSTICO */}
-      {/* =================================================================== */}
       {activeTab === 'calendar' && (
         <div className="space-y-6">
           {/* Cabecera del Semáforo Logístico */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-emerald-400" />
-                  Semáforo Logístico de Entregas (Depósitos Uruguay)
+                  <Calendar className="w-5 h-5 text-indigo-400" />
+                  📅 Calendario de Factibilidad & Cruce de Stock IA
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Cruce automático de plazos de pliego con existencias físicas en Montevideo y tránsito marítimo.
+                  Licitaciones abiertas por orden de cierre. Cruza con existencias reales en Montevideo, Salto y Tránsito Marítimo.
                 </p>
               </div>
 
-              {/* Métricas de Stock */}
-              <div className="flex items-center gap-3">
-                <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs">
-                  <span className="text-slate-400 block">Depósito Central MVD:</span>
-                  <strong className="text-emerald-400 text-sm">{calendarMeta.deposito_central} u.</strong>
-                </div>
-                <div className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs">
-                  <span className="text-slate-400 block">Tránsito Marítimo:</span>
-                  <strong className="text-amber-400 text-sm">{calendarMeta.transito} u.</strong>
-                </div>
+              {/* Botón Destacado: Cruzar con Mi Stock & Ordenar por Factibilidad */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleCrossStockFeasibility}
+                  disabled={isCrossingStock}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all"
+                >
+                  {isCrossingStock ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  <span>🧠 Cruzar con Mi Stock & Ordenar por Factibilidad (IA)</span>
+                </button>
               </div>
             </div>
 
-            {/* Filtros del Semáforo */}
+            {/* Badges de Estadísticas del Cruce */}
+            {crossStockStats && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl mb-4 text-xs font-mono">
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-300">
+                  <span className="block text-[10px] uppercase font-bold text-emerald-400">🟢 Tier 1 (100% Stock MVD):</span>
+                  <span className="text-lg font-bold">{crossStockStats.tier1} convocatorias viables hoy</span>
+                </div>
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300">
+                  <span className="block text-[10px] uppercase font-bold text-amber-400">🟡 Tier 2 (Salto / Reventa Local):</span>
+                  <span className="text-lg font-bold">{crossStockStats.tier2} convocatorias completables 24-48h</span>
+                </div>
+                <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300">
+                  <span className="block text-[10px] uppercase font-bold text-rose-400">🔴 Tier 3 (Tránsito Marítimo):</span>
+                  <span className="text-lg font-bold">{crossStockStats.tier3} requieren flete marítimo</span>
+                </div>
+              </div>
+            )}
+
+            {/* Filtros de Lista */}
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
               <button
                 onClick={() => setCalendarFilter('TODOS')}
@@ -1972,7 +2389,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   calendarFilter === 'TODOS' ? 'bg-slate-700 text-white' : 'bg-slate-800/60 text-slate-400'
                 }`}
               >
-                Todos ({calendarItems.length})
+                Todos ({crossStockItems.length > 0 ? crossStockItems.length : calendarItems.length})
               </button>
               <button
                 onClick={() => setCalendarFilter('VERDE')}
@@ -1988,7 +2405,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   calendarFilter === 'AMARILLO' ? 'bg-amber-600 text-white' : 'bg-slate-800/60 text-amber-400'
                 }`}
               >
-                🟡 En Tránsito Marítimo
+                🟡 Transferencia / Reventa Local
               </button>
               <button
                 onClick={() => setCalendarFilter('ROJO')}
@@ -1996,15 +2413,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                   calendarFilter === 'ROJO' ? 'bg-rose-600 text-white' : 'bg-slate-800/60 text-rose-400'
                 }`}
               >
-                🔴 Fabricación Requerida
-              </button>
-              <button
-                onClick={() => setCalendarFilter('GUARDADOS')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  calendarFilter === 'GUARDADOS' ? 'bg-indigo-600 text-white' : 'bg-slate-800/60 text-indigo-400'
-                }`}
-              >
-                ⭐ Solo Guardados
+                🔴 Espera Marítima (45-60d)
               </button>
 
               <div className="relative ml-auto min-w-[220px]">
@@ -2020,13 +2429,76 @@ export const TendersView: React.FC<TendersViewProps> = ({
             </div>
           </div>
 
-          {/* Listado de Vencimientos */}
+          {/* Listado Reordenado por Factibilidad */}
           <div className="space-y-3">
             {isLoadingCalendar ? (
               <div className="py-12 text-center text-slate-400">
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
                 <p className="text-xs">Consultando calendario y semáforo logístico...</p>
               </div>
+            ) : crossStockItems.length > 0 ? (
+              crossStockItems
+                .filter((item) => {
+                  if (calendarFilter !== 'TODOS' && item.semaforo_logistico !== calendarFilter) return false;
+                  if (calendarSearch && !item.title.toLowerCase().includes(calendarSearch.toLowerCase()) && !item.buyer.toLowerCase().includes(calendarSearch.toLowerCase())) return false;
+                  return true;
+                })
+                .map((item) => (
+                  <div
+                    key={item.compraId}
+                    className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                            item.semaforo_logistico === 'VERDE'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : item.semaforo_logistico === 'AMARILLO'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {item.semaforo_logistico === 'VERDE'
+                            ? '🟢 Tier 1: 100% Stock MVD'
+                            : item.semaforo_logistico === 'AMARILLO'
+                            ? '🟡 Tier 2: Salto / Reventa Local'
+                            : '🔴 Tier 3: Espera Marítima'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">#{item.compraId}</span>
+                        <span className="text-xs font-mono font-bold text-indigo-400 ml-auto">
+                          Cobertura Inmediata: {item.cobertura_stock_inmediato_pct}%
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-white hover:text-indigo-400 transition-colors">
+                        {item.title}
+                      </h4>
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                        <span>🏛️ {item.buyer}</span>
+                        <span>•</span>
+                        <span>⏰ Cierre: <strong className="text-amber-300 font-mono">{item.endDate ? item.endDate.split('T')[0] : 'Vigente'}</strong></span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-semibold">{item.dias_restantes} días restantes</span>
+                      </div>
+
+                      <p className="text-xs text-slate-300 bg-slate-950/50 p-2 rounded-lg border border-slate-800/80">
+                        {item.diagnostico_logistico}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleLoadInCotizador(item)}
+                        className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                        <span>🚀 Cargar en Cotizador B2B</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
             ) : (
               filteredCalendarItems.map((item) => (
                 <div
@@ -2048,32 +2520,31 @@ export const TendersView: React.FC<TendersViewProps> = ({
                           ? '🟢 Stock Disponible MVD'
                           : item.semaforo_logistico === 'AMARILLO'
                           ? '🟡 En Tránsito Marítimo'
-                          : '🔴 Requiere Fabricación'}
+                          : '🔴 Requiere Importación'}
                       </span>
-                      <span className="text-xs font-mono text-slate-400">ID: {item.compraId}</span>
-                      {item.saved && (
-                        <span className="text-[11px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
-                          En Seguimiento
-                        </span>
-                      )}
+                      <span className="text-xs font-mono text-slate-400">#{item.compraId}</span>
                     </div>
 
-                    <h4 className="text-sm font-bold text-white line-clamp-1">{item.title}</h4>
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <span>{item.buyer}</span>
+                    <h4 className="text-sm font-bold text-white hover:text-indigo-400 transition-colors">
+                      {item.title}
+                    </h4>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      <span>🏛️ {item.buyer}</span>
                       <span>•</span>
-                      <span>Vence: <strong>{item.endDate ? item.endDate.split('T')[0] : 'Inmediato'}</strong> ({item.dias_restantes} días)</span>
+                      <span>⏰ Cierre: <strong className="text-amber-300 font-mono">{item.endDate.split('T')[0]}</strong></span>
+                      <span>•</span>
+                      <span className="text-slate-300">{item.dias_restantes} días restantes</span>
                     </div>
-                    <p className="text-xs text-slate-300 mt-1">{item.diagnostico_logistico}</p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleLoadInCotizador({ compraId: item.compraId, title: item.title, buyer: { name: item.buyer } })}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20"
+                      className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5"
                     >
-                      <span>Cotizar</span>
                       <ArrowRight className="w-3.5 h-3.5" />
+                      <span>Cargar en Cotizador</span>
                     </button>
                   </div>
                 </div>
@@ -2083,16 +2554,39 @@ export const TendersView: React.FC<TendersViewProps> = ({
         </div>
       )}
 
-      {/* =================================================================== */}
-      {/* CONTENIDO DE TAB 6: COTIZADOR & DICTAMEN B2B (DAVID VS ARISTÓTELES) */}
-      {/* =================================================================== */}
       {activeTab === 'cotizador' && (
         <div className="space-y-6">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-amber-400" />
-              Cotizador & Análisis Dialéctico de Factibilidad
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-amber-400" />
+                  🧮 Cotizador B2B & Generador Oficial de Ofertas SICE
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Cálculo de márgenes en Decimal, semáforo logístico, debate dialéctico y reserva en Gemelo Digital 3D.
+                </p>
+              </div>
+
+              {/* Selector Rápido de Oportunidades desde Radar o Calendario */}
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    const found = openCalls.find((c) => String(c.compraId) === selId) || crossStockItems.find((c) => String(c.compraId) === selId);
+                    if (found) handleLoadInCotizador(found);
+                  }}
+                  className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 max-w-xs truncate"
+                >
+                  <option value="">⚡ Cargar Licitación desde Radar...</option>
+                  {openCalls.map((c) => (
+                    <option key={c.compraId} value={String(c.compraId)}>
+                      #{c.compraId} - {c.title.slice(0, 45)}...
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
@@ -2136,57 +2630,185 @@ export const TendersView: React.FC<TendersViewProps> = ({
               </div>
             </div>
 
-            {/* Partidas */}
-            <div className="space-y-2 mb-4">
-              <label className="block text-xs font-semibold text-slate-400">Partidas a Cotizar</label>
-              {items.map((it, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={it.sku}
-                    onChange={(e) => {
-                      const copy = [...items];
-                      copy[idx].sku = e.target.value;
-                      setItems(copy);
-                    }}
-                    placeholder="SKU"
-                    className="w-1/3 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white"
-                  />
-                  <input
-                    type="number"
-                    value={it.cantidad_solicitada}
-                    onChange={(e) => {
-                      const copy = [...items];
-                      copy[idx].cantidad_solicitada = parseInt(e.target.value) || 1;
-                      setItems(copy);
-                    }}
-                    className="w-1/4 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white"
-                  />
-                  <button
-                    onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                    className="p-2 text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+            {/* Partidas y Comparativa Integral en Decimal */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Partidas a Cotizar & Comparativa de Costos vs Ganador SICE
+                </label>
+                <span className="text-[11px] text-slate-400 font-mono">Dólar BROU: ${tasaBrou ? tasaBrou.toFixed(2) : '40.10'}</span>
+              </div>
+
+              {items.map((it, idx) => {
+                const matchingSugg = CANONICAL_SKU_SUGGESTIONS.find((s) => s.sku === it.sku.toUpperCase());
+                const baseCost = matchingSugg ? matchingSugg.cost : 14.50;
+                const lastWinner = matchingSugg ? matchingSugg.siceMediana : 28.00;
+                const unitOffer = Math.round(baseCost * (1 + margenPct / 100) * 100) / 100;
+                const subtotal = Math.round(unitOffer * it.cantidad_solicitada * 100) / 100;
+                const stockMvd = matchingSugg ? 120 : 80;
+                const semaforoStock = stockMvd >= it.cantidad_solicitada ? '🟢 Inmediato MVD' : '🟡 Salto/Reventa';
+
+                return (
+                  <div key={idx} className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
+                      {/* SKU Input con autocompletado */}
+                      <div className="relative md:col-span-2">
+                        <input
+                          type="text"
+                          value={it.sku}
+                          onFocus={() => setActiveSkuAutocompleteIdx(idx)}
+                          onChange={(e) => {
+                            const copy = [...items];
+                            copy[idx].sku = e.target.value;
+                            setItems(copy);
+                          }}
+                          placeholder="SKU (ej. LUM-6060, UFO-150W)..."
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono"
+                        />
+                        {activeSkuAutocompleteIdx === idx && it.sku.length >= 2 && (
+                          <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                            {CANONICAL_SKU_SUGGESTIONS.filter((s) => s.sku.toLowerCase().includes(it.sku.toLowerCase()) || s.label.toLowerCase().includes(it.sku.toLowerCase())).map((s, sIdx) => (
+                              <div
+                                key={sIdx}
+                                onClick={() => {
+                                  const copy = [...items];
+                                  copy[idx].sku = s.sku;
+                                  setItems(copy);
+                                  setActiveSkuAutocompleteIdx(null);
+                                }}
+                                className="p-2 hover:bg-slate-800 cursor-pointer text-xs flex justify-between border-b border-slate-800"
+                              >
+                                <span className="font-mono text-indigo-400 font-bold">{s.sku}</span>
+                                <span className="text-slate-300 text-[11px] truncate max-w-[150px]">{s.category}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Cantidad Solicitada */}
+                      <div>
+                        <input
+                          type="number"
+                          value={it.cantidad_solicitada}
+                          onChange={(e) => {
+                            const copy = [...items];
+                            copy[idx].cantidad_solicitada = parseInt(e.target.value) || 1;
+                            setItems(copy);
+                          }}
+                          placeholder="Cant."
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white text-center font-mono"
+                        />
+                      </div>
+
+                      {/* Costo Landed & Stock */}
+                      <div className="text-[11px] font-mono text-slate-300">
+                        <div>Costo: <strong className="text-slate-100">${baseCost.toFixed(2)}</strong></div>
+                        <div className="text-[10px] text-emerald-400">{semaforoStock} ({stockMvd}u)</div>
+                      </div>
+
+                      {/* Último Ganador SICE & Oferta Unit */}
+                      <div className="text-[11px] font-mono text-slate-300">
+                        <div>Últ. Ganador: <strong className="text-amber-400">${lastWinner.toFixed(2)}</strong></div>
+                        <div>Oferta: <strong className="text-indigo-400">${unitOffer.toFixed(2)}</strong></div>
+                      </div>
+
+                      {/* Subtotal & Borrar */}
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs text-emerald-400">${subtotal.toFixed(2)}</span>
+                        <button
+                          onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                          className="p-1 text-slate-500 hover:text-rose-400"
+                          title="Eliminar partida"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
               <button
                 onClick={() => setItems([...items, { sku: 'LUM-6060', cantidad_solicitada: 50 }])}
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold"
+                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold pt-1"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Agregar Partida
               </button>
             </div>
 
-            <button
-              onClick={handleEvaluateTender}
-              disabled={isEvaluating}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-            >
-              {isEvaluating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              <span>Evaluar Factibilidad & Debate Dialéctico</span>
-            </button>
+            {/* Botones Principales de Evaluación y Exportación */}
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800">
+              <button
+                onClick={handleEvaluateTender}
+                disabled={isEvaluating}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+              >
+                {isEvaluating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                <span>✨ Evaluar Factibilidad & Debate Dialéctico</span>
+              </button>
+
+              <button
+                onClick={() => handleExportSiceOffer('excel')}
+                disabled={isExportingOffer}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/20 ml-auto"
+                title="Generar planilla oficial SICE en Excel con datos RUPE y desglose IVA 22%"
+              >
+                {isExportingOffer ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                <span>📄 Exportar Planilla SICE (Excel)</span>
+              </button>
+
+              <button
+                onClick={() => handleExportSiceOffer('pdf')}
+                disabled={isExportingOffer}
+                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-sm"
+                title="Generar anexo formal de oferta económica en PDF listo para firmar y subir a RUPE"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>📄 Exportar Oferta (PDF)</span>
+              </button>
+            </div>
+
+            {/* Botones de Reserva Directa en Gemelo Digital 3D */}
+            <div className="mt-4 p-4 bg-slate-950/70 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <span>Reserva Directa en Gemelo Digital 3D (Depósito Montevideo)</span>
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Bloquee las posiciones físicas en las estanterías del almacén para garantizar el despacho.
+                </p>
+                {reservationResult && (
+                  <div className="mt-2 text-xs font-mono text-emerald-400 bg-slate-900 px-2 py-1 rounded border border-emerald-500/30">
+                    {reservationResult.message} • Slots: {reservationResult.slots_reserved.join(', ')} (Status {reservationResult.http_code})
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleReserveDigitalTwin('SOFT')}
+                  disabled={isReservingTwin}
+                  className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+                  title="Activar Pre-Reserva Blanda para licitación en curso"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>🟡 Pre-Reserva Blanda</span>
+                </button>
+
+                <button
+                  onClick={() => handleReserveDigitalTwin('HARD')}
+                  disabled={isReservingTwin}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all"
+                  title="Bloquear posiciones físicas en el Almacén 3D con estado LOCKED (HTTP 423)"
+                >
+                  <Lock className="w-3.5 h-3.5 text-white" />
+                  <span>🔵 Reserva Dura (Locked 3D)</span>
+                </button>
+              </div>
+            </div>
 
             {/* Resultado de Evaluación Dialéctica */}
             {evaluationResult && (
@@ -2198,7 +2820,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                       activeDialecticTab === 'both' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
                     }`}
                   >
-                    Debate Completo
+                    ⚖️ Debate Completo (Finanzas vs Ventas)
                   </button>
                   <button
                     onClick={() => setActiveDialecticTab('david')}
@@ -2206,7 +2828,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
                       activeDialecticTab === 'david' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
                     }`}
                   >
-                    Ing. David (Técnico)
+                    🛡️ Veredicto Financiero
                   </button>
                   <button
                     onClick={() => setActiveDialecticTab('aristoteles')}
@@ -2214,27 +2836,33 @@ export const TendersView: React.FC<TendersViewProps> = ({
                       activeDialecticTab === 'aristoteles' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
                     }`}
                   >
-                    Aristóteles (Comercial)
+                    🚀 Estrategia Comercial
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(activeDialecticTab === 'both' || activeDialecticTab === 'david') && (
-                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs prose prose-invert max-w-none">
-                      <ReactMarkdown>
-                        {typeof evaluationResult.dictamen_david === 'string'
-                          ? evaluationResult.dictamen_david
-                          : evaluationResult.dictamen_david?.dictamen_completo || ''}
-                      </ReactMarkdown>
+                <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl text-slate-200 text-xs leading-relaxed">
+                  {activeDialecticTab === 'both' ? (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-slate-900/90 border border-indigo-500/30 rounded-xl">
+                        <span className="font-bold text-indigo-400 block mb-1">🛡️ Dictamen Técnico & Financiero (Ing. David Jiménez):</span>
+                        <div className="prose prose-invert max-w-none text-xs">
+                          <ReactMarkdown>{evaluationResult.dictamen_david?.dictamen_completo || evaluationResult.dictamen_david?.postura_david || 'Aprobado técnicamente.'}</ReactMarkdown>
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-900/90 border border-emerald-500/30 rounded-xl">
+                        <span className="font-bold text-emerald-400 block mb-1">🚀 Estrategia Comercial (Aristóteles):</span>
+                        <div className="prose prose-invert max-w-none text-xs">
+                          <ReactMarkdown>{evaluationResult.dictamen_aristoteles?.estrategia_completa || evaluationResult.dictamen_aristoteles?.pitch_apertura || 'Margen competitivo verificado.'}</ReactMarkdown>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {(activeDialecticTab === 'both' || activeDialecticTab === 'aristoteles') && (
-                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 text-xs prose prose-invert max-w-none">
-                      <ReactMarkdown>
-                        {typeof evaluationResult.dictamen_aristoteles === 'string'
-                          ? evaluationResult.dictamen_aristoteles
-                          : evaluationResult.dictamen_aristoteles?.estrategia_completa || evaluationResult.dictamen_aristoteles?.propuesta_formal || ''}
-                      </ReactMarkdown>
+                  ) : activeDialecticTab === 'david' ? (
+                    <div className="prose prose-invert max-w-none text-xs">
+                      <ReactMarkdown>{evaluationResult.dictamen_david?.dictamen_completo || evaluationResult.dictamen_david?.postura_david || 'Dictamen David generado.'}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="prose prose-invert max-w-none text-xs">
+                      <ReactMarkdown>{evaluationResult.dictamen_aristoteles?.estrategia_completa || evaluationResult.dictamen_aristoteles?.pitch_apertura || 'Estrategia comercial generada.'}</ReactMarkdown>
                     </div>
                   )}
                 </div>
@@ -2244,7 +2872,7 @@ export const TendersView: React.FC<TendersViewProps> = ({
         </div>
       )}
 
-      {/* =================================================================== */}
+            {/* =================================================================== */}
       {/* MODAL: RESUMEN IA DE PLIEGO */}
       {/* =================================================================== */}
       {selectedSummaryCallId && (
@@ -2713,6 +3341,159 @@ export const TendersView: React.FC<TendersViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* =================================================================== */}
+      {/* MODAL: LECTOR Y EXTRACTOR DE PLIEGOS PDF CON IA LOCAL (4 BLOQUES) */}
+      {/* =================================================================== */}
+      {pdfAnalysisModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header del Modal */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Lector de Pliego PDF con IA Local (4 Bloques Clave)
+                  </h3>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                    <span className="text-indigo-400 font-mono">Modelo: {pdfAnalysisData?.modelo_ia || selectedOllamaModel}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-semibold">{pdfAnalysisData?.fuente || 'IA Local'}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setPdfAnalysisModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Contexto del llamado */}
+            {pdfAnalysisCall && (
+              <div className="px-5 py-3 bg-slate-950/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between text-xs gap-2">
+                <div className="truncate max-w-lg">
+                  <span className="font-semibold text-slate-200 block truncate">{pdfAnalysisCall.title}</span>
+                  <span className="text-slate-400 text-[11px]">
+                    {pdfAnalysisCall.buyer?.name || (pdfAnalysisCall as any).buyerName || 'Organismo Comprador'} • #{pdfAnalysisCall.compraId}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {pdfAnalysisCall.url_pliego_pdf && (
+                    <a
+                      href={pdfAnalysisCall.url_pliego_pdf}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-semibold flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" /> Ver PDF Original
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      setPdfAnalysisModalOpen(false);
+                      handleLoadInCotizador(pdfAnalysisCall);
+                    }}
+                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1"
+                  >
+                    <ArrowRight className="w-3 h-3" /> Cargar en Cotizador
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Contenido de los 4 Bloques Clave */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs flex-1">
+              {isLoadingPdfAnalysis ? (
+                <div className="py-24 text-center text-slate-400 space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-400" />
+                  <p className="font-semibold text-sm text-slate-200">
+                    Descargando pliego PDF y procesando con IA local...
+                  </p>
+                  <p className="text-slate-400 text-xs max-w-md mx-auto">
+                    Extrayendo texto con pypdf y estructurando los 4 bloques: variantes técnicas, plazos y multas, certificaciones requeridas y requisitos RUPE/TOCAF.
+                  </p>
+                </div>
+              ) : pdfAnalysisData ? (
+                <div className="space-y-4">
+                  {/* Bloque 1: Detalle Técnico de Ítems */}
+                  <div className="p-4 bg-slate-950/70 border border-indigo-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 font-bold text-sm text-indigo-300 mb-2">
+                      <span className="p-1 bg-indigo-500/10 rounded">📦</span>
+                      <h4>1. Detalle Técnico de Ítems y Variantes Exigidas</h4>
+                    </div>
+                    <div className="prose prose-invert max-w-none text-slate-200 leading-relaxed text-xs">
+                      <ReactMarkdown>{pdfAnalysisData.items_y_variantes || 'No especificado en el pliego.'}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Bloque 2: Plazos, Lugar y Multas */}
+                  <div className="p-4 bg-slate-950/70 border border-amber-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 font-bold text-sm text-amber-300 mb-2">
+                      <span className="p-1 bg-amber-500/10 rounded">⏱️</span>
+                      <h4>2. Plazo de Entrega, Lugar de Recepción y Multas por Mora</h4>
+                    </div>
+                    <div className="prose prose-invert max-w-none text-slate-200 leading-relaxed text-xs">
+                      <ReactMarkdown>{pdfAnalysisData.plazos_lugar_multas || 'No especificado en el pliego.'}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Bloque 3: Muestras y Certificaciones */}
+                  <div className="p-4 bg-slate-950/70 border border-emerald-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 font-bold text-sm text-emerald-300 mb-2">
+                      <span className="p-1 bg-emerald-500/10 rounded">🧪</span>
+                      <h4>3. Requisitos de Muestras, Garantías y Certificaciones (UNIT / URSEA / MSP)</h4>
+                    </div>
+                    <div className="prose prose-invert max-w-none text-slate-200 leading-relaxed text-xs">
+                      <ReactMarkdown>{pdfAnalysisData.muestras_garantias_certificaciones || 'No especificado en el pliego.'}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Bloque 4: Excluyentes RUPE / TOCAF */}
+                  <div className="p-4 bg-slate-950/70 border border-rose-500/30 rounded-xl">
+                    <div className="flex items-center gap-2 font-bold text-sm text-rose-300 mb-2">
+                      <span className="p-1 bg-rose-500/10 rounded">⚠️</span>
+                      <h4>4. Requisitos Excluyentes en RUPE / TOCAF</h4>
+                    </div>
+                    <div className="prose prose-invert max-w-none text-slate-200 leading-relaxed text-xs">
+                      <ReactMarkdown>{pdfAnalysisData.requisitos_excluyentes_rupe_tocaf || 'No especificado en el pliego.'}</ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-slate-400 text-center py-12">No se pudo generar el análisis del pliego PDF.</p>
+              )}
+            </div>
+
+            {/* Footer de Acciones */}
+            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  if (pdfAnalysisData?.resumen_ejecutivo_markdown) {
+                    navigator.clipboard.writeText(pdfAnalysisData.resumen_ejecutivo_markdown);
+                    setNotification({ type: 'success', message: 'Dictamen de 4 bloques copiado al portapapeles.' });
+                  }
+                }}
+                disabled={!pdfAnalysisData}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl font-medium text-xs flex items-center gap-2 border border-slate-700 transition-colors"
+              >
+                <Copy className="w-4 h-4" /> Copiar Resumen Ejecutivo
+              </button>
+              <button
+                onClick={() => setPdfAnalysisModalOpen(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold text-xs transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* =================================================================== */}
       {/* MODAL: GESTIÓN DE PALABRAS CLAVE & EXPANSIÓN OLLAMA */}

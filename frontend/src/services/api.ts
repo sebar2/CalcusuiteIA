@@ -128,6 +128,11 @@ import type {
   ProcurementBuyersResponse,
   ProcurementIntendenciasResponse,
   ProcurementCalendarResponse,
+  ProcurementPdfAnalysisResponse,
+  ProcurementRadarSuggestedResponse,
+  ProcurementCalendarCrossStockResponse,
+  ProcurementReserveTwinResponse,
+  ProcurementAddCompetitorResponse,
   Invoice,
   InvoiceSummary,
   ExpenseItem,
@@ -1536,6 +1541,107 @@ export const apiService = {
   }): Promise<ProcurementCalendarResponse> {
     const res = await apiClient.get<ProcurementCalendarResponse>('/api/v1/procurement/calendar', { params });
     return res.data;
+  },
+
+  async analyzeProcurementPdf(
+    compraId: string | number,
+    payload: {
+      titulo?: string;
+      organismo?: string;
+      vertical_id?: string;
+      objeto_contratacion?: string;
+      items_solicitados?: any[];
+      pliego_pdf_url?: string;
+      pliego_web_url?: string;
+      plazo_entrega_dias?: number;
+      model?: string;
+    }
+  ): Promise<ProcurementPdfAnalysisResponse> {
+    const res = await apiClient.post<ProcurementPdfAnalysisResponse>(
+      `/api/v1/procurement/open-calls/${compraId}/analyze-pdf`,
+      payload
+    );
+    return res.data;
+  },
+
+  async getRadarSuggestedPricingItems(): Promise<ProcurementRadarSuggestedResponse> {
+    const res = await apiClient.get<ProcurementRadarSuggestedResponse>('/api/v1/procurement/pricing/radar-suggested-items');
+    return res.data;
+  },
+
+  async addCompetitorToSuppliersBridge(payload: {
+    competitor_name: string;
+    competitor_rut?: string;
+    rubro?: string;
+    product_sku: string;
+    product_name: string;
+    precio_adjudicado: number;
+    moneda?: string;
+    fecha_precio?: string;
+    contract_id?: string;
+  }): Promise<ProcurementAddCompetitorResponse> {
+    const res = await apiClient.post<ProcurementAddCompetitorResponse>(
+      '/api/v1/procurement/competitors/add-to-suppliers',
+      payload
+    );
+    return res.data;
+  },
+
+  async crossStockFeasibility(payload: { vertical_id?: string }): Promise<ProcurementCalendarCrossStockResponse> {
+    const res = await apiClient.post<ProcurementCalendarCrossStockResponse>(
+      '/api/v1/procurement/calendar/cross-stock',
+      payload
+    );
+    return res.data;
+  },
+
+  async reserveDigitalTwin(payload: {
+    tender_id: string;
+    skus: string[];
+    reservation_type: 'SOFT' | 'HARD';
+    margin_pct?: number;
+  }): Promise<ProcurementReserveTwinResponse> {
+    const res = await apiClient.post<ProcurementReserveTwinResponse>(
+      '/api/v1/procurement/quoter/reserve-twin',
+      payload
+    );
+    return res.data;
+  },
+
+  async exportSiceOffer(
+    payload: {
+      empresa_nombre: string;
+      empresa_rut: string;
+      empresa_contacto: string;
+      numero_licitacion: string;
+      organismo_comprador: string;
+      objeto_llamado: string;
+      plazo_entrega_dias: number;
+      moneda: string;
+      tipo_cambio_brou: number;
+      items: Array<{
+        sku: string;
+        codigo_sice?: string;
+        descripcion: string;
+        cantidad: number;
+        unidad_medida: string;
+        costo_unitario: number;
+        precio_unitario_oferta: number;
+        margen_pct: number;
+        subtotal_oferta: number;
+      }>;
+      format: 'pdf' | 'excel';
+    }
+  ): Promise<void> {
+    const res = await apiClient.post('/api/v1/procurement/export-sice-offer', payload, {
+      responseType: 'blob',
+    });
+    const ext = payload.format === 'pdf' ? 'pdf' : 'xlsx';
+    const mime = payload.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    downloadBlobFile(
+      new Blob([res.data], { type: mime }),
+      `Oferta_Economica_SICE_${payload.numero_licitacion.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`
+    );
   },
 
   // ===================================================================

@@ -1902,6 +1902,101 @@ export interface ArbitrageScanResponse {
 // HUB DE LICITACIONES E INTELIGENCIA ESTATAL B2B (URUGUAY PROCUREMENT API)
 // =====================================================================
 
+export interface ProcurementItemSolicitado {
+  codigo_sice?: string;
+  siceCode?: string;
+  descripcion?: string;
+  cantidad?: number;
+  unidad_medida?: string;
+  especificaciones?: string;
+}
+
+export interface ProcurementPdfAnalysisBlock {
+  items_y_variantes?: string;
+  plazos_lugar_multas?: string;
+  muestras_garantias_certificaciones?: string;
+  requisitos_excluyentes_rupe_tocaf?: string;
+  resumen_ejecutivo_markdown?: string;
+  fuente?: string;
+  modelo_ia?: string;
+  confianza_extraccion?: string;
+}
+
+export interface ProcurementPdfAnalysisResponse {
+  success: boolean;
+  data: ProcurementPdfAnalysisBlock;
+}
+
+export interface ProcurementRadarSuggestedItem {
+  codigo_sice: string;
+  descripcion: string;
+  cantidad_licitacion_activa: number;
+  unidad_medida: string;
+  licitacion_compra_id: string | number;
+  licitacion_titulo: string;
+  organismo: string;
+  ultimo_precio_adjudicado: number;
+  precio_minimo: number;
+  precio_promedio: number;
+  fecha_adjudicacion: string;
+  proveedor_adjudicado: string;
+  precio_oferta_recomendado_calcu: number;
+  moneda: string;
+  margen_bruto_pct: number;
+  tc_brou: number;
+}
+
+export interface ProcurementRadarSuggestedResponse {
+  success: boolean;
+  data: {
+    items: ProcurementRadarSuggestedItem[];
+    total: number;
+  };
+}
+
+export interface ProcurementCalendarCrossStockItem {
+  tier: number;
+  compraId: string | number;
+  title: string;
+  buyer: string;
+  endDate?: string;
+  dias_restantes: number;
+  items_solicitados: ProcurementItemSolicitado[];
+  cobertura_stock_inmediato_pct: number;
+  semaforo_logistico: 'VERDE' | 'AMARILLO' | 'ROJO';
+  semaforo_color: string;
+  diagnostico_logistico: string;
+  url_pliego_arce?: string;
+  url_pliego_pdf?: string;
+}
+
+export interface ProcurementCalendarCrossStockResponse {
+  success: boolean;
+  data: {
+    items: ProcurementCalendarCrossStockItem[];
+    total: number;
+    tier1_count: number;
+    tier2_count: number;
+    tier3_count: number;
+  };
+}
+
+export interface ProcurementReserveTwinResponse {
+  status: string;
+  tender_id: string;
+  reservation_type: 'HARD_RESERVED' | 'SOFT_RESERVED';
+  slots_reserved: string[];
+  http_code: number;
+  message: string;
+}
+
+export interface ProcurementAddCompetitorResponse {
+  status: string;
+  message: string;
+  supplier_id: number;
+  sku: string;
+}
+
 export interface ProcurementCallItem {
   _id?: string;
   compraId: number | string;
@@ -1926,6 +2021,12 @@ export interface ProcurementCallItem {
   ocid?: string;
   amount?: number;
   currency?: string;
+  objeto_contratacion?: string;
+  items_solicitados?: ProcurementItemSolicitado[];
+  url_pliego_arce?: string;
+  url_pliego_pdf?: string;
+  dso_estimado_dias?: number;
+  vertical_id?: string;
 }
 
 export interface ProcurementCallsResponse {
@@ -2176,6 +2277,13 @@ export interface ProcurementSupplierItem {
   buyerCount?: number;
   buyers?: any[];
   topCategories?: any[];
+  rut?: string;
+  rubro_principal?: string;
+  cant_contratos?: number;
+  monto_adjudicado?: number;
+  organismo?: string;
+  fecha_contrato?: string;
+  es_proveedor_calcu?: boolean;
 }
 
 export interface ProcurementSuppliersResponse {
@@ -2225,6 +2333,12 @@ export interface ProcurementBuyerItem {
   supplierCount?: number;
   avgContractValue?: number;
   topCategories?: any[];
+  dso_estimado_dias?: number;
+  dso_semaforo?: 'VERDE' | 'AMARILLO' | 'ROJO' | string;
+  dso_diagnostico?: string;
+  tipo_compra_predominante?: string;
+  rubro_principal?: string;
+  fecha_ultimo_contrato?: string;
 }
 
 export interface ProcurementBuyersResponse {

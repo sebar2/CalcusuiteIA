@@ -553,3 +553,333 @@ class ReportExportService:
         doc.build(elements)
         buffer.seek(0)
         return buffer
+
+    @classmethod
+    def generate_sice_offer_excel(cls, payload: dict) -> io.BytesIO:
+        """
+        Genera Planilla Oficial de Oferta Económica SICE en Excel (.xlsx)
+        con desglose en Decimal, IVA 22%, tipo de cambio BROU y condiciones formales.
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Oferta Económica SICE"
+
+        # Estilos
+        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid") # Azul ARCE/SICE
+        sub_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        total_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+
+        white_title_font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+        white_header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        bold_font = Font(name="Calibri", size=10, bold=True, color="0F172A")
+        regular_font = Font(name="Calibri", size=10, color="1E293B")
+        total_font = Font(name="Calibri", size=11, bold=True, color="0F172A")
+
+        thin_border = Border(
+            left=Side(style="thin", color="CBD5E1"),
+            right=Side(style="thin", color="CBD5E1"),
+            top=Side(style="thin", color="CBD5E1"),
+            bottom=Side(style="thin", color="CBD5E1"),
+        )
+        double_bottom_border = Border(
+            left=Side(style="thin", color="CBD5E1"),
+            right=Side(style="thin", color="CBD5E1"),
+            top=Side(style="thin", color="CBD5E1"),
+            bottom=Side(style="double", color="0F172A"),
+        )
+
+        align_center = Alignment(horizontal="center", vertical="center")
+        align_right = Alignment(horizontal="right", vertical="center")
+        align_left = Alignment(horizontal="left", vertical="center")
+
+        empresa = payload.get("empresa_oferente") or "Calcu Enterprise SA"
+        rut = payload.get("rut_oferente") or "21.999.830.0018"
+        licitacion = payload.get("numero_licitacion") or "Licitación Pública"
+        organismo = payload.get("organismo") or "Organismo Estatal"
+        moneda = payload.get("moneda") or "USD"
+        tc_brou = Decimal(str(payload.get("tipo_cambio_brou") or "40.10"))
+        plazo_entrega = payload.get("plazo_entrega_garantizado") or "30 días corridos"
+        mantenimiento = payload.get("mantenimiento_oferta") or "60 días corridos"
+        partidas = payload.get("partidas") or []
+
+        # Encabezado Institucional SICE / RUPE
+        ws.merge_cells("A1:J1")
+        ws["A1"] = "ANEXO OFICIAL DE OFERTA ECONÓMICA - COMPRAS ESTATALES (SICE / RUPE)"
+        ws["A1"].font = white_title_font
+        ws["A1"].fill = header_fill
+        ws["A1"].alignment = align_center
+        ws.row_dimensions[1].height = 28
+
+        info_rows = [
+            ("Empresa Oferente:", empresa, "R.U.T.:", rut),
+            ("Nº de Convocatoria / Pliego:", licitacion, "Organismo Comprador:", organismo),
+            ("Moneda de Cotización:", f"{moneda} (TC Dólar BROU: ${tc_brou:.2f})", "Plazo de Entrega:", plazo_entrega),
+            ("Mantenimiento de Oferta:", mantenimiento, "Fecha de Emisión:", datetime.now().strftime("%d/%m/%Y")),
+        ]
+
+        for r_idx, (k1, v1, k2, v2) in enumerate(info_rows, start=3):
+            ws.cell(row=r_idx, column=1, value=k1).font = bold_font
+            ws.cell(row=r_idx, column=2, value=v1).font = regular_font
+            ws.cell(row=r_idx, column=5, value=k2).font = bold_font
+            ws.cell(row=r_idx, column=6, value=v2).font = regular_font
+            ws.row_dimensions[r_idx].height = 20
+
+        # Tabla de Renglones / Partidas
+        headers = [
+            "Ítem", "Código SICE / SKU", "Descripción Técnica", "Cantidad",
+            "Unidad", f"Precio Unit. S/IVA ({moneda})", "IVA (22%)",
+            f"Precio Unit. C/IVA ({moneda})", f"Subtotal S/IVA ({moneda})", f"Total C/IVA ({moneda})"
+        ]
+
+        header_row = 8
+        ws.row_dimensions[header_row].height = 26
+        for col_idx, h_text in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col_idx, value=h_text)
+            cell.font = white_header_font
+            cell.fill = header_fill
+            cell.alignment = align_center
+            cell.border = thin_border
+
+        curr_row = header_row + 1
+        total_subtotal_sin_iva = Decimal("0.0000")
+        total_iva = Decimal("0.0000")
+        total_general_con_iva = Decimal("0.0000")
+
+        for idx, p in enumerate(partidas, start=1):
+            sku = p.get("codigo_sice") or p.get("sku") or f"ITEM-{idx}"
+            desc = p.get("descripcion") or p.get("descripcion_tecnica") or f"Partida {idx}"
+            qty = Decimal(str(p.get("cantidad") or 1))
+            unidad = p.get("unidad_medida") or "UNIDAD"
+            pu_sin_iva = Decimal(str(p.get("precio_unitario_sin_iva") or p.get("precio_unitario") or "10.0000"))
+
+            iva_unit = (pu_sin_iva * Decimal("0.2200")).quantize(Decimal("0.0001"))
+            pu_con_iva = (pu_sin_iva + iva_unit).quantize(Decimal("0.0001"))
+            sub_sin_iva = (pu_sin_iva * qty).quantize(Decimal("0.0001"))
+            tot_con_iva = (pu_con_iva * qty).quantize(Decimal("0.0001"))
+            iva_tot = (tot_con_iva - sub_sin_iva).quantize(Decimal("0.0001"))
+
+            total_subtotal_sin_iva += sub_sin_iva
+            total_iva += iva_tot
+            total_general_con_iva += tot_con_iva
+
+            row_data = [
+                idx, sku, desc, int(qty), unidad,
+                float(pu_sin_iva), float(iva_unit), float(pu_con_iva),
+                float(sub_sin_iva), float(tot_con_iva)
+            ]
+
+            ws.row_dimensions[curr_row].height = 22
+            for col_idx, val in enumerate(row_data, start=1):
+                cell = ws.cell(row=curr_row, column=col_idx, value=val)
+                cell.font = regular_font
+                cell.border = thin_border
+                if col_idx in (1, 4, 5):
+                    cell.alignment = align_center
+                elif col_idx in (6, 7, 8, 9, 10):
+                    cell.alignment = align_right
+                    cell.number_format = "$#,##0.00"
+                else:
+                    cell.alignment = align_left
+
+            curr_row += 1
+
+        # Fila de Totales
+        ws.row_dimensions[curr_row].height = 24
+        ws.cell(row=curr_row, column=1, value="TOTALES OFERTA ECONÓMICA").font = total_font
+        ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=8)
+        ws.cell(row=curr_row, column=1).alignment = align_right
+        ws.cell(row=curr_row, column=1).fill = total_fill
+
+        c_sub = ws.cell(row=curr_row, column=9, value=float(total_subtotal_sin_iva))
+        c_sub.font = total_font
+        c_sub.fill = total_fill
+        c_sub.alignment = align_right
+        c_sub.number_format = "$#,##0.00"
+        c_sub.border = double_bottom_border
+
+        c_tot = ws.cell(row=curr_row, column=10, value=float(total_general_con_iva))
+        c_tot.font = total_font
+        c_tot.fill = total_fill
+        c_tot.alignment = align_right
+        c_tot.number_format = "$#,##0.00"
+        c_tot.border = double_bottom_border
+
+        # Autoajuste de anchos de columna
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        ws.column_dimensions["C"].width = 38 # Descripción más ancha
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    @classmethod
+    def generate_sice_offer_pdf(cls, payload: dict) -> io.BytesIO:
+        """
+        Genera Documento PDF Oficial de Oferta Económica SICE / RUPE
+        cumpliendo con formato TOCAF art. 48/65 y requisitos de compras estatales.
+        """
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            leftMargin=36,
+            rightMargin=36,
+            topMargin=36,
+            bottomMargin=36
+        )
+        elements = []
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle(
+            "SiceTitle",
+            parent=styles["Heading1"],
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=16,
+            textColor=colors.HexColor("#1E3A8A"),
+            alignment=1,
+            spaceAfter=12
+        )
+        meta_label = ParagraphStyle("MetaLabel", fontName="Helvetica-Bold", fontSize=8, leading=11, textColor=colors.HexColor("#334155"))
+        meta_val = ParagraphStyle("MetaVal", fontName="Helvetica", fontSize=8, leading=11, textColor=colors.HexColor("#0F172A"))
+        tbl_header = ParagraphStyle("TblH", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.white, alignment=1)
+        tbl_cell = ParagraphStyle("TblC", fontName="Helvetica", fontSize=7.5, leading=9.5, textColor=colors.HexColor("#1E293B"))
+        tbl_cell_r = ParagraphStyle("TblCR", fontName="Helvetica", fontSize=7.5, leading=9.5, textColor=colors.HexColor("#1E293B"), alignment=2)
+        tbl_cell_bold_r = ParagraphStyle("TblCBR", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=colors.HexColor("#0F172A"), alignment=2)
+
+        empresa = payload.get("empresa_oferente") or "Calcu Enterprise SA"
+        rut = payload.get("rut_oferente") or "21.999.830.0018"
+        licitacion = payload.get("numero_licitacion") or "Licitación Pública"
+        organismo = payload.get("organismo") or "Organismo Estatal"
+        moneda = payload.get("moneda") or "USD"
+        tc_brou = Decimal(str(payload.get("tipo_cambio_brou") or "40.10"))
+        plazo_entrega = payload.get("plazo_entrega_garantizado") or "30 días corridos"
+        mantenimiento = payload.get("mantenimiento_oferta") or "60 días corridos"
+        partidas = payload.get("partidas") or []
+
+        elements.append(Paragraph("ANEXO DE OFERTA ECONÓMICA FORMAL (SICE / RUPE)", title_style))
+        elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#1E3A8A"), spaceAfter=10))
+
+        # Cuadro de metadatos del llamado
+        meta_data = [
+            [
+                Paragraph("<b>Empresa Oferente:</b>", meta_label), Paragraph(empresa, meta_val),
+                Paragraph("<b>RUT:</b>", meta_label), Paragraph(rut, meta_val),
+            ],
+            [
+                Paragraph("<b>Convocatoria:</b>", meta_label), Paragraph(licitacion, meta_val),
+                Paragraph("<b>Organismo Comprador:</b>", meta_label), Paragraph(organismo, meta_val),
+            ],
+            [
+                Paragraph("<b>Moneda Cotizada:</b>", meta_label), Paragraph(f"{moneda} (TC BROU: ${tc_brou:.2f})", meta_val),
+                Paragraph("<b>Plazo de Entrega:</b>", meta_label), Paragraph(plazo_entrega, meta_val),
+            ],
+            [
+                Paragraph("<b>Mantenimiento Oferta:</b>", meta_label), Paragraph(mantenimiento, meta_val),
+                Paragraph("<b>Fecha:</b>", meta_label), Paragraph(datetime.now().strftime("%d/%m/%Y"), meta_val),
+            ],
+        ]
+        t_meta = Table(meta_data, colWidths=[1.3 * inch, 2.4 * inch, 1.4 * inch, 2.3 * inch])
+        t_meta.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#CBD5E1")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(t_meta)
+        elements.append(Spacer(1, 12))
+
+        # Tabla de Renglones
+        table_rows = [[
+            Paragraph("Ítem", tbl_header),
+            Paragraph("Código SICE", tbl_header),
+            Paragraph("Descripción Técnica", tbl_header),
+            Paragraph("Cant.", tbl_header),
+            Paragraph(f"P. Unit S/IVA<br/>({moneda})", tbl_header),
+            Paragraph(f"IVA 22%<br/>({moneda})", tbl_header),
+            Paragraph(f"Subtotal S/IVA<br/>({moneda})", tbl_header),
+            Paragraph(f"Total C/IVA<br/>({moneda})", tbl_header),
+        ]]
+
+        tot_sin_iva = Decimal("0.0000")
+        tot_con_iva = Decimal("0.0000")
+
+        for idx, p in enumerate(partidas, start=1):
+            sku = p.get("codigo_sice") or p.get("sku") or f"ITEM-{idx}"
+            desc = p.get("descripcion") or p.get("descripcion_tecnica") or f"Partida {idx}"
+            qty = Decimal(str(p.get("cantidad") or 1))
+            pu_sin_iva = Decimal(str(p.get("precio_unitario_sin_iva") or p.get("precio_unitario") or "10.0000"))
+            iva_u = (pu_sin_iva * Decimal("0.2200")).quantize(Decimal("0.0001"))
+            pu_con = (pu_sin_iva + iva_u).quantize(Decimal("0.0001"))
+            sub_sin = (pu_sin_iva * qty).quantize(Decimal("0.0001"))
+            sub_con = (pu_con * qty).quantize(Decimal("0.0001"))
+
+            tot_sin_iva += sub_sin
+            tot_con_iva += sub_con
+
+            table_rows.append([
+                Paragraph(str(idx), tbl_cell),
+                Paragraph(sku, tbl_cell),
+                Paragraph(desc[:50], tbl_cell),
+                Paragraph(str(int(qty)), tbl_cell_r),
+                Paragraph(f"${pu_sin_iva:.2f}", tbl_cell_r),
+                Paragraph(f"${iva_u:.2f}", tbl_cell_r),
+                Paragraph(f"${sub_sin:.2f}", tbl_cell_r),
+                Paragraph(f"${sub_con:.2f}", tbl_cell_r),
+            ])
+
+        # Fila Total
+        table_rows.append([
+            Paragraph("<b>TOTAL GENERAL OFERTA ECONÓMICA</b>", tbl_cell_bold_r),
+            Paragraph("", tbl_cell),
+            Paragraph("", tbl_cell),
+            Paragraph("", tbl_cell),
+            Paragraph("", tbl_cell),
+            Paragraph("", tbl_cell),
+            Paragraph(f"<b>${tot_sin_iva:.2f}</b>", tbl_cell_bold_r),
+            Paragraph(f"<b>${tot_con_iva:.2f}</b>", tbl_cell_bold_r),
+        ])
+
+        col_widths = [0.4 * inch, 0.9 * inch, 2.3 * inch, 0.5 * inch, 0.8 * inch, 0.7 * inch, 0.9 * inch, 0.9 * inch]
+        t_items = Table(table_rows, colWidths=col_widths)
+        t_items.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("SPAN", (0, -1), (5, -1)),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E2E8F0")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#CBD5E1")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+        ]))
+        elements.append(t_items)
+        elements.append(Spacer(1, 20))
+
+        # Declaración Jurada y Firmas
+        dj_text = (
+            "El oferente declara bajo juramento que los precios unitarios cotizados incluyen todos los costos, "
+            "fletes, aranceles y tributos de importación vigentes, manteniendo plena conformidad técnica con el pliego "
+            "y garantizando el plazo de entrega estipulado en plaza uruguaya bajo normativa TOCAF."
+        )
+        elements.append(Paragraph(f"<i>{dj_text}</i>", ParagraphStyle("DJ", fontName="Helvetica-Oblique", fontSize=7, leading=9.5, textColor=colors.HexColor("#475569"))))
+        elements.append(Spacer(1, 25))
+
+        sig_data = [
+            [
+                Paragraph("________________________________________<br/><b>Firma del Representante Legal</b><br/>Inscripto en RUPE / TOCAF", ParagraphStyle("Sig", fontName="Helvetica", fontSize=8, leading=11, alignment=1)),
+                Paragraph("________________________________________<br/><b>Responsable Técnico de Oferta</b><br/>Homologación Técnica Calcu", ParagraphStyle("Sig", fontName="Helvetica", fontSize=8, leading=11, alignment=1)),
+            ]
+        ]
+        t_sig = Table(sig_data, colWidths=[3.7 * inch, 3.7 * inch])
+        elements.append(t_sig)
+
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer

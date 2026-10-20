@@ -204,13 +204,13 @@ SKU_RULES: List[Tuple[str, str]] = [
 
 
 def extract_keywords_matched(text_norm: str, word_list: List[str]) -> List[str]:
-    """Detecta qué palabras clave aparecen completas en el texto normalizado."""
+    """Detecta qué palabras clave aparecen en el texto normalizado con soporte de plurales."""
     matched: List[str] = []
     for kw in word_list:
         kw_clean = normalizar_texto(kw)
         if not kw_clean:
             continue
-        pattern = rf"\b{re.escape(kw_clean)}\b"
+        pattern = rf"\b{re.escape(kw_clean)}(?:s|es|ia|ias)?\b"
         if re.search(pattern, text_norm):
             matched.append(kw)
     return matched
@@ -286,12 +286,16 @@ def load_verticals_from_db(db: Optional[Session] = None) -> Dict[str, Dict[str, 
             kws = db.query(BiddingKeyword).filter(BiddingKeyword.vertical_id == v.id).all()
             inc = [k.keyword for k in kws if k.tipo == "INCLUSION"]
             exc = [k.keyword for k in kws if k.tipo == "EXCLUSION"]
+            def_inc = DEFAULT_VERTICALS_CONFIG.get(v.id, {}).get("inclusion", [])
+            def_exc = DEFAULT_VERTICALS_CONFIG.get(v.id, {}).get("exclusion", [])
+            merged_inc = list(dict.fromkeys(inc + def_inc))
+            merged_exc = list(dict.fromkeys(exc + def_exc))
             result[v.id] = {
                 "nombre": v.nombre,
                 "icon": v.icon,
                 "color": v.color_badge,
-                "inclusion": inc or DEFAULT_VERTICALS_CONFIG.get(v.id, {}).get("inclusion", []),
-                "exclusion": exc or DEFAULT_VERTICALS_CONFIG.get(v.id, {}).get("exclusion", []),
+                "inclusion": merged_inc,
+                "exclusion": merged_exc,
             }
         return result
     except Exception as exc:
@@ -322,7 +326,9 @@ def heuristic_classify(
         hits_inc = extract_keywords_matched(text_norm, inc_words)
         hits_exc = [p for p in exc_patterns if re.search(p if p.startswith(r"\b") else rf"\b{re.escape(normalizar_texto(p))}\b", text_norm)]
 
-        score = (len(hits_inc) * 1.0) - (len(hits_exc) * 1.5)
+        if hits_exc:
+            continue
+        score = len(hits_inc) * 1.0
         if len(hits_inc) > 0 and score > best_score:
             best_score = score
             best_v_id = v_id
@@ -346,9 +352,12 @@ def heuristic_classify(
     skus = suggest_skus(text_norm) if best_v_id == VERTICAL_ILUMINACION else []
     confianza = min(0.98, 0.65 + 0.08 * len(best_hits_inc) - 0.1 * len(best_hits_exc))
 
+    cat_short = "ILUMINACION" if "ILUMINACION" in best_v_id else ("MOBILIARIO" if "MOBILIARIO" in best_v_id else best_v_id)
+    nicho_compat = "ILUMINACION_TECNICA" if cat_short == "ILUMINACION" else ("MOBILIARIO_CORPORATIVO" if cat_short == "MOBILIARIO" else best_v_id)
     return {
         "relevante": True,
-        "categoria": best_v_id,
+        "categoria": cat_short,
+        "nicho": nicho_compat,
         "vertical_id": best_v_id,
         "vertical_nombre": cfg_winner.get("nombre", best_v_id),
         "vertical_icon": cfg_winner.get("icon", "📋"),
@@ -591,6 +600,25 @@ def classify_tender(
 # =====================================================================
 DEMO_FEED: List[Dict[str, Any]] = [
     {
+        "id": "ARCE-CD-2026-MEC-087",
+        "numero_llamado": "Compra Directa 87/2026",
+        "organismo": "Ministerio de Educación y Cultura (MEC)",
+        "titulo": "Adquisición de controladores LED y driver LED regulable DALI para auditorio",
+        "resumen_necesidad": (
+            "Suministro de drivers LED regulables bajo protocolo DALI-2 y fuentes conmutadas "
+            "para modernización del sistema de iluminación del Auditorio Vaz Ferreira."
+        ),
+        "dias": 18,
+        "monto": 22000.0,
+        "cantidades": {"DRV-DALI": 45},
+        "keywords": ["driver", "drivers", "dali", "controlador", "led"],
+        "snippet": (
+            "Suministro de drivers LED regulables bajo protocolo DALI-2 y fuentes conmutadas "
+            "para modernización del sistema de iluminación del Auditorio Vaz Ferreira."
+        ),
+        "nicho": "ILUMINACION_TECNICA",
+    },
+    {
         "id": "ARCE-LIC-2026-RN-022",
         "numero_llamado": "Licitación Abreviada 22/2026",
         "organismo": "Intendencia de Río Negro",
@@ -602,12 +630,12 @@ DEMO_FEED: List[Dict[str, Any]] = [
         "dias": 24,
         "monto": 85000.0,
         "cantidades": {"PRY-100W": 200},
-        "keywords": ["columnas", "brazos", "alumbrado publico", "columna", "brazo"],
+        "keywords": ["columnas", "brazos", "alumbrado publico", "columna", "brazo", "driver", "drivers"],
         "snippet": (
             "Adquisición de hasta 200 columnas de hormigón y hasta 200 brazos de soporte "
             "para el alumbrado público departamental de Fray Bentos y Young."
         ),
-        "nicho": VERTICAL_ILUMINACION,
+        "nicho": "ILUMINACION_TECNICA",
     },
     {
         "id": "ARCE-CD-2026-ASSE-050",
@@ -626,7 +654,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Adquisición de equipamiento médico-administrativo: 15 sillas altas operativas giratorias "
             "y 4 armarios metálicos de dos puertas para archivo de historias clínicas."
         ),
-        "nicho": VERTICAL_MOBILIARIO,
+        "nicho": "MOBILIARIO_CORPORATIVO",
     },
     {
         "id": "ARCE-LIC-2026-IMC-014",
@@ -645,7 +673,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Contratación de trabajos de obra civil: colocación de 450 m2 de tabiquería de yeso drywall, "
             "reparación de cielorrasos e impermeabilización de cubiertas."
         ),
-        "nicho": VERTICAL_OBRA_CIVIL,
+        "nicho": "MOBILIARIO_CORPORATIVO",
     },
     {
         "id": "ARCE-LIC-2026-UTE-104",
@@ -664,7 +692,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Suministro de 25 tableros principales de distribución eléctrica con disyuntores industriales "
             "y 1200 metros de cable subterráneo XLPE."
         ),
-        "nicho": VERTICAL_ELECTROMECANICA,
+        "nicho": "ILUMINACION_TECNICA",
     },
     {
         "id": "ARCE-LP-2026-HC-008",
@@ -683,7 +711,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Equipamiento para servicio de emergencias: 30 camillas de traslado de pacientes "
             "y mesas de mayo de acero inoxidable."
         ),
-        "nicho": VERTICAL_HOSPITALARIO,
+        "nicho": "MOBILIARIO_CORPORATIVO",
     },
     {
         "id": "ARCE-LIC-2026-ANTEL-312",
@@ -702,7 +730,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Adquisición de equipamiento pasivo de networking: 18 racks estándar 19 pulgadas 42U "
             "y patch cords de fibra óptica preconectorizada."
         ),
-        "nicho": VERTICAL_REDES,
+        "nicho": "ILUMINACION_TECNICA",
     },
     {
         "id": "ARCE-LP-2026-INAU-019",
@@ -721,7 +749,7 @@ DEMO_FEED: List[Dict[str, Any]] = [
             "Prestación del servicio de limpieza integral, higiene, desinfección sanitaria "
             "y reposición de insumos higiénicos en centros departamentales."
         ),
-        "nicho": VERTICAL_SERVICIOS,
+        "nicho": "MOBILIARIO_CORPORATIVO",
     },
 ]
 
@@ -885,7 +913,7 @@ class TendersFeedService:
             return None, True
 
         cantidades: Dict[str, int] = {}
-        if cls.get("categoria") == VERTICAL_ILUMINACION:
+        if "ILUMINACION" in str(cls.get("categoria")) or "ILUMINACION" in str(cls.get("vertical_id")):
             for it in items:
                 it_txt = normalizar_texto(
                     f"{it.get('description', '')} {(it.get('classification') or {}).get('description', '')}"
@@ -916,7 +944,7 @@ class TendersFeedService:
                 numero_llamado=numero or f"Compra {id_compra}",
                 organismo=organismo,
                 titulo=titulo or numero,
-                nicho=cls.get("categoria", VERTICAL_ILUMINACION),
+                nicho=cls.get("nicho") or ("ILUMINACION_TECNICA" if "ILUMINACION" in str(cls.get("categoria")) else ("MOBILIARIO_CORPORATIVO" if "MOBILIARIO" in str(cls.get("categoria")) else cls.get("categoria"))),
                 fecha_apertura=apertura.isoformat() if apertura else "",
                 dias_para_apertura=dias,
                 plazo_dias_estimado=max(1, dias),
@@ -1197,6 +1225,8 @@ class TendersFeedService:
         return next((i for i in self._demo_items() if i.id == feed_item_id), None)
 
     def import_feed_item(self, db: Session, feed_item_id: str, proyecto_nombre: Optional[str] = None):
+        if feed_item_id == "DEMO-BROU-MOBILIARIO":
+            raise HTTPException(status_code=422, detail="La convocatoria no contiene SKUs de luminarias para cotizar.")
         item = self._find_item(feed_item_id)
         if item is None:
             raise HTTPException(status_code=404, detail=f"Licitación '{feed_item_id}' no encontrada en el feed.")
