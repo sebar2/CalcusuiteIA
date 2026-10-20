@@ -2355,3 +2355,35 @@ class ArbitrageScanResponse(BaseModel):
     summary_metrics: ArbitrageSummaryMetrics
     items: List[ArbitrageItemResponse] = Field(default_factory=list)
 
+
+
+# ==============================================================
+# GEMELO DIGITAL 3D: ESQUEMAS DE GEOMETRÍA PARAMÉTRICA REAL
+# ==============================================================
+
+class WarehouseDimensionsUpdate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    width_m: float = Field(..., gt=0, description="Ancho de la nave en metros")
+    length_m: float = Field(..., gt=0, description="Largo de la nave en metros")
+    clear_height_m: float = Field(..., gt=0, description="Altura libre de techo en metros")
+
+
+class RackDimensionsUpdate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    rack_width_m: float = Field(..., gt=0, description="Ancho de sección del rack en metros")
+    rack_height_m: float = Field(..., gt=0, description="Altura total del rack en metros")
+    rack_depth_m: float = Field(..., gt=0, description="Profundidad de larguero en metros")
+    levels_count: int = Field(default=4, ge=1, le=12, description="Cantidad de niveles verticales")
+    max_rack_weight_kg: float = Field(default=3000.0, gt=0, description="Capacidad máxima de carga estructural en kg")
+
+
+class SlotItemSpecsUpdate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    box_width_m: float = Field(..., gt=0, description="Ancho de caja en metros")
+    box_height_m: float = Field(..., gt=0, description="Alto de caja en metros")
+    box_length_m: float = Field(..., gt=0, description="Largo de caja en metros")
+    unit_weight_kg: float = Field(..., ge=0, description="Peso unitario en kg")
+    units_count: int = Field(default=1, ge=0, description="Cantidad de cajas o bultos")
+    real_product_id: Optional[int] = Field(None, description="ID del producto real del catálogo de Calcu")
+    lote: Optional[str] = Field(None, description="Número de lote")
+    descripcion: Optional[str] = Field(None, description="Descripción personalizada")

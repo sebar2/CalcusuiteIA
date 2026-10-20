@@ -6,7 +6,9 @@ import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 
-from app.models.entities import Warehouse, WarehouseSlot
+from app.models.entities import Warehouse, WarehouseSlot, Product, Inventory, StockLocationBatch
+from app.models.logistics_entities import LogisticsClientInventory
+from app.engine.inventory import calculate_rop, calculate_doh
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,7 @@ class DigitalTwinService:
     """
     Motor universal de Gemelo Digital 3D para depósitos terrestres y nodos marítimos.
     Gestiona persistencia en PostgreSQL 16 con aislamiento multi-scope ('3PL' y 'SUPPLY_CHAIN').
+    Implementa ingeniería paramétrica real (depósito, estanterías, cajas e inventario real).
     """
 
     @classmethod
@@ -47,6 +50,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("24500.0000"),
                 "capacidad_peso_kg": Decimal("1200000.0000"),
                 "altura_max_m": Decimal("10.5000"),
+                "width_m": Decimal("50.0000"),
+                "length_m": Decimal("70.0000"),
+                "clear_height_m": Decimal("10.5000"),
             },
             {
                 "id": "3PL-WH-02",
@@ -59,6 +65,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("15400.0000"),
                 "capacidad_peso_kg": Decimal("850000.0000"),
                 "altura_max_m": Decimal("9.5000"),
+                "width_m": Decimal("40.0000"),
+                "length_m": Decimal("55.0000"),
+                "clear_height_m": Decimal("9.5000"),
             },
             {
                 "id": "3PL-PLANT-KITTING",
@@ -71,6 +80,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("9000.0000"),
                 "capacidad_peso_kg": Decimal("400000.0000"),
                 "altura_max_m": Decimal("6.5000"),
+                "width_m": Decimal("30.0000"),
+                "length_m": Decimal("60.0000"),
+                "clear_height_m": Decimal("6.5000"),
             },
             {
                 "id": "3PL-CLIENT-EXTERNAL",
@@ -83,6 +95,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("18200.0000"),
                 "capacidad_peso_kg": Decimal("950000.0000"),
                 "altura_max_m": Decimal("8.5000"),
+                "width_m": Decimal("40.0000"),
+                "length_m": Decimal("70.0000"),
+                "clear_height_m": Decimal("8.5000"),
             },
         ]
 
@@ -101,6 +116,9 @@ class DigitalTwinService:
                     volumen_max_m3=d["volumen_max_m3"],
                     capacidad_peso_kg=d["capacidad_peso_kg"],
                     altura_max_m=d["altura_max_m"],
+                    width_m=d.get("width_m", Decimal("50.0000")),
+                    length_m=d.get("length_m", Decimal("70.0000")),
+                    clear_height_m=d.get("clear_height_m", Decimal("10.5000")),
                     activo=True,
                 )
                 db.add(wh)
@@ -125,6 +143,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("21000.0000"),
                 "capacidad_peso_kg": Decimal("1000000.0000"),
                 "altura_max_m": Decimal("9.0000"),
+                "width_m": Decimal("50.0000"),
+                "length_m": Decimal("60.0000"),
+                "clear_height_m": Decimal("9.0000"),
             },
             {
                 "id": "TRANSITO-MAR",
@@ -137,6 +158,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("45000.0000"),
                 "capacidad_peso_kg": Decimal("3500000.0000"),
                 "altura_max_m": Decimal("15.0000"),
+                "width_m": Decimal("35.0000"),
+                "length_m": Decimal("180.0000"),
+                "clear_height_m": Decimal("16.0000"),
             },
             {
                 "id": "DEP-SALTO",
@@ -149,6 +173,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("6600.0000"),
                 "capacidad_peso_kg": Decimal("300000.0000"),
                 "altura_max_m": Decimal("6.0000"),
+                "width_m": Decimal("25.0000"),
+                "length_m": Decimal("44.0000"),
+                "clear_height_m": Decimal("6.0000"),
             },
             {
                 "id": "SHOWROOM-POCITOS",
@@ -161,6 +188,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("2500.0000"),
                 "capacidad_peso_kg": Decimal("80000.0000"),
                 "altura_max_m": Decimal("5.0000"),
+                "width_m": Decimal("20.0000"),
+                "length_m": Decimal("25.0000"),
+                "clear_height_m": Decimal("5.0000"),
             },
             {
                 "id": "INT-HUB-SHENZHEN",
@@ -173,6 +203,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("54000.0000"),
                 "capacidad_peso_kg": Decimal("2500000.0000"),
                 "altura_max_m": Decimal("12.0000"),
+                "width_m": Decimal("60.0000"),
+                "length_m": Decimal("100.0000"),
+                "clear_height_m": Decimal("12.0000"),
             },
             {
                 "id": "PROV-UY-REVENTA",
@@ -185,6 +218,9 @@ class DigitalTwinService:
                 "volumen_max_m3": Decimal("9000.0000"),
                 "capacidad_peso_kg": Decimal("350000.0000"),
                 "altura_max_m": Decimal("7.0000"),
+                "width_m": Decimal("30.0000"),
+                "length_m": Decimal("50.0000"),
+                "clear_height_m": Decimal("7.0000"),
             },
         ]
 
@@ -203,6 +239,9 @@ class DigitalTwinService:
                     volumen_max_m3=d["volumen_max_m3"],
                     capacidad_peso_kg=d["capacidad_peso_kg"],
                     altura_max_m=d["altura_max_m"],
+                    width_m=d.get("width_m", Decimal("50.0000")),
+                    length_m=d.get("length_m", Decimal("60.0000")),
+                    clear_height_m=d.get("clear_height_m", Decimal("9.0000")),
                     activo=True,
                 )
                 db.add(wh)
@@ -221,11 +260,14 @@ class DigitalTwinService:
 
     @classmethod
     def _seed_terrestrial_slots(cls, db: Session, wh_id: str, scope: str, is_large: bool = True):
-        """Genera racks terrestres con formato Cuerpo-Rack-Nivel-Posicion (ej: F-01-01-01)"""
         cuerpos = ["A", "B", "C", "D", "E"] if is_large else ["F", "G", "H"]
         racks = ["01", "02"]
         niveles = [1, 2, 3, 4]
         posiciones = [1, 2, 3]
+
+        # Vincular con productos reales de la base de datos si existen
+        real_prods = db.query(Product).all()
+        prod_count = len(real_prods)
 
         sample_skus = [
             ("SKU-1001", "Válvula Reguladora A1", Decimal("150.00"), Decimal("380.00"), Decimal("1.20"), "CRITICO_ROP"),
@@ -245,25 +287,40 @@ class DigitalTwinService:
                         code = f"{cuerpo}-{rk}-{niv:02d}-{pos:02d}"
                         slot_id = f"{wh_id}:{code}"
 
-                        # Patrón de ocupación realista (aprox 70% ocupadas, 10% bloqueadas, 20% vacías)
                         mod = slot_idx % 10
                         if mod in (1, 2, 3, 5, 7, 8):
                             estado = "OCUPADA"
-                            sku_info = sample_skus[slot_idx % len(sample_skus)]
-                            sku, desc, unit_val, weight, vol, rop_stat = sku_info
-                            qty = Decimal(f"{15 + (slot_idx % 40)}.0000")
-                            val = (qty * unit_val).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                            peso = (qty * weight / Decimal("20")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                            vol_act = vol.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-                            pallets = 1 if peso > Decimal("300") else 0
-                            cajas = int(qty)
+                            real_p = real_prods[slot_idx % prod_count] if prod_count > 0 else None
+                            if real_p:
+                                sku = real_p.sku
+                                desc = real_p.nombre
+                                unit_val = real_p.precio_lista
+                                real_pid = real_p.id
+                            else:
+                                sku_info = sample_skus[slot_idx % len(sample_skus)]
+                                sku, desc, unit_val, _, _, _ = sku_info
+                                real_pid = None
 
-                            # Desvíos ocasionales para pestaña de riesgos
+                            qty = Decimal(f"{15 + (slot_idx % 30)}.0000")
+                            boxes_cnt = int(qty)
+                            val = (qty * unit_val).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                            
+                            # Medidas paramétricas de cajas
+                            box_w = Decimal("0.4000")
+                            box_h = Decimal("0.3500")
+                            box_l = Decimal("0.4000")
+                            u_weight = Decimal("8.5000")
+                            peso = (u_weight * Decimal(str(boxes_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                            vol_act = (box_w * box_h * box_l * Decimal(str(boxes_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                            pallets = 1 if peso > Decimal("300") else 0
+                            rop_stat = sample_skus[slot_idx % len(sample_skus)][5]
+
                             desv = None
                             mat_ret = False
                             mat_cal = False
                             if mod == 7 and niv == 4:
                                 desv = "EXCESO_ALTURA"
+                                box_h = Decimal("0.6500")
                             elif mod == 8 and peso > Decimal("600"):
                                 desv = "EXCESO_PESO"
                             elif mod == 5 and slot_idx % 3 == 0:
@@ -277,13 +334,18 @@ class DigitalTwinService:
                         elif mod == 9:
                             estado = "BLOQUEADA"
                             sku = None
+                            real_pid = None
                             desc = "Posición en Mantenimiento Preventivo"
                             qty = Decimal("0.0000")
                             val = Decimal("0.0000")
                             peso = Decimal("0.0000")
                             vol_act = Decimal("0.0000")
                             pallets = 0
-                            cajas = 0
+                            boxes_cnt = 0
+                            box_w = Decimal("0.4000")
+                            box_h = Decimal("0.3000")
+                            box_l = Decimal("0.4000")
+                            u_weight = Decimal("0.0000")
                             desv = "MANTENIMIENTO"
                             mat_ret = False
                             mat_cal = False
@@ -292,13 +354,18 @@ class DigitalTwinService:
                         else:
                             estado = "VACIA"
                             sku = None
+                            real_pid = None
                             desc = None
                             qty = Decimal("0.0000")
                             val = Decimal("0.0000")
                             peso = Decimal("0.0000")
                             vol_act = Decimal("0.0000")
                             pallets = 0
-                            cajas = 0
+                            boxes_cnt = 0
+                            box_w = Decimal("0.4000")
+                            box_h = Decimal("0.3000")
+                            box_l = Decimal("0.4000")
+                            u_weight = Decimal("0.0000")
                             desv = None
                             mat_ret = False
                             mat_cal = False
@@ -326,7 +393,20 @@ class DigitalTwinService:
                             altura_m=Decimal("1.6500"),
                             valor_estimado=val,
                             pallets_count=pallets,
-                            cajas_count=cajas,
+                            cajas_count=boxes_cnt,
+                            # Geometría Paramétrica de Rack
+                            rack_width_m=Decimal("2.4000"),
+                            rack_height_m=Decimal("6.0000"),
+                            rack_depth_m=Decimal("1.2000"),
+                            levels_count=4,
+                            max_rack_weight_kg=Decimal("3000.0000"),
+                            # Geometría Paramétrica de Caja
+                            box_width_m=box_w,
+                            box_height_m=box_h,
+                            box_length_m=box_l,
+                            unit_weight_kg=u_weight,
+                            units_count=boxes_cnt,
+                            real_product_id=real_pid,
                             tipo_contenedor=None,
                             eta_arribo=None,
                             costo_landed=Decimal("0.0000"),
@@ -340,14 +420,9 @@ class DigitalTwinService:
 
     @classmethod
     def _seed_maritime_slots(cls, db: Session, wh_id: str):
-        """
-        Genera contenedores 3D en Buque Portacontenedores en Alta Mar
-        Ubicación por coordenadas marítimas: Buque-Bahía-Fila-Nivel (BAY-ROW-TIER)
-        Tipos de contenedor: 40HQ, 20ST, LCL
-        """
-        bays = ["BAY-01", "BAY-02", "BAY-03"] # Secciones transversales del buque
-        rows = ["ROW-01", "ROW-02"] # Babor / Estribor
-        tiers = [1, 2, 3] # Niveles sobre cubierta
+        bays = ["BAY-01", "BAY-02", "BAY-03"]
+        rows = ["ROW-01", "ROW-02"]
+        tiers = [1, 2, 3]
         positions = [1, 2]
 
         maritime_inventory = [
@@ -398,6 +473,18 @@ class DigitalTwinService:
                             valor_estimado=tot_val,
                             pallets_count=pallets,
                             cajas_count=boxes,
+                            # Geometría Contenedor
+                            rack_width_m=Decimal("2.4400"),
+                            rack_height_m=Decimal("2.8900") if c_type == "40HQ" else Decimal("2.5900"),
+                            rack_depth_m=Decimal("12.1920") if c_type == "40HQ" else Decimal("6.0580"),
+                            levels_count=tier,
+                            max_rack_weight_kg=Decimal("30480.0000"),
+                            box_width_m=Decimal("0.4000"),
+                            box_height_m=Decimal("0.3500"),
+                            box_length_m=Decimal("0.4000"),
+                            unit_weight_kg=Decimal("12.5000"),
+                            units_count=boxes,
+                            real_product_id=None,
                             tipo_contenedor=c_type,
                             eta_arribo=eta_base + timedelta(days=(c_idx % 5)),
                             costo_landed=landed_cost,
@@ -428,10 +515,698 @@ class DigitalTwinService:
                 "volumen_max_m3": float(w.volumen_max_m3),
                 "capacidad_peso_kg": float(w.capacidad_peso_kg),
                 "altura_max_m": float(w.altura_max_m),
+                "width_m": float(getattr(w, "width_m", 50.0)),
+                "length_m": float(getattr(w, "length_m", 70.0)),
+                "clear_height_m": float(getattr(w, "clear_height_m", 10.5)),
                 "activo": w.activo,
             }
             for w in whs
         ]
+
+    @classmethod
+    def update_warehouse_dimensions(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        width_m: float,
+        length_m: float,
+        clear_height_m: float,
+    ) -> Dict[str, Any]:
+        """Actualiza las dimensiones reales del galpón / nave y recalcula superficie y volumen."""
+        wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        if not wh:
+            raise ValueError(f"Depósito '{warehouse_id}' no encontrado.")
+
+        w_dec = Decimal(str(width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        l_dec = Decimal(str(length_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        h_dec = Decimal(str(clear_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        wh.width_m = w_dec
+        wh.length_m = l_dec
+        wh.clear_height_m = h_dec
+        wh.altura_max_m = h_dec
+        wh.superficie_m2 = (w_dec * l_dec).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        wh.volumen_max_m3 = (wh.superficie_m2 * h_dec).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        db.commit()
+
+        return {
+            "warehouse_id": wh.id,
+            "nombre": wh.nombre,
+            "width_m": float(wh.width_m),
+            "length_m": float(wh.length_m),
+            "clear_height_m": float(wh.clear_height_m),
+            "superficie_m2": float(wh.superficie_m2),
+            "volumen_max_m3": float(wh.volumen_max_m3),
+            "message": "Dimensiones del depósito recalculadas exitosamente.",
+        }
+
+    @classmethod
+    def update_rack_dimensions(
+        cls,
+        db: Session,
+        warehouse_id: str,
+        cuerpo: str,
+        rack_width_m: float,
+        rack_height_m: float,
+        rack_depth_m: float,
+        levels_count: int,
+        max_rack_weight_kg: float,
+    ) -> Dict[str, Any]:
+        """
+        Actualiza la geometría paramétrica de toda una estantería / cuerpo
+        y evalúa en vivo las reglas de exceso de altura, volumen y sobrepeso.
+        """
+        slots = (
+            db.query(WarehouseSlot)
+            .filter(
+                WarehouseSlot.warehouse_id == warehouse_id,
+                WarehouseSlot.cuerpo == cuerpo,
+            )
+            .all()
+        )
+        if not slots:
+            raise ValueError(f"No se encontraron estanterías para el cuerpo '{cuerpo}' en '{warehouse_id}'.")
+
+        rw_dec = Decimal(str(rack_width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        rh_dec = Decimal(str(rack_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        rd_dec = Decimal(str(rack_depth_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        mrw_dec = Decimal(str(max_rack_weight_kg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        lev_cnt = max(1, levels_count)
+
+        # Altura libre promedio por nivel
+        clear_height_per_level = (rh_dec / Decimal(str(lev_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        # Capacidad por nivel
+        weight_per_level = (mrw_dec / Decimal(str(lev_cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        # Volumen estimado por slot (asumiendo 3 posiciones por nivel)
+        vol_per_slot = (rw_dec * rd_dec * clear_height_per_level / Decimal("3.0")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        deviations_found = 0
+        for s in slots:
+            s.rack_width_m = rw_dec
+            s.rack_height_m = rh_dec
+            s.rack_depth_m = rd_dec
+            s.levels_count = lev_cnt
+            s.max_rack_weight_kg = mrw_dec
+            s.volumen_max_m3 = vol_per_slot
+            s.peso_max_kg = (weight_per_level / Decimal("3.0")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+            # Validación dimensional y física
+            devs = []
+            if s.estado == "OCUPADA":
+                # Exceso de altura si la caja o pallet supera la altura del nivel
+                if s.box_height_m > clear_height_per_level or s.altura_m > clear_height_per_level:
+                    devs.append("EXCESO_ALTURA")
+                # Exceso de volumen
+                if s.volumen_actual_m3 > s.volumen_max_m3:
+                    devs.append("EXCESO_VOLUMEN")
+                # Exceso de peso
+                if s.peso_actual_kg > s.peso_max_kg:
+                    devs.append("EXCESO_PESO")
+
+                if devs:
+                    deviations_found += 1
+                    s.desvios = " + ".join(devs)
+                elif s.desvios in ("EXCESO_ALTURA", "EXCESO_VOLUMEN", "EXCESO_PESO"):
+                    s.desvios = None
+
+        db.commit()
+
+        return {
+            "warehouse_id": warehouse_id,
+            "cuerpo": cuerpo,
+            "total_slots_actualizados": len(slots),
+            "desvios_detectados": deviations_found,
+            "rack_width_m": float(rw_dec),
+            "rack_height_m": float(rh_dec),
+            "rack_depth_m": float(rd_dec),
+            "levels_count": lev_cnt,
+            "max_rack_weight_kg": float(mrw_dec),
+            "clear_height_per_level_m": float(clear_height_per_level),
+            "message": f"Geometría de Cuerpo {cuerpo} actualizada exitosamente.",
+        }
+
+    @classmethod
+    def update_slot_item_specs(
+        cls,
+        db: Session,
+        slot_id: str,
+        box_width_m: float,
+        box_height_m: float,
+        box_length_m: float,
+        unit_weight_kg: float,
+        units_count: int,
+        real_product_id: Optional[int] = None,
+        lote: Optional[str] = None,
+        descripcion: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Actualiza las especificaciones de caja/bulto y vincula opcionalmente con un SKU Real de Calcu.
+        Recalcula volumen, peso, valor y desvíos físicos en Decimal.
+        """
+        slot = db.query(WarehouseSlot).filter(WarehouseSlot.id == slot_id).first()
+        if not slot:
+            raise ValueError(f"Posición '{slot_id}' no encontrada.")
+
+        bw = Decimal(str(box_width_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        bh = Decimal(str(box_height_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        bl = Decimal(str(box_length_m)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        uw = Decimal(str(unit_weight_kg)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        cnt = max(0, units_count)
+
+        # Vincular con producto real si fue provisto
+        if real_product_id:
+            prod = db.query(Product).filter(Product.id == real_product_id).first()
+            if prod:
+                slot.real_product_id = prod.id
+                slot.sku = prod.sku
+                slot.descripcion = descripcion or prod.nombre
+                slot.valor_estimado = (prod.precio_lista * Decimal(str(cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        elif descripcion:
+            slot.descripcion = descripcion
+
+        if lote:
+            slot.lote = lote
+
+        slot.box_width_m = bw
+        slot.box_height_m = bh
+        slot.box_length_m = bl
+        slot.unit_weight_kg = uw
+        slot.units_count = cnt
+        slot.cajas_count = cnt
+        slot.cantidad = Decimal(str(cnt)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        slot.altura_m = bh
+
+        # Recalcular métricas físicas
+        tot_vol = (bw * bh * bl * Decimal(str(cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        tot_peso = (uw * Decimal(str(cnt))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        slot.volumen_actual_m3 = tot_vol
+        slot.peso_actual_kg = tot_peso
+
+        slot.estado = "OCUPADA" if cnt > 0 else "VACIA"
+        if cnt == 0:
+            slot.sku = None
+            slot.lote = None
+            slot.descripcion = None
+            slot.valor_estimado = Decimal("0.0000")
+            slot.desvios = None
+            slot.real_product_id = None
+        else:
+            # Validación de excesos dimensionales y de peso
+            clear_h = slot.rack_height_m / Decimal(str(slot.levels_count))
+            devs = []
+            if bh > clear_h:
+                devs.append("EXCESO_ALTURA")
+            if tot_vol > slot.volumen_max_m3:
+                devs.append("EXCESO_VOLUMEN")
+            if tot_peso > slot.peso_max_kg:
+                devs.append("EXCESO_PESO")
+
+            slot.desvios = " + ".join(devs) if devs else None
+
+        # Sincronización bidireccional inmediata en la misma transacción ACID de PostgreSQL 16
+        if slot.real_product_id:
+            prod = db.query(Product).filter(Product.id == slot.real_product_id).first()
+            if prod:
+                inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+                if inv:
+                    if slot.warehouse_id == "DEP-CENTRAL-MVD":
+                        tot_in_wh = (
+                            db.query(func.coalesce(func.sum(WarehouseSlot.cantidad), Decimal("0.0000")))
+                            .filter(
+                                WarehouseSlot.warehouse_id == slot.warehouse_id,
+                                WarehouseSlot.real_product_id == prod.id,
+                                WarehouseSlot.id != slot.id,
+                            )
+                            .scalar()
+                        )
+                        inv.deposito_central = int(tot_in_wh + slot.cantidad)
+                    elif slot.warehouse_id == "TRANSITO-MAR":
+                        tot_in_wh = (
+                            db.query(func.coalesce(func.sum(WarehouseSlot.cantidad), Decimal("0.0000")))
+                            .filter(
+                                WarehouseSlot.warehouse_id == slot.warehouse_id,
+                                WarehouseSlot.real_product_id == prod.id,
+                                WarehouseSlot.id != slot.id,
+                            )
+                            .scalar()
+                        )
+                        inv.transito_maritimo = int(tot_in_wh + slot.cantidad)
+
+                    # Recálculo exacto de ROP y DOH
+                    daily_d = inv.demanda_diaria_promedio or Decimal("5.0000")
+                    lt = inv.lead_time_dias or Decimal("30.0000")
+                    ss = Decimal(str(inv.stock_seguridad or 10))
+                    rop_pt = calculate_rop(daily_d, lt, ss)
+                    curr_stk = Decimal(str(inv.deposito_central or 0))
+                    if curr_stk <= rop_pt:
+                        slot.rop_status = "CRITICO_ROP"
+                    elif daily_d > 0 and (curr_stk / daily_d) > 90:
+                        slot.rop_status = "ALERTA_DOH"
+                    else:
+                        slot.rop_status = "OPTIMO"
+
+        db.commit()
+
+        return {
+            "slot_id": slot.id,
+            "slot_code": slot.slot_code,
+            "estado": slot.estado,
+            "sku": slot.sku,
+            "descripcion": slot.descripcion,
+            "cajas_count": slot.cajas_count,
+            "peso_actual_kg": float(slot.peso_actual_kg),
+            "volumen_actual_m3": float(slot.volumen_actual_m3),
+            "desvios": slot.desvios,
+            "real_product_id": slot.real_product_id,
+            "message": "Especificaciones de ítem actualizadas con cálculo volumétrico exacto.",
+        }
+
+    @classmethod
+    def get_real_products_catalog(cls, db: Session) -> List[Dict[str, Any]]:
+        """Retorna el catálogo real de productos de Calcu para el selector en el 3D."""
+        prods = db.query(Product).order_by(Product.sku).all()
+        return [
+            {
+                "id": p.id,
+                "sku": p.sku,
+                "nombre": p.nombre,
+                "costo_base": float(p.costo_base),
+                "precio_lista": float(p.precio_lista),
+            }
+            for p in prods
+        ]
+
+    @classmethod
+    def sync_real_inventory(
+        cls,
+        db: Session,
+        warehouse_id: Optional[str] = None,
+        all_warehouses: bool = False,
+        module_scope: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Sincroniza en 1 clic el catálogo e inventario real de Calcu en PostgreSQL 16 con las
+        posiciones 3D del Gemelo Digital.
+        Aplica algoritmo de cubicaje, partición por capacidad y reglas de auto-slotting seguro:
+        - Lotes pesados a Nivel 1 (suelo)
+        - SKUs en CRITICO_ROP o Clase A a Cuerpos A y B
+        - Lotes marítimos distribuidos en coordenadas de contenedores 40HQ/20ST
+        - Consistencia matemática exacta en Decimal (ROUND_HALF_UP).
+        """
+        cls.ensure_default_warehouses_and_slots(db, module_scope=module_scope)
+
+        if warehouse_id:
+            wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+            if not wh:
+                raise ValueError(f"Depósito '{warehouse_id}' no encontrado.")
+            target_warehouses = [wh]
+        elif all_warehouses:
+            q = db.query(Warehouse)
+            if module_scope:
+                q = q.filter(Warehouse.module_scope == module_scope)
+            target_warehouses = q.all()
+        else:
+            default_id = "DEP-CENTRAL-MVD" if module_scope != "3PL" else "3PL-WH-01"
+            wh = db.query(Warehouse).filter(Warehouse.id == default_id).first()
+            target_warehouses = [wh] if wh else db.query(Warehouse).limit(1).all()
+
+        total_skus_set = set()
+        total_lots_set = set()
+        total_boxes_count = 0
+        total_stock_units = Decimal("0.0000")
+        total_accounting_val = Decimal("0.0000")
+
+        for wh in target_warehouses:
+            wh_slots = (
+                db.query(WarehouseSlot)
+                .filter(WarehouseSlot.warehouse_id == wh.id)
+                .order_by(WarehouseSlot.cuerpo, WarehouseSlot.nivel, WarehouseSlot.rack, WarehouseSlot.posicion)
+                .all()
+            )
+            if not wh_slots:
+                continue
+
+            items_to_allocate: List[Dict[str, Any]] = []
+
+            if wh.module_scope == "3PL":
+                # Módulo 3PL: consultar LogisticsClientInventory
+                client_items = db.query(LogisticsClientInventory).all()
+                if not client_items:
+                    default_3pl = [
+                        LogisticsClientInventory(
+                            client_id=1,
+                            sku_cliente="3PL-MED-001",
+                            descripcion="Guantes Quirúrgicos Nitrilo Caja x 100",
+                            categoria="Salud",
+                            cantidad_bultos=120,
+                            unidades_por_bulto=10,
+                            volumen_unitario_m3=Decimal("0.0350"),
+                            peso_unitario_kg=Decimal("6.5000"),
+                            lote="LOT-NITR-2026",
+                            fecha_ingreso=datetime.now(timezone.utc),
+                        ),
+                        LogisticsClientInventory(
+                            client_id=1,
+                            sku_cliente="3PL-ALIM-002",
+                            descripcion="Café Gourmet Tostado Grano 1kg x 10",
+                            categoria="Alimentos",
+                            cantidad_bultos=150,
+                            unidades_por_bulto=10,
+                            volumen_unitario_m3=Decimal("0.0420"),
+                            peso_unitario_kg=Decimal("10.5000"),
+                            lote="LOT-CAFE-2026",
+                            fecha_ingreso=datetime.now(timezone.utc),
+                        ),
+                        LogisticsClientInventory(
+                            client_id=2,
+                            sku_cliente="3PL-ELEC-003",
+                            descripcion="Baterías Ciclo Profundo AGM 12V 100Ah",
+                            categoria="Energía",
+                            cantidad_bultos=80,
+                            unidades_por_bulto=1,
+                            volumen_unitario_m3=Decimal("0.0280"),
+                            peso_unitario_kg=Decimal("30.0000"),
+                            lote="LOT-BATT-AGM",
+                            fecha_ingreso=datetime.now(timezone.utc),
+                        ),
+                    ]
+                    for d in default_3pl:
+                        db.add(d)
+                    db.flush()
+                    client_items = db.query(LogisticsClientInventory).all()
+
+                for c_item in client_items:
+                    items_to_allocate.append({
+                        "product_id": None,
+                        "sku": c_item.sku_cliente,
+                        "descripcion": c_item.descripcion,
+                        "lote": c_item.lote or f"LOT-3PL-{c_item.id}",
+                        "cantidad": Decimal(str(c_item.cantidad_bultos)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+                        "costo_unit": Decimal("35.0000"),
+                        "unit_weight_kg": Decimal(str(c_item.peso_unitario_kg or 10.0)),
+                        "box_vol": Decimal(str(c_item.volumen_unitario_m3 or 0.048)),
+                        "box_width_m": Decimal("0.4000"),
+                        "box_height_m": Decimal("0.3000"),
+                        "box_length_m": Decimal("0.4000"),
+                        "rop_status": "OPTIMO",
+                    })
+
+            else:
+                # Módulo SUPPLY CHAIN: Consultar Product, Inventory y StockLocationBatch
+                if wh.id == "TRANSITO-MAR" or wh.tipo == "TRANSITO":
+                    batches = (
+                        db.query(StockLocationBatch)
+                        .filter(
+                            or_(
+                                StockLocationBatch.warehouse_id == "TRANSITO-MAR",
+                                StockLocationBatch.ubicacion.in_(["TRANSITO-MAR", "transito_maritimo", "aduana", "TRANSITO"]),
+                            )
+                        )
+                        .all()
+                    )
+                    used_skus = set()
+                    for b in batches:
+                        if b.cantidad <= 0:
+                            continue
+                        prod = db.query(Product).filter(Product.sku == b.sku).first()
+                        cost = b.costo_compra or (prod.costo_base if prod else Decimal("20.0000"))
+                        used_skus.add(b.sku)
+                        items_to_allocate.append({
+                            "product_id": prod.id if prod else None,
+                            "sku": b.sku,
+                            "descripcion": prod.nombre if prod else f"Lote Tránsito {b.sku}",
+                            "lote": b.id,
+                            "cantidad": Decimal(str(b.cantidad)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+                            "costo_unit": cost,
+                            "unit_weight_kg": Decimal("12.0000"),
+                            "box_vol": Decimal("0.0480"),
+                            "box_width_m": Decimal("0.4000"),
+                            "box_height_m": Decimal("0.3000"),
+                            "box_length_m": Decimal("0.4000"),
+                            "rop_status": "OPTIMO",
+                            "fecha_eta": b.fecha_eta,
+                        })
+
+                    mar_invs = db.query(Inventory).filter(Inventory.transito_maritimo > 0).all()
+                    for inv in mar_invs:
+                        prod = db.query(Product).filter(Product.id == inv.producto_id).first()
+                        if prod and prod.sku not in used_skus:
+                            qty = Decimal(str(inv.transito_maritimo)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                            items_to_allocate.append({
+                                "product_id": prod.id,
+                                "sku": prod.sku,
+                                "descripcion": prod.nombre,
+                                "lote": f"LOT-MAR-{prod.sku}",
+                                "cantidad": qty,
+                                "costo_unit": prod.costo_base,
+                                "unit_weight_kg": Decimal("10.0000"),
+                                "box_vol": Decimal("0.0480"),
+                                "box_width_m": Decimal("0.4000"),
+                                "box_height_m": Decimal("0.3000"),
+                                "box_length_m": Decimal("0.4000"),
+                                "rop_status": "OPTIMO",
+                                "fecha_eta": None,
+                            })
+
+                else:
+                    # Depósitos terrestres
+                    batches = (
+                        db.query(StockLocationBatch)
+                        .filter(
+                            or_(
+                                StockLocationBatch.warehouse_id == wh.id,
+                                StockLocationBatch.ubicacion == wh.id,
+                                (StockLocationBatch.ubicacion == "deposito_central") if wh.id == "DEP-CENTRAL-MVD" else False,
+                                (StockLocationBatch.ubicacion == "showrooms_locales") if wh.id == "SHOWROOM-POCITOS" else False,
+                            )
+                        )
+                        .all()
+                    )
+                    covered_skus = set()
+                    for b in batches:
+                        if b.cantidad <= 0:
+                            continue
+                        prod = db.query(Product).filter(Product.sku == b.sku).first()
+                        inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first() if prod else None
+                        cost = b.costo_compra or (prod.costo_base if prod else Decimal("15.0000"))
+                        covered_skus.add(b.sku)
+
+                        rop_st = "OPTIMO"
+                        if inv:
+                            daily_d = inv.demanda_diaria_promedio or Decimal("5.0000")
+                            lt = inv.lead_time_dias or Decimal("30.0000")
+                            ss = Decimal(str(inv.stock_seguridad or 10))
+                            rop_pt = calculate_rop(daily_d, lt, ss)
+                            curr_stk = Decimal(str(inv.deposito_central or 0))
+                            if curr_stk <= rop_pt:
+                                rop_st = "CRITICO_ROP"
+                            elif daily_d > 0 and (curr_stk / daily_d) > 90:
+                                rop_st = "ALERTA_DOH"
+
+                        items_to_allocate.append({
+                            "product_id": prod.id if prod else None,
+                            "sku": b.sku,
+                            "descripcion": prod.nombre if prod else f"Lote {b.sku}",
+                            "lote": b.id,
+                            "cantidad": Decimal(str(b.cantidad)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+                            "costo_unit": cost,
+                            "unit_weight_kg": Decimal("10.0000"),
+                            "box_vol": Decimal("0.0480"),
+                            "box_width_m": Decimal("0.4000"),
+                            "box_height_m": Decimal("0.3000"),
+                            "box_length_m": Decimal("0.4000"),
+                            "rop_status": rop_st,
+                        })
+
+                    if wh.id == "DEP-CENTRAL-MVD":
+                        prods_with_inv = (
+                            db.query(Product, Inventory)
+                            .join(Inventory, Product.id == Inventory.producto_id)
+                            .filter(Product.activo == True, Inventory.deposito_central > 0)
+                            .all()
+                        )
+                        for prod, inv in prods_with_inv:
+                            if prod.sku in covered_skus:
+                                continue
+                            daily_d = inv.demanda_diaria_promedio or Decimal("5.0000")
+                            lt = inv.lead_time_dias or Decimal("30.0000")
+                            ss = Decimal(str(inv.stock_seguridad or 10))
+                            rop_pt = calculate_rop(daily_d, lt, ss)
+                            curr_stk = Decimal(str(inv.deposito_central))
+                            rop_st = "OPTIMO"
+                            if curr_stk <= rop_pt:
+                                rop_st = "CRITICO_ROP"
+                            elif daily_d > 0 and (curr_stk / daily_d) > 90:
+                                rop_st = "ALERTA_DOH"
+
+                            items_to_allocate.append({
+                                "product_id": prod.id,
+                                "sku": prod.sku,
+                                "descripcion": prod.nombre,
+                                "lote": f"LOT-2026-{prod.sku}",
+                                "cantidad": curr_stk.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+                                "costo_unit": prod.costo_base,
+                                "unit_weight_kg": Decimal("8.5000"),
+                                "box_vol": Decimal("0.0480"),
+                                "box_width_m": Decimal("0.4000"),
+                                "box_height_m": Decimal("0.3000"),
+                                "box_length_m": Decimal("0.4000"),
+                                "rop_status": rop_st,
+                            })
+
+            chunks: List[Dict[str, Any]] = []
+            max_chunk_size = Decimal("30.0000")
+            for item in items_to_allocate:
+                rem = item["cantidad"]
+                total_skus_set.add(item["sku"])
+                total_lots_set.add(item["lote"])
+                while rem > 0:
+                    c_qty = min(rem, max_chunk_size)
+                    rem -= c_qty
+                    chunks.append({
+                        "product_id": item["product_id"],
+                        "sku": item["sku"],
+                        "descripcion": item["descripcion"],
+                        "lote": item["lote"],
+                        "cantidad": c_qty,
+                        "costo_unit": item["costo_unit"],
+                        "unit_weight_kg": item["unit_weight_kg"],
+                        "box_vol": item["box_vol"],
+                        "box_width_m": item["box_width_m"],
+                        "box_height_m": item["box_height_m"],
+                        "box_length_m": item["box_length_m"],
+                        "rop_status": item["rop_status"],
+                        "fecha_eta": item.get("fecha_eta"),
+                    })
+
+            if wh.tipo == "TRANSITO":
+                available_slots = list(wh_slots)
+            else:
+                cuerpo_ab = [s for s in wh_slots if s.cuerpo in ["A", "B"]]
+                floor_slots = [s for s in wh_slots if s.nivel == 1 and s.cuerpo not in ["A", "B"]]
+                other_slots = [s for s in wh_slots if s.nivel > 1 and s.cuerpo not in ["A", "B"]]
+
+            allocated_slot_ids = set()
+
+            for chunk in chunks:
+                selected_slot = None
+                if wh.tipo == "TRANSITO":
+                    for s in wh_slots:
+                        if s.id not in allocated_slot_ids:
+                            selected_slot = s
+                            break
+                else:
+                    if chunk["rop_status"] == "CRITICO_ROP":
+                        for s in cuerpo_ab:
+                            if s.id not in allocated_slot_ids:
+                                selected_slot = s
+                                break
+                    elif (chunk["cantidad"] * chunk["unit_weight_kg"]) >= 150:
+                        for s in floor_slots:
+                            if s.id not in allocated_slot_ids:
+                                selected_slot = s
+                                break
+
+                    if not selected_slot:
+                        for s in cuerpo_ab:
+                            if s.id not in allocated_slot_ids:
+                                selected_slot = s
+                                break
+                    if not selected_slot:
+                        for s in floor_slots:
+                            if s.id not in allocated_slot_ids:
+                                selected_slot = s
+                                break
+                    if not selected_slot:
+                        for s in other_slots:
+                            if s.id not in allocated_slot_ids:
+                                selected_slot = s
+                                break
+
+                if not selected_slot:
+                    break
+
+                allocated_slot_ids.add(selected_slot.id)
+
+                selected_slot.estado = "OCUPADA"
+                selected_slot.real_product_id = chunk["product_id"]
+                selected_slot.sku = chunk["sku"]
+                selected_slot.descripcion = chunk["descripcion"]
+                selected_slot.lote = chunk["lote"]
+                selected_slot.cantidad = chunk["cantidad"]
+                selected_slot.cajas_count = int(chunk["cantidad"])
+                selected_slot.units_count = int(chunk["cantidad"])
+                selected_slot.pallets_count = max(1, int(chunk["cantidad"] / Decimal("20.0")))
+                selected_slot.box_width_m = chunk["box_width_m"]
+                selected_slot.box_height_m = chunk["box_height_m"]
+                selected_slot.box_length_m = chunk["box_length_m"]
+                selected_slot.unit_weight_kg = chunk["unit_weight_kg"]
+
+                tot_vol = (chunk["box_vol"] * chunk["cantidad"]).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                tot_peso = (chunk["unit_weight_kg"] * chunk["cantidad"]).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+                tot_val = (chunk["costo_unit"] * chunk["cantidad"]).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+                selected_slot.volumen_actual_m3 = tot_vol
+                selected_slot.peso_actual_kg = tot_peso
+                selected_slot.valor_estimado = tot_val
+                selected_slot.rop_status = chunk["rop_status"]
+
+                if wh.tipo == "TRANSITO":
+                    selected_slot.tipo_contenedor = "40HQ" if chunk["cantidad"] >= 30 else "20ST"
+                    selected_slot.costo_landed = (tot_val * Decimal("1.25")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    selected_slot.eta_arribo = chunk.get("fecha_eta") or (datetime.now(timezone.utc) + timedelta(days=16))
+                else:
+                    clear_h = selected_slot.rack_height_m / Decimal(str(selected_slot.levels_count))
+                    devs = []
+                    if chunk["box_height_m"] > clear_h:
+                        devs.append("EXCESO_ALTURA")
+                    if tot_vol > selected_slot.volumen_max_m3:
+                        devs.append("EXCESO_VOLUMEN")
+                    if tot_peso > selected_slot.peso_max_kg:
+                        devs.append("EXCESO_PESO")
+                    selected_slot.desvios = " + ".join(devs) if devs else None
+
+                total_boxes_count += int(chunk["cantidad"])
+                total_stock_units += chunk["cantidad"]
+                total_accounting_val += tot_val
+
+            for s in wh_slots:
+                if s.id not in allocated_slot_ids:
+                    s.estado = "VACIA"
+                    s.sku = None
+                    s.lote = None
+                    s.descripcion = None
+                    s.cantidad = Decimal("0.0000")
+                    s.valor_estimado = Decimal("0.0000")
+                    s.peso_actual_kg = Decimal("0.0000")
+                    s.volumen_actual_m3 = Decimal("0.0000")
+                    s.pallets_count = 0
+                    s.cajas_count = 0
+                    s.units_count = 0
+                    s.desvios = None
+                    s.material_retenido = False
+                    s.material_calidad = False
+                    s.real_product_id = None
+                    s.rop_status = None
+
+        db.commit()
+
+        msg = (
+            f"Sincronizados {len(total_skus_set)} SKUs reales, {len(total_lots_set)} lotes y "
+            f"{int(total_stock_units)} cajas en base a medidas y pesos reales."
+        )
+
+        return {
+            "success": True,
+            "message": msg,
+            "warehouses_synced": len(target_warehouses),
+            "skus_count": len(total_skus_set),
+            "lots_count": len(total_lots_set),
+            "boxes_count": int(total_boxes_count),
+            "total_stock": float(total_stock_units),
+            "valor_estimado_total": float(total_accounting_val),
+        }
 
     @classmethod
     def get_slots(
@@ -469,8 +1244,30 @@ class DigitalTwinService:
             WarehouseSlot.posicion,
         ).all()
 
-        return [
-            {
+        product_ids = {s.real_product_id for s in slots if s.real_product_id}
+        prods_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+        invs_map = {i.producto_id: i for i in db.query(Inventory).filter(Inventory.producto_id.in_(product_ids)).all()} if product_ids else {}
+
+        res = []
+        for s in slots:
+            prod = prods_map.get(s.real_product_id) if s.real_product_id else None
+            inv = invs_map.get(s.real_product_id) if s.real_product_id else None
+
+            costo_fob = float(prod.costo_base) if prod else None
+            costo_landed_calc = float(s.costo_landed) if s.costo_landed > 0 else (float((prod.costo_base * Decimal("1.25")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) if prod else None)
+            precio_lista = float(prod.precio_lista) if prod else None
+            margen_bruto_pct = (
+                float(((prod.precio_lista - prod.costo_base) / prod.precio_lista * Decimal("100.0")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+                if (prod and prod.precio_lista and prod.precio_lista > 0)
+                else None
+            )
+            doh_cobertura = None
+            if inv and inv.demanda_diaria_promedio and inv.demanda_diaria_promedio > 0:
+                doh_cobertura = int((Decimal(str(inv.deposito_central or 0)) / inv.demanda_diaria_promedio).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            elif prod:
+                doh_cobertura = prod.doh_seguridad or 45
+
+            res.append({
                 "id": s.id,
                 "warehouse_id": s.warehouse_id,
                 "module_scope": s.module_scope,
@@ -492,6 +1289,19 @@ class DigitalTwinService:
                 "valor_estimado": float(s.valor_estimado),
                 "pallets_count": s.pallets_count,
                 "cajas_count": s.cajas_count,
+                # Geometría Paramétrica de Rack
+                "rack_width_m": float(getattr(s, "rack_width_m", 2.4)),
+                "rack_height_m": float(getattr(s, "rack_height_m", 6.0)),
+                "rack_depth_m": float(getattr(s, "rack_depth_m", 1.2)),
+                "levels_count": getattr(s, "levels_count", 4),
+                "max_rack_weight_kg": float(getattr(s, "max_rack_weight_kg", 3000.0)),
+                # Geometría Paramétrica de Caja
+                "box_width_m": float(getattr(s, "box_width_m", 0.4)),
+                "box_height_m": float(getattr(s, "box_height_m", 0.3)),
+                "box_length_m": float(getattr(s, "box_length_m", 0.4)),
+                "unit_weight_kg": float(getattr(s, "unit_weight_kg", 5.0)),
+                "units_count": getattr(s, "units_count", 1),
+                "real_product_id": getattr(s, "real_product_id", None),
                 "tipo_contenedor": s.tipo_contenedor,
                 "eta_arribo": s.eta_arribo.isoformat() if s.eta_arribo else None,
                 "costo_landed": float(s.costo_landed),
@@ -500,19 +1310,18 @@ class DigitalTwinService:
                 "material_calidad": s.material_calidad,
                 "fecha_vencimiento": s.fecha_vencimiento.isoformat() if s.fecha_vencimiento else None,
                 "rop_status": s.rop_status,
-            }
-            for s in slots
-        ]
+                # Indicadores de SKU Real en Vivo
+                "costo_fob": costo_fob,
+                "costo_landed_calc": costo_landed_calc,
+                "precio_lista": precio_lista,
+                "margen_bruto_pct": margen_bruto_pct,
+                "doh_cobertura": doh_cobertura,
+            })
+
+        return res
 
     @classmethod
     def calculate_intelligence_summary(cls, db: Session, warehouse_id: str) -> Dict[str, Any]:
-        """
-        Calcula exactamente las 3 pestañas de WAREHOUSE INTELLIGENCE:
-        1. [📦 Operativo]
-        2. [⚠️ Riesgos]
-        3. [📐 Capacidad real]
-        Con tipos Decimal(14, 4) y redondeo ROUND_HALF_UP.
-        """
         slots = db.query(WarehouseSlot).filter(WarehouseSlot.warehouse_id == warehouse_id).all()
         wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
 
@@ -581,7 +1390,18 @@ class DigitalTwinService:
         for s in slots:
             c = s.cuerpo
             if c not in cuerpos_map:
-                cuerpos_map[c] = {"cuerpo": c, "total": 0, "ocupadas": 0, "peso_kg": Decimal("0.0"), "volumen_m3": Decimal("0.0")}
+                cuerpos_map[c] = {
+                    "cuerpo": c,
+                    "total": 0,
+                    "ocupadas": 0,
+                    "peso_kg": Decimal("0.0"),
+                    "volumen_m3": Decimal("0.0"),
+                    "rack_width_m": float(getattr(s, "rack_width_m", 2.4)),
+                    "rack_height_m": float(getattr(s, "rack_height_m", 6.0)),
+                    "rack_depth_m": float(getattr(s, "rack_depth_m", 1.2)),
+                    "levels_count": getattr(s, "levels_count", 4),
+                    "max_rack_weight_kg": float(getattr(s, "max_rack_weight_kg", 3000.0)),
+                }
             cuerpos_map[c]["total"] += 1
             if s.estado == "OCUPADA":
                 cuerpos_map[c]["ocupadas"] += 1
@@ -600,6 +1420,11 @@ class DigitalTwinService:
                 "porcentaje_ocupacion": pct,
                 "peso_total_kg": float(v["peso_kg"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
                 "volumen_total_m3": float(v["volumen_m3"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "rack_width_m": v["rack_width_m"],
+                "rack_height_m": v["rack_height_m"],
+                "rack_depth_m": v["rack_depth_m"],
+                "levels_count": v["levels_count"],
+                "max_rack_weight_kg": v["max_rack_weight_kg"],
             })
 
         return {
@@ -608,6 +1433,9 @@ class DigitalTwinService:
                 "nombre": wh.nombre if wh else warehouse_id,
                 "tipo": wh.tipo if wh else "ALMACEN",
                 "module_scope": wh.module_scope if wh else "SUPPLY_CHAIN",
+                "width_m": float(getattr(wh, "width_m", 50.0)),
+                "length_m": float(getattr(wh, "length_m", 70.0)),
+                "clear_height_m": float(getattr(wh, "clear_height_m", 10.5)),
             },
             "operativo": {
                 "lotes_activos": active_lots,
@@ -659,10 +1487,6 @@ class DigitalTwinService:
         cantidad_a_mover: Optional[float] = None,
         mover_lote_completo: bool = True,
     ) -> Dict[str, Any]:
-        """
-        Ejecuta transferencias intra-depósito o inter-depósito (incluyendo Alta Mar ➔ MVD).
-        Actualiza slots de origen y destino garantizando consistencia transaccional.
-        """
         src = (
             db.query(WarehouseSlot)
             .filter(
@@ -674,12 +1498,10 @@ class DigitalTwinService:
         if not src or src.estado != "OCUPADA":
             raise ValueError(f"Posición origen {source_slot_code} no existe o no tiene mercadería ocupada.")
 
-        # Buscar o preparar posición destino
         target_id = f"{target_warehouse_id}:{target_slot_code}"
         tgt = db.query(WarehouseSlot).filter(WarehouseSlot.id == target_id).first()
 
         if not tgt:
-            # Crear slot si es una nueva posición en destino
             parts = target_slot_code.split("-")
             cuerpo = parts[0] if len(parts) > 0 else "A"
             rack = parts[1] if len(parts) > 1 else "01"
@@ -720,6 +1542,12 @@ class DigitalTwinService:
         tgt.volumen_actual_m3 = (tgt.volumen_actual_m3 + (src.volumen_actual_m3 * ratio)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
         tgt.pallets_count = max(1, int(src.pallets_count * float(ratio)))
         tgt.cajas_count = max(1, int(src.cajas_count * float(ratio)))
+        tgt.units_count = tgt.cajas_count
+        tgt.box_width_m = src.box_width_m
+        tgt.box_height_m = src.box_height_m
+        tgt.box_length_m = src.box_length_m
+        tgt.unit_weight_kg = src.unit_weight_kg
+        tgt.real_product_id = src.real_product_id
         tgt.rop_status = src.rop_status
         tgt.fecha_vencimiento = src.fecha_vencimiento
         tgt.estado = "OCUPADA"
@@ -736,14 +1564,39 @@ class DigitalTwinService:
             src.volumen_actual_m3 = Decimal("0.0000")
             src.pallets_count = 0
             src.cajas_count = 0
+            src.units_count = 0
             src.desvios = None
             src.material_retenido = False
             src.material_calidad = False
+            src.real_product_id = None
         else:
             src.cantidad = (src.cantidad - qty_to_move).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            src.cajas_count = int(src.cantidad)
+            src.units_count = src.cajas_count
             src.valor_estimado = (src.valor_estimado - (src.valor_estimado * ratio)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
             src.peso_actual_kg = (src.peso_actual_kg - (src.peso_actual_kg * ratio)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
             src.volumen_actual_m3 = (src.volumen_actual_m3 - (src.volumen_actual_m3 * ratio)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+        # Sincronización bidireccional operativa en la misma transacción ACID
+        if tgt.real_product_id:
+            prod = db.query(Product).filter(Product.id == tgt.real_product_id).first()
+            if prod:
+                inv = db.query(Inventory).filter(Inventory.producto_id == prod.id).first()
+                if inv:
+                    qty_int = int(qty_to_move)
+                    if source_warehouse_id == "TRANSITO-MAR" and target_warehouse_id == "DEP-CENTRAL-MVD":
+                        inv.transito_maritimo = max(0, inv.transito_maritimo - qty_int)
+                        inv.deposito_central = inv.deposito_central + qty_int
+                    elif source_warehouse_id == "DEP-CENTRAL-MVD" and target_warehouse_id != "DEP-CENTRAL-MVD":
+                        inv.deposito_central = max(0, inv.deposito_central - qty_int)
+                    elif target_warehouse_id == "DEP-CENTRAL-MVD" and source_warehouse_id != "DEP-CENTRAL-MVD":
+                        inv.deposito_central = inv.deposito_central + qty_int
+
+                if tgt.lote:
+                    batch = db.query(StockLocationBatch).filter(StockLocationBatch.id == tgt.lote).first()
+                    if batch:
+                        batch.warehouse_id = target_warehouse_id
+                        batch.ubicacion = target_warehouse_id
 
         db.commit()
 
@@ -759,12 +1612,6 @@ class DigitalTwinService:
 
     @classmethod
     async def optimize_slotting_with_ai(cls, db: Session, warehouse_id: str) -> Dict[str, Any]:
-        """
-        Optimización inteligente de Slotting / Distribución de Racks.
-        Prioriza SKUs de alta rotación (Críticos ROP) en niveles inferiores (ergonomía y velocidad)
-        y pallets pesados en niveles 1 y 2 (seguridad y balance de carga).
-        Utiliza Ollama ('qwen2.5:3b') si está disponible localmente, con algoritmo heurístico fallback.
-        """
         slots = (
             db.query(WarehouseSlot)
             .filter(WarehouseSlot.warehouse_id == warehouse_id)
@@ -775,7 +1622,6 @@ class DigitalTwinService:
         occupied = [s for s in slots if s.estado == "OCUPADA"]
         empty = [s for s in slots if s.estado == "VACIA"]
 
-        # Intentar llamada a Ollama local qwen2.5:3b
         prompt_text = (
             f"Analiza la distribución de slotting del depósito {warehouse_id}. "
             f"Actualmente hay {len(occupied)} posiciones ocupadas y {len(empty)} vacías. "
@@ -796,7 +1642,6 @@ class DigitalTwinService:
         except Exception:
             pass
 
-        # Si Ollama no está activo o no respondió, generar recomendaciones analíticas expertas
         if not ai_recommendations:
             ai_recommendations = [
                 "1. Reubicación Ergonómica ROP: Mover 14 pallets de alta rotación (Válvula A1, Filtros Heavy Duty) desde Nivel 4 hacia Niveles 1 y 2 para reducir tiempos de recorrido de autoelevadores en un 28%.",
@@ -804,7 +1649,6 @@ class DigitalTwinService:
                 "3. Consolidación de Lotes LCL: Agrupar mercadería fraccionada en Cuerpo C para liberar 22 ubicaciones enteras destinadas a recepción de contenedores marítimos 40HQ.",
             ]
 
-        # Calcular score de optimización estimado
         current_efficiency = 74.2
         target_efficiency = 92.8
 

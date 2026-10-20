@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,6 +14,14 @@ import {
   Plus,
   X,
   Cpu,
+  Ruler,
+  Layers,
+  Settings2,
+  PackageCheck,
+  AlertCircle,
+  RefreshCw,
+  CheckCircle2,
+  Link2,
 } from 'lucide-react';
 import type {
   DigitalTwinWarehouse,
@@ -21,6 +29,10 @@ import type {
   WarehouseIntelligenceSummary,
   TransferStockPayload,
   OptimizeSlottingResponse,
+  RealProductItem,
+  WarehouseDimensionsUpdatePayload,
+  RackDimensionsUpdatePayload,
+  SlotItemSpecsUpdatePayload,
 } from '../../services/digitalTwinApi';
 import { digitalTwinApi } from '../../services/digitalTwinApi';
 
@@ -36,130 +48,288 @@ interface UniversalWarehouseTwin3DProps {
 // 3D OBJECTS & MESHES (THREE.JS)
 // ==========================================
 
-// Terrestrial Pallet & Cargo Box Component
-const TerrestrialSlotMesh: React.FC<{
-  slot: DigitalTwinSlot;
-  isSelected: boolean;
-  isGhost: boolean;
-  onSelect: (slot: DigitalTwinSlot) => void;
-}> = ({ slot, isSelected, isGhost, onSelect }) => {
-  const meshRef = useRef<THREE.Group>(null);
+// Parametric Terrestrial Concrete Floor & Walls
+const WarehouseNaveMesh: React.FC<{
+  width: number;
+  length: number;
+  clearHeight: number;
+}> = ({ width, length, clearHeight }) => {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Ground concrete floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[width, length]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.8} metalness={0.2} />
+      </mesh>
 
-  const posX = (slot.cuerpo.charCodeAt(0) - 65) * 6 + (parseInt(slot.rack) || 1) * 2.2;
-  const posY = (slot.nivel - 1) * 1.8 + 0.3;
-  const posZ = (slot.posicion - 2) * 1.6;
+      {/* Safety perimeter line */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <ringGeometry args={[Math.min(width, length) * 0.45, Math.min(width, length) * 0.45 + 0.2, 64]} />
+        <meshBasicMaterial color="#eab308" />
+      </mesh>
 
-  const isAlertROP = slot.rop_status === 'CRITICO_ROP';
-  const isAlertDOH = slot.rop_status === 'ALERTA_DOH';
-  const hasDeviation = Boolean(slot.desvios);
+      {/* Grid line indicator */}
+      <gridHelper args={[Math.max(width, length), 20, '#38bdf8', '#1e293b']} position={[0, 0.01, 0]} />
 
-  if (isGhost) {
-    return (
-      <group position={[posX, posY, posZ]}>
-        <mesh>
-          <boxGeometry args={[1.2, 1.4, 1.2]} />
-          <meshBasicMaterial color="#334155" wireframe transparent opacity={0.15} />
+      {/* Structural Corner Columns indicating Clear Height */}
+      {[
+        [-width / 2 + 1, -length / 2 + 1],
+        [width / 2 - 1, -length / 2 + 1],
+        [-width / 2 + 1, length / 2 - 1],
+        [width / 2 - 1, length / 2 - 1],
+      ].map(([cx, cz], i) => (
+        <group key={i} position={[cx, clearHeight / 2, cz]}>
+          <mesh>
+            <boxGeometry args={[0.6, clearHeight, 0.6]} />
+            <meshStandardMaterial color="#334155" roughness={0.5} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Perimeter Dock Area */}
+      <group position={[-width / 2 - 3, 0, 0]}>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[6, 0.2, length * 0.8]} />
+          <meshStandardMaterial color="#1e293b" />
         </mesh>
+        {[-8, 0, 8].map((zPos, idx) => (
+          <group key={idx} position={[1.5, 1.2, zPos]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[4.2, 2.2, 2.2]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.5} />
+            </mesh>
+            <mesh position={[-2.8, -0.2, 0]}>
+              <boxGeometry args={[1.6, 1.8, 2.0]} />
+              <meshStandardMaterial color="#0284c7" roughness={0.4} />
+            </mesh>
+          </group>
+        ))}
       </group>
-    );
-  }
+    </group>
+  );
+};
 
-  if (slot.estado === 'VACIA') {
-    return (
-      <group
-        position={[posX, posY, posZ]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(slot);
-        }}
-      >
-        <mesh>
-          <boxGeometry args={[1.2, 0.2, 1.2]} />
-          <meshStandardMaterial color="#0284c7" transparent opacity={0.3} wireframe />
-        </mesh>
-      </group>
-    );
-  }
+// Structural Racks per Cuerpo
+const RackStructures: React.FC<{
+  cuerpos: string[];
+  slotsByCuerpo: Record<string, DigitalTwinSlot[]>;
+  selectedCuerpo: string;
+  onSelectRackCuerpo: (cuerpo: string, sampleSlot: DigitalTwinSlot) => void;
+}> = ({ cuerpos, slotsByCuerpo, selectedCuerpo, onSelectRackCuerpo }) => {
+  return (
+    <group>
+      {cuerpos.map((cuerpo) => {
+        const cuerpoSlots = slotsByCuerpo[cuerpo] || [];
+        if (cuerpoSlots.length === 0) return null;
+        const sample = cuerpoSlots[0];
 
-  if (slot.estado === 'BLOQUEADA') {
-    return (
-      <group
-        position={[posX, posY, posZ]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(slot);
-        }}
-      >
-        <mesh>
-          <boxGeometry args={[1.2, 1.4, 1.2]} />
-          <meshStandardMaterial color="#ef4444" transparent opacity={0.65} wireframe />
-        </mesh>
-      </group>
-    );
-  }
+        const cuerpoIdx = Math.max(0, cuerpo.charCodeAt(0) - 65);
+        const rw = sample.rack_width_m || 2.4;
+        const rh = sample.rack_height_m || 6.0;
+        const rd = sample.rack_depth_m || 1.2;
+        const lev = sample.levels_count || 4;
+        const levelH = rh / Math.max(1, lev);
 
-  let boxColor = '#d97706';
-  let emissiveColor = '#000000';
-  let emissiveIntensity = 0;
+        const rackNums = Array.from(new Set(cuerpoSlots.map((s) => parseInt(s.rack.replace(/\D/g, '')) || 1)));
+        const isSelected = selectedCuerpo === cuerpo;
 
-  if (isAlertROP) {
-    boxColor = '#dc2626';
-    emissiveColor = '#ef4444';
-    emissiveIntensity = 0.6;
-  } else if (isAlertDOH) {
-    boxColor = '#f59e0b';
-    emissiveColor = '#fbbf24';
-    emissiveIntensity = 0.4;
-  } else if (hasDeviation) {
-    boxColor = '#8b5cf6';
-    emissiveColor = '#a855f7';
-    emissiveIntensity = 0.3;
-  } else if (slot.rop_status === 'OPTIMO') {
-    boxColor = '#059669';
-  }
+        return (
+          <group key={cuerpo}>
+            {rackNums.map((rackNum) => {
+              const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
+              return (
+                <group
+                  key={rackNum}
+                  position={[posX, 0, 0]}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectRackCuerpo(cuerpo, sample);
+                  }}
+                >
+                  {/* Upright posts (4 corner columns) */}
+                  {[-rd / 2, rd / 2].map((xOff, xi) =>
+                    [-rw / 2, rw / 2].map((zOff, zi) => (
+                      <mesh key={`${xi}-${zi}`} position={[xOff, rh / 2, zOff]}>
+                        <boxGeometry args={[0.07, rh, 0.07]} />
+                        <meshStandardMaterial
+                          color={isSelected ? '#38bdf8' : '#475569'}
+                          metalness={0.7}
+                          roughness={0.3}
+                        />
+                      </mesh>
+                    ))
+                  )}
 
-  if (isSelected) {
-    emissiveColor = '#38bdf8';
-    emissiveIntensity = 0.8;
-  }
+                  {/* Horizontal crossbeams per level */}
+                  {Array.from({ length: lev + 1 }).map((_, k) => (
+                    <mesh key={k} position={[0, k * levelH + 0.04, 0]}>
+                      <boxGeometry args={[rd, 0.05, rw]} />
+                      <meshStandardMaterial
+                        color={isSelected ? '#0284c7' : '#334155'}
+                        metalness={0.6}
+                        roughness={0.4}
+                      />
+                    </mesh>
+                  ))}
+
+                  {/* Header Label */}
+                  <Text
+                    position={[0, rh + 0.4, 0]}
+                    fontSize={0.35}
+                    color={isSelected ? '#38bdf8' : '#94a3b8'}
+                    anchorX="center"
+                    anchorY="middle"
+                  >
+                    {`Cuerpo ${cuerpo} - R${rackNum}`}
+                  </Text>
+                </group>
+              );
+            })}
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
+// Ultra-Optimized InstancedMesh Cargo Engine for Real Inventory
+const InstancedTerrestrialCargo: React.FC<{
+  slots: DigitalTwinSlot[];
+  selectedSlotId: string | null;
+  onSelectSlot: (slot: DigitalTwinSlot) => void;
+}> = ({ slots, selectedSlotId, onSelectSlot }) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const color = useMemo(() => new THREE.Color(), []);
+
+  const occupiedSlots = useMemo(() => {
+    return slots.filter((s) => s.estado === 'OCUPADA');
+  }, [slots]);
+
+  useLayoutEffect(() => {
+    if (!meshRef.current) return;
+    const mesh = meshRef.current;
+
+    occupiedSlots.forEach((slot, i) => {
+      const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
+      const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
+      const rw = slot.rack_width_m || 2.4;
+      const rh = slot.rack_height_m || 6.0;
+      const rd = slot.rack_depth_m || 1.2;
+      const lev = Math.max(1, slot.levels_count || 4);
+      const levelH = rh / lev;
+
+      const bw = Math.min(rw / 3.1, Math.max(0.2, slot.box_width_m || 0.4));
+      const bh = Math.max(0.2, slot.box_height_m || 0.3);
+      const bl = Math.min(rd * 0.9, Math.max(0.2, slot.box_length_m || 0.4));
+
+      const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
+      const posY = (slot.nivel - 1) * levelH + bh / 2 + 0.08;
+      const posZ = (slot.posicion - 2) * (rw / 3.0);
+
+      dummy.position.set(posX, posY, posZ);
+      dummy.scale.set(bw, bh, bl);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+
+      // Color coding reactive to ROP / DOH / Physical Deviations
+      let hexColor = '#0284c7'; // default blue
+      if (slot.id === selectedSlotId) {
+        hexColor = '#38bdf8'; // glowing cyan
+      } else if (slot.desvios) {
+        hexColor = '#ec4899'; // pink/magenta deviation
+      } else if (slot.rop_status === 'CRITICO_ROP') {
+        hexColor = '#ef4444'; // critical red
+      } else if (slot.rop_status === 'ALERTA_DOH') {
+        hexColor = '#f59e0b'; // amber
+      } else if (slot.rop_status === 'OPTIMO') {
+        hexColor = '#10b981'; // emerald
+      }
+
+      color.set(hexColor);
+      mesh.setColorAt(i, color);
+    });
+
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+  }, [occupiedSlots, selectedSlotId, dummy, color]);
+
+  if (occupiedSlots.length === 0) return null;
 
   return (
-    <group
+    <instancedMesh
       ref={meshRef}
-      position={[posX, posY, posZ]}
+      args={[undefined, undefined, occupiedSlots.length]}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(slot);
+        const instanceId = e.instanceId;
+        if (instanceId !== undefined && occupiedSlots[instanceId]) {
+          onSelectSlot(occupiedSlots[instanceId]);
+        }
       }}
     >
-      <mesh position={[0, 0.08, 0]}>
-        <boxGeometry args={[1.2, 0.15, 1.2]} />
-        <meshStandardMaterial color="#78350f" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 0.75, 0]}>
-        <boxGeometry args={[1.05, 1.2, 1.05]} />
-        <meshStandardMaterial
-          color={boxColor}
-          roughness={0.6}
-          emissive={emissiveColor}
-          emissiveIntensity={emissiveIntensity}
-        />
-      </mesh>
-      <mesh position={[0, 0.75, 0]}>
-        <boxGeometry args={[1.07, 0.1, 1.07]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.4} />
-      </mesh>
-      {isSelected && (
-        <Text
-          position={[0, 1.6, 0]}
-          fontSize={0.25}
-          color="#38bdf8"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {slot.slot_code}
-        </Text>
-      )}
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial roughness={0.35} metalness={0.2} />
+    </instancedMesh>
+  );
+};
+
+// Wireframe Mesh for Empty and Blocked Slots
+const EmptyAndBlockedSlotsMesh: React.FC<{
+  slots: DigitalTwinSlot[];
+  showEmptySlots: boolean;
+  selectedSlotId: string | null;
+  onSelectSlot: (slot: DigitalTwinSlot) => void;
+}> = ({ slots, showEmptySlots, selectedSlotId, onSelectSlot }) => {
+  const targetSlots = useMemo(() => {
+    return slots.filter((s) => {
+      if (s.estado === 'OCUPADA') return false;
+      if (s.estado === 'VACIA' && !showEmptySlots) return false;
+      return true;
+    });
+  }, [slots, showEmptySlots]);
+
+  return (
+    <group>
+      {targetSlots.map((slot) => {
+        const cuerpoIdx = Math.max(0, slot.cuerpo.charCodeAt(0) - 65);
+        const rackNum = parseInt(slot.rack.replace(/\D/g, '')) || 1;
+        const rw = slot.rack_width_m || 2.4;
+        const rh = slot.rack_height_m || 6.0;
+        const rd = slot.rack_depth_m || 1.2;
+        const lev = Math.max(1, slot.levels_count || 4);
+        const levelH = rh / lev;
+
+        const posX = cuerpoIdx * (rd * 2 + 4.8) + (rackNum - 1) * (rd + 1.6) - 12;
+        const posY = (slot.nivel - 1) * levelH + 0.1;
+        const posZ = (slot.posicion - 2) * (rw / 3.0);
+
+        const isBlocked = slot.estado === 'BLOQUEADA';
+        const isSelected = slot.id === selectedSlotId;
+
+        return (
+          <group
+            key={slot.id}
+            position={[posX, posY, posZ]}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectSlot(slot);
+            }}
+          >
+            <mesh>
+              <boxGeometry args={[rw / 3.2, 0.08, rd * 0.9]} />
+              <meshStandardMaterial
+                color={isSelected ? '#38bdf8' : isBlocked ? '#ef4444' : '#0284c7'}
+                transparent
+                opacity={isSelected ? 0.7 : isBlocked ? 0.6 : 0.25}
+                wireframe={!isSelected}
+              />
+            </mesh>
+          </group>
+        );
+      })}
     </group>
   );
 };
@@ -291,42 +461,6 @@ const ContainerShipHull: React.FC = () => {
   );
 };
 
-// Terrestrial Warehouse Concrete Floor & Yard
-const WarehouseFloor: React.FC = () => {
-  return (
-    <group position={[12, 0, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[50, 30]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.2} />
-      </mesh>
-
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <ringGeometry args={[14, 14.15, 64]} />
-        <meshBasicMaterial color="#eab308" />
-      </mesh>
-
-      <group position={[-20, 0, 0]}>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[6, 0.2, 28]} />
-          <meshStandardMaterial color="#334155" />
-        </mesh>
-        {[-8, 0, 8].map((zPos, idx) => (
-          <group key={idx} position={[2, 1.4, zPos]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[4.8, 2.2, 2.2]} />
-              <meshStandardMaterial color="#f8fafc" roughness={0.5} />
-            </mesh>
-            <mesh position={[-3.2, -0.2, 0]}>
-              <boxGeometry args={[1.8, 1.8, 2.0]} />
-              <meshStandardMaterial color="#0284c7" roughness={0.4} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  );
-};
-
 // ==========================================
 // MAIN COMPONENT: UniversalWarehouseTwin3D
 // ==========================================
@@ -344,6 +478,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   );
   const [slots, setSlots] = useState<DigitalTwinSlot[]>([]);
   const [summary, setSummary] = useState<WarehouseIntelligenceSummary | null>(null);
+  const [realProducts, setRealProducts] = useState<RealProductItem[]>([]);
 
   const [selectedCuerpo, setSelectedCuerpo] = useState<string>('ALL');
   const [kanbanFilter, setKanbanFilter] = useState<string>(propKanbanFilter);
@@ -353,6 +488,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
   const [inspectedSlot, setInspectedSlot] = useState<DigitalTwinSlot | null>(null);
 
+  // Modals state
   const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
   const [transferTargetWh, setTransferTargetWh] = useState<string>('');
   const [transferTargetSlot, setTransferTargetSlot] = useState<string>('');
@@ -373,13 +509,66 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
   const [newWhLocation, setNewWhLocation] = useState<string>('');
   const [isSavingWh, setIsSavingWh] = useState<boolean>(false);
 
+  // Parametric Dimensions Modals
+  const [isWhDimModalOpen, setIsWhDimModalOpen] = useState<boolean>(false);
+  const [whDimForm, setWhDimForm] = useState<WarehouseDimensionsUpdatePayload>({
+    width_m: 50.0,
+    length_m: 70.0,
+    clear_height_m: 10.5,
+  });
+  const [isSavingWhDim, setIsSavingWhDim] = useState<boolean>(false);
+
+  const [isRackEngModalOpen, setIsRackEngModalOpen] = useState<boolean>(false);
+  const [selectedRackCuerpo, setSelectedRackCuerpo] = useState<string>('A');
+  const [rackEngForm, setRackEngForm] = useState<RackDimensionsUpdatePayload>({
+    rack_width_m: 2.4,
+    rack_height_m: 6.0,
+    rack_depth_m: 1.2,
+    levels_count: 4,
+    max_rack_weight_kg: 3000.0,
+  });
+  const [isSavingRackEng, setIsSavingRackEng] = useState<boolean>(false);
+
+  const [isSlotItemModalOpen, setIsSlotItemModalOpen] = useState<boolean>(false);
+  const [slotItemForm, setSlotItemForm] = useState<SlotItemSpecsUpdatePayload>({
+    box_width_m: 0.4,
+    box_height_m: 0.3,
+    box_length_m: 0.4,
+    unit_weight_kg: 10.0,
+    units_count: 1,
+    real_product_id: null,
+    lote: '',
+    descripcion: '',
+  });
+  const [isSavingSlotItem, setIsSavingSlotItem] = useState<boolean>(false);
+  const [isSyncingInventory, setIsSyncingInventory] = useState<boolean>(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+
+  const selectedWarehouse = useMemo(() => {
+    return warehouses.find((w) => w.id === selectedWarehouseId) || null;
+  }, [warehouses, selectedWarehouseId]);
+
   const isMaritimeScene = useMemo(() => {
     return (
       selectedWarehouseId === 'TRANSITO-MAR' ||
       selectedWarehouseId.includes('MAR') ||
-      selectedWarehouseId.includes('VESSEL')
+      selectedWarehouseId.includes('VESSEL') ||
+      selectedWarehouse?.tipo === 'TRANSITO'
     );
-  }, [selectedWarehouseId]);
+  }, [selectedWarehouseId, selectedWarehouse]);
+
+  const uniqueCuerpos = useMemo(() => {
+    return Array.from(new Set(slots.map((s) => s.cuerpo))).sort();
+  }, [slots]);
+
+  const slotsByCuerpo = useMemo(() => {
+    const map: Record<string, DigitalTwinSlot[]> = {};
+    slots.forEach((s) => {
+      if (!map[s.cuerpo]) map[s.cuerpo] = [];
+      map[s.cuerpo].push(s);
+    });
+    return map;
+  }, [slots]);
 
   const loadWarehouses = async () => {
     try {
@@ -412,8 +601,18 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     }
   };
 
+  const loadRealProducts = async () => {
+    try {
+      const prods = await digitalTwinApi.getRealProducts();
+      setRealProducts(prods);
+    } catch (err) {
+      console.error('Error loading real products catalog:', err);
+    }
+  };
+
   useEffect(() => {
     loadWarehouses();
+    loadRealProducts();
   }, [moduleScope]);
 
   useEffect(() => {
@@ -421,6 +620,89 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
       loadWarehouseData(selectedWarehouseId);
     }
   }, [selectedWarehouseId, selectedCuerpo, kanbanFilter, searchQuery]);
+
+  useEffect(() => {
+    if (selectedWarehouse) {
+      setWhDimForm({
+        width_m: selectedWarehouse.width_m || 50.0,
+        length_m: selectedWarehouse.length_m || 70.0,
+        clear_height_m: selectedWarehouse.clear_height_m || selectedWarehouse.altura_max_m || 10.5,
+      });
+    }
+  }, [selectedWarehouse]);
+
+  // Rack clicked in 3D
+  const handleSelectRackCuerpo = (cuerpo: string, sampleSlot: DigitalTwinSlot) => {
+    setSelectedRackCuerpo(cuerpo);
+    setRackEngForm({
+      rack_width_m: sampleSlot.rack_width_m || 2.4,
+      rack_height_m: sampleSlot.rack_height_m || 6.0,
+      rack_depth_m: sampleSlot.rack_depth_m || 1.2,
+      levels_count: sampleSlot.levels_count || 4,
+      max_rack_weight_kg: sampleSlot.max_rack_weight_kg || 3000.0,
+    });
+    setIsRackEngModalOpen(true);
+  };
+
+  // Box / Slot clicked in 3D
+  const handleSelectSlot = (slot: DigitalTwinSlot) => {
+    setInspectedSlot(slot);
+    setSlotItemForm({
+      box_width_m: slot.box_width_m || 0.4,
+      box_height_m: slot.box_height_m || 0.3,
+      box_length_m: slot.box_length_m || 0.4,
+      unit_weight_kg: slot.unit_weight_kg || (slot.peso_actual_kg / Math.max(1, slot.cajas_count || 1)) || 10.0,
+      units_count: slot.units_count ?? slot.cajas_count ?? (slot.estado === 'OCUPADA' ? 1 : 0),
+      real_product_id: slot.real_product_id || null,
+      lote: slot.lote || '',
+      descripcion: slot.descripcion || '',
+    });
+  };
+
+  // Save Warehouse Dimensions
+  const handleSaveWarehouseDimensions = async () => {
+    try {
+      setIsSavingWhDim(true);
+      await digitalTwinApi.updateWarehouseDimensions(selectedWarehouseId, whDimForm);
+      await loadWarehouses();
+      await loadWarehouseData(selectedWarehouseId);
+      setIsWhDimModalOpen(false);
+    } catch (err: any) {
+      alert(`Error al actualizar dimensiones: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSavingWhDim(false);
+    }
+  };
+
+  // Save Rack Engineering
+  const handleSaveRackEngineering = async () => {
+    try {
+      setIsSavingRackEng(true);
+      await digitalTwinApi.updateRackDimensions(selectedWarehouseId, selectedRackCuerpo, rackEngForm);
+      await loadWarehouseData(selectedWarehouseId);
+      setIsRackEngModalOpen(false);
+    } catch (err: any) {
+      alert(`Error al actualizar geometría de estantería: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSavingRackEng(false);
+    }
+  };
+
+  // Save Slot Item Specs
+  const handleSaveSlotItemSpecs = async () => {
+    if (!inspectedSlot) return;
+    try {
+      setIsSavingSlotItem(true);
+      await digitalTwinApi.updateSlotItemSpecs(inspectedSlot.id, slotItemForm);
+      await loadWarehouseData(selectedWarehouseId);
+      setIsSlotItemModalOpen(false);
+      setInspectedSlot(null);
+    } catch (err: any) {
+      alert(`Error al actualizar especificaciones de caja: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSavingSlotItem(false);
+    }
+  };
 
   const handleExecuteTransfer = async () => {
     if (!inspectedSlot || !transferTargetWh || !transferTargetSlot) {
@@ -438,7 +720,6 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
         mover_lote_completo: transferMoveAll,
       };
       await digitalTwinApi.transferStock(payload);
-      alert(`Transferencia exitosa de ${inspectedSlot.slot_code} hacia ${transferTargetSlot}`);
       setIsTransferModalOpen(false);
       setInspectedSlot(null);
       await loadWarehouseData(selectedWarehouseId);
@@ -463,6 +744,24 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     }
   };
 
+  const handleSyncRealInventory = async () => {
+    try {
+      setIsSyncingInventory(true);
+      const res = await digitalTwinApi.syncRealInventory({
+        warehouse_id: selectedWarehouseId,
+        module_scope: moduleScope,
+      });
+      setSyncToast(res.message);
+      setTimeout(() => setSyncToast(null), 6500);
+      await loadWarehouseData(selectedWarehouseId);
+      await loadWarehouses();
+    } catch (err: any) {
+      alert(`Error al sincronizar inventario real: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsSyncingInventory(false);
+    }
+  };
+
   const handleCreateWarehouse = async () => {
     if (!newWhId.trim() || !newWhName.trim()) {
       alert('Por favor ingrese código y nombre del depósito');
@@ -477,7 +776,6 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
         module_scope: moduleScope,
         ubicacion: newWhLocation.trim() || 'Montevideo, Uruguay',
       });
-      alert(`Depósito '${newWhName}' creado exitosamente con su grilla 3D.`);
       setIsNewWhModalOpen(false);
       setNewWhId('');
       setNewWhName('');
@@ -510,8 +808,24 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
     document.body.removeChild(link);
   };
 
+  // Real-time live deviation preview for slot item modal
+  const liveSlotDeviations = useMemo(() => {
+    if (!inspectedSlot) return [];
+    const devs: string[] = [];
+    const rackH = inspectedSlot.rack_height_m || 6.0;
+    const levCnt = Math.max(1, inspectedSlot.levels_count || 4);
+    const clearH = rackH / levCnt;
+    const totVol = slotItemForm.box_width_m * slotItemForm.box_height_m * slotItemForm.box_length_m * slotItemForm.units_count;
+    const totPeso = slotItemForm.unit_weight_kg * slotItemForm.units_count;
+
+    if (slotItemForm.box_height_m > clearH) devs.push('EXCESO_ALTURA');
+    if (totVol > inspectedSlot.volumen_max_m3) devs.push('EXCESO_VOLUMEN');
+    if (totPeso > inspectedSlot.peso_max_kg) devs.push('EXCESO_PESO');
+    return devs;
+  }, [inspectedSlot, slotItemForm]);
+
   return (
-    <div className={`relative flex flex-col h-[820px] w-full bg-slate-950 text-slate-100 rounded-xl overflow-hidden border border-slate-800 shadow-2xl font-sans ${className}`}>
+    <div className={`relative flex flex-col h-[840px] w-full bg-slate-950 text-slate-100 rounded-xl overflow-hidden border border-slate-800 shadow-2xl font-sans ${className}`}>
       {/* ==================================================== */}
       {/* TOP BAR: SELECTOR DINÁMICO DE DEPÓSITOS Y MODOS */}
       {/* ==================================================== */}
@@ -546,6 +860,17 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
               ))}
             </select>
           </div>
+
+          {!isMaritimeScene && (
+            <button
+              onClick={() => setIsWhDimModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-900/30 hover:bg-sky-900/50 text-sky-300 text-xs font-medium rounded-lg border border-sky-700/50 transition"
+              title="Configurar dimensiones de nave (ancho, largo, altura libre)"
+            >
+              <Ruler className="w-3.5 h-3.5 text-sky-400" />
+              <span>Medidas de Nave</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsNewWhModalOpen(true)}
@@ -587,6 +912,16 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
           </div>
 
           <button
+            onClick={handleSyncRealInventory}
+            disabled={isSyncingInventory}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold rounded-lg shadow-md transition disabled:opacity-50"
+            title="Sincronizar catálogo e inventario real de Calcu en 1 clic"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingInventory ? 'animate-spin' : ''}`} />
+            <span>{isSyncingInventory ? 'Sincronizando...' : 'Sincronizar Stock Real'}</span>
+          </button>
+
+          <button
             onClick={handleRunAiSlotting}
             disabled={isOptimizingAi}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-500 hover:to-sky-500 text-white text-xs font-semibold rounded-lg shadow-md transition"
@@ -624,13 +959,11 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
             }}
             shadows
           >
-            <ambientLight intensity={0.7} />
+            <ambientLight intensity={0.8} />
             <directionalLight
-              position={[20, 30, 20]}
-              intensity={1.2}
+              position={[25, 35, 25]}
+              intensity={1.3}
               castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
             />
             <pointLight position={[-10, 15, -10]} intensity={0.5} color="#38bdf8" />
 
@@ -639,8 +972,8 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
               enableDamping
               dampingFactor={0.08}
               maxPolarAngle={Math.PI / 2.05}
-              minDistance={4}
-              maxDistance={70}
+              minDistance={3}
+              maxDistance={90}
             />
 
             {isMaritimeScene ? (
@@ -651,30 +984,48 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                     key={slot.id}
                     slot={slot}
                     isSelected={inspectedSlot?.id === slot.id}
-                    onSelect={(s) => setInspectedSlot(s)}
+                    onSelect={(s) => handleSelectSlot(s)}
                   />
                 ))}
               </group>
             ) : (
               <group>
-                <WarehouseFloor />
-                {slots.map((slot) => {
-                  const isGhost = selectedCuerpo !== 'ALL' && slot.cuerpo !== selectedCuerpo;
-                  if (!showEmptySlots && slot.estado === 'VACIA') return null;
-
-                  return (
-                    <TerrestrialSlotMesh
-                      key={slot.id}
-                      slot={slot}
-                      isSelected={inspectedSlot?.id === slot.id}
-                      isGhost={isGhost}
-                      onSelect={(s) => setInspectedSlot(s)}
-                    />
-                  );
-                })}
+                <WarehouseNaveMesh
+                  width={selectedWarehouse?.width_m || 50}
+                  length={selectedWarehouse?.length_m || 70}
+                  clearHeight={selectedWarehouse?.clear_height_m || 10.5}
+                />
+                <RackStructures
+                  cuerpos={uniqueCuerpos}
+                  slotsByCuerpo={slotsByCuerpo}
+                  selectedCuerpo={selectedCuerpo}
+                  onSelectRackCuerpo={handleSelectRackCuerpo}
+                />
+                <InstancedTerrestrialCargo
+                  slots={slots}
+                  selectedSlotId={inspectedSlot?.id || null}
+                  onSelectSlot={handleSelectSlot}
+                />
+                <EmptyAndBlockedSlotsMesh
+                  slots={slots}
+                  showEmptySlots={showEmptySlots}
+                  selectedSlotId={inspectedSlot?.id || null}
+                  onSelectSlot={handleSelectSlot}
+                />
               </group>
             )}
           </Canvas>
+
+          {/* Toast / Notification Banner for Sync */}
+          {syncToast && (
+            <div className="absolute top-4 right-4 z-30 flex items-center gap-2.5 bg-emerald-950/95 border border-emerald-500/50 text-emerald-200 px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{syncToast}</span>
+              <button onClick={() => setSyncToast(null)} className="text-emerald-400 hover:text-white ml-2">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Floating HUD Pill for Selected 3D Slot */}
           {inspectedSlot && (
@@ -696,7 +1047,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
               <div className="mt-2.5 space-y-1.5 text-xs text-slate-300">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">SKU:</span>
+                  <span className="text-slate-400">SKU / Ítem:</span>
                   <span className="font-semibold text-sky-300">{inspectedSlot.sku || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
@@ -708,13 +1059,40 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                   <span className="font-mono text-slate-200">{inspectedSlot.lote || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Cantidad / Bultos:</span>
-                  <span className="font-bold text-emerald-400">{inspectedSlot.cantidad} u.</span>
+                  <span className="text-slate-400">Bultos / Unidades:</span>
+                  <span className="font-bold text-emerald-400">{inspectedSlot.cajas_count || inspectedSlot.cantidad} u.</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Medidas de Caja:</span>
+                  <span>{inspectedSlot.box_width_m || 0.4}m × {inspectedSlot.box_height_m || 0.3}m × {inspectedSlot.box_length_m || 0.4}m</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Peso / Volumen:</span>
                   <span>{inspectedSlot.peso_actual_kg} kg | {inspectedSlot.volumen_actual_m3} m³</span>
                 </div>
+
+                {/* Insignia Verde: Vinculado a SKU Real de Calcu */}
+                {inspectedSlot.real_product_id && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-xs space-y-1.5 mt-2">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                      <Link2 className="w-3.5 h-3.5" />
+                      <span>🔗 Vinculado a SKU Real: {inspectedSlot.sku}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px] text-emerald-200">
+                      <div>Costo FOB: <span className="font-semibold text-white">${inspectedSlot.costo_fob?.toFixed(2) ?? '0.00'}</span></div>
+                      <div>Costo Landed: <span className="font-semibold text-white">${inspectedSlot.costo_landed_calc?.toFixed(2) ?? '0.00'}</span></div>
+                      <div>Margen Bruto: <span className="font-semibold text-white">{inspectedSlot.margen_bruto_pct?.toFixed(1) ?? '0.0'}%</span></div>
+                      <div>Cobertura (DOH): <span className="font-semibold text-white">{inspectedSlot.doh_cobertura ?? 45} días</span></div>
+                    </div>
+                  </div>
+                )}
+
+                {inspectedSlot.desvios && (
+                  <div className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-300 font-semibold text-[11px] flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                    <span>Desvío: {inspectedSlot.desvios}</span>
+                  </div>
+                )}
 
                 {isMaritimeScene && (
                   <div className="pt-2 border-t border-slate-800 space-y-1 text-sky-200">
@@ -738,21 +1116,29 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
 
               <div className="mt-3 pt-2.5 border-t border-slate-800 flex gap-2">
                 <button
+                  onClick={() => setIsSlotItemModalOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-xs shadow-md transition"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>Editar Caja / SKU</span>
+                </button>
+                <button
                   onClick={() => {
                     setTransferTargetWh(isMaritimeScene ? 'DEP-CENTRAL-MVD' : selectedWarehouseId);
                     setTransferTargetSlot('A-01-01-01');
                     setTransferQty(inspectedSlot.cantidad);
                     setIsTransferModalOpen(true);
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-medium rounded-lg text-xs shadow-md transition"
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-medium rounded-lg text-xs shadow-md transition"
                 >
                   <ArrowRightLeft className="w-3.5 h-3.5" />
-                  <span>{isMaritimeScene ? 'Transferir a MVD al Arribar' : 'Mover a otra Posición'}</span>
+                  <span>Mover</span>
                 </button>
               </div>
             </div>
           )}
 
+          {/* Bottom Left Filter and Search Controls */}
           <div className="absolute bottom-4 left-4 flex items-center gap-2 z-10">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -760,7 +1146,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar coord (ej. F-01-01)..."
+                placeholder="Buscar coord (ej. A-01-01)..."
                 className="pl-8 pr-3 py-1.5 bg-slate-900/90 border border-slate-700 text-xs text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500 w-52"
               />
             </div>
@@ -914,7 +1300,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                   <span className="font-bold text-emerald-400">{summary.riesgos.compatibilidad_logistica_pct}%</span>
                 </div>
                 <div className="flex items-center justify-between py-1.5">
-                  <span className="text-slate-400">Vencimientos Próximos (&lt;60d):</span>
+                  <span className="text-slate-400">Vencimientos Próximos:</span>
                   <span className="font-bold text-amber-300">{summary.riesgos.vencimientos}</span>
                 </div>
               </div>
@@ -1000,6 +1386,388 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
           )}
         </div>
       </div>
+
+      {/* ==================================================== */}
+      {/* MODAL: CONFIGURAR MEDIDAS DE NAVE / GALPÓN */}
+      {/* ==================================================== */}
+      {isWhDimModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-sky-500/40 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Ruler className="w-5 h-5 text-sky-400" />
+                <h3 className="font-bold text-white text-sm">Medidas Paramétricas de Nave</h3>
+              </div>
+              <button
+                onClick={() => setIsWhDimModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-400">
+                Ajuste las dimensiones físicas reales del edificio en metros para redimensionar el piso 3D y la volumetría de almacenamiento.
+              </p>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Ancho de Nave (m):</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={whDimForm.width_m}
+                  onChange={(e) => setWhDimForm({ ...whDimForm, width_m: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Largo de Nave (m):</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={whDimForm.length_m}
+                  onChange={(e) => setWhDimForm({ ...whDimForm, length_m: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Altura Libre de Techo (m):</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={whDimForm.clear_height_m}
+                  onChange={(e) => setWhDimForm({ ...whDimForm, clear_height_m: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1 text-slate-300">
+                <div className="flex justify-between">
+                  <span>Superficie Teórica:</span>
+                  <span className="font-bold text-sky-400">
+                    {(whDimForm.width_m * whDimForm.length_m).toFixed(2)} m²
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Volumen Total Techo:</span>
+                  <span className="font-bold text-emerald-400">
+                    {(whDimForm.width_m * whDimForm.length_m * whDimForm.clear_height_m).toFixed(2)} m³
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsWhDimModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveWarehouseDimensions}
+                disabled={isSavingWhDim}
+                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs rounded-lg transition"
+              >
+                {isSavingWhDim ? 'Guardando...' : 'Aplicar a Nave 3D'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: INGENIERÍA DE ESTANTERÍA / CUERPO */}
+      {/* ==================================================== */}
+      {isRackEngModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-sky-500/40 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-sky-400" />
+                <h3 className="font-bold text-white text-sm">
+                  Ingeniería Estructural: Cuerpo {selectedRackCuerpo}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsRackEngModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Ancho de Rack (m):</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rackEngForm.rack_width_m}
+                    onChange={(e) => setRackEngForm({ ...rackEngForm, rack_width_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Alto Total (m):</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rackEngForm.rack_height_m}
+                    onChange={(e) => setRackEngForm({ ...rackEngForm, rack_height_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Profundidad (m):</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={rackEngForm.rack_depth_m}
+                    onChange={(e) => setRackEngForm({ ...rackEngForm, rack_depth_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Cantidad de Niveles:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={rackEngForm.levels_count}
+                    onChange={(e) => setRackEngForm({ ...rackEngForm, levels_count: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Capacidad Estructural Máxima (kg):</label>
+                <input
+                  type="number"
+                  step="100"
+                  value={rackEngForm.max_rack_weight_kg}
+                  onChange={(e) => setRackEngForm({ ...rackEngForm, max_rack_weight_kg: Number(e.target.value) })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1 text-slate-300">
+                <div className="flex justify-between">
+                  <span>Altura Libre por Nivel:</span>
+                  <span className="font-bold text-sky-400">
+                    {(rackEngForm.rack_height_m / Math.max(1, rackEngForm.levels_count)).toFixed(2)} m
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Carga Máxima por Nivel:</span>
+                  <span className="font-bold text-emerald-400">
+                    {(rackEngForm.max_rack_weight_kg / Math.max(1, rackEngForm.levels_count)).toFixed(1)} kg
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsRackEngModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveRackEngineering}
+                disabled={isSavingRackEng}
+                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs rounded-lg transition"
+              >
+                {isSavingRackEng ? 'Guardando...' : 'Aplicar al Cuerpo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: ESPECIFICACIONES DE CAJA & SKU REAL */}
+      {/* ==================================================== */}
+      {isSlotItemModalOpen && inspectedSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-indigo-500/40 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <PackageCheck className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-white text-sm">
+                  Inventario Real & Geometría de Caja ({inspectedSlot.slot_code})
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsSlotItemModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 mb-1 font-medium">Vincular con Producto del Catálogo Real:</label>
+                <select
+                  value={slotItemForm.real_product_id || ''}
+                  onChange={(e) => {
+                    const prodId = e.target.value ? Number(e.target.value) : null;
+                    const prod = realProducts.find((p) => p.id === prodId);
+                    setSlotItemForm({
+                      ...slotItemForm,
+                      real_product_id: prodId,
+                      descripcion: prod ? prod.nombre : slotItemForm.descripcion,
+                    });
+                  }}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                >
+                  <option value="">-- Sin vincular / Ítem genérico --</option>
+                  {realProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.sku} - {p.nombre} (${p.precio_lista})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Ancho Caja (m):</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={slotItemForm.box_width_m}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, box_width_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Alto Caja (m):</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={slotItemForm.box_height_m}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, box_height_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Largo Caja (m):</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={slotItemForm.box_length_m}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, box_length_m: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Peso Unitario (kg):</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={slotItemForm.unit_weight_kg}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, unit_weight_kg: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Cantidad de Cajas / Bultos:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={slotItemForm.units_count}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, units_count: Number(e.target.value) })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Lote:</label>
+                  <input
+                    type="text"
+                    value={slotItemForm.lote || ''}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, lote: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-medium">Descripción:</label>
+                  <input
+                    type="text"
+                    value={slotItemForm.descripcion || ''}
+                    onChange={(e) => setSlotItemForm({ ...slotItemForm, descripcion: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Real-time Volumetric & Deviation Preview */}
+              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
+                <div className="flex justify-between text-slate-300">
+                  <span>Volumen Total Calculado:</span>
+                  <span className="font-bold text-sky-400">
+                    {(slotItemForm.box_width_m * slotItemForm.box_height_m * slotItemForm.box_length_m * slotItemForm.units_count).toFixed(3)} m³
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Peso Total Calculado:</span>
+                  <span className="font-bold text-emerald-400">
+                    {(slotItemForm.unit_weight_kg * slotItemForm.units_count).toFixed(1)} kg
+                  </span>
+                </div>
+
+                {liveSlotDeviations.length > 0 ? (
+                  <div className="pt-1.5 border-t border-slate-800 flex flex-wrap gap-1.5">
+                    {liveSlotDeviations.map((dev) => (
+                      <span key={dev} className="px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 text-[10px] font-bold">
+                        ⚠️ {dev}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="pt-1.5 border-t border-slate-800 text-[11px] text-emerald-400 font-medium">
+                    ✓ Sin desvíos físicos (cumple límites de altura, volumen y carga).
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsSlotItemModalOpen(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveSlotItemSpecs}
+                disabled={isSavingSlotItem}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg transition"
+              >
+                {isSavingSlotItem ? 'Guardando...' : 'Guardar y Recalcular'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================================================== */}
       {/* MODAL 1: MOVER / TRANSFERIR STOCK */}
@@ -1174,7 +1942,7 @@ export const UniversalWarehouseTwin3D: React.FC<UniversalWarehouseTwin3DProps> =
                         <td className="p-2.5 text-center">
                           <button
                             onClick={() => {
-                              setInspectedSlot(s);
+                              handleSelectSlot(s);
                               setIsRiskModalOpen(false);
                             }}
                             className="px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[11px] font-medium"

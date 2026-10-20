@@ -530,6 +530,11 @@ class Warehouse(Base):
     volumen_max_m3: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('7200.0000'), nullable=False)
     capacidad_peso_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('500000.0000'), nullable=False)
     altura_max_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('8.5000'), nullable=False)
+    # Geometría Paramétrica Real del Galpón / Nodo
+    width_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('50.0000'), nullable=False)
+    length_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('100.0000'), nullable=False)
+    clear_height_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('12.0000'), nullable=False)
+
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
 
@@ -540,6 +545,7 @@ class WarehouseSlot(Base):
     """
     Entidad Posición 3D / Slot de Depósito (Gemelo Digital Universal)
     Soporta racks en tierra (ej. F-01-01-01) y contenedores marítimos (Buque-Bahía-Fila-Nivel)
+    Geometría Paramétrica Real: Racks, Cajas y Vínculo con Catálogo Real
     """
     __tablename__ = "warehouse_slots"
 
@@ -564,21 +570,40 @@ class WarehouseSlot(Base):
     valor_estimado: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
     pallets_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cajas_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # 1. Geometría Paramétrica de Estantería / Rack
+    rack_width_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('2.4000'), nullable=False)
+    rack_height_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('6.0000'), nullable=False)
+    rack_depth_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('1.2000'), nullable=False)
+    levels_count: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    max_rack_weight_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('3000.0000'), nullable=False)
+
+    # 2. Medidas Reales de Caja / Bulto y Vínculo con Catálogo Real
+    box_width_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.4000'), nullable=False)
+    box_height_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.3000'), nullable=False)
+    box_length_m: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.4000'), nullable=False)
+    unit_weight_kg: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('5.0000'), nullable=False)
+    units_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    real_product_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("productos.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Atributos de nodo marítimo (Alta Mar)
     tipo_contenedor: Mapped[Optional[str]] = mapped_column(String(30), nullable=True) # '40HQ', '20ST', 'LCL'
     eta_arribo: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     costo_landed: Mapped[Decimal] = mapped_column(Numeric(14, 4), default=Decimal('0.0000'), nullable=False)
-    # Control de Calidad y Riesgos
+
+    # Control de Calidad y Riesgos Físicos
     desvios: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 'EXCESO_PESO', 'EXCESO_VOLUMEN', 'EXCESO_ALTURA'
     material_retenido: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     material_calidad: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     fecha_vencimiento: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Sincronización Kanban ROP/DOH
     rop_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True) # 'CRITICO_ROP', 'ALERTA_DOH', 'OPTIMO'
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=True)
 
     warehouse_rel: Mapped["Warehouse"] = relationship(back_populates="slots")
+    product_rel: Mapped[Optional["Product"]] = relationship(foreign_keys=[real_product_id])
 
 
 class Client(Base):

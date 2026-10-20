@@ -14,6 +14,9 @@ export interface DigitalTwinWarehouse {
   volumen_max_m3: number;
   capacidad_peso_kg: number;
   altura_max_m: number;
+  width_m?: number;
+  length_m?: number;
+  clear_height_m?: number;
   activo: boolean;
 }
 
@@ -47,6 +50,24 @@ export interface DigitalTwinSlot {
   material_calidad: boolean;
   fecha_vencimiento: string | null;
   rop_status: 'CRITICO_ROP' | 'ALERTA_DOH' | 'OPTIMO' | null;
+  // Propiedades paramétricas reales
+  rack_width_m?: number;
+  rack_height_m?: number;
+  rack_depth_m?: number;
+  levels_count?: number;
+  max_rack_weight_kg?: number;
+  box_width_m?: number;
+  box_height_m?: number;
+  box_length_m?: number;
+  unit_weight_kg?: number;
+  units_count?: number;
+  real_product_id?: number | null;
+  // Indicadores de SKU Real en Vivo
+  costo_fob?: number | null;
+  costo_landed_calc?: number | null;
+  precio_lista?: number | null;
+  margen_bruto_pct?: number | null;
+  doh_cobertura?: number | null;
 }
 
 export interface CuerpoSummaryItem {
@@ -137,6 +158,56 @@ export interface OptimizeSlottingResponse {
   recomendaciones: string[];
 }
 
+export interface WarehouseDimensionsUpdatePayload {
+  width_m: number;
+  length_m: number;
+  clear_height_m: number;
+}
+
+export interface RackDimensionsUpdatePayload {
+  rack_width_m: number;
+  rack_height_m: number;
+  rack_depth_m: number;
+  levels_count: number;
+  max_rack_weight_kg: number;
+}
+
+export interface SlotItemSpecsUpdatePayload {
+  box_width_m: number;
+  box_height_m: number;
+  box_length_m: number;
+  unit_weight_kg: number;
+  units_count: number;
+  real_product_id?: number | null;
+  lote?: string | null;
+  descripcion?: string | null;
+}
+
+export interface RealProductItem {
+  id: number;
+  sku: string;
+  nombre: string;
+  costo_base: number;
+  precio_lista: number;
+}
+
+export interface SyncRealInventoryPayload {
+  warehouse_id?: string;
+  all_warehouses?: boolean;
+  module_scope?: '3PL' | 'SUPPLY_CHAIN';
+}
+
+export interface SyncRealInventoryResponse {
+  success: boolean;
+  message: string;
+  warehouses_synced: number;
+  skus_count: number;
+  lots_count: number;
+  boxes_count: number;
+  total_stock: number;
+  valor_estimado_total: number;
+}
+
 export const digitalTwinApi = {
   getWarehouses: async (scope?: '3PL' | 'SUPPLY_CHAIN'): Promise<DigitalTwinWarehouse[]> => {
     const params = scope ? { module_scope: scope } : {};
@@ -176,6 +247,46 @@ export const digitalTwinApi = {
     const res = await axios.post<OptimizeSlottingResponse>(`${API_BASE}/optimize-slotting`, {
       warehouse_id,
     });
+    return res.data;
+  },
+
+  updateWarehouseDimensions: async (
+    warehouse_id: string,
+    payload: WarehouseDimensionsUpdatePayload
+  ): Promise<any> => {
+    const res = await axios.patch(`${API_BASE}/warehouses/${warehouse_id}/dimensions`, payload);
+    return res.data;
+  },
+
+  updateRackDimensions: async (
+    warehouse_id: string,
+    cuerpo: string,
+    payload: RackDimensionsUpdatePayload
+  ): Promise<any> => {
+    const res = await axios.patch(`${API_BASE}/racks/${warehouse_id}/${cuerpo}/dimensions`, payload);
+    return res.data;
+  },
+
+  updateSlotItemSpecs: async (
+    slot_id: string,
+    payload: SlotItemSpecsUpdatePayload
+  ): Promise<any> => {
+    const res = await axios.patch(`${API_BASE}/slots/${slot_id}/item-specs`, payload);
+    return res.data;
+  },
+
+  getRealProducts: async (): Promise<RealProductItem[]> => {
+    const res = await axios.get<RealProductItem[]>(`${API_BASE}/products`);
+    return res.data;
+  },
+
+  syncRealInventory: async (
+    payload: SyncRealInventoryPayload
+  ): Promise<SyncRealInventoryResponse> => {
+    const res = await axios.post<SyncRealInventoryResponse>(
+      `${API_BASE}/sync-real-inventory`,
+      payload
+    );
     return res.data;
   },
 };

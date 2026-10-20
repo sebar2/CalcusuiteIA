@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 from app.database.session import SessionLocal
 from app.services.digital_twin_service import DigitalTwinService
 from app.models.entities import Warehouse
+from app.domain.schemas import (
+    WarehouseDimensionsUpdate,
+    RackDimensionsUpdate,
+    SlotItemSpecsUpdate,
+)
 
 router = APIRouter(prefix="/digital-twin", tags=["Digital Twin 3D Universal"])
 
@@ -44,6 +49,12 @@ class TransferStockPayload(BaseModel):
 
 class OptimizeSlottingPayload(BaseModel):
     warehouse_id: str
+
+
+class SyncRealInventoryPayload(BaseModel):
+    warehouse_id: Optional[str] = None
+    all_warehouses: bool = False
+    module_scope: Optional[str] = None
 
 
 @router.get("/warehouses")
@@ -107,6 +118,120 @@ def create_digital_twin_warehouse(
         "module_scope": wh.module_scope,
         "message": "Depósito y grilla 3D creados exitosamente.",
     }
+
+
+@router.patch("/warehouses/{warehouse_id}/dimensions")
+def update_warehouse_dimensions_endpoint(
+    warehouse_id: str,
+    payload: WarehouseDimensionsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza las dimensiones paramétricas del edificio/nave del depósito (ancho, largo, altura libre)
+    y recalcula la superficie m² y volumen máximo m³ con Decimal.
+    """
+    try:
+        return DigitalTwinService.update_warehouse_dimensions(
+            db=db,
+            warehouse_id=warehouse_id,
+            width_m=payload.width_m,
+            length_m=payload.length_m,
+            clear_height_m=payload.clear_height_m,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch("/racks/{warehouse_id}/{cuerpo}/dimensions")
+def update_rack_dimensions_endpoint(
+    warehouse_id: str,
+    cuerpo: str,
+    payload: RackDimensionsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza la geometría paramétrica estructural de una estantería / cuerpo
+    (ancho, alto, profundidad, cantidad de niveles, carga máx) y recalcula desvíos en vivo.
+    """
+    try:
+        return DigitalTwinService.update_rack_dimensions(
+            db=db,
+            warehouse_id=warehouse_id,
+            cuerpo=cuerpo,
+            rack_width_m=payload.rack_width_m,
+            rack_height_m=payload.rack_height_m,
+            rack_depth_m=payload.rack_depth_m,
+            levels_count=payload.levels_count,
+            max_rack_weight_kg=payload.max_rack_weight_kg,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch("/slots/{slot_id}/item-specs")
+def update_slot_item_specs_endpoint(
+    slot_id: str,
+    payload: SlotItemSpecsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Actualiza dimensiones reales de caja/bulto (ancho, alto, largo, peso unitario, unidades)
+    y vincula opcionalmente con un SKU real del catálogo de Calcu con detección de desvíos físicos.
+    """
+    try:
+        return DigitalTwinService.update_slot_item_specs(
+            db=db,
+            slot_id=slot_id,
+            box_width_m=payload.box_width_m,
+            box_height_m=payload.box_height_m,
+            box_length_m=payload.box_length_m,
+            unit_weight_kg=payload.unit_weight_kg,
+            units_count=payload.units_count,
+            real_product_id=payload.real_product_id,
+            lote=payload.lote,
+            descripcion=payload.descripcion,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/products")
+def get_digital_twin_products(
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna el catálogo real de productos de Calcu para el selector de inventario en el 3D.
+    """
+    return DigitalTwinService.get_real_products_catalog(db)
+
+
+@router.post("/sync-real-inventory")
+def sync_real_inventory_endpoint(
+    payload: SyncRealInventoryPayload,
+    db: Session = Depends(get_db),
+):
+    """
+    Sincroniza en 1 clic el catálogo e inventario real de Calcu (PostgreSQL 16)
+    con las posiciones 3D del Gemelo Digital, aplicando algoritmo de cubicaje
+    y reglas de auto-slotting físico con Decimal (ROUND_HALF_UP).
+    """
+    try:
+        return DigitalTwinService.sync_real_inventory(
+            db=db,
+            warehouse_id=payload.warehouse_id,
+            all_warehouses=payload.all_warehouses,
+            module_scope=payload.module_scope,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("/slots")
