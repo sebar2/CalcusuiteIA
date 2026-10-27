@@ -112,12 +112,19 @@
   window.CalcuTelemetry = new TelemetryTracker();
 
   // 2. WIDGET DE WEBCHAT IA NATIVO
+  const isProduction =
+    window.location.hostname === 'calcusuiteia.com' ||
+    window.location.hostname === 'www.calcusuiteia.com' ||
+    window.location.hostname === 'app.calcusuiteia.com';
+
   const WEBCHAT_CONFIG = {
-    endpoints: [
-      'https://app.calcusuiteia.com/api/v1/public/webchat',
-      'http://127.0.0.1:8000/api/v1/public/webchat',
-      'http://localhost:8000/api/v1/public/webchat',
-    ],
+    endpoints: isProduction
+      ? ['https://app.calcusuiteia.com/api/v1/public/webchat']
+      : [
+          'https://app.calcusuiteia.com/api/v1/public/webchat',
+          'http://127.0.0.1:8000/api/v1/public/webchat',
+          'http://localhost:8000/api/v1/public/webchat',
+        ],
     officialWhatsapp: '59894858791',
     officialEmail: 'contacto@calcusuiteia.com',
   };

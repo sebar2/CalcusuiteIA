@@ -6,16 +6,21 @@
  * ==========================================================================
  */
 
+const isProduction =
+  window.location.hostname === "calcusuiteia.com" ||
+  window.location.hostname === "www.calcusuiteia.com" ||
+  window.location.hostname === "app.calcusuiteia.com";
+
 const LEADS_CONFIG = {
   directEmail: "contacto@calcusuiteia.com",
   directWhatsapp: "59894858791",
-  endpoints: [
-    "https://app.calcusuiteia.com/api/v1/public/leads",
-    "/api/v1/public/leads",
-    "/api/v1/leads",
-    "http://127.0.0.1:8000/api/v1/public/leads",
-    "http://localhost:8000/api/v1/public/leads"
-  ]
+  endpoints: isProduction
+    ? ["https://app.calcusuiteia.com/api/v1/public/leads"]
+    : [
+        "https://app.calcusuiteia.com/api/v1/public/leads",
+        "http://127.0.0.1:8000/api/v1/public/leads",
+        "http://localhost:8000/api/v1/public/leads"
+      ]
 };
 
 /**
