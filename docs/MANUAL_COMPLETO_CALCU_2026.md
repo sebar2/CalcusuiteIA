@@ -48,7 +48,7 @@ El ingreso a la plataforma se realiza mediante un portal unificado que conecta l
 ### Características del Acceso:
 * **Autenticación Estricta & Auditoría ISO 27001**: Acceso corporativo mediante credenciales individuales registradas en variables de entorno seguras (`.env`) con trazabilidad completa de eventos en el registro perimetral inmutable.
 * **Entorno Evaluador / Modo Demo (Sandbox Aislado)**: Para prospectos y evaluadores externos, la plataforma provee el usuario `demo` con contraseña `demo123` que opera sobre una base de datos clonada e hiper-aislada (`calcu_demo.db`), impidiendo cualquier impacto sobre los datos reales o la infraestructura host.
-* **Conexión Cifrada Tailscale Zero-Trust (ZTNA)**: El sistema corre sobre una red privada en malla (*mesh VPN*). No requiere abrir puertos hacia internet público. Los choferes en ruta y las terminales de depósito se comunican peer-to-peer directamente con el servidor central (`100.119.40.92:8000`).
+* **Conexión Cifrada Tailscale Zero-Trust (ZTNA)**: El sistema corre sobre una red privada en malla (*mesh VPN*). No requiere abrir puertos hacia internet público. Los choferes en ruta y las terminales de depósito se comunican peer-to-peer directamente con el servidor central (`api.calcusuiteia.com`).
 
 ---
 

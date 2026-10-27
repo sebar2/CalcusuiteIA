@@ -11,7 +11,7 @@ const LEADS_CONFIG = {
   directWhatsapp: "59894858791",
   endpoints: [
     "/api/v1/leads",
-    "http://100.119.40.92:8000/api/v1/leads",
+    "https://api.calcusuiteia.com/api/v1/leads",
     "http://127.0.0.1:8000/api/v1/leads",
     "http://localhost:8000/api/v1/leads"
   ]

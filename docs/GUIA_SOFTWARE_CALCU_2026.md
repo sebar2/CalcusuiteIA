@@ -29,7 +29,7 @@ Calcu opera bajo un modelo de **Zero-Trust Network Access (ZTNA)** mediante una 
   * `admin_3pl`: Administración operativa de flota, WMS, almacén y rentabilidad de transporte.
   * `operario_3pl`: Gestión de stock, picking con lector QR/Code128 y preparación de despachos.
   * `conductor_3pl`: Interfaz móvil simplificada para entrega en ruta, geoposicionamiento y firma digital.
-* **Configuración Dinámica de Servidor**: Selector integrado de nodo Tailscale para alternar entre el servidor central (`100.119.40.92:8000`) o nodos de contingencia locales.
+* **Configuración Dinámica de Servidor**: Selector integrado de nodo Tailscale para alternar entre el servidor central (`api.calcusuiteia.com`) o nodos de contingencia locales.
 
 ---
 
