@@ -115,7 +115,6 @@
   const WEBCHAT_CONFIG = {
     endpoints: [
       'https://app.calcusuiteia.com/api/v1/public/webchat',
-      '/api/v1/public/webchat',
       'http://127.0.0.1:8000/api/v1/public/webchat',
       'http://localhost:8000/api/v1/public/webchat',
     ],
@@ -193,10 +192,11 @@
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white tracking-tight">Calcu Copilot IA</span>
+                <span class="text-sm font-bold text-white tracking-tight">CalcuSuiteIA Copilot</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">CSIA</span>
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="En línea"></span>
               </div>
-              <p id="chatHeaderSub" class="text-[11px] text-cyan-400 font-medium">Asesor Comercial • calcusuiteia.com</p>
+              <p id="chatHeaderSub" class="text-[11px] text-cyan-400 font-medium">Asesor Inteligente • calcusuiteia.com</p>
             </div>
           </div>
           <div class="flex items-center gap-1">
@@ -222,7 +222,7 @@
               IA
             </div>
             <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] leading-relaxed text-slate-200">
-              ¡Hola! 👋 Soy el asistente ejecutivo de **Calcu Suite**. Puedo explicarte cómo funciona nuestro **Gemelo Digital 3D**, la logística 3PL o coordinar tu acceso al **Programa Pioneros (6 meses gratis + 50% vitalicio)**.<br><br>
+              ¡Hola! 👋 Soy el asistente inteligente de **CalcuSuiteIA (CSIA)**. Puedo orientarte sobre nuestro **Gemelo Digital 3D**, la logística 3PL o coordinar tu acceso prioritario al **Programa Pioneros (6 meses 100% gratis + 50% vitalicio)**.<br><br>
               ¿De qué empresa nos visitas o qué módulo te gustaría explorar hoy?
             </div>
           </div>
@@ -230,6 +230,7 @@
 
         <!-- Quick Pills -->
         <div id="quickPills" class="px-3 py-2 bg-slate-950 border-t border-slate-900 flex gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
+          <button onclick="if(window.openAccountModal) window.openAccountModal('PIONERO')" class="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-bold flex items-center gap-1 transition-all">🚀 Crear Cuenta</button>
           <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="Quiero información sobre el Gemelo Digital 3D">📦 Gemelo 3D</button>
           <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="¿Cómo funciona el Programa Pioneros (50% de por vida)?">💎 Programa Pioneros</button>
           <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="Quiero coordinar una reunión o cotización formal">👤 Hablar con Ejecutivo</button>
