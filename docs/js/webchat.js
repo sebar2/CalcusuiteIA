@@ -348,13 +348,16 @@
     showTyping() {
       const row = document.createElement('div');
       row.id = 'chatTypingIndicator';
-      row.className = 'flex gap-2.5 items-start';
+      row.className = 'flex gap-2.5 items-start my-1';
       row.innerHTML = `
         <div class="w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold">IA</div>
-        <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 text-slate-400 flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"></span>
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.2s"></span>
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.4s"></span>
+        <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 text-slate-300 flex items-center gap-2 text-xs">
+          <span class="flex gap-1 items-center">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.2s"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.4s"></span>
+          </span>
+          <span class="text-[11px] text-cyan-300 font-medium">CalcuSuiteIA Copilot está escribiendo...</span>
         </div>
       `;
       this.messagesContainer.appendChild(row);
@@ -381,6 +384,35 @@
       return escaped;
     }
 
+    appendNetworkRetryMessage(failedText) {
+      const row = document.createElement('div');
+      row.className = 'flex gap-2.5 items-start my-2';
+      row.innerHTML = `
+        <div class="w-7 h-7 rounded-lg bg-amber-950/80 border border-amber-800 flex items-center justify-center text-amber-400 shrink-0 text-[10px] font-bold">⚠️</div>
+        <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] text-xs leading-relaxed text-slate-300">
+          <p class="mb-2">Parece haber una intermitencia temporal en la red. Puedes reintentar enviar tu consulta o contactarnos directamente por WhatsApp:</p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button id="retryWebchatBtn" class="px-2.5 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700 text-[11px] font-semibold transition-all">
+              🔄 Reintentar
+            </button>
+            <a href="https://wa.me/59894858791?text=${encodeURIComponent('Hola CalcuSuiteIA, tengo una consulta sobre la suite: ' + failedText)}" target="_blank" rel="noopener" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 text-[11px] font-semibold flex items-center gap-1 transition-all">
+              💬 Abrir WhatsApp
+            </a>
+          </div>
+        </div>
+      `;
+      this.messagesContainer.appendChild(row);
+      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+      const retryBtn = row.querySelector('#retryWebchatBtn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          row.remove();
+          this.sendMessage(failedText);
+        });
+      }
+    }
+
     async sendMessage(text) {
       this.appendMessage(text, true);
       this.isBusy = true;
@@ -388,6 +420,10 @@
 
       const payload = {
         session_id: this.sessionId,
+        visitor_name: this.knownFields.full_name || null,
+        visitor_email: this.knownFields.email || null,
+        visitor_phone: this.knownFields.phone || null,
+        company_name: this.knownFields.company_name || null,
         message: text,
         page_metrics: window.CalcuTelemetry.getMetrics(),
         known_fields: this.knownFields,
@@ -425,13 +461,8 @@
       if (reply) {
         this.appendMessage(reply, false);
       } else {
-        // Fallback local elegante
-        const fallbackMsg = (
-          "Gracias por escribirnos. Nuestro servidor de IA está procesando solicitudes de alta demanda en este momento. " +
-          "Puedes comunicarte directamente con nuestro equipo de dirección por WhatsApp al **+598 94 858 791** " +
-          "o escribirnos a **contacto@calcusuiteia.com** para coordinar tu acceso inmediato a la demo."
-        );
-        this.appendMessage(fallbackMsg, false);
+        // En caso de corte total de conectividad, ofrecer reintento interactivo
+        this.appendNetworkRetryMessage(text);
       }
     }
   }
