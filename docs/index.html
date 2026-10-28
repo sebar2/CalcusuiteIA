@@ -105,7 +105,106 @@
 
 
 
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Desplegable Lateral Superior Izquierdo (~55% de pantalla) al hacer clic en el Logo -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <!-- Cabecera del Drawer -->
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg p-1.5">
+              <svg class="w-full h-full text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#38bdf8" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="#818cf8" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="#a78bfa" stroke-width="1.8" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="1.5" fill="#38bdf8"/>
+              </svg>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-cyan-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Plataforma Logística & Financiera 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer" aria-label="Cerrar Menú">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- Acciones Principales: Iniciar Sesión & Crear Cuenta -->
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="log-in" class="w-4 h-4 text-cyan-400"></i>
+            <span>Iniciar Sesión en la App</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-cyan-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <!-- Enlaces a Módulos del Sistema -->
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos del Ecosistema</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <a href="index.html#gemelo3d" onclick="closeLogoDrawer()" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Gemelo Digital 3D</span>
+                <span class="text-[10px] text-slate-500">WMS espacial & cubicaje</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal IA</span>
+                <span class="text-[10px] text-slate-500">WhatsApp QR, Web & Redes</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="radio" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas</span>
+                <span class="text-[10px] text-slate-500">Reglas 2026 y ROI en vivo</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay</span>
+                <span class="text-[10px] text-slate-500">MLU Oficial & Anti-Penalización</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-slate-500">e-Factura y Liquidación</span>
+              </div>
+            </a>
+            <a href="documentacion.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-blue-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="book-open" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Manual Completo 2026</span>
+                <span class="text-[10px] text-slate-500">26 Capítulos & Asesor IA</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pie del Drawer -->
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA &bull; Multi-Tenant 2026</span>
+        <a href="https://app.calcusuiteia.com" target="_blank" class="text-cyan-400 hover:underline font-semibold flex items-center gap-1">
+          <span>Abrir App</span>
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
 
 
 
@@ -131,8 +230,8 @@
 
       
 
-            <!-- Brand Logo Minimalista CSIA -->
-      <a href="index.html" class="flex items-center gap-3 group">
+            <!-- Brand Logo Minimalista CSIA con Slide Drawer al Clic -->
+      <div onclick="openLogoDrawer()" class="flex items-center gap-3 group cursor-pointer select-none" title="Abrir Menú de Navegación Rápida">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 group-hover:scale-105 transition-transform p-1.5">
           <svg class="w-full h-full text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#38bdf8" stroke-width="1.8" stroke-linejoin="round"/>
@@ -148,7 +247,7 @@
           </div>
           <p class="text-[11px] text-slate-400 font-medium">SupplyFinance & 3PL Logistics</p>
         </div>
-      </a>
+      </div>
 
       <!-- Desktop Navigation Menu -->
       <nav class="hidden lg:flex items-center gap-5 text-xs xl:text-sm font-medium text-slate-300">
@@ -179,14 +278,7 @@
           <span>Crear Cuenta</span>
         </button>
 
-        <!-- WhatsApp Direct Pill -->
-        <a href="https://wa.me/59894858791?text=Hola%2C%20quisiera%20consultar%20por%20CalcuSuiteIA" 
-           target="_blank" 
-           rel="noopener noreferrer"
-           class="hidden xl:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-500/20 transition-all">
-          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
-          <span>+598 94 858 791</span>
-        </a>
+
 
         <!-- Mobile Hamburger Toggle -->
         <button id="mobileNavToggle" 
@@ -2277,6 +2369,32 @@
   <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
   <script src="./js/main.js"></script>
+
+
+  <script>
+    function openLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        d.classList.remove('hidden');
+        setTimeout(() => {
+          c.classList.remove('-translate-x-full');
+          c.classList.add('translate-x-0');
+        }, 10);
+      }
+    }
+    function closeLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        c.classList.remove('translate-x-0');
+        c.classList.add('-translate-x-full');
+        setTimeout(() => {
+          d.classList.add('hidden');
+        }, 300);
+      }
+    }
+  </script>
 
 </body>
 

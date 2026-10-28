@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>Manual Completo 2026 | CalcuSuiteIA Enterprise 2026</title>
-  <meta name="description" content="Centro de documentación técnica de CalcuSuiteIA (CSIA): 26 capítulos detallados, especificaciones de API y APK móvil Android.">
+  <title>Documentación Oficial 2026 | CalcuSuiteIA Enterprise & Logistics</title>
+  <meta name="description" content="Especificaciones de módulos, límites técnicos, guía de integraciones 2026 y Agente IA Asesor de Pauta & Difusión de CalcuSuiteIA.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
   <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
@@ -32,7 +32,7 @@
               700: '#1d4ed8',
               800: '#1e40af',
               900: '#1e3a8a',
-              950: '#0a192f',
+              950: '#0a0f1d',
             }
           }
         }
@@ -40,7 +40,101 @@
     }
   </script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Desplegable Lateral Superior Izquierdo (~55% de pantalla) al hacer clic en el Logo -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg p-1.5">
+              <svg class="w-full h-full text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#38bdf8" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M2 17L12 22L22 17" stroke="#818cf8" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M2 12L12 17L22 12" stroke="#a78bfa" stroke-width="1.8" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="1.5" fill="#38bdf8"/>
+              </svg>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-cyan-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Plataforma Logística & Financiera 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer" aria-label="Cerrar Menú">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="log-in" class="w-4 h-4 text-cyan-400"></i>
+            <span>Iniciar Sesión en la App</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-cyan-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos del Ecosistema</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <a href="index.html#gemelo3d" onclick="closeLogoDrawer()" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Gemelo Digital 3D</span>
+                <span class="text-[10px] text-slate-500">WMS espacial & cubicaje</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-indigo-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal IA</span>
+                <span class="text-[10px] text-slate-500">WhatsApp QR, Web & Redes</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="radio" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas</span>
+                <span class="text-[10px] text-slate-500">Reglas 2026 y ROI en vivo</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay</span>
+                <span class="text-[10px] text-slate-500">MLU Oficial & Anti-Penalización</span>
+              </div>
+            </a>
+            <a href="https://app.calcusuiteia.com" target="_blank" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-slate-500">e-Factura y Liquidación</span>
+              </div>
+            </a>
+            <a href="documentacion.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-blue-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="book-open" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Manual Completo 2026</span>
+                <span class="text-[10px] text-slate-500">26 Capítulos & Asesor IA</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA &bull; Multi-Tenant 2026</span>
+        <a href="https://app.calcusuiteia.com" target="_blank" class="text-cyan-400 hover:underline font-semibold flex items-center gap-1">
+          <span>Abrir App</span>
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+    </div>
+  </div>
 
   <!-- Background Gradients -->
   <div class="fixed inset-0 pointer-events-none -z-10">
@@ -48,12 +142,13 @@
     <div class="absolute top-1/3 -left-48 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
     <div class="absolute top-2/3 -right-48 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"></div>
   </div>
-  <!-- Header / Navigation Bar -->
-  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+
+  <!-- Header / Navigation Bar (Sin número de WhatsApp) -->
+  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0a0f1d]/90 backdrop-blur-md">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
       
-            <!-- Brand Logo Minimalista CSIA -->
-      <a href="index.html" class="flex items-center gap-3 group">
+      <!-- Brand Logo Minimalista CSIA con Slide Drawer al Clic -->
+      <div onclick="openLogoDrawer()" class="flex items-center gap-3 group cursor-pointer select-none" title="Abrir Menú de Navegación Rápida">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 group-hover:scale-105 transition-transform p-1.5">
           <svg class="w-full h-full text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#38bdf8" stroke-width="1.8" stroke-linejoin="round"/>
@@ -69,7 +164,7 @@
           </div>
           <p class="text-[11px] text-slate-400 font-medium">SupplyFinance & 3PL Logistics</p>
         </div>
-      </a>
+      </div>
 
       <!-- Desktop Navigation Menu -->
       <nav class="hidden lg:flex items-center gap-6 text-xs xl:text-sm font-medium text-slate-300">
@@ -82,254 +177,351 @@
         <a href="terminos.html" class="hover:text-blue-400 transition-colors">Términos</a>
       </nav>
 
-            <!-- CTA Buttons & Mobile Hamburger Menu -->
+      <!-- CTA Buttons -->
       <div class="flex items-center gap-2.5">
-        <!-- Entrar a la App Web -->
-        <a href="https://app.calcusuiteia.com" 
-           target="_blank" 
-           rel="noopener noreferrer"
-           class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-xs border border-slate-700 hover:border-slate-600 transition-all shadow-sm">
+        <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-xs border border-slate-700 hover:border-slate-600 transition-all shadow-sm">
           <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
           <span>Entrar a la App Web</span>
         </a>
-
-        <!-- Crear Cuenta -->
-        <button onclick="openAccountModal('PIONERO')" 
-                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs tracking-wide shadow-md shadow-cyan-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
-          <span>Crear Cuenta</span>
-        </button>
-
-        <!-- WhatsApp Direct Pill -->
-        <a href="https://wa.me/59894858791?text=Hola%2C%20quisiera%20consultar%20por%20CalcuSuiteIA" 
-           target="_blank" 
-           rel="noopener noreferrer"
-           class="hidden xl:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-500/20 transition-all">
-          <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
-          <span>+598 94 858 791</span>
-        </a>
-
-        <!-- Mobile Hamburger Toggle -->
-        <button id="mobileNavToggle" 
-                onclick="toggleMobileDrawer()" 
-                aria-label="Abrir menú de navegación móvil"
-                class="lg:hidden p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <i data-lucide="menu" class="w-6 h-6" id="mobileMenuIcon"></i>
-        </button>
-      </div>
-    </div>
-
-        <!-- Menu Desplegable / Drawer Movil -->
-    <div id="mobileDrawer" class="hidden lg:hidden border-t border-slate-800/80 bg-slate-950/95 px-4 pt-4 pb-6 space-y-3 transition-all">
-      <div class="grid grid-cols-2 gap-2 mb-2">
-        <a href="https://app.calcusuiteia.com" target="_blank" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold text-xs text-center shadow">
-          <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
-          <span>Entrar a la App</span>
-        </a>
-        <button onclick="toggleMobileDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold text-xs text-center shadow-lg shadow-cyan-600/30">
+        <button onclick="openAccountModal('PIONERO')" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs tracking-wide shadow-md shadow-cyan-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer">
           <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
           <span>Crear Cuenta</span>
         </button>
       </div>
-      <a href="index.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-blue-400 font-medium text-sm">
-        <i data-lucide="home" class="w-4 h-4 text-blue-400"></i>
-        <span>Inicio</span>
-      </a>
-      <a href="index.html#gemelo3d" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-cyan-400 font-medium text-sm">
-        <i data-lucide="box" class="w-4 h-4 text-cyan-400"></i>
-        <span>Gemelo 3D</span>
-      </a>
-      <a href="nosotros.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-indigo-400 font-medium text-sm">
-        <i data-lucide="users" class="w-4 h-4 text-indigo-400"></i>
-        <span>Nosotros (Historia & Misión)</span>
-      </a>
-      <a href="seguridad.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-emerald-400 font-medium text-sm">
-        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-        <span>Seguridad & Arquitectura</span>
-      </a>
-      <a href="documentacion.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-amber-400 font-medium text-sm">
-        <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i>
-        <span>Manual 2026 (26 Caps)</span>
-      </a>
-      <a href="blog.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-rose-400 font-medium text-sm">
-        <i data-lucide="newspaper" class="w-4 h-4 text-rose-400"></i>
-        <span>Blog & Artículos Técnicos</span>
-      </a>
-      <a href="terminos.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-slate-400 font-medium text-sm">
-        <i data-lucide="file-text" class="w-4 h-4 text-slate-400"></i>
-        <span>Términos & Garantía</span>
-      </a>
     </div>
   </header>
-  <main class="flex-1 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
+
+  <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 space-y-16">
     
     <!-- Hero Section -->
-    <div class="text-center max-w-3xl mx-auto mb-16">
+    <div class="text-center max-w-3xl mx-auto">
       <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold uppercase tracking-wider mb-6">
         <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
-        <span>Documentación & Especificaciones 2026</span>
+        <span>Documentación & Especificaciones Técnicas 2026</span>
       </div>
       <h1 class="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight">
-        Manual Completo del Ecosistema (26 Capítulos)
+        Manual de Arquitectura, Módulos & Hub 2026
       </h1>
       <p class="mt-6 text-base sm:text-lg text-slate-300 leading-relaxed">
-        Guía integral paso a paso de cada módulo de la plataforma: Gemelo Digital 3D, Supply Chain, Logística 3PL, Mercado Libre, Contabilidad y Aplicación Móvil Android.
+        Capacidades de cómputo, límites de API, normativas antispam 2026 y simulador de inversión publicitaria con Inteligencia Artificial.
       </p>
-      
-      <!-- Quick Action Buttons -->
-      <div class="flex flex-wrap items-center justify-center gap-4 mt-8">
-        <a href="./MANUAL_COMPLETO_CALCU_2026.html" target="_blank"
-           class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all">
-          <i data-lucide="file-text" class="w-4 h-4"></i>
-          <span>Abrir Manual Completo 2026 (HTML)</span>
-        </a>
-        <a href="./downloads/CalcuMobile-Signed.apk" download
-           class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs border border-slate-700 flex items-center gap-2 transition-all">
-          <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i>
-          <span>Descargar APK Móvil Android</span>
-        </a>
-      </div>
     </div>
 
-    <!-- Browser de 26 Capítulos -->
-    <div class="mb-20">
-      <h2 class="text-2xl font-extrabold text-white mb-6 flex items-center gap-2">
-        <i data-lucide="layers" class="w-6 h-6 text-blue-400"></i>
-        <span>Índice Estructurado de Capítulos</span>
-      </h2>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-all">
-          <span class="text-xs font-mono text-blue-400">Capítulo 01</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Visión General y Arquitectura Híbrida</h4>
-          <p class="text-xs text-slate-400">Filosofía de diseño, microservicios FastAPI, backend relacional y rendimiento en frontend React 18.</p>
+    <!-- SECCIÓN INTERACTIVA: AGENTE DE IA ASESOR DE DIFUSIÓN & PAUTA 2026 -->
+    <section class="glass-card p-6 sm:p-8 rounded-3xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/40 via-purple-950/30 to-slate-900/80 shadow-2xl">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
+          <i data-lucide="sparkles" class="w-6 h-6 text-cyan-200"></i>
         </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-cyan-500/40 transition-all">
-          <span class="text-xs font-mono text-cyan-400">Capítulo 02</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Gemelo Digital 3D & WMS Espacial</h4>
-          <p class="text-xs text-slate-400">Coordenadas métricas X/Z del rack entero, rotación 0°/90°, detección AABB y persistencia Numeric(14,4).</p>
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-widest text-purple-400 font-bold">Herramienta Interactiva 2026</span>
+          <h2 class="text-xl sm:text-2xl font-black text-white">Agente de IA Asesor de Difusión & Pauta</h2>
         </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-indigo-500/40 transition-all">
-          <span class="text-xs font-mono text-indigo-400">Capítulo 03</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Editor Dimensional de Racks & Cajas</h4>
-          <p class="text-xs text-slate-400">Configuración milimétrica de ancho, alto y profundidad con cálculo de cubicaje m³ ocupado vs libre.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/40 transition-all">
-          <span class="text-xs font-mono text-emerald-400">Capítulo 04</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Simulador de Cubicaje 3D (IA 98%)</h4>
-          <p class="text-xs text-slate-400">Optimización de empaquetado 3D Bin Packing para pallets, contenedores marítimos y racks.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-purple-500/40 transition-all">
-          <span class="text-xs font-mono text-purple-400">Capítulo 05</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Buque Portacontenedores 3D en Alta Mar</h4>
-          <p class="text-xs text-slate-400">Visualización de importaciones marítimas, seguimiento de BL, peso en TEUs y cálculo de arribo.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-amber-500/40 transition-all">
-          <span class="text-xs font-mono text-amber-400">Capítulo 06</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Kanban ROP & Reabastecimiento DOH</h4>
-          <p class="text-xs text-slate-400">Punto de reorden con Landed Costs, días de inventario a mano (DOH) y órdenes de compra automáticas.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-rose-500/40 transition-all">
-          <span class="text-xs font-mono text-rose-400">Capítulo 07</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Operaciones 3PL: Depósito & Clientes</h4>
-          <p class="text-xs text-slate-400">Gestión de stock de terceros, tarifas por posición pallet/día, cross-docking y facturación de estadía.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-all">
-          <span class="text-xs font-mono text-blue-400">Capítulo 08</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Flota, Choferes & Ruteo Logístico</h4>
-          <p class="text-xs text-slate-400">Control de camiones, remitos digitales de entrega con firma en pantalla, odómetros y combustible.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/40 transition-all">
-          <span class="text-xs font-mono text-emerald-400">Capítulo 09</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Integración con Mercado Libre Uruguay</h4>
-          <p class="text-xs text-slate-400">Sincronización bidireccional de publicaciones, stock y órdenes de compra con Kanban en 5 etapas.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-cyan-500/40 transition-all">
-          <span class="text-xs font-mono text-cyan-400">Capítulo 10</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Chat Omnicanal WhatsApp QR & Audio .opus</h4>
-          <p class="text-xs text-slate-400">Atención unificada por número corporativo, transcripción de notas de voz y bot de calificación IA.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-indigo-500/40 transition-all">
-          <span class="text-xs font-mono text-indigo-400">Capítulo 11</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Contabilidad General & Libro Diario B2B</h4>
-          <p class="text-xs text-slate-400">Partida doble en tiempo real, balance de sumas y saldos, centros de costo OPEX y estado de resultados.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-purple-500/40 transition-all">
-          <span class="text-xs font-mono text-purple-400">Capítulo 12</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Facturación Electrónica CFE & DGI</h4>
-          <p class="text-xs text-slate-400">Emisión de e-Factura, e-Ticket, resguardos de retención y liquidación del Formulario DGI 2178.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-amber-500/40 transition-all">
-          <span class="text-xs font-mono text-amber-400">Capítulo 13</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Liquidación de Sueldos & Nómina BPS</h4>
-          <p class="text-xs text-slate-400">Cálculo de aportes jubilatorios, FONASA, FRL, IRPF laboral y generación de planillas para BPS.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-rose-500/40 transition-all">
-          <span class="text-xs font-mono text-rose-400">Capítulo 14</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">Gestión de Cobranzas & Scoring Crediticio</h4>
-          <p class="text-xs text-slate-400">Aging de deudores, alertas preventivas por WhatsApp, límites de crédito comercial y conciliación.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/40 transition-all">
-          <span class="text-xs font-mono text-emerald-400">Capítulo 15</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">FP&A: Presupuesto Real vs Budget</h4>
-          <p class="text-xs text-slate-400">Control de desviaciones presupuestarias por centro de costos y pronósticos proyectados con IA.</p>
-        </div>
-
-        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-all">
-          <span class="text-xs font-mono text-blue-400">Capítulos 16 a 26</span>
-          <h4 class="font-bold text-white text-sm mt-1 mb-2">APIs, Webhooks, APK Móvil & Licencias</h4>
-          <p class="text-xs text-slate-400">Arquitectura de seguridad, esquema multi-tenant, sincronización offline y administración del tenant.</p>
-        </div>
-
       </div>
-    </div>
+      <p class="text-xs sm:text-sm text-slate-300 mb-6">
+        Configure su presupuesto y rubro para obtener la distribución táctica recomendada por el modelo de IA entre Google Ads, Meta Ads, WhatsApp Cloud API y Mailing corporativo.
+      </p>
 
-    <!-- Guía de la App Móvil Android -->
-    <div class="glass-card p-8 sm:p-10 rounded-3xl border border-slate-800 mb-20">
-      <div class="flex flex-col lg:flex-row gap-8 items-center">
-        <div class="flex-1">
-          <span class="text-xs font-mono text-emerald-400 uppercase tracking-widest">Aplicación Móvil para Choferes y Depósito</span>
-          <h3 class="text-2xl font-extrabold text-white mt-1 mb-3">Calcu Mobile APK (Android)</h3>
-          <p class="text-sm text-slate-300 leading-relaxed mb-4">
-            Diseñada específicamente para entornos logísticos reales con conectividad intermitente (puertos, cámaras de frío, galpones y rutas nacionales). Opera bajo arquitectura <strong class="text-white">Offline-First</strong> con base de datos local embebida y sincronización delta automática en cuanto recupera señal.
-          </p>
-          <ul class="text-xs text-slate-300 space-y-2 mb-6">
-            <li class="flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Escaneo rápido de códigos QR y de barras 1D/2D con la cámara del dispositivo</li>
-            <li class="flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Firma digital de remitos en pantalla y captura fotográfica de entrega</li>
-            <li class="flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Conexión con impresoras térmicas Bluetooth para etiquetado de pallets</li>
-          </ul>
-          <a href="./downloads/CalcuMobile-Signed.apk" download
-             class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-emerald-600/30 transition-all">
-            <i data-lucide="download" class="w-4 h-4"></i>
-            <span>Descargar APK Instalador (CalcuMobile-Signed.apk)</span>
-          </a>
-        </div>
-        <div class="w-full lg:w-72 p-6 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-          <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-            <i data-lucide="smartphone" class="w-8 h-8"></i>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Controles / Inputs -->
+        <div class="lg:col-span-5 space-y-4 bg-slate-900/80 p-5 rounded-2xl border border-slate-800">
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">
+              Presupuesto Mensual de Difusión: <span id="adBudgetLabel" class="text-cyan-400 font-mono text-sm">$600 USD</span>
+            </label>
+            <input type="range" id="adBudgetInput" min="100" max="5000" step="50" value="600" oninput="updateAdvisorSim()" class="w-full accent-cyan-400">
           </div>
-          <div class="text-sm font-bold text-white">Versión 2026.4</div>
-          <div class="text-xs text-slate-400 mt-1">Compatible con Android 8.0 a 15 (Redmi, Samsung, Zebra, Honeywell)</div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">Rubro / Industria de la Empresa</label>
+            <select id="adIndustryInput" onchange="updateAdvisorSim()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none">
+              <option value="b2b_wholesale">Distribución Mayorista B2B & Importación</option>
+              <option value="logistics_3pl">Logística 3PL, Depósito & Transporte</option>
+              <option value="retail_meli">E-Commerce Retail & Mercado Libre (B2C)</option>
+              <option value="corporate_services">Servicios Corporativos & Software</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">Alcance Geográfico Objetivo</label>
+            <select id="adReachInput" onchange="updateAdvisorSim()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none">
+              <option value="uruguay">Nacional Uruguay (Montevideo + Interior)</option>
+              <option value="regional">Regional Cono Sur (UY + AR + BR + CL)</option>
+              <option value="global">Internacional / Comercio Exterior</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Resultados del Asesor IA -->
+        <div class="lg:col-span-7 bg-[#0a0f1d] p-6 rounded-2xl border border-purple-500/30 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span class="text-xs font-bold uppercase tracking-wider text-purple-400">Distribución Táctica Recomendada</span>
+              <span id="advisorLeadsEst" class="text-xs font-mono font-bold text-emerald-400">≈ 142 Leads Calificados</span>
+            </div>
+
+            <!-- Barras de Presupuesto -->
+            <div class="mt-4 space-y-3 text-xs">
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="target" class="w-3.5 h-3.5 text-blue-400"></i> Google Ads (Intención de Búsqueda)</span>
+                  <span id="pctGoogle" class="font-mono text-cyan-400 font-bold">$240 USD (40%)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div id="barGoogle" class="bg-cyan-500 h-full rounded-full" style="width: 40%;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="megaphone" class="w-3.5 h-3.5 text-indigo-400"></i> Meta Ads / Instagram (Leads & Video)</span>
+                  <span id="pctMeta" class="font-mono text-indigo-400 font-bold">$180 USD (30%)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div id="barMeta" class="bg-indigo-500 h-full rounded-full" style="width: 30%;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="message-square" class="w-3.5 h-3.5 text-emerald-400"></i> WhatsApp Cloud API (Outreach 24h & CTWA)</span>
+                  <span id="pctWhatsApp" class="font-mono text-emerald-400 font-bold">$120 USD (20%)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div id="barWhatsApp" class="bg-emerald-500 h-full rounded-full" style="width: 20%;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[11px] mb-1">
+                  <span class="text-slate-300 flex items-center gap-1.5"><i data-lucide="mail" class="w-3.5 h-3.5 text-purple-400"></i> Mailing Masivo & Nurturing Resend</span>
+                  <span id="pctEmail" class="font-mono text-purple-400 font-bold">$60 USD (10%)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div id="barEmail" class="bg-purple-500 h-full rounded-full" style="width: 10%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dictamen del Copiloto IA -->
+          <div class="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 text-xs">
+            <div class="font-bold text-white flex items-center gap-1.5 mb-1">
+              <i data-lucide="bot" class="w-4 h-4 text-purple-400"></i>
+              <span>Dictamen Estratégico del Copiloto IA</span>
+            </div>
+            <p id="advisorComment" class="text-slate-400 leading-relaxed text-[11px]">
+              Para distribución mayorista en Uruguay, priorice Google Search para captar clientes con intención inmediata de compra de stock, reforzando con WhatsApp Business API para cierre veloz con listas de precios en PDF.
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- ESPECIFICACIONES TÉCNICAS & LÍMITES POR MÓDULO -->
+    <section class="space-y-6">
+      <div>
+        <h2 class="text-2xl font-black text-white flex items-center gap-2">
+          <i data-lucide="cpu" class="w-6 h-6 text-cyan-400"></i>
+          <span>Capacidades de Cómputo & Límites Técnicos por Módulo</span>
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">Garantía arquitectónica validada contra PostgreSQL 16 y microservicios FastAPI.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- WMS 3D -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-cyan-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="box" class="w-5 h-5 text-cyan-400"></i>
+            <h3 class="font-bold text-white text-sm">WMS Espacial & Gemelo 3D</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Simulación tridimensional de galpones y racks con precisión milimétrica (X, Y, Z, rotación 0°/90°).
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Capacidad: Hasta 50,000 ubicaciones pallet/tenant</li>
+            <li>• Bin Packing 3D: Eficiencia volumétrica del 98.4%</li>
+            <li>• Precisión: Numeric(14,4) en base de datos</li>
+          </ul>
+        </div>
+
+        <!-- CRM & Chat Omnicanal -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-indigo-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="message-square" class="w-5 h-5 text-indigo-400"></i>
+            <h3 class="font-bold text-white text-sm">Pipeline CRM & Chat Omnicanal</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Kanban con jerarquía invertida, notas fijadas en chat y motivo obligatorio en etapa Pérdida.
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Concurrencia: 10,000 mensajes/minuto WebSocket</li>
+            <li>• Audio: Notas de voz .opus reproducibles</li>
+            <li>• Guardián Duplicados: Fusión 1FN-3FN con aprobación</li>
+          </ul>
+        </div>
+
+        <!-- Difusión & Campañas -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-purple-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="radio" class="w-5 h-5 text-purple-400"></i>
+            <h3 class="font-bold text-white text-sm">Difusión & Campañas 2026</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Despacho saliente con semáforo de elegibilidad y calculadora de ROI financiero proyectado.
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Ventanas Meta: 24h estándar / 7d HUMAN_AGENT</li>
+            <li>• FB Marketplace: Límite 30 peticiones/minuto</li>
+            <li>• TikTok Business: Ventana de atención 24-48h</li>
+          </ul>
+        </div>
+
+        <!-- Mercado Libre Uruguay -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-amber-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="shopping-bag" class="w-5 h-5 text-amber-400"></i>
+            <h3 class="font-bold text-white text-sm">Mercado Libre Uruguay (MLU)</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Conexión oficial OAuth 2.0 con protección activa anti-penalizaciones en preguntas pre-venta.
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Sincronización: &lt; 2 segundos por webhook IPN</li>
+            <li>• Regla Anti-Ban: Detección regex teléfonos/emails</li>
+            <li>• Órdenes: Conversión automática a Trato CRM</li>
+          </ul>
+        </div>
+
+        <!-- Facturación CFE & DGI -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="file-text" class="w-5 h-5 text-emerald-400"></i>
+            <h3 class="font-bold text-white text-sm">Facturación Electrónica DGI</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Emisión de e-Factura, e-Ticket, resguardos y código QR interactivo de cobro Mercado Pago UY.
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Formatos: Impresión centrada A4 corporativa</li>
+            <li>• Impuestos: Formulario 2178 DGI con IVA en vivo</li>
+            <li>• Moneda: Cotizaciones BROU UYU / USD / UI</li>
+          </ul>
+        </div>
+
+        <!-- Bóveda Cifrada AES-256 -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-800 hover:border-blue-500/40 transition-all">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="shield-check" class="w-5 h-5 text-blue-400"></i>
+            <h3 class="font-bold text-white text-sm">Seguridad & Bóveda AES-256</h3>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed mb-3">
+            Cifrado de credenciales de integración y aislamiento estricto por cuenta (UID) y usuario (ID).
+          </p>
+          <ul class="text-[11px] text-slate-300 space-y-1 font-mono border-t border-slate-800/80 pt-2">
+            <li>• Criterio ISO 27001 & CWE-312: Cero secretos en DOM</li>
+            <li>• Red Local: PostgreSQL (:5432) e IA (:11434) 127.0.0.1</li>
+            <li>• Sesiones: JWT HS256 con revocación instantánea</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- GUÍA DE INTEGRACIONES OFICIALES 2026 -->
+    <section class="space-y-6">
+      <div>
+        <h2 class="text-2xl font-black text-white flex items-center gap-2">
+          <i data-lucide="plug" class="w-6 h-6 text-emerald-400"></i>
+          <span>Guía de Canales, Conexiones & Tarifas Oficiales 2026</span>
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">Conectores directos integrados en la bóveda de CalcuSuiteIA.</p>
+      </div>
+
+      <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-[#0a0f1d] shadow-sm">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+            <tr>
+              <th class="py-3 px-4 font-semibold">Canal / Conector</th>
+              <th class="py-3 px-4 font-semibold">Ventana de Atención 2026</th>
+              <th class="py-3 px-4 font-semibold">Límites & Requisitos</th>
+              <th class="py-3 px-4 font-semibold">Costo Proveedor 2026</th>
+              <th class="py-3 px-4 font-semibold text-right">Documentación Oficial</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 text-slate-300">
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i> WhatsApp Cloud API
+              </td>
+              <td class="py-3 px-4 text-emerald-400 font-semibold">24h estándar / 72h CTWA</td>
+              <td class="py-3 px-4">Meta WABA verificado + Plantillas aprobadas</td>
+              <td class="py-3 px-4 font-mono">$0.052 USD (Marketing) / $0.015 (Utilidad)</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" class="text-cyan-400 hover:underline">Meta Docs ↗</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="megaphone" class="w-4 h-4 text-indigo-400"></i> Instagram & Messenger
+              </td>
+              <td class="py-3 px-4 text-cyan-400 font-semibold">24h + 7d HUMAN_AGENT</td>
+              <td class="py-3 px-4">Meta Graph API System User Token</td>
+              <td class="py-3 px-4 font-mono">$0.00 USD (Respuestas orgánicas)</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://developers.facebook.com/docs/messenger-platform" target="_blank" class="text-cyan-400 hover:underline">Messenger Docs ↗</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="shopping-bag" class="w-4 h-4 text-blue-400"></i> FB Marketplace Batch
+              </td>
+              <td class="py-3 px-4 text-slate-400 font-semibold">Sincronización en Lote</td>
+              <td class="py-3 px-4">Máx. 30 peticiones/minuto en catálogo</td>
+              <td class="py-3 px-4 font-mono">Gratuito con Meta Commerce Manager</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://developers.facebook.com/docs/commerce-platform" target="_blank" class="text-cyan-400 hover:underline">Commerce API ↗</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400"></i> Mercado Libre Uruguay
+              </td>
+              <td class="py-3 px-4 text-amber-400 font-semibold">IPN Instantáneo (&lt; 2s)</td>
+              <td class="py-3 px-4">App ID + Client Secret en developers.mercadolibre.com</td>
+              <td class="py-3 px-4 font-mono">Comisión estándar por venta MeLi</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://developers.mercadolibre.com.uy" target="_blank" class="text-cyan-400 hover:underline">MeLi Devs ↗</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="zap" class="w-4 h-4 text-pink-400"></i> TikTok Business Leads
+              </td>
+              <td class="py-3 px-4 text-pink-400 font-semibold">24h a 48h tras sumisión</td>
+              <td class="py-3 px-4">Formularios instantáneos + Webhook de leads</td>
+              <td class="py-3 px-4 font-mono">Costo por lead según subasta de pauta</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://business-api.tiktok.com" target="_blank" class="text-cyan-400 hover:underline">TikTok Devs ↗</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-bold text-white flex items-center gap-2">
+                <i data-lucide="mail" class="w-4 h-4 text-purple-400"></i> Resend Email API
+              </td>
+              <td class="py-3 px-4 text-purple-400 font-semibold">Inmediato (&lt; 500ms)</td>
+              <td class="py-3 px-4">Dominio con registros DKIM / SPF / DMARC alineados</td>
+              <td class="py-3 px-4 font-mono">$0.0008 USD / correo ($20/50k)</td>
+              <td class="py-3 px-4 text-right">
+                <a href="https://resend.com/docs" target="_blank" class="text-cyan-400 hover:underline">Resend Docs ↗</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
   </main>
+
   <footer class="border-t border-slate-900 bg-slate-950 py-14 px-4 sm:px-6 lg:px-8 text-xs mt-auto">
     <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
       <div class="space-y-3">
@@ -362,10 +554,9 @@
         </ul>
       </div>
       <div>
-        <h4 class="font-bold text-white uppercase tracking-wider mb-3">Contacto & Soporte</h4>
+        <h4 class="font-bold text-white uppercase tracking-wider mb-3">Contacto Corporativo</h4>
         <ul class="space-y-2 text-slate-400">
           <li><a href="mailto:contacto@calcusuiteia.com" class="hover:text-blue-400 transition-colors flex items-center gap-1.5"><i data-lucide="mail" class="w-3.5 h-3.5 text-blue-400"></i> contacto@calcusuiteia.com</a></li>
-          <li><a href="https://wa.me/59894858791" target="_blank" class="hover:text-emerald-400 transition-colors flex items-center gap-1.5"><i data-lucide="phone" class="w-3.5 h-3.5 text-emerald-400"></i> +598 94 858 791</a></li>
           <li class="pt-2 text-slate-500 font-mono text-[11px]">SLA 99.95% &bull; ISO 27001 Ready</li>
         </ul>
       </div>
@@ -380,22 +571,87 @@
     </div>
   </footer>
 
+  <!-- Scripts del Asesor IA y Drawer -->
   <script>
-    function toggleMobileDrawer() {
-      const drawer = document.getElementById('mobileDrawer');
-      if (drawer) {
-        drawer.classList.toggle('hidden');
+    function openLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        d.classList.remove('hidden');
+        setTimeout(() => {
+          c.classList.remove('-translate-x-full');
+          c.classList.add('translate-x-0');
+        }, 10);
       }
     }
-  </script>
+    function closeLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        c.classList.remove('translate-x-0');
+        c.classList.add('-translate-x-full');
+        setTimeout(() => {
+          d.classList.add('hidden');
+        }, 300);
+      }
+    }
 
-  <!-- Telemetría y Chat IA Slot-Filling -->
+    function updateAdvisorSim() {
+      const budget = Number(document.getElementById('adBudgetInput').value);
+      const industry = document.getElementById('adIndustryInput').value;
+      const reach = document.getElementById('adReachInput').value;
+      document.getElementById('adBudgetLabel').innerText = `$${budget} USD`;
+
+      let pG = 0.40, pM = 0.30, pW = 0.20, pE = 0.10;
+      let estCpl = 4.2;
+      let comment = "";
+
+      if (industry === 'b2b_wholesale') {
+        pG = 0.45; pM = 0.20; pW = 0.25; pE = 0.10;
+        estCpl = 5.5;
+        comment = "Para distribución mayorista en Uruguay, priorice Google Search para captar compras de stock en volumen y WhatsApp Cloud API para cierre directo con listas de precios.";
+      } else if (industry === 'logistics_3pl') {
+        pG = 0.50; pM = 0.20; pW = 0.15; pE = 0.15;
+        estCpl = 6.8;
+        comment = "En logística 3PL y depósito, la intención de búsqueda en Google (pallets, almacenaje fiscal, ruteo) tiene la mayor tasa de conversión calificada.";
+      } else if (industry === 'retail_meli') {
+        pG = 0.25; pM = 0.45; pW = 0.20; pE = 0.10;
+        estCpl = 2.4;
+        comment = "En retail y MeLi, los formatos visuales de Meta Ads (Reels/Carruseles) generan alto volumen con soporte de WhatsApp para dudas previas.";
+      } else {
+        pG = 0.35; pM = 0.25; pW = 0.20; pE = 0.20;
+        estCpl = 4.8;
+        comment = "Estrategia equilibrada: Google Ads para captura inicial, reforzado con secuencias de correo masivo Resend para maduración de tratos B2B.";
+      }
+
+      const costG = Math.round(budget * pG);
+      const costM = Math.round(budget * pM);
+      const costW = Math.round(budget * pW);
+      const costE = Math.round(budget * pE);
+
+      document.getElementById('pctGoogle').innerText = `$${costG} USD (${Math.round(pG * 100)}%)`;
+      document.getElementById('pctMeta').innerText = `$${costM} USD (${Math.round(pM * 100)}%)`;
+      document.getElementById('pctWhatsApp').innerText = `$${costW} USD (${Math.round(pW * 100)}%)`;
+      document.getElementById('pctEmail').innerText = `$${costE} USD (${Math.round(pE * 100)}%)`;
+
+      document.getElementById('barGoogle').style.width = `${pG * 100}%`;
+      document.getElementById('barMeta').style.width = `${pM * 100}%`;
+      document.getElementById('barWhatsApp').style.width = `${pW * 100}%`;
+      document.getElementById('barEmail').style.width = `${pE * 100}%`;
+
+      const leads = Math.round(budget / estCpl);
+      document.getElementById('advisorLeadsEst').innerText = `≈ ${leads} Leads Calificados`;
+      document.getElementById('advisorComment').innerText = comment;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateAdvisorSim();
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    });
+  </script>
   <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
-  <script>
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  </script>
 </body>
 </html>
