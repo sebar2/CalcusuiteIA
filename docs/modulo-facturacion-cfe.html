@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Facturación Electrónica CFE DGI & Liquidación Fiscal | CalcuSuiteIA</title>
+  <meta name="description" content="Emisión de e-Facturas y e-Tickets homologados ante DGI Uruguay. Códigos QR reglamentarios, partida doble automática, CAE y liquidación mensual de IVA y BPS.">
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a855f7'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><polyline points='10 9 9 9 8 9'/></svg>">
+  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#faf5ff',
+              400: '#c084fc',
+              500: '#a855f7',
+              600: '#9333ea',
+              900: '#581c87',
+              950: '#0a0f1d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(168, 85, 247, 0.15); }
+    .glass-card-hover:hover { border-color: rgba(168, 85, 247, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.15); }
+    .glow-purple { text-shadow: 0 0 25px rgba(168, 85, 247, 0.5); }
+  </style>
+</head>
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Lateral -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-indigo-600 flex items-center justify-center text-white shadow-lg p-1.5">
+              <i data-lucide="file-text" class="w-6 h-6 text-purple-200"></i>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-purple-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="index.html" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="home" class="w-4 h-4 text-purple-400"></i>
+            <span>Volver a Inicio</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-purple-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos Especializados</span>
+          <div class="space-y-2">
+            <a href="modulo-gemelo-digital-3d.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Gemelo Digital 3D & WMS</span>
+                <span class="text-[10px] text-slate-500">Racks paramétricos e inventario espacial</span>
+              </div>
+            </a>
+            <a href="modulo-logistica-3pl.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="truck" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Logística 3PL & Flota GPS</span>
+                <span class="text-[10px] text-slate-500">Monitoreo satelital y liquidación</span>
+              </div>
+            </a>
+            <a href="modulo-mercadolibre.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay Oficial</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y publicación IA</span>
+              </div>
+            </a>
+            <a href="modulo-chat-omnicanal.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal & WhatsApp QR</span>
+                <span class="text-[10px] text-slate-500">Audios .opus y notas pegadas</span>
+              </div>
+            </a>
+            <a href="modulo-integraciones-hub.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="share-2" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Hub de Integraciones 2026</span>
+                <span class="text-[10px] text-slate-500">11 canales y Bóveda AES-256</span>
+              </div>
+            </a>
+            <a href="modulo-facturacion-cfe.html" class="p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 text-purple-300 font-bold transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-purple-400/80 font-normal">e-Facturas, QR y Liquidación Fiscal</span>
+              </div>
+            </a>
+            <a href="modulo-licitaciones-radar.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="target" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Radar Licitaciones ARCE</span>
+                <span class="text-[10px] text-slate-500">Compras estatales y análisis IA</span>
+              </div>
+            </a>
+            <a href="modulo-cobranzas-finanzas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="scale" class="w-4 h-4 text-rose-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Cobranzas B2B & Morosidad</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y botón de pago MP</span>
+              </div>
+            </a>
+            <a href="modulo-difusion-campanas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-pink-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="megaphone" class="w-4 h-4 text-pink-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas Masivas</span>
+                <span class="text-[10px] text-slate-500">Segmentación B2B y reglas anti-bloqueo</span>
+              </div>
+            </a>
+            <a href="modulo-control-room.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-red-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-red-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Control Room & ISO 27001</span>
+                <span class="text-[10px] text-slate-500">Auditoría, telemetría y seguridad</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA &bull; Multi-Tenant 2026</span>
+        <a href="documentacion.html" class="text-purple-400 hover:underline font-semibold">Documentación Técnica &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div onclick="openLogoDrawer()" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/25 group-hover:scale-105 transition-transform p-1.5">
+          <i data-lucide="file-text" class="w-5 h-5 text-purple-200"></i>
+        </div>
+        <div>
+          <span class="text-lg font-black text-white">CalcuSuite<span class="text-purple-400">IA</span></span>
+          <span class="hidden sm:inline-block text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full ml-2 font-mono">CFE DGI</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 sm:gap-4">
+      <a href="index.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="home" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Inicio</span>
+      </a>
+      <a href="documentacion.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="book-open" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Documentación</span>
+      </a>
+      <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 shadow flex items-center gap-1.5 transition-all">
+        <i data-lucide="log-in" class="w-3.5 h-3.5 text-purple-400"></i>
+        <span class="hidden sm:inline">Entrar a la App</span>
+        <span class="sm:hidden">App</span>
+      </a>
+      <button onclick="openAccountModal('PIONERO')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-200"></i>
+        <span>Crear Cuenta</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Breadcrumbs -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
+    <nav class="flex items-center gap-2 text-xs text-slate-400">
+      <a href="index.html" class="hover:text-purple-400 transition-colors">Inicio</a>
+      <span class="text-slate-600">/</span>
+      <span class="text-slate-500">Módulos</span>
+      <span class="text-slate-600">/</span>
+      <span class="text-purple-400 font-semibold">Facturación Electrónica CFE DGI & Liquidación</span>
+    </nav>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <div class="text-center max-w-3xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-950/80 border border-purple-500/30 text-purple-300 text-xs font-bold mb-4 uppercase tracking-wider">
+        <i data-lucide="check-circle" class="w-4 h-4 text-purple-400"></i>
+        Normativa DGI Uruguay &bull; Códigos QR Homologados &bull; CAE
+      </div>
+      <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+        Facturación CFE & <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-300 glow-purple">Liquidación Fiscal DGI</span>
+      </h1>
+      <p class="mt-4 text-slate-300 text-base sm:text-lg leading-relaxed">
+        Emite e-Facturas y e-Tickets en 1 clic desde cualquier venta física o digital. Partida doble automática en el Libro Diario, generación del Formulario 2178/2181 y enlace directo con Mercado Pago y cobro con Código QR.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <a href="#capturas" class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-600/30 flex items-center gap-2 transition-all">
+          <i data-lucide="eye" class="w-4 h-4"></i>
+          <span>Ver Emisión e Impresión Real</span>
+        </a>
+        <a href="#simulador" class="px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="calculator" class="w-4 h-4 text-purple-400"></i>
+          <span>Simulador de IVA & Retenciones</span>
+        </a>
+        <a href="#copilot-ia" class="px-5 py-3 rounded-xl bg-pink-950/60 hover:bg-pink-900/60 border border-pink-500/40 text-pink-300 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="bot" class="w-4 h-4 text-pink-400"></i>
+          <span>Consultar a la Asesora Fiscal</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Showcase Principal -->
+    <div id="capturas" class="mt-14 max-w-5xl mx-auto">
+      <div class="glass-card rounded-2xl p-4 sm:p-6 border border-purple-500/30 shadow-2xl">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-purple-500 animate-pulse"></span>
+            <span class="text-xs font-mono font-bold text-slate-300">LISTADO DE COMPROBANTES CFE & VALIDACIÓN DGI</span>
+          </div>
+          <span class="text-[11px] font-mono text-purple-400 bg-purple-950 px-2.5 py-0.5 rounded-full border border-purple-800">CFE 111 &bull; CAE ACTIVO</span>
+        </div>
+
+        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" onclick="openScreenshotModal('./screenshots/10_facturacion_b2b_listado.png', 'Facturación B2B CFE y Estado de Validación DGI')">
+          <img src="./screenshots/10_facturacion_b2b_listado.png" alt="Facturación Electrónica CFE" class="w-full h-auto object-cover hover:scale-[1.01] transition-transform duration-300">
+        </div>
+        <p class="mt-3 text-xs text-slate-400 text-center font-mono">
+          Control de e-Facturas emitidas, serie y número asignado por CAE, estado de aprobación DGI y envío automático por correo.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/11_facturacion_emision_modal.png', 'Modal de Emisión de Factura CFE con Partida Doble')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/11_facturacion_emision_modal.png" alt="Emisión CFE" class="w-full h-full object-cover">
+          </div>
+          <span class="text-[11px] font-bold text-purple-400 uppercase tracking-wider block">1-Clic Emisión</span>
+          <h3 class="text-sm font-bold text-white mt-1">Modal de Emisión Rápida</h3>
+          <p class="text-xs text-slate-400 mt-1">Cálculo desglosado de IVA básico (22%), IVA mínimo (10%) y retenciones IRPF/IRAE.</p>
+        </div>
+
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/09_liquidacion_fiscal_dgi_bps.png', 'Liquidación Fiscal Formulario 2178 DGI y BPS')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/09_liquidacion_fiscal_dgi_bps.png" alt="Liquidación Fiscal DGI" class="w-full h-full object-cover">
+          </div>
+          <span class="text-[11px] font-bold text-pink-400 uppercase tracking-wider block">Formulario 2178</span>
+          <h3 class="text-sm font-bold text-white mt-1">Pre-liquidación Mensual</h3>
+          <p class="text-xs text-slate-400 mt-1">Suma del débito fiscal vs crédito fiscal de compras con exportación para contadores.</p>
+        </div>
+
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/07_libro_diario_partida_doble.png', 'Libro Diario Contable con Partida Doble')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/07_libro_diario_partida_doble.png" alt="Libro Diario" class="w-full h-full object-cover">
+          </div>
+          <span class="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">Contabilidad Pura</span>
+          <h3 class="text-sm font-bold text-white mt-1">Asientos Automáticos</h3>
+          <p class="text-xs text-slate-400 mt-1">Cada factura impacta inmediatamente en las cuentas de Deudores por Ventas y Ventas con IVA.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 Pilares Funcionales -->
+    <div class="mt-20">
+      <div class="text-center mb-10">
+        <h2 class="text-xs font-bold tracking-widest text-purple-400 uppercase">Seguridad Contable y Tributaria</h2>
+        <p class="text-2xl font-black text-white mt-1">Conformidad con las Leyes de Uruguay</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-4">
+            <i data-lucide="qr-code" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Código QR Homologado y CAE Reglamentario</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Cada documento PDF incluye el Código QR con la URL oficial de verificación de DGI, timbre profesional, resolución vigente y los rangos numéricos del CAE autorizados para tu RUT.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center mb-4">
+            <i data-lucide="book" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Partida Doble Automática (Debe = Haber)</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Olvídate de cargar asientos a fin de mes. Al emitir una factura, cobrar un anticipo o pagar un flete, CalcuSuiteIA genera las líneas contables con verificación estricta de balance cero.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4">
+            <i data-lucide="credit-card" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Botón de Pago con Mercado Pago Uruguay</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Las e-Facturas a crédito y órdenes de compra integran un Código QR interactivo de Mercado Pago. El cliente escanea con su celular y abona en hasta 12 cuotas con tarjeta de crédito o débito.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4">
+            <i data-lucide="mail-check" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Despacho de PDF y XML al Correo del Cliente</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Envío instantáneo mediante Resend SMTP del archivo PDF imprimible en formato A4 junto al archivo XML firmado digitalmente para que el cliente lo ingrese directamente a su sistema contable.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulador Fiscal de Liquidación -->
+    <div id="simulador" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-purple-500/30">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="p-2.5 rounded-xl bg-purple-500/20 text-purple-400">
+          <i data-lucide="calculator" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-black text-white">Simulador de Liquidación de IVA & Facturación (DGI)</h3>
+          <p class="text-xs text-slate-400">Calcula el débito fiscal sobre tus ventas y el saldo estimado a pagar a DGI a fin de mes.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Ventas Netas del Mes (UYU):</label>
+          <input type="number" id="simVentasMes" value="650000" min="1000" max="50000000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-purple-400">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Compras con IVA Crédito (UYU):</label>
+          <input type="number" id="simComprasMes" value="380000" min="0" max="50000000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-purple-400">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Tasa de IVA Aplicable:</label>
+          <select id="simTasaIva" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-xs font-semibold focus:outline-none focus:border-purple-400">
+            <option value="22" selected>Tasa Básica (22%)</option>
+            <option value="10">Tasa Mínima (10%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mt-6 p-4 rounded-xl bg-slate-950/80 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+        <div>
+          <span class="text-[11px] text-slate-400 block">IVA Débito (Ventas)</span>
+          <span id="resIvaDebito" class="text-lg font-mono font-bold text-rose-400">$ 143.000 UYU</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">IVA Crédito (Compras)</span>
+          <span id="resIvaCredito" class="text-lg font-mono font-bold text-emerald-400">$ 83.600 UYU</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Saldo Neto Estimado DGI</span>
+          <span id="resSaldoDgi" class="text-lg font-mono font-bold text-purple-400">$ 59.400 UYU</span>
+        </div>
+      </div>
+      <div class="mt-4 text-right">
+        <button onclick="openAccountModal('PIONERO')" class="text-xs font-bold text-purple-400 hover:text-purple-300 inline-flex items-center gap-1">
+          <span>Automatizar mi facturación CFE y contabilidad &rarr;</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Copilot IA Amigable Contable -->
+    <div id="copilot-ia" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-purple-500/40 relative overflow-hidden">
+      <div class="flex items-center gap-3.5 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
+          <i data-lucide="bot" class="w-7 h-7 text-purple-100"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-xl font-bold text-white">Asesora IA Contable & Fiscal DGI</h3>
+            <span class="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+          </div>
+          <p class="text-xs text-slate-400">Pregúntame sobre CAE, tipos de CFE (111, 101), timbres profesionales o cómo activar tu facturador.</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button onclick="askCopilot('¿Qué requisitos exige DGI para empezar a emitir e-Facturas?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Requisitos DGI para e-Factura?
+        </button>
+        <button onclick="askCopilot('¿Cómo se genera el CAE y cuánto tiempo tarda la homologación?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Cómo se tramita el CAE?
+        </button>
+        <button onclick="askCopilot('¿El sistema exporta el Libro Diario para mi contador de confianza?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Exporta el Libro Diario a Excel?
+        </button>
+      </div>
+
+      <div id="copilotChatBox" class="h-64 overflow-y-auto space-y-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800 mb-4 font-sans text-xs sm:text-sm">
+        <div class="flex items-start gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            ¡Hola! 📋 Soy tu asesora tributaria y contable. Te puedo orientar paso a paso sobre cómo emitir comprobantes fiscales electrónicos en Uruguay, cumplir las normativas de DGI y activar tu plan Pionero con 6 meses sin costo. ¿En qué te puedo asesorar?
+          </div>
+        </div>
+      </div>
+
+      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+        <input type="text" id="copilotInput" placeholder="Escribe tu consulta sobre e-Facturas, CAE o DGI..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-purple-400">
+        <button type="submit" class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Enviar</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Navegación Siguiente -->
+    <div class="mt-20 pt-10 border-t border-slate-800/80">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="text-xs text-slate-500 block">Siguiente módulo recomendado:</span>
+          <a href="modulo-licitaciones-radar.html" class="text-lg font-bold text-purple-400 hover:text-purple-300 flex items-center gap-2">
+            <span>Módulo 7: Radar de Licitaciones Estatales ARCE & Compras Públicas</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </a>
+        </div>
+        <div class="flex gap-3">
+          <a href="modulo-integraciones-hub.html" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold transition-all">
+            &larr; Módulo Anterior (Hub)
+          </a>
+          <button onclick="openAccountModal('PIONERO')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
+            Crear Cuenta Pionero
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-800/80 py-8 bg-[#070b16] text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-black text-white">CalcuSuite<span class="text-purple-400">IA</span></span>
+        <span>&bull; Arquitectura Multi-Tenant 2026</span>
+      </div>
+      <div class="flex items-center gap-4 text-slate-400">
+        <a href="index.html" class="hover:text-white">Inicio</a>
+        <a href="documentacion.html" class="hover:text-white">Documentación</a>
+        <a href="seguridad.html" class="hover:text-white">Seguridad</a>
+        <a href="terminos.html" class="hover:text-white">Términos</a>
+      </div>
+      <div>RUT 218994020015 &bull; Montevideo, Uruguay</div>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal para Screenshots -->
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+    <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
+        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-2 bg-black/60 flex items-center justify-center">
+        <img id="screenshotModalImg" src="" alt="" class="max-h-[75vh] w-auto object-contain rounded-lg">
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/account-modal.js"></script>
+  <script>
+    lucide.createIcons();
+
+    function openLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        d.classList.remove('hidden');
+        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
+      }
+    }
+    function closeLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        c.classList.remove('translate-x-0');
+        c.classList.add('-translate-x-full');
+        setTimeout(() => { d.classList.add('hidden'); }, 300);
+      }
+    }
+
+    function openScreenshotModal(src, title) {
+      const m = document.getElementById('screenshotModal');
+      const img = document.getElementById('screenshotModalImg');
+      const t = document.getElementById('screenshotModalTitle');
+      if (m && img && t) {
+        img.src = src;
+        t.textContent = title;
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+    function closeScreenshotModal() {
+      const m = document.getElementById('screenshotModal');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    // Calculadora Fiscal DGI
+    function recalculateSimulator() {
+      const ventas = parseFloat(document.getElementById('simVentasMes')?.value) || 650000;
+      const compras = parseFloat(document.getElementById('simComprasMes')?.value) || 380000;
+      const tasa = parseFloat(document.getElementById('simTasaIva')?.value) || 22;
+
+      const ivaDebito = Math.round(ventas * (tasa / 100));
+      const ivaCredito = Math.round(compras * (tasa / 100));
+      const saldo = Math.round(ivaDebito - ivaCredito);
+
+      document.getElementById('resIvaDebito').textContent = '$ ' + ivaDebito.toLocaleString('es-UY') + ' UYU';
+      document.getElementById('resIvaCredito').textContent = '$ ' + ivaCredito.toLocaleString('es-UY') + ' UYU';
+      document.getElementById('resSaldoDgi').textContent = '$ ' + saldo.toLocaleString('es-UY') + ' UYU';
+    }
+    ['simVentasMes', 'simComprasMes', 'simTasaIva'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
+    });
+
+    // Copilot IA
+    function askCopilot(question) {
+      document.getElementById('copilotInput').value = question;
+      handleCopilotSubmit(new Event('submit'));
+    }
+
+    function handleCopilotSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('copilotInput');
+      const q = input.value.trim();
+      if (!q) return;
+
+      appendMessage('user', q);
+      input.value = '';
+
+      setTimeout(() => {
+        let answer = "Excelente consulta tributaria. CalcuSuiteIA está homologado y estructurado conforme a todas las disposiciones del sistema de facturación electrónica de DGI Uruguay.";
+        const low = q.toLowerCase();
+
+        if (low.includes('cae') || low.includes('tramite') || low.includes('homolog') || low.includes('autoriza')) {
+          answer = "📑 **Gestión del CAE ante DGI:** El CAE se solicita directamente en los servicios en línea de DGI con tu RUT. Una vez obtenido el archivo de constancia, lo subes a CalcuSuiteIA en 1 clic y el sistema administra los números correlativos automáticamente.";
+        } else if (low.includes('requisito') || low.includes('certificado') || low.includes('firma')) {
+          answer = "🔑 **Requisitos Básicos:** Solo necesitas tu RUT activo en DGI y un Certificado Digital de Firma Electrónica (ej. Abitab o Correo Uruguayo). Nuestro equipo te asiste en la configuración inicial sin complicaciones.";
+        } else if (low.includes('contador') || low.includes('excel') || low.includes('libro diario') || low.includes('partida doble')) {
+          answer = "📊 **Integración Total con tu Contador:** Puedes descargar en cualquier momento el Libro Diario, Libro Mayor y Balance de Comprobación en Excel. Tu contador recibe los asientos perfectamente cuadrados con cuentas Debe y Haber.";
+        } else if (low.includes('pionero') || low.includes('gratis')) {
+          answer = "🎁 **Plan Pionero 100% Bonificado:** Obtienes el módulo de facturación CFE y contabilidad sin costo durante 6 meses con 50% de descuento vitalicio garantizado al salir de la fase Pionero.";
+        }
+        appendMessage('bot', answer);
+      }, 400);
+    }
+
+    function appendMessage(sender, text) {
+      const box = document.getElementById('copilotChatBox');
+      const div = document.createElement('div');
+      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
+      
+      if (sender === 'user') {
+        div.innerHTML = `
+          <div class="ml-auto bg-purple-600/30 border border-purple-500/40 rounded-2xl rounded-tr-sm p-3 text-purple-100 max-w-xl text-right">
+            ${escapeHTML(text)}
+          </div>
+          <div class="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            <div>${text}</div>
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[11px] text-purple-400/80">CalcuSuiteIA Tax Copilot</span>
+              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 font-bold px-2.5 py-1 rounded-lg border border-purple-500/30 transition-colors">
+                Activar Plan Pionero Gratis &rarr;
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+      lucide.createIcons();
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
+    }
+  </script>
+</body>
+</html>

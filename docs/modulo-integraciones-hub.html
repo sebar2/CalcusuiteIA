@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Hub de Integraciones 2026 & Bóveda AES-256 | CalcuSuiteIA Enterprise</title>
+  <meta name="description" content="Bóveda centralizada de integraciones 2026: 11 canales comerciales oficiales bajo cifrado militar AES-256. Atribución de ROAS y CAC, webhooks HMAC y sincronización CRM.">
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/><polyline points='15 3 21 3 21 9'/><line x1='10' y1='14' x2='21' y2='3'/></svg>">
+  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              400: '#60a5fa',
+              500: '#3b82f6',
+              600: '#2563eb',
+              900: '#1e3a8a',
+              950: '#0a0f1d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(59, 130, 246, 0.15); }
+    .glass-card-hover:hover { border-color: rgba(59, 130, 246, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.15); }
+    .glow-blue { text-shadow: 0 0 25px rgba(59, 130, 246, 0.5); }
+  </style>
+</head>
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Lateral -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-600 flex items-center justify-center text-white shadow-lg p-1.5">
+              <i data-lucide="share-2" class="w-6 h-6 text-blue-200"></i>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-blue-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="index.html" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="home" class="w-4 h-4 text-blue-400"></i>
+            <span>Volver a Inicio</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-blue-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos Especializados</span>
+          <div class="space-y-2">
+            <a href="modulo-gemelo-digital-3d.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Gemelo Digital 3D & WMS</span>
+                <span class="text-[10px] text-slate-500">Racks paramétricos e inventario espacial</span>
+              </div>
+            </a>
+            <a href="modulo-logistica-3pl.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="truck" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Logística 3PL & Flota GPS</span>
+                <span class="text-[10px] text-slate-500">Monitoreo satelital y liquidación</span>
+              </div>
+            </a>
+            <a href="modulo-mercadolibre.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay Oficial</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y publicación IA</span>
+              </div>
+            </a>
+            <a href="modulo-chat-omnicanal.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal & WhatsApp QR</span>
+                <span class="text-[10px] text-slate-500">Audios .opus y notas pegadas</span>
+              </div>
+            </a>
+            <a href="modulo-integraciones-hub.html" class="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-blue-300 font-bold transition-all flex items-center gap-2.5">
+              <i data-lucide="share-2" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="block">Hub de Integraciones 2026</span>
+                <span class="text-[10px] text-blue-400/80 font-normal">11 canales y Bóveda AES-256</span>
+              </div>
+            </a>
+            <a href="modulo-facturacion-cfe.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-slate-500">e-Facturas, QR y Liquidación Fiscal</span>
+              </div>
+            </a>
+            <a href="modulo-licitaciones-radar.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="target" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Radar Licitaciones ARCE</span>
+                <span class="text-[10px] text-slate-500">Compras estatales y análisis IA</span>
+              </div>
+            </a>
+            <a href="modulo-cobranzas-finanzas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="scale" class="w-4 h-4 text-rose-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Cobranzas B2B & Morosidad</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y botón de pago MP</span>
+              </div>
+            </a>
+            <a href="modulo-difusion-campanas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-pink-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="megaphone" class="w-4 h-4 text-pink-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas Masivas</span>
+                <span class="text-[10px] text-slate-500">Segmentación B2B y reglas anti-bloqueo</span>
+              </div>
+            </a>
+            <a href="modulo-control-room.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-red-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-red-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Control Room & ISO 27001</span>
+                <span class="text-[10px] text-slate-500">Auditoría, telemetría y seguridad</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA &bull; Multi-Tenant 2026</span>
+        <a href="documentacion.html" class="text-blue-400 hover:underline font-semibold">Documentación Técnica &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div onclick="openLogoDrawer()" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform p-1.5">
+          <i data-lucide="share-2" class="w-5 h-5 text-blue-200"></i>
+        </div>
+        <div>
+          <span class="text-lg font-black text-white">CalcuSuite<span class="text-blue-400">IA</span></span>
+          <span class="hidden sm:inline-block text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full ml-2 font-mono">HUB 2026</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 sm:gap-4">
+      <a href="index.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="home" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Inicio</span>
+      </a>
+      <a href="documentacion.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="book-open" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Documentación</span>
+      </a>
+      <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 shadow flex items-center gap-1.5 transition-all">
+        <i data-lucide="log-in" class="w-3.5 h-3.5 text-blue-400"></i>
+        <span class="hidden sm:inline">Entrar a la App</span>
+        <span class="sm:hidden">App</span>
+      </a>
+      <button onclick="openAccountModal('PIONERO')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-blue-200"></i>
+        <span>Crear Cuenta</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Breadcrumbs -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
+    <nav class="flex items-center gap-2 text-xs text-slate-400">
+      <a href="index.html" class="hover:text-blue-400 transition-colors">Inicio</a>
+      <span class="text-slate-600">/</span>
+      <span class="text-slate-500">Módulos</span>
+      <span class="text-slate-600">/</span>
+      <span class="text-blue-400 font-semibold">Hub de Integraciones 2026 & Bóveda AES-256</span>
+    </nav>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <div class="text-center max-w-3xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-950/80 border border-blue-500/30 text-blue-300 text-xs font-bold mb-4 uppercase tracking-wider">
+        <i data-lucide="shield" class="w-4 h-4 text-blue-400"></i>
+        Bóveda Criptográfica AES-256 &bull; 11 Canales Oficiales
+      </div>
+      <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+        Hub de Integraciones & <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400 glow-blue">Bóveda Criptográfica</span>
+      </h1>
+      <p class="mt-4 text-slate-300 text-base sm:text-lg leading-relaxed">
+        Conecta tus canales de captación, publicidad y ventas sin fugas de datos. Cifrado de credenciales en reposo, enmascaramiento estricto en logs (CWE-312 / CWE-532) y atribución de ROAS y CAC en tiempo real.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <a href="#canales" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-all">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Ver 11 Canales Soportados</span>
+        </a>
+        <a href="#simulador" class="px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-blue-400"></i>
+          <span>Verificador de Compatibilidad</span>
+        </a>
+        <a href="#copilot-ia" class="px-5 py-3 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="bot" class="w-4 h-4 text-indigo-400"></i>
+          <span>Consultar al Asesor AdTech</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Captura Showcase Principal -->
+    <div class="mt-14 max-w-5xl mx-auto">
+      <div class="glass-card rounded-2xl p-4 sm:p-6 border border-blue-500/30 shadow-2xl">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span>
+            <span class="text-xs font-mono font-bold text-slate-300">HUB CENTRAL DE CONECTORES Y TOKENS CIFRADOS</span>
+          </div>
+          <span class="text-[11px] font-mono text-blue-400 bg-blue-950 px-2.5 py-0.5 rounded-full border border-blue-800">AES-256 GCM</span>
+        </div>
+
+        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" onclick="openScreenshotModal('./screenshots/22_integraciones_whatsapp_qr.png', 'Bóveda de Integraciones con Canales Oficiales')">
+          <img src="./screenshots/22_integraciones_whatsapp_qr.png" alt="Hub Integraciones CalcuSuiteIA" class="w-full h-auto object-cover hover:scale-[1.01] transition-transform duration-300">
+        </div>
+        <p class="mt-3 text-xs text-slate-400 text-center font-mono">
+          Configuración protegida por contraseña Maestra, enmascaramiento de tokens y telemetría de respuestas HTTP 200.
+        </p>
+      </div>
+    </div>
+
+    <!-- Malla de los 11 Canales Oficiales 2026 -->
+    <div id="canales" class="mt-20">
+      <div class="text-center mb-10">
+        <h2 class="text-xs font-bold tracking-widest text-blue-400 uppercase">Ecosistema Conectado</h2>
+        <p class="text-2xl font-black text-white mt-1">11 Canales Oficiales en Producción</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp Cloud API</span>
+            <span class="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800 font-mono">Meta Oficial</span>
+          </div>
+          <p class="text-xs text-slate-300">Plantillas HSM, webhooks verificados y atención corporativa masiva.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-teal-400 flex items-center gap-1.5"><i data-lucide="qr-code" class="w-4 h-4"></i> WhatsApp Directo QR</span>
+            <span class="text-[10px] bg-teal-950 text-teal-300 px-2 py-0.5 rounded border border-teal-800 font-mono">Sin Costo</span>
+          </div>
+          <p class="text-xs text-slate-300">Conexión por código QR, notas de voz .opus y pegado Ctrl+V sin costos por mensaje.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5"><i data-lucide="facebook" class="w-4 h-4"></i> Meta Ads Lead Gen</span>
+            <span class="text-[10px] bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-800 font-mono">Instantáneo</span>
+          </div>
+          <p class="text-xs text-slate-300">Inyección automática de prospectos de Facebook e Instagram al Kanban de ventas.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-pink-400 flex items-center gap-1.5"><i data-lucide="instagram" class="w-4 h-4"></i> Instagram Chat Directo</span>
+            <span class="text-[10px] bg-pink-950 text-pink-300 px-2 py-0.5 rounded border border-pink-800 font-mono">24h + 7d</span>
+          </div>
+          <p class="text-xs text-slate-300">Ventana estándar de 24 horas y soporte extendido de 7 días con etiqueta HUMAN_AGENT.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5"><i data-lucide="shopping-cart" class="w-4 h-4"></i> FB Marketplace Batch</span>
+            <span class="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800 font-mono">30 req/min</span>
+          </div>
+          <p class="text-xs text-slate-300">Publicación en lote para catálogos vehiculares, inmobiliarios y maquinaria pesada.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5"><i data-lucide="video" class="w-4 h-4"></i> TikTok Business</span>
+            <span class="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800 font-mono">Lead Gen</span>
+          </div>
+          <p class="text-xs text-slate-300">Captura de formularios publicitarios en video vertical con sincronización al CRM.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5"><i data-lucide="twitter" class="w-4 h-4"></i> X (Twitter) API v2</span>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">OAuth 2.0</span>
+          </div>
+          <p class="text-xs text-slate-300">Monitoreo de menciones de marca, reclamos y atención a clientes corporativos.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-violet-400 flex items-center gap-1.5"><i data-lucide="mail" class="w-4 h-4"></i> Resend SMTP</span>
+            <span class="text-[10px] bg-violet-950 text-violet-300 px-2 py-0.5 rounded border border-violet-800 font-mono">DKIM &bull; SPF</span>
+          </div>
+          <p class="text-xs text-slate-300">Entrega de correos de alta reputación para e-facturas, notificaciones y mailing masivo.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-sky-400 flex items-center gap-1.5"><i data-lucide="credit-card" class="w-4 h-4"></i> Mercado Pago Uruguay</span>
+            <span class="text-[10px] bg-sky-950 text-sky-300 px-2 py-0.5 rounded border border-sky-800 font-mono">Links & QR</span>
+          </div>
+          <p class="text-xs text-slate-300">Cobro de órdenes de compra, cuotas con tarjeta y conciliación automática con e-Factura.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5"><i data-lucide="search" class="w-4 h-4"></i> Google Ads Enhanced</span>
+            <span class="text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800 font-mono">ROAS / CAC</span>
+          </div>
+          <p class="text-xs text-slate-300">Medición de conversiones fuera de línea y cálculo exacto de rentabilidad de pauta.</p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-yellow-400 flex items-center gap-1.5"><i data-lucide="shopping-bag" class="w-4 h-4"></i> Mercado Libre UY</span>
+            <span class="text-[10px] bg-yellow-950 text-yellow-300 px-2 py-0.5 rounded border border-yellow-800 font-mono">Oficial MLU</span>
+          </div>
+          <p class="text-xs text-slate-300">Sincronización de pedidos, stock central, mensajería y publicación asistida con IA.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verificador Interactivo de Conectividad -->
+    <div id="simulador" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-blue-500/30">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="p-2.5 rounded-xl bg-blue-500/20 text-blue-400">
+          <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-black text-white">Verificador de Compatibilidad de Canales 2026</h3>
+          <p class="text-xs text-slate-400">Selecciona los canales que tu empresa utiliza hoy y verifica el diagnóstico de integración automática.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <label class="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-blue-500/40">
+          <input type="checkbox" checked onchange="checkChannels()" class="accent-blue-500 chk-channel">
+          <span class="text-xs text-slate-200">WhatsApp</span>
+        </label>
+        <label class="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-blue-500/40">
+          <input type="checkbox" checked onchange="checkChannels()" class="accent-blue-500 chk-channel">
+          <span class="text-xs text-slate-200">Mercado Libre</span>
+        </label>
+        <label class="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-blue-500/40">
+          <input type="checkbox" checked onchange="checkChannels()" class="accent-blue-500 chk-channel">
+          <span class="text-xs text-slate-200">Meta Ads</span>
+        </label>
+        <label class="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-blue-500/40">
+          <input type="checkbox" onchange="checkChannels()" class="accent-blue-500 chk-channel">
+          <span class="text-xs text-slate-200">Mercado Pago</span>
+        </label>
+      </div>
+
+      <div class="mt-6 p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="w-3.5 h-3.5 rounded-full bg-emerald-500"></span>
+          <span id="txtCompatibilidad" class="text-xs sm:text-sm text-slate-200 font-semibold">3 canales seleccionados &bull; Integración 100% Soportada en 1 Clic con Bóveda AES-256.</span>
+        </div>
+        <button onclick="openAccountModal('PIONERO')" class="text-xs font-bold text-blue-400 hover:text-blue-300">
+          Conectar mis canales &rarr;
+        </button>
+      </div>
+    </div>
+
+    <!-- Copilot IA Amigable AdTech -->
+    <div id="copilot-ia" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-blue-500/40 relative overflow-hidden">
+      <div class="flex items-center gap-3.5 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+          <i data-lucide="bot" class="w-7 h-7 text-blue-100"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-xl font-bold text-white">Asesor IA de Conectores & AdTech</h3>
+            <span class="text-[10px] bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+          </div>
+          <p class="text-xs text-slate-400">Pregúntame sobre seguridad de credenciales, límites por canal o cómo medir el ROAS de tus campañas.</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button onclick="askCopilot('¿Cómo protege la Bóveda AES-256 mis contraseñas y tokens?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Cómo funciona el cifrado AES-256?
+        </button>
+        <button onclick="askCopilot('¿Cuáles son los límites de envíos en Facebook Marketplace en 2026?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Límites de FB Marketplace?
+        </button>
+        <button onclick="askCopilot('¿Puedo medir el costo por lead (CAC) en tiempo real?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Cómo se mide el CAC y ROAS?
+        </button>
+      </div>
+
+      <div id="copilotChatBox" class="h-64 overflow-y-auto space-y-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800 mb-4 font-sans text-xs sm:text-sm">
+        <div class="flex items-start gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            ¡Hola! 🛡️ Soy tu asesor de integraciones y seguridad AdTech. Puedo explicarte cómo cifrar tus accesos, calcular el rendimiento de pauta o conectar tus 11 canales sin fugas de datos. ¿En qué te asesoro?
+          </div>
+        </div>
+      </div>
+
+      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+        <input type="text" id="copilotInput" placeholder="Escribe tu consulta sobre integraciones, APIs o seguridad..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-blue-400">
+        <button type="submit" class="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Enviar</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Navegación Siguiente -->
+    <div class="mt-20 pt-10 border-t border-slate-800/80">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="text-xs text-slate-500 block">Siguiente módulo recomendado:</span>
+          <a href="modulo-facturacion-cfe.html" class="text-lg font-bold text-blue-400 hover:text-blue-300 flex items-center gap-2">
+            <span>Módulo 6: Facturación Electrónica CFE DGI & Liquidación Fiscal</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </a>
+        </div>
+        <div class="flex gap-3">
+          <a href="modulo-chat-omnicanal.html" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold transition-all">
+            &larr; Módulo Anterior (Chat)
+          </a>
+          <button onclick="openAccountModal('PIONERO')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all cursor-pointer">
+            Crear Cuenta Pionero
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-800/80 py-8 bg-[#070b16] text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-black text-white">CalcuSuite<span class="text-blue-400">IA</span></span>
+        <span>&bull; Arquitectura Multi-Tenant 2026</span>
+      </div>
+      <div class="flex items-center gap-4 text-slate-400">
+        <a href="index.html" class="hover:text-white">Inicio</a>
+        <a href="documentacion.html" class="hover:text-white">Documentación</a>
+        <a href="seguridad.html" class="hover:text-white">Seguridad</a>
+        <a href="terminos.html" class="hover:text-white">Términos</a>
+      </div>
+      <div>RUT 218994020015 &bull; Montevideo, Uruguay</div>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal para Screenshots -->
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+    <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
+        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-2 bg-black/60 flex items-center justify-center">
+        <img id="screenshotModalImg" src="" alt="" class="max-h-[75vh] w-auto object-contain rounded-lg">
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/account-modal.js"></script>
+  <script>
+    lucide.createIcons();
+
+    function openLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        d.classList.remove('hidden');
+        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
+      }
+    }
+    function closeLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        c.classList.remove('translate-x-0');
+        c.classList.add('-translate-x-full');
+        setTimeout(() => { d.classList.add('hidden'); }, 300);
+      }
+    }
+
+    function openScreenshotModal(src, title) {
+      const m = document.getElementById('screenshotModal');
+      const img = document.getElementById('screenshotModalImg');
+      const t = document.getElementById('screenshotModalTitle');
+      if (m && img && t) {
+        img.src = src;
+        t.textContent = title;
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+    function closeScreenshotModal() {
+      const m = document.getElementById('screenshotModal');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    function checkChannels() {
+      const count = document.querySelectorAll('.chk-channel:checked').length;
+      document.getElementById('txtCompatibilidad').textContent = `${count} canales seleccionados • Integración 100% Soportada en 1 Clic con Bóveda AES-256.`;
+    }
+
+    // Copilot IA
+    function askCopilot(question) {
+      document.getElementById('copilotInput').value = question;
+      handleCopilotSubmit(new Event('submit'));
+    }
+
+    function handleCopilotSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('copilotInput');
+      const q = input.value.trim();
+      if (!q) return;
+
+      appendMessage('user', q);
+      input.value = '';
+
+      setTimeout(() => {
+        let answer = "Excelente consulta. El Hub de Integraciones de CalcuSuiteIA unifica tus canales de venta y comunicación con los más altos estándares de ciberseguridad.";
+        const low = q.toLowerCase();
+
+        if (low.includes('aes') || low.includes('cifrado') || low.includes('seguridad') || low.includes('token') || low.includes('clave')) {
+          answer = "🔒 **Bóveda AES-256 GCM:** Cada token o secreto se encripta antes de tocar el disco. En la base de datos y en los registros de auditoría se muestran siempre enmascarados (ej: `whsec_****`), impidiendo cualquier filtración inadvertida.";
+        } else if (low.includes('marketplace') || low.includes('limite') || low.includes('lote') || low.includes('facebook')) {
+          answer = "📊 **Límites de Facebook Marketplace 2026:** El sistema respeta el límite estricto de 30 solicitudes por minuto mediante encolamiento asíncrono, evitando cualquier sanción de catálogo.";
+        } else if (low.includes('cac') || low.includes('roas') || low.includes('costo') || low.includes('inversion')) {
+          answer = "📈 **Atribución Precisa de ROAS y CAC:** Al conectar Google Ads o Meta Leads, cada venta cerrada en el CRM rastrea el costo de adquisición original para que sepas qué canal genera dinero real y cuál gasta sin retorno.";
+        } else if (low.includes('pionero') || low.includes('gratis')) {
+          answer = "🎁 **Integraciones Incluidas en Pionero:** Durante los 6 meses del Plan Pionero puedes conectar los 11 canales sin límite de tráfico con soporte de nuestros arquitectos.";
+        }
+        appendMessage('bot', answer);
+      }, 400);
+    }
+
+    function appendMessage(sender, text) {
+      const box = document.getElementById('copilotChatBox');
+      const div = document.createElement('div');
+      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
+      
+      if (sender === 'user') {
+        div.innerHTML = `
+          <div class="ml-auto bg-blue-600/30 border border-blue-500/40 rounded-2xl rounded-tr-sm p-3 text-blue-100 max-w-xl text-right">
+            ${escapeHTML(text)}
+          </div>
+          <div class="w-7 h-7 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <div class="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            <div>${text}</div>
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[11px] text-blue-400/80">CalcuSuiteIA Integrations Copilot</span>
+              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 font-bold px-2.5 py-1 rounded-lg border border-blue-500/30 transition-colors">
+                Activar Plan Pionero Gratis &rarr;
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+      lucide.createIcons();
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
+    }
+  </script>
+</body>
+</html>

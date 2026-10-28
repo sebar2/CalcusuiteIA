@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Gemelo Digital 3D & WMS Espacial | CalcuSuiteIA Enterprise 2026</title>
+  <meta name="description" content="Visualización y gestión tridimensional acelerada por WebGL Three.js para depósitos logísticos. Traslado de racks en bloque, detección AABB de colisiones y cubicaje espacial.">
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfeff',
+              400: '#22d3ee',
+              500: '#06b6d4',
+              600: '#0891b2',
+              900: '#164e63',
+              950: '#0a0f1d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(56, 189, 248, 0.15); }
+    .glass-card-hover:hover { border-color: rgba(56, 189, 248, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.15); }
+    .glow-cyan { text-shadow: 0 0 25px rgba(6, 182, 212, 0.5); }
+  </style>
+</head>
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Lateral (~55% Pantalla) al hacer clic en el Logo -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg p-1.5">
+              <i data-lucide="box" class="w-6 h-6 text-cyan-200"></i>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-cyan-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer" aria-label="Cerrar Menú">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="index.html" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="home" class="w-4 h-4 text-cyan-400"></i>
+            <span>Volver a Inicio</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-cyan-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos Especializados</span>
+          <div class="space-y-2">
+            <a href="modulo-gemelo-digital-3d.html" class="p-3 rounded-xl bg-cyan-950/40 border border-cyan-500/40 text-cyan-300 font-bold transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="block">Gemelo Digital 3D & WMS</span>
+                <span class="text-[10px] text-cyan-400/80 font-normal">Racks paramétricos e inventario espacial</span>
+              </div>
+            </a>
+            <a href="modulo-logistica-3pl.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="truck" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Logística 3PL & Flota GPS</span>
+                <span class="text-[10px] text-slate-500">Monitoreo satelital y liquidación</span>
+              </div>
+            </a>
+            <a href="modulo-mercadolibre.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay Oficial</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y publicación IA</span>
+              </div>
+            </a>
+            <a href="modulo-chat-omnicanal.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal & WhatsApp QR</span>
+                <span class="text-[10px] text-slate-500">Audios .opus y notas pegadas</span>
+              </div>
+            </a>
+            <a href="modulo-integraciones-hub.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="share-2" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Hub de Integraciones 2026</span>
+                <span class="text-[10px] text-slate-500">11 canales y Bóveda AES-256</span>
+              </div>
+            </a>
+            <a href="modulo-facturacion-cfe.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-slate-500">e-Facturas, QR y Liquidación Fiscal</span>
+              </div>
+            </a>
+            <a href="modulo-licitaciones-radar.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="target" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Radar Licitaciones ARCE</span>
+                <span class="text-[10px] text-slate-500">Compras estatales y análisis IA</span>
+              </div>
+            </a>
+            <a href="modulo-cobranzas-finanzas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="scale" class="w-4 h-4 text-rose-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Cobranzas B2B & Morosidad</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y botón de pago MP</span>
+              </div>
+            </a>
+            <a href="modulo-difusion-campanas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-pink-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="megaphone" class="w-4 h-4 text-pink-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas Masivas</span>
+                <span class="text-[10px] text-slate-500">Segmentación B2B y reglas anti-bloqueo</span>
+              </div>
+            </a>
+            <a href="modulo-control-room.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-red-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-red-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Control Room & ISO 27001</span>
+                <span class="text-[10px] text-slate-500">Auditoría, telemetría y seguridad</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA &bull; Multi-Tenant 2026</span>
+        <a href="documentacion.html" class="text-cyan-400 hover:underline font-semibold">Documentación Técnica &rarr;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header Superior -->
+  <header class="sticky top-0 z-40 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div onclick="openLogoDrawer()" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 group-hover:scale-105 transition-transform p-1.5">
+          <i data-lucide="box" class="w-5 h-5 text-cyan-200"></i>
+        </div>
+        <div>
+          <span class="text-lg font-black text-white">CalcuSuite<span class="text-cyan-400">IA</span></span>
+          <span class="hidden sm:inline-block text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full ml-2 font-mono">WMS 3D</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navegación y Botones -->
+    <div class="flex items-center gap-3 sm:gap-4">
+      <a href="index.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="home" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Inicio</span>
+      </a>
+      <a href="documentacion.html" class="text-xs font-semibold text-slate-300 hover:text-white transition-colors hidden md:inline-flex items-center gap-1">
+        <i data-lucide="book-open" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>Documentación</span>
+      </a>
+      <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 shadow flex items-center gap-1.5 transition-all">
+        <i data-lucide="log-in" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <span class="hidden sm:inline">Entrar a la App</span>
+        <span class="sm:hidden">App</span>
+      </a>
+      <button onclick="openAccountModal('PIONERO')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
+        <span>Crear Cuenta</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Breadcrumbs -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 w-full">
+    <nav class="flex items-center gap-2 text-xs text-slate-400">
+      <a href="index.html" class="hover:text-cyan-400 transition-colors">Inicio</a>
+      <span class="text-slate-600">/</span>
+      <span class="text-slate-500">Módulos</span>
+      <span class="text-slate-600">/</span>
+      <span class="text-cyan-400 font-semibold">Gemelo Digital 3D & WMS Espacial</span>
+    </nav>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <div class="text-center max-w-3xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 text-xs font-bold mb-4 uppercase tracking-wider">
+        <i data-lucide="layers" class="w-4 h-4 text-cyan-400"></i>
+        Motor Espacial WebGL Three.js &bull; Producción 2026
+      </div>
+      <h1 class="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+        Gemelo Digital 3D & <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 glow-cyan">WMS Espacial</span>
+      </h1>
+      <p class="mt-4 text-slate-300 text-base sm:text-lg leading-relaxed">
+        Visualiza, organiza y reubica estructuras de estantería en tiempo real. Algoritmos de colisión física AABB, cubicaje milimétrico m³ y persistencia espacial ACID en PostgreSQL 16 con precisión <code class="text-cyan-300 font-mono text-sm">Numeric(14, 4)</code>.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <a href="#video-demo" class="px-5 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-lg shadow-cyan-600/30 flex items-center gap-2 transition-all">
+          <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+          <span>Ver Video Demostrativo</span>
+        </a>
+        <a href="#simulador" class="px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="calculator" class="w-4 h-4 text-cyan-400"></i>
+          <span>Simulador de Capacidad</span>
+        </a>
+        <a href="#copilot-ia" class="px-5 py-3 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 font-bold text-sm flex items-center gap-2 transition-all">
+          <i data-lucide="bot" class="w-4 h-4 text-indigo-400"></i>
+          <span>Preguntar al Asesor IA</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Video Showcase & Media Principal -->
+    <div id="video-demo" class="mt-14 max-w-5xl mx-auto glass-card rounded-2xl p-4 sm:p-6 border border-cyan-500/30 shadow-2xl relative overflow-hidden">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
+          <span class="text-xs font-mono font-bold text-slate-300">DEMOSTRACIÓN INTERACTIVA EN VIVO (WEBGL)</span>
+        </div>
+        <span class="text-[11px] font-mono text-cyan-400 bg-cyan-950 px-2.5 py-0.5 rounded-full border border-cyan-800">HTML5 60 FPS</span>
+      </div>
+
+      <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video relative group">
+        <video controls loop muted autoplay playsinline class="w-full h-full object-cover">
+          <source src="./assets/video/gemelo_3d_demo.webm" type="video/webm">
+          <source src="./gemelo_3d_demo.webm" type="video/webm">
+          Tu navegador no soporta el formato de video.
+        </video>
+      </div>
+      <p class="mt-3 text-xs text-slate-400 text-center font-mono">
+        Traslado espacial de racks en bloque, ajuste dinámico por raycasting y persistencia milimétrica.
+      </p>
+    </div>
+
+    <!-- Galería de Capturas Reales -->
+    <div class="mt-16">
+      <div class="text-center mb-8">
+        <h2 class="text-xs font-bold tracking-widest text-cyan-400 uppercase">Inspección de Interfaces</h2>
+        <p class="text-2xl font-black text-white mt-1">Capturas Reales de Producción</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/27_gemelo_digital_3d_rack_spatial.png', 'Gemelo Digital 3D: Traslado Espacial de Racks en Bloque')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/27_gemelo_digital_3d_rack_spatial.png" alt="Traslado Espacial de Racks" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+          </div>
+          <span class="text-[11px] font-bold text-cyan-400 uppercase tracking-wider block">Coordenadas X/Z</span>
+          <h3 class="text-sm font-bold text-white mt-1">Traslado Espacial en Bloque</h3>
+          <p class="text-xs text-slate-400 mt-1">Mueve el cuerpo de estantería entero con sus niveles y cajas vinculadas de forma atómica.</p>
+        </div>
+
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/28_gemelo_digital_3d_rack_editor.png', 'Editor Dimensional de Racks y Cajas')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/28_gemelo_digital_3d_rack_editor.png" alt="Editor Dimensional de Racks" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+          </div>
+          <span class="text-[11px] font-bold text-blue-400 uppercase tracking-wider block">Panel Inspector</span>
+          <h3 class="text-sm font-bold text-white mt-1">Editor Paramétrico Dimensional</h3>
+          <p class="text-xs text-slate-400 mt-1">Regula ancho, profundidad, niveles de altura y carga máxima por cuerpo en kg.</p>
+        </div>
+
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/13_3pl_wms_deposito.png', 'Matriz de Ocupación de Depósito WMS')">
+          <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
+            <img src="./screenshots/13_3pl_wms_deposito.png" alt="WMS Depósito" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300">
+          </div>
+          <span class="text-[11px] font-bold text-indigo-400 uppercase tracking-wider block">Almacén Central</span>
+          <h3 class="text-sm font-bold text-white mt-1">Mapa Térmico de Cubicaje</h3>
+          <p class="text-xs text-slate-400 mt-1">Supervisión en vivo de m³ ocupados vs disponibles en todas las naves logísticas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 Pilares Arquitectónicos -->
+    <div class="mt-20">
+      <div class="text-center mb-10">
+        <h2 class="text-xs font-bold tracking-widest text-cyan-400 uppercase">Capacidades Técnicas</h2>
+        <p class="text-2xl font-black text-white mt-1">Arquitectura de Ingeniería Espacial</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Detección de Colisiones AABB en Tiempo Real</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            El motor matemático calcula las cajas delimitadoras orientadas al eje (Axis-Aligned Bounding Box) impidiendo que dos estructuras de racks o cargas paletizadas se superpongan en el espacio físico o invadan pasillos de montacargas.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center mb-4">
+            <i data-lucide="database" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Persistencia ACID en PostgreSQL 16</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Cada coordenada espacial <code class="text-cyan-300 font-mono text-xs">pos_x, pos_z, rotation_y, width, depth, height</code> se guarda con tipo de dato <code class="text-cyan-300 font-mono text-xs">Numeric(14, 4)</code>. Cero redondeos erróneos ni derivas métricas en almacén.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">InstancedMesh & Aceleración GPU</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Renderiza depósitos de más de 10.000 m² y miles de pallets sin ralentizar el navegador. Utiliza instanciación geométrica en GPU y sombreadores GLSL ligeros optimizados para computadoras de oficina y tablets Android.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-800">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4">
+            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Sincronización Bidireccional con Stock Físico</h3>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            Al escanear un SKU o lote con la App Móvil o confirmar una orden de venta en Mercado Libre, la posición tridimensional en estantería se actualiza de inmediato con aviso de picking guiado por coordenadas.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulador Interactivo JS: Capacidad y Cubicaje -->
+    <div id="simulador" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-cyan-500/30">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400">
+          <i data-lucide="calculator" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-black text-white">Calculador Paramétrico de Capacidad de Depósito</h3>
+          <p class="text-xs text-slate-400">Ingresa las medidas de tu nave logística y calcula al instante la optimización de espacio 3D.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Superficie Total (m²):</label>
+          <input type="number" id="simM2" value="1200" min="100" max="50000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-cyan-400">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Altura Libre al Techo (m):</label>
+          <input type="number" id="simAltura" value="8.5" step="0.5" min="3" max="20" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-cyan-400">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-2">Ancho de Pasillo Operativo (m):</label>
+          <input type="number" id="simPasillo" value="3.0" step="0.2" min="1.8" max="5" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-cyan-400">
+        </div>
+      </div>
+
+      <div class="mt-6 p-4 rounded-xl bg-slate-950/80 border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+        <div>
+          <span class="text-[11px] text-slate-400 block">Volumen Bruto</span>
+          <span id="resVolBruto" class="text-lg font-mono font-bold text-white">10.200 m³</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Posiciones Pallet</span>
+          <span id="resPallets" class="text-lg font-mono font-bold text-cyan-400">1.440 slots</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Racks Estimados</span>
+          <span id="resRacks" class="text-lg font-mono font-bold text-blue-400">120 cuerpos</span>
+        </div>
+        <div>
+          <span class="text-[11px] text-slate-400 block">Carga Máxima</span>
+          <span id="resCarga" class="text-lg font-mono font-bold text-emerald-400">1.440 Ton</span>
+        </div>
+      </div>
+      <div class="mt-4 text-right">
+        <button onclick="openAccountModal('PIONERO')" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
+          <span>Diseñar mi almacén con el equipo de ingenieros de CalcuSuiteIA &rarr;</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sección del Copilot IA Amigable del Módulo -->
+    <div id="copilot-ia" class="mt-20 glass-card rounded-2xl p-6 sm:p-8 border border-cyan-500/40 relative overflow-hidden">
+      <div class="flex items-center gap-3.5 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+          <i data-lucide="bot" class="w-7 h-7 text-cyan-100"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-xl font-bold text-white">Asesor IA de Espacio & WMS 3D</h3>
+            <span class="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+          </div>
+          <p class="text-xs text-slate-400">Pregúntame cualquier duda técnica, de cubicaje o cómo probar el Gemelo Digital en tu empresa.</p>
+        </div>
+      </div>
+
+      <!-- Burbujas de Preguntas Sugeridas -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button onclick="askCopilot('¿Cómo evita el gemelo 3D que se superpongan los racks?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Cómo se evitan colisiones de racks?
+        </button>
+        <button onclick="askCopilot('¿Qué requisitos de hardware se necesitan para usar el 3D?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Qué hardware se necesita?
+        </button>
+        <button onclick="askCopilot('¿Cuánto cuesta implementar el módulo 3D y qué incluye el plan Pionero?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+          ¿Cuánto cuesta en el Programa Pionero?
+        </button>
+      </div>
+
+      <!-- Ventana de Mensajes del Chat -->
+      <div id="copilotChatBox" class="h-64 overflow-y-auto space-y-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800 mb-4 font-sans text-xs sm:text-sm">
+        <div class="flex items-start gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            ¡Hola! 👋 Soy tu copiloto de ingeniería logística 3D. Te puedo asesorar sobre cómo modelar tu nave, optimizar la capacidad de pallets o activar tu acceso Pionero de 6 meses gratuitos. ¿En qué te puedo ayudar hoy?
+          </div>
+        </div>
+      </div>
+
+      <!-- Cuadro de Entrada y Envío -->
+      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+        <input type="text" id="copilotInput" placeholder="Escribe tu consulta sobre el Gemelo Digital 3D..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400">
+        <button type="submit" class="px-5 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Enviar</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Navegación a Módulos Siguientes -->
+    <div class="mt-20 pt-10 border-t border-slate-800/80">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="text-xs text-slate-500 block">Siguiente módulo recomendado:</span>
+          <a href="modulo-logistica-3pl.html" class="text-lg font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-2">
+            <span>Módulo 2: Logística 3PL & Control de Flota Satelital GPS</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </a>
+        </div>
+        <div class="flex gap-3">
+          <a href="index.html" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold transition-all">
+            &larr; Volver a la Landing
+          </a>
+          <button onclick="openAccountModal('PIONERO')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white text-xs font-bold shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+            Crear Cuenta Pionero
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-800/80 py-8 bg-[#070b16] text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-black text-white">CalcuSuite<span class="text-cyan-400">IA</span></span>
+        <span>&bull; Arquitectura Multi-Tenant 2026</span>
+      </div>
+      <div class="flex items-center gap-4 text-slate-400">
+        <a href="index.html" class="hover:text-white">Inicio</a>
+        <a href="documentacion.html" class="hover:text-white">Documentación</a>
+        <a href="seguridad.html" class="hover:text-white">Seguridad</a>
+        <a href="terminos.html" class="hover:text-white">Términos</a>
+      </div>
+      <div>RUT 218994020015 &bull; Montevideo, Uruguay</div>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal para Screenshots -->
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+    <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
+        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-2 bg-black/60 flex items-center justify-center">
+        <img id="screenshotModalImg" src="" alt="" class="max-h-[75vh] w-auto object-contain rounded-lg">
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/account-modal.js"></script>
+  <script>
+    lucide.createIcons();
+
+    function openLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        d.classList.remove('hidden');
+        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
+      }
+    }
+    function closeLogoDrawer() {
+      const d = document.getElementById('logoSlideDrawer');
+      const c = document.getElementById('logoSlideDrawerContent');
+      if (d && c) {
+        c.classList.remove('translate-x-0');
+        c.classList.add('-translate-x-full');
+        setTimeout(() => { d.classList.add('hidden'); }, 300);
+      }
+    }
+
+    function openScreenshotModal(src, title) {
+      const m = document.getElementById('screenshotModal');
+      const img = document.getElementById('screenshotModalImg');
+      const t = document.getElementById('screenshotModalTitle');
+      if (m && img && t) {
+        img.src = src;
+        t.textContent = title;
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+    function closeScreenshotModal() {
+      const m = document.getElementById('screenshotModal');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+    }
+
+    // Lógica del Simulador
+    function recalculateSimulator() {
+      const m2 = parseFloat(document.getElementById('simM2')?.value) || 1200;
+      const h = parseFloat(document.getElementById('simAltura')?.value) || 8.5;
+      const pasillo = parseFloat(document.getElementById('simPasillo')?.value) || 3.0;
+
+      const volBruto = m2 * h;
+      const factorOcupacion = pasillo > 3.5 ? 0.38 : (pasillo < 2.5 ? 0.52 : 0.45);
+      const pallets = Math.round((m2 * factorOcupacion) * (h / 2.1));
+      const racks = Math.round(pallets / 12);
+      const toneladas = Math.round(pallets * 1.0);
+
+      document.getElementById('resVolBruto').textContent = volBruto.toLocaleString('es-UY') + ' m³';
+      document.getElementById('resPallets').textContent = pallets.toLocaleString('es-UY') + ' slots';
+      document.getElementById('resRacks').textContent = racks.toLocaleString('es-UY') + ' cuerpos';
+      document.getElementById('resCarga').textContent = toneladas.toLocaleString('es-UY') + ' Ton';
+    }
+    ['simM2', 'simAltura', 'simPasillo'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
+    });
+
+    // Lógica del Copilot IA Amigable
+    function askCopilot(question) {
+      document.getElementById('copilotInput').value = question;
+      handleCopilotSubmit(new Event('submit'));
+    }
+
+    function handleCopilotSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('copilotInput');
+      const q = input.value.trim();
+      if (!q) return;
+
+      appendMessage('user', q);
+      input.value = '';
+
+      setTimeout(() => {
+        let answer = "Excelente consulta. El Gemelo Digital 3D de CalcuSuiteIA se conecta en vivo a tu inventario y permite planificar la distribución espacial antes de mover un solo pallet físico.";
+        const low = q.toLowerCase();
+
+        if (low.includes('colision') || low.includes('superpon') || low.includes('aabb')) {
+          answer = "🛡️ **Algoritmo AABB:** Cada rack tiene una caja tridimensional matemática. Si intentas moverlo sobre otro rack o sobre un pasillo delimitado, el sistema bloquea el desplazamiento y te alerta en rojo en el visor 3D para evitar accidentes operativos.";
+        } else if (low.includes('hardware') || low.includes('requisito') || low.includes('pc') || low.includes('tarjeta')) {
+          answer = "💻 **Requisitos muy ligeros:** Funciona directamente en Google Chrome o Edge en cualquier PC de oficina o tablet Android con WebGL estándar. No requiere tarjeta gráfica dedicada de alto rendimiento porque usamos técnicas de instanciación geométrica GPU ultra-optimizadas.";
+        } else if (low.includes('cuesta') || low.includes('precio') || low.includes('pionero') || low.includes('costo')) {
+          answer = "🎁 **100% Gratis durante la etapa Pionero (aprox. 6 meses)** con el 50% de descuento vitalicio garantizado al salir a producción comercial. Puedes activar tu cuenta Pionero ahora mismo haciendo clic en el botón inferior.";
+        } else if (low.includes('stock') || low.includes('artículo') || low.includes('lote')) {
+          answer = "📦 **Vínculo con el Inventario Real:** Cada pallet del 3D está enlazado al SKU, lote, fecha de vencimiento y proveedor en PostgreSQL 16. Si despachas por Mercado Libre o Factura CFE, el visor 3D libera la coordenada automáticamente.";
+        }
+        appendMessage('bot', answer);
+      }, 400);
+    }
+
+    function appendMessage(sender, text) {
+      const box = document.getElementById('copilotChatBox');
+      const div = document.createElement('div');
+      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
+      
+      if (sender === 'user') {
+        div.innerHTML = `
+          <div class="ml-auto bg-cyan-600/30 border border-cyan-500/40 rounded-2xl rounded-tr-sm p-3 text-cyan-100 max-w-xl text-right">
+            ${escapeHTML(text)}
+          </div>
+          <div class="w-7 h-7 rounded-lg bg-cyan-700 text-white flex items-center justify-center shrink-0">
+            <i data-lucide="user" class="w-4 h-4"></i>
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            <div>${text}</div>
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[11px] text-cyan-400/80">CalcuSuiteIA 3D Copilot</span>
+              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 font-bold px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-colors">
+                Activar Plan Pionero Gratis &rarr;
+              </button>
+            </div>
+          </div>
+        `;
+      }
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+      lucide.createIcons();
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
+    }
+  </script>
+</body>
+</html>
