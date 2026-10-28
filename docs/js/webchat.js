@@ -133,10 +133,14 @@
     constructor() {
       this.isOpen = false;
       this.isBusy = false;
+      this.hasInteracted = false;
       this.sessionId = this.getOrCreateSessionId();
       this.knownFields = this.loadKnownFields();
       this.isEscalated = false;
+      this.renderedHumanMsgIds = new Set();
+      this.syncTimer = null;
       this.buildDOM();
+      this.startSyncPolling();
     }
 
     getOrCreateSessionId() {
@@ -318,7 +322,7 @@
       }
     }
 
-    appendMessage(text, isUser = false) {
+    appendMessage(text, isUser = false, isHumanOperator = false, senderLabel = '') {
       const row = document.createElement('div');
       row.className = isUser ? 'flex justify-end' : 'flex gap-2.5 items-start';
 
@@ -326,6 +330,10 @@
       if (isUser) {
         bubble.className = 'p-3 rounded-2xl rounded-tr-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white max-w-[85%] leading-relaxed shadow-md shadow-blue-900/30';
         bubble.textContent = text;
+      } else if (isHumanOperator) {
+        bubble.className = 'p-3 rounded-2xl rounded-tl-sm bg-emerald-950/70 border border-emerald-700/70 max-w-[85%] leading-relaxed text-emerald-100';
+        const headerHtml = `<div class="text-[10px] font-bold text-emerald-400 mb-1">👤 ${senderLabel || 'Ejecutivo CalcuSuiteIA'}</div>`;
+        bubble.innerHTML = headerHtml + this.formatMarkdown(text);
       } else {
         bubble.className = 'p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] leading-relaxed text-slate-200';
         bubble.innerHTML = this.formatMarkdown(text);
@@ -335,14 +343,55 @@
         row.appendChild(bubble);
       } else {
         const avatar = document.createElement('div');
-        avatar.className = 'w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold';
-        avatar.textContent = 'IA';
+        if (isHumanOperator) {
+          avatar.className = 'w-7 h-7 rounded-lg bg-emerald-950 border border-emerald-700 flex items-center justify-center text-emerald-400 shrink-0 text-[10px] font-bold';
+          avatar.textContent = 'EJ';
+        } else {
+          avatar.className = 'w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold';
+          avatar.textContent = 'IA';
+        }
         row.appendChild(avatar);
         row.appendChild(bubble);
       }
 
       this.messagesContainer.appendChild(row);
       this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+
+    startSyncPolling() {
+      if (this.syncTimer) clearInterval(this.syncTimer);
+      this.syncTimer = setInterval(() => {
+        if (this.isOpen || this.hasInteracted) {
+          this.pollOperatorMessages();
+        }
+      }, 4000);
+    }
+
+    async pollOperatorMessages() {
+      if (!this.sessionId) return;
+      for (const baseEndpoint of WEBCHAT_CONFIG.endpoints) {
+        const syncUrl = `${baseEndpoint}/${encodeURIComponent(this.sessionId)}/sync`;
+        try {
+          const resp = await fetch(syncUrl, { method: 'GET' });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.known_fields && Object.keys(data.known_fields).length > 0) {
+              this.saveKnownFields(data.known_fields);
+            }
+            const humanMsgs = data.human_messages || [];
+            for (const hm of humanMsgs) {
+              if (hm.id && !this.renderedHumanMsgIds.has(hm.id)) {
+                this.renderedHumanMsgIds.add(hm.id);
+                this.appendMessage(hm.message_text, false, true, hm.sender_name || 'Ejecutivo CalcuSuiteIA');
+                if (!this.isOpen) {
+                  this.toggleChat();
+                }
+              }
+            }
+            break;
+          }
+        } catch {}
+      }
     }
 
     showTyping() {
@@ -414,6 +463,7 @@
     }
 
     async sendMessage(text) {
+      this.hasInteracted = true;
       this.appendMessage(text, true);
       this.isBusy = true;
       this.showTyping();
