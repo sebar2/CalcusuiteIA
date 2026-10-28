@@ -1,528 +1,749 @@
 /**
- * ==========================================================================
- * CALCU SUITE 2026 - WEBCHAT IA CORPORATIVO & TELEMETRÍA DE NAVEGACIÓN
- * Motor de Memoria Slot-Filling, Telemetría Web y Avance Automático Kanban CRM
- * ==========================================================================
+ * CalcuSuiteIA (CSIA) — Widget Corporativo de WebChat IA & Telemetría B2B
+ * - Pre-Chat Gate Obligatorio (Nombre, Teléfono/WhatsApp, Correo, Empresa) -> CERO campos null
+ * - Memoria Slot-Filling sin redundancia (sincronizada en localStorage: csia_visitor_profile & csia_known_fields)
+ * - Telemetría de comportamiento web en tiempo real (tiempo en sitio, scroll, página activa, clics)
+ * - Avance automático de etapa en el Kanban CRM y recepción de mensajes de operador humano en vivo
  */
 
 (function () {
-  // 1. SISTEMA DE TELEMETRÍA DE NAVEGACIÓN WEB
-  const TELEMETRY_STORAGE_KEY = 'calcu_telemetry_data';
+  'use strict';
 
-  class TelemetryTracker {
+  const CONFIG = {
+    primaryEndpoint: 'https://app.calcusuiteia.com/api/v1/public/webchat',
+    leadsEndpoint: 'https://app.calcusuiteia.com/api/v1/public/leads',
+    localEndpoints: [
+      'http://localhost:8000/api/v1/public/webchat',
+      'http://localhost:5173/api/v1/public/webchat',
+    ],
+    localLeadsEndpoints: [
+      'http://localhost:8000/api/v1/public/leads',
+      'http://localhost:5173/api/v1/public/leads',
+    ],
+    contactEmail: 'contacto@calcusuiteia.com',
+    appPortalUrl: 'https://app.calcusuiteia.com',
+  };
+
+  function getActiveChatEndpoints() {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return [...CONFIG.localEndpoints, CONFIG.primaryEndpoint];
+    }
+    return [CONFIG.primaryEndpoint];
+  }
+
+  function getActiveLeadsEndpoints() {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return [...CONFIG.localLeadsEndpoints, CONFIG.leadsEndpoint];
+    }
+    return [CONFIG.leadsEndpoint];
+  }
+
+  // --- 1. Motor de Telemetría de Navegación ---
+  class PageTelemetryTracker {
     constructor() {
-      this.init();
+      this.startTime = Date.now();
+      this.maxScrollPct = 0;
+      this.ctaClicksCount = 0;
+      this.pagesVisited = this.loadPagesVisited();
+      this.initListeners();
     }
 
-    init() {
-      const stored = this.loadStored();
-      const currentPath = window.location.pathname || '/';
-
-      let pages = stored.pages_visited || [];
-      if (!pages.includes(currentPath)) {
-        pages.push(currentPath);
-      }
-
-      this.data = {
-        session_id: stored.session_id || this.generateUUID(),
-        start_time: stored.start_time || Date.now(),
-        pages_visited: pages,
-        interacted_elements: stored.interacted_elements || [],
-        max_scroll_depth: stored.max_scroll_depth || 0,
-        referrer: document.referrer || stored.referrer || 'Directo / Orgánico',
-      };
-
-      this.save();
-      this.bindEvents();
-    }
-
-    generateUUID() {
-      return 'web-anon-' + 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
-    }
-
-    loadStored() {
+    loadPagesVisited() {
       try {
-        const item = sessionStorage.getItem(TELEMETRY_STORAGE_KEY);
-        return item ? JSON.parse(item) : {};
-      } catch {
-        return {};
-      }
-    }
-
-    save() {
-      try {
-        sessionStorage.setItem(TELEMETRY_STORAGE_KEY, JSON.stringify(this.data));
-      } catch {}
-    }
-
-    bindEvents() {
-      // Cálculo de scroll depth
-      window.addEventListener('scroll', () => {
-        const h = document.documentElement;
-        const b = document.body;
-        const st = 'scrollTop';
-        const sh = 'scrollHeight';
-        const percent = Math.round(((h[st] || b[st]) / ((h[sh] || b[sh]) - h.clientHeight)) * 100) || 0;
-        if (percent > (this.data.max_scroll_depth || 0)) {
-          this.data.max_scroll_depth = Math.min(100, percent);
-          this.save();
+        const raw = sessionStorage.getItem('csia_pages_visited');
+        const list = raw ? JSON.parse(raw) : [];
+        const current = window.location.pathname || '/';
+        if (!list.includes(current)) {
+          list.push(current);
+          sessionStorage.setItem('csia_pages_visited', JSON.stringify(list));
         }
-      }, { passive: true });
+        return list;
+      } catch {
+        return [window.location.pathname || '/'];
+      }
+    }
 
-      // Registro de clicks en elementos interactivos
+    initListeners() {
+      window.addEventListener(
+        'scroll',
+        () => {
+          const scrollTop = window.scrollY || document.documentElement.scrollTop;
+          const docHeight =
+            document.documentElement.scrollHeight - document.documentElement.clientHeight;
+          if (docHeight > 0) {
+            const pct = Math.min(100, Math.round((scrollTop / docHeight) * 100));
+            if (pct > this.maxScrollPct) this.maxScrollPct = pct;
+          }
+        },
+        { passive: true }
+      );
+
       document.addEventListener('click', (e) => {
         const target = e.target.closest('a, button');
         if (target) {
-          const identifier = target.getAttribute('id') || target.getAttribute('href') || target.innerText.trim().slice(0, 30);
-          if (identifier && !this.data.interacted_elements.includes(identifier)) {
-            this.data.interacted_elements.push(identifier);
-            if (this.data.interacted_elements.length > 20) {
-              this.data.interacted_elements.shift();
-            }
-            this.save();
-          }
+          this.ctaClicksCount += 1;
         }
-      }, { passive: true });
+      });
     }
 
-    getMetrics() {
-      const now = Date.now();
-      const elapsedSeconds = Math.round((now - (this.data.start_time || now)) / 1000);
-      const isMobile = window.innerWidth < 768;
-      const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
-      const deviceType = isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop';
-
+    getSnapshot() {
+      const elapsedSeconds = Math.round((Date.now() - this.startTime) / 1000);
       return {
         current_page: window.location.pathname || '/',
-        pages_visited: this.data.pages_visited || [window.location.pathname],
+        page_title: document.title,
         time_on_site_seconds: elapsedSeconds,
-        scroll_depth_pct: this.data.max_scroll_depth || 0,
-        interacted_elements: this.data.interacted_elements || [],
-        referrer: this.data.referrer,
-        device_type: deviceType,
+        scroll_depth_pct: this.maxScrollPct,
+        cta_clicks: this.ctaClicksCount,
+        pages_visited: this.pagesVisited,
+        referrer: document.referrer || 'direct',
         viewport: `${window.innerWidth}x${window.innerHeight}`,
+        timestamp: new Date().toISOString(),
       };
     }
   }
 
-  window.CalcuTelemetry = new TelemetryTracker();
-
-  // 2. WIDGET DE WEBCHAT IA NATIVO
-  const isProduction =
-    window.location.hostname === 'calcusuiteia.com' ||
-    window.location.hostname === 'www.calcusuiteia.com' ||
-    window.location.hostname === 'app.calcusuiteia.com';
-
-  const WEBCHAT_CONFIG = {
-    endpoints: isProduction
-      ? ['https://app.calcusuiteia.com/api/v1/public/webchat']
-      : [
-          'https://app.calcusuiteia.com/api/v1/public/webchat',
-          'http://127.0.0.1:8000/api/v1/public/webchat',
-          'http://localhost:8000/api/v1/public/webchat',
-        ],
-    officialWhatsapp: '59894858791',
-    officialEmail: 'contacto@calcusuiteia.com',
-  };
-
-  class CalcuWebChatUI {
-    constructor() {
-      this.isOpen = false;
-      this.isBusy = false;
-      this.hasInteracted = false;
+  // --- 2. Controlador del Widget de WebChat IA con Pre-Chat Gate Obligatorio ---
+  class CalcuWebChatWidget {
+    constructor(telemetry) {
+      this.telemetry = telemetry;
       this.sessionId = this.getOrCreateSessionId();
       this.knownFields = this.loadKnownFields();
-      this.isEscalated = false;
-      this.renderedHumanMsgIds = new Set();
+      this.isOpen = false;
+      this.isSending = false;
+      this.pendingQuickMessage = null;
+      this.lastSyncedMessageId = 0;
+      this.seenHumanMessageIds = new Set();
       this.syncTimer = null;
-      this.buildDOM();
-      this.startSyncPolling();
+      this.renderWidget();
+      this.bindPageForms();
+      this.startHumanReplySync();
     }
 
     getOrCreateSessionId() {
-      let sid = sessionStorage.getItem('calcu_webchat_session_id');
-      if (!sid) {
-        sid = window.CalcuTelemetry.data.session_id || window.CalcuTelemetry.generateUUID();
-        sessionStorage.setItem('calcu_webchat_session_id', sid);
+      try {
+        let sid = localStorage.getItem('csia_webchat_session_id');
+        if (!sid) {
+          sid =
+            'web-' +
+            ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
+              (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+            );
+          localStorage.setItem('csia_webchat_session_id', sid);
+        }
+        return sid;
+      } catch {
+        return 'web-anon-' + Math.random().toString(36).substring(2, 11);
       }
-      return sid;
     }
 
     loadKnownFields() {
+      let merged = {};
       try {
-        const raw = sessionStorage.getItem('calcu_webchat_known_fields');
-        return raw ? JSON.parse(raw) : {};
-      } catch {
-        return {};
-      }
-    }
-
-    saveKnownFields(fields) {
-      this.knownFields = Object.assign({}, this.knownFields, fields);
-      try {
-        sessionStorage.setItem('calcu_webchat_known_fields', JSON.stringify(this.knownFields));
+        const rawKnown = localStorage.getItem('csia_known_fields');
+        if (rawKnown) {
+          merged = { ...merged, ...JSON.parse(rawKnown) };
+        }
       } catch {}
-      this.updateHeaderBadge();
+      try {
+        const rawProfile = localStorage.getItem('csia_visitor_profile');
+        if (rawProfile) {
+          const parsedProfile = JSON.parse(rawProfile);
+          merged = { ...merged, ...parsedProfile };
+        }
+      } catch {}
+      return merged;
     }
 
-    buildDOM() {
-      // 1. Botón Flotante
-      const triggerBtn = document.createElement('div');
-      triggerBtn.id = 'calcuChatTrigger';
-      triggerBtn.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-3 cursor-pointer group';
-      triggerBtn.innerHTML = `
-        <div class="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/95 border border-cyan-500/40 text-xs text-slate-200 shadow-xl shadow-cyan-950/40 backdrop-blur-md group-hover:border-cyan-400 transition-all">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="font-medium">¿Dudas? Chatea con IA</span>
-        </div>
-        <button aria-label="Abrir Asistente Comercial IA" class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-cyan-600/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all focus:outline-none">
-          <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-white">
-            <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-            </svg>
-          </div>
-        </button>
-      `;
+    hasCompleteIdentity() {
+      const f = this.knownFields || {};
+      const hasName = Boolean(f.full_name && String(f.full_name).trim().length >= 2);
+      const hasPhone = Boolean(f.phone && String(f.phone).trim().length >= 6);
+      const hasEmail = Boolean(
+        f.email && String(f.email).includes('@') && String(f.email).trim().length >= 5
+      );
+      const hasCompany = Boolean(f.company_name && String(f.company_name).trim().length >= 2);
+      return hasName && hasPhone && hasEmail && hasCompany;
+    }
 
-      // 2. Ventana de Chat
-      const chatModal = document.createElement('div');
-      chatModal.id = 'calcuChatModal';
-      chatModal.className = 'hidden fixed bottom-24 right-4 sm:right-6 z-50 w-[92vw] sm:w-[410px] max-w-[430px] h-[580px] max-h-[85vh] rounded-2xl bg-slate-950/98 border border-slate-800 shadow-2xl shadow-black/80 flex flex-col overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200';
-      chatModal.innerHTML = `
-        <!-- Header -->
-        <div class="px-4 py-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
-              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-              </svg>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white tracking-tight">CalcuSuiteIA Copilot</span>
-                <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">CSIA</span>
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="En línea"></span>
+    saveKnownFields(newFields) {
+      if (!newFields || typeof newFields !== 'object') return;
+      const clean = {};
+      Object.entries(newFields).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && String(v).trim() !== '') {
+          clean[k] = String(v).trim();
+        }
+      });
+      this.knownFields = { ...this.knownFields, ...clean };
+      try {
+        localStorage.setItem('csia_known_fields', JSON.stringify(this.knownFields));
+        const profilePayload = {
+          full_name: this.knownFields.full_name || '',
+          phone: this.knownFields.phone || '',
+          email: this.knownFields.email || '',
+          company_name: this.knownFields.company_name || '',
+        };
+        localStorage.setItem('csia_visitor_profile', JSON.stringify(profilePayload));
+      } catch {}
+      this.updateProfileBadge();
+      this.syncGateVisibility();
+    }
+
+    renderWidget() {
+      const container = document.createElement('div');
+      container.id = 'csia-webchat-root';
+      container.innerHTML = `
+        <!-- Botón Flotante WebChat IA -->
+        <button id="csiaChatToggleBtn" aria-label="Abrir WebChat IA CalcuSuiteIA"
+          class="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white font-bold text-xs shadow-2xl shadow-cyan-500/30 hover:scale-[1.03] active:scale-95 transition-all border border-cyan-300/30">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
+          </span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          <span>Asesor IA En Línea</span>
+        </button>
+
+        <!-- Ventana de Chat -->
+        <div id="csiaChatWindow"
+          class="fixed bottom-24 right-6 z-50 hidden w-[390px] max-w-[calc(100vw-2rem)] bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex-col"
+          style="height: 560px; max-height: calc(100vh - 7.5rem);">
+          
+          <!-- Cabecera -->
+          <div class="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700/80 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xs shadow-md border border-white/15">
+                CS<span class="text-cyan-200">IA</span>
               </div>
-              <p id="chatHeaderSub" class="text-[11px] text-cyan-400 font-medium">Asesor Inteligente • calcusuiteia.com</p>
+              <div>
+                <div class="text-sm font-bold text-white flex items-center gap-2">
+                  Copilot Comercial B2B
+                  <span class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Online</span>
+                </div>
+                <div id="csiaProfileStatusBadge" class="text-[11px] text-slate-400 truncate max-w-[235px]">
+                  CalcuSuiteIA • Atención Corporativa
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button id="closeChatBtn" aria-label="Cerrar chat" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+            <button id="csiaChatCloseBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors" aria-label="Cerrar chat">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
               </svg>
             </button>
           </div>
-        </div>
 
-        <!-- Banner de Calificación / Escalación -->
-        <div id="escalationBanner" class="hidden px-4 py-2 bg-emerald-950/60 border-b border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-2">
-          <span class="text-emerald-400 font-bold">🔥 Lead Calificado:</span>
-          <span>Derivado a Dirección para Demo Ejecutiva</span>
-        </div>
+          <!-- PASO PREVIO OBLIGATORIO: PRE-CHAT GATE (CERO CAMPOS NULL) -->
+          <div id="csiaPreChatGate" class="flex-1 overflow-y-auto p-5 bg-slate-950/85 flex flex-col justify-between">
+            <div>
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider mb-3">
+                <span>⚡ Atención Ejecutiva Personalizada</span>
+              </div>
+              <h3 class="text-sm font-extrabold text-white mb-1">Identificación Corporativa Rápida</h3>
+              <p class="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Completa tus datos una única vez para asignarte prioridad en nuestro CRM y chatear en vivo con nuestro especialista.
+              </p>
 
-        <!-- Messages Thread -->
-        <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs text-slate-200 scroll-smooth">
-          <!-- Welcome Bubble -->
-          <div class="flex gap-2.5 items-start">
-            <div class="w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold">
-              IA
+              <div id="csiaGatePendingTopicBanner" class="hidden mb-3 px-3 py-2 rounded-xl bg-blue-950/60 border border-blue-500/40 text-[11px] text-blue-200">
+                Consulta seleccionada: <strong id="csiaGatePendingTopicText" class="text-white"></strong>
+              </div>
+
+              <form id="csiaPreChatGateForm" class="space-y-2.5" novalidate>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Nombre Completo *</label>
+                  <input id="csiaGateName" type="text" required placeholder="Ej: Martín Rodríguez"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Teléfono / WhatsApp *</label>
+                  <input id="csiaGatePhone" type="tel" required placeholder="Ej: +598 99 123 456"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Correo Electrónico *</label>
+                  <input id="csiaGateEmail" type="email" required placeholder="nombre@empresa.com.uy"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Empresa / Razón Social *</label>
+                  <input id="csiaGateCompany" type="text" required placeholder="Ej: Distribuidora del Plata S.A."
+                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                </div>
+
+                <div id="csiaGateError" class="hidden text-[11px] text-rose-300 bg-rose-950/60 border border-rose-500/40 rounded-xl px-3 py-2"></div>
+
+                <button type="submit"
+                  class="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/25 transition-all flex items-center justify-center gap-2">
+                  <span>Iniciar Chat con Especialista IA →</span>
+                </button>
+              </form>
             </div>
-            <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] leading-relaxed text-slate-200">
-              ¡Hola! 👋 Soy el asistente inteligente de **CalcuSuiteIA (CSIA)**. Puedo orientarte sobre nuestro **Gemelo Digital 3D**, la logística 3PL o coordinar tu acceso prioritario al **Programa Pioneros (6 meses 100% gratis + 50% vitalicio)**.<br><br>
-              ¿De qué empresa nos visitas o qué módulo te gustaría explorar hoy?
+
+            <!-- Píldoras rápidas también visibles en el Gate para elegir tema -->
+            <div class="pt-3 mt-3 border-t border-slate-800/80">
+              <div class="text-[10px] text-slate-500 mb-1.5 font-semibold">O selecciona un tema directo:</div>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" data-quick-msg="Quiero evaluar el Gemelo Digital 3D para mi depósito"
+                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-colors">
+                  📦 Gemelo 3D
+                </button>
+                <button type="button" data-quick-msg="Me interesa el Programa Pioneros con 6 meses gratis y 50% vitalicio"
+                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition-colors">
+                  💎 Programa Pioneros
+                </button>
+                <button type="button" data-quick-msg="Quiero hablar con un asesor para agendar una demo corporativa"
+                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition-colors">
+                  👤 Hablar con Ejecutivo
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Quick Pills -->
-        <div id="quickPills" class="px-3 py-2 bg-slate-950 border-t border-slate-900 flex gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
-          <button onclick="if(window.openAccountModal) window.openAccountModal('PIONERO')" class="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-bold flex items-center gap-1 transition-all">🚀 Crear Cuenta</button>
-          <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="Quiero información sobre el Gemelo Digital 3D">📦 Gemelo 3D</button>
-          <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="¿Cómo funciona el Programa Pioneros (50% de por vida)?">💎 Programa Pioneros</button>
-          <button class="quick-pill shrink-0 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-slate-800 hover:border-cyan-700 transition-all" data-msg="Quiero coordinar una reunión o cotización formal">👤 Hablar con Ejecutivo</button>
-        </div>
+          <!-- Mensajes del Chat (Activo tras completar el Pre-Chat Gate) -->
+          <div id="csiaChatMessages" class="hidden flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950/70 text-xs">
+            <div class="flex items-start gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
+              <div id="csiaWelcomeBubble" class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm">
+                ¡Hola! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong>. ¿Qué módulo o proceso operativo te gustaría optimizar hoy (Gemelo 3D, Logística 3PL, Mercado Libre, Licitaciones ARCE o Finanzas)?
+              </div>
+            </div>
+          </div>
 
-        <!-- Input Bar -->
-        <form id="chatForm" class="p-3 bg-slate-900/90 border-t border-slate-800 flex items-center gap-2">
-          <input 
-            type="text" 
-            id="chatInput" 
-            placeholder="Escribe tu consulta o datos aquí..." 
-            autocomplete="off"
-            class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all"
-          />
-          <button 
-            type="submit" 
-            id="chatSendBtn"
-            class="p-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-500 hover:to-blue-500 shadow-md shadow-cyan-600/20 active:scale-95 transition-all disabled:opacity-50"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-            </svg>
-          </button>
-        </form>
+          <!-- Sugerencias Rápidas en Chat Activo -->
+          <div id="csiaQuickPrompts" class="hidden px-4 py-2 bg-slate-900/90 border-t border-slate-800/80 flex gap-1.5 overflow-x-auto no-scrollbar">
+            <button type="button" data-quick-msg="Quiero evaluar el Gemelo Digital 3D para mi depósito"
+              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-colors">
+              📦 Gemelo 3D
+            </button>
+            <button type="button" data-quick-msg="Me interesa el Programa Pioneros con 6 meses gratis y 50% vitalicio"
+              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition-colors">
+              💎 Programa Pioneros
+            </button>
+            <button type="button" data-quick-msg="Quiero hablar con un asesor para agendar una demo corporativa"
+              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition-colors">
+              👤 Hablar con Ejecutivo
+            </button>
+          </div>
+
+          <!-- Input del Chat (Activo tras completar el Pre-Chat Gate) -->
+          <form id="csiaChatForm" class="hidden p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
+            <input id="csiaChatInput" type="text" placeholder="Escribe tu consulta aquí..." autocomplete="off"
+              class="flex-1 bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+            <button type="submit"
+              class="px-3.5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors shrink-0">
+              Enviar
+            </button>
+          </form>
+        </div>
       `;
 
-      document.body.appendChild(triggerBtn);
-      document.body.appendChild(chatModal);
+      document.body.appendChild(container);
+      this.updateProfileBadge();
+      this.populateGateInputs();
+      this.syncGateVisibility();
 
-      this.triggerBtn = triggerBtn;
-      this.chatModal = chatModal;
-      this.messagesContainer = document.getElementById('chatMessages');
-      this.chatInput = document.getElementById('chatInput');
-      this.chatForm = document.getElementById('chatForm');
+      const toggleBtn = document.getElementById('csiaChatToggleBtn');
+      const closeBtn = document.getElementById('csiaChatCloseBtn');
+      const chatForm = document.getElementById('csiaChatForm');
+      const chatInput = document.getElementById('csiaChatInput');
+      const gateForm = document.getElementById('csiaPreChatGateForm');
 
-      this.bindUIEvents();
-    }
+      toggleBtn.addEventListener('click', () => this.toggleChat());
+      closeBtn.addEventListener('click', () => this.toggleChat(false));
 
-    bindUIEvents() {
-      this.triggerBtn.addEventListener('click', () => this.toggleChat());
-      document.getElementById('closeChatBtn').addEventListener('click', () => this.toggleChat());
+      if (gateForm) {
+        gateForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.handleGateSubmit();
+        });
+      }
 
-      // Envío de mensaje
-      this.chatForm.addEventListener('submit', (e) => {
+      chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const text = this.chatInput.value.trim();
-        if (text && !this.isBusy) {
-          this.sendMessage(text);
-          this.chatInput.value = '';
+        const text = chatInput.value.trim();
+        if (!text || this.isSending) return;
+        if (!this.hasCompleteIdentity()) {
+          this.pendingQuickMessage = text;
+          chatInput.value = '';
+          this.syncGateVisibility();
+          return;
         }
+        chatInput.value = '';
+        this.sendMessage(text);
       });
 
-      // Quick pills
-      document.querySelectorAll('.quick-pill').forEach((btn) => {
+      container.querySelectorAll('.csia-quick-pill').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const msg = btn.getAttribute('data-msg');
-          if (msg && !this.isBusy) {
-            this.sendMessage(msg);
+          const msg = btn.getAttribute('data-quick-msg');
+          if (!msg) return;
+          if (!this.hasCompleteIdentity()) {
+            this.pendingQuickMessage = msg;
+            const banner = document.getElementById('csiaGatePendingTopicBanner');
+            const topicText = document.getElementById('csiaGatePendingTopicText');
+            if (banner && topicText) {
+              topicText.textContent = msg;
+              banner.classList.remove('hidden');
+            }
+            const nameInput = document.getElementById('csiaGateName');
+            if (nameInput) nameInput.focus();
+            return;
           }
+          this.sendMessage(msg);
         });
       });
     }
 
-    toggleChat() {
-      this.isOpen = !this.isOpen;
+    populateGateInputs() {
+      const f = this.knownFields || {};
+      const nameEl = document.getElementById('csiaGateName');
+      const phoneEl = document.getElementById('csiaGatePhone');
+      const emailEl = document.getElementById('csiaGateEmail');
+      const compEl = document.getElementById('csiaGateCompany');
+      if (nameEl && f.full_name) nameEl.value = f.full_name;
+      if (phoneEl && f.phone) phoneEl.value = f.phone;
+      if (emailEl && f.email) emailEl.value = f.email;
+      if (compEl && f.company_name) compEl.value = f.company_name;
+    }
+
+    syncGateVisibility() {
+      const gateEl = document.getElementById('csiaPreChatGate');
+      const msgsEl = document.getElementById('csiaChatMessages');
+      const promptsEl = document.getElementById('csiaQuickPrompts');
+      const formEl = document.getElementById('csiaChatForm');
+      const welcomeEl = document.getElementById('csiaWelcomeBubble');
+
+      if (!gateEl || !msgsEl || !promptsEl || !formEl) return;
+
+      if (this.hasCompleteIdentity()) {
+        gateEl.classList.add('hidden');
+        msgsEl.classList.remove('hidden');
+        promptsEl.classList.remove('hidden');
+        formEl.classList.remove('hidden');
+        if (welcomeEl && this.knownFields.full_name) {
+          welcomeEl.innerHTML = `¡Hola <strong>${this.escapeHtml(
+            this.knownFields.full_name
+          )}</strong>! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong> para <strong>${this.escapeHtml(
+            this.knownFields.company_name
+          )}</strong>. ¿Qué módulo o proceso operativo te gustaría optimizar hoy?`;
+        }
+      } else {
+        gateEl.classList.remove('hidden');
+        msgsEl.classList.add('hidden');
+        promptsEl.classList.add('hidden');
+        formEl.classList.add('hidden');
+        this.populateGateInputs();
+      }
+    }
+
+    handleGateSubmit() {
+      const nameVal = (document.getElementById('csiaGateName')?.value || '').trim();
+      const phoneVal = (document.getElementById('csiaGatePhone')?.value || '').trim();
+      const emailVal = (document.getElementById('csiaGateEmail')?.value || '').trim().toLowerCase();
+      const companyVal = (document.getElementById('csiaGateCompany')?.value || '').trim();
+      const errEl = document.getElementById('csiaGateError');
+
+      if (nameVal.length < 2 || phoneVal.length < 6 || !emailVal.includes('@') || companyVal.length < 2) {
+        if (errEl) {
+          errEl.textContent =
+            'Por favor completa tu Nombre, Teléfono/WhatsApp, Correo Corporativo válido y Empresa para iniciar el chat.';
+          errEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (errEl) errEl.classList.add('hidden');
+
+      this.saveKnownFields({
+        full_name: nameVal,
+        phone: phoneVal,
+        email: emailVal,
+        company_name: companyVal,
+      });
+
+      const initialMessage =
+        this.pendingQuickMessage ||
+        `Hola, soy ${nameVal} de la empresa ${companyVal}. Mi correo es ${emailVal} y mi WhatsApp es ${phoneVal}. Me gustaría recibir asesoramiento sobre CalcuSuiteIA.`;
+      this.pendingQuickMessage = null;
+      this.sendMessage(initialMessage);
+    }
+
+    updateProfileBadge() {
+      const badge = document.getElementById('csiaProfileStatusBadge');
+      if (!badge) return;
+      const name = this.knownFields.full_name;
+      const company = this.knownFields.company_name;
+      if (name && company) {
+        badge.textContent = `${name} • ${company}`;
+      } else if (name) {
+        badge.textContent = `Sesión activa: ${name}`;
+      } else {
+        badge.textContent = 'CalcuSuiteIA • Atención Corporativa';
+      }
+    }
+
+    toggleChat(forceState) {
+      const win = document.getElementById('csiaChatWindow');
+      if (!win) return;
+      this.isOpen = typeof forceState === 'boolean' ? forceState : !this.isOpen;
       if (this.isOpen) {
-        this.chatModal.classList.remove('hidden');
-        setTimeout(() => this.chatInput.focus(), 100);
-      } else {
-        this.chatModal.classList.add('hidden');
-      }
-    }
-
-    updateHeaderBadge() {
-      const banner = document.getElementById('escalationBanner');
-      if (this.isEscalated && banner) {
-        banner.classList.remove('hidden');
-      }
-    }
-
-    appendMessage(text, isUser = false, isHumanOperator = false, senderLabel = '') {
-      const row = document.createElement('div');
-      row.className = isUser ? 'flex justify-end' : 'flex gap-2.5 items-start';
-
-      const bubble = document.createElement('div');
-      if (isUser) {
-        bubble.className = 'p-3 rounded-2xl rounded-tr-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white max-w-[85%] leading-relaxed shadow-md shadow-blue-900/30';
-        bubble.textContent = text;
-      } else if (isHumanOperator) {
-        bubble.className = 'p-3 rounded-2xl rounded-tl-sm bg-emerald-950/70 border border-emerald-700/70 max-w-[85%] leading-relaxed text-emerald-100';
-        const headerHtml = `<div class="text-[10px] font-bold text-emerald-400 mb-1">👤 ${senderLabel || 'Ejecutivo CalcuSuiteIA'}</div>`;
-        bubble.innerHTML = headerHtml + this.formatMarkdown(text);
-      } else {
-        bubble.className = 'p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] leading-relaxed text-slate-200';
-        bubble.innerHTML = this.formatMarkdown(text);
-      }
-
-      if (isUser) {
-        row.appendChild(bubble);
-      } else {
-        const avatar = document.createElement('div');
-        if (isHumanOperator) {
-          avatar.className = 'w-7 h-7 rounded-lg bg-emerald-950 border border-emerald-700 flex items-center justify-center text-emerald-400 shrink-0 text-[10px] font-bold';
-          avatar.textContent = 'EJ';
+        win.classList.remove('hidden');
+        win.classList.add('flex');
+        this.syncGateVisibility();
+        if (this.hasCompleteIdentity()) {
+          document.getElementById('csiaChatInput')?.focus();
         } else {
-          avatar.className = 'w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold';
-          avatar.textContent = 'IA';
+          document.getElementById('csiaGateName')?.focus();
         }
-        row.appendChild(avatar);
-        row.appendChild(bubble);
-      }
-
-      this.messagesContainer.appendChild(row);
-      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-    }
-
-    startSyncPolling() {
-      if (this.syncTimer) clearInterval(this.syncTimer);
-      this.syncTimer = setInterval(() => {
-        if (this.isOpen || this.hasInteracted) {
-          this.pollOperatorMessages();
-        }
-      }, 4000);
-    }
-
-    async pollOperatorMessages() {
-      if (!this.sessionId) return;
-      for (const baseEndpoint of WEBCHAT_CONFIG.endpoints) {
-        const syncUrl = `${baseEndpoint}/${encodeURIComponent(this.sessionId)}/sync`;
-        try {
-          const resp = await fetch(syncUrl, { method: 'GET' });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data.known_fields && Object.keys(data.known_fields).length > 0) {
-              this.saveKnownFields(data.known_fields);
-            }
-            const humanMsgs = data.human_messages || [];
-            for (const hm of humanMsgs) {
-              if (hm.id && !this.renderedHumanMsgIds.has(hm.id)) {
-                this.renderedHumanMsgIds.add(hm.id);
-                this.appendMessage(hm.message_text, false, true, hm.sender_name || 'Ejecutivo CalcuSuiteIA');
-                if (!this.isOpen) {
-                  this.toggleChat();
-                }
-              }
-            }
-            break;
-          }
-        } catch {}
+        this.pollHumanReplies();
+      } else {
+        win.classList.add('hidden');
+        win.classList.remove('flex');
       }
     }
 
-    showTyping() {
-      const row = document.createElement('div');
-      row.id = 'chatTypingIndicator';
-      row.className = 'flex gap-2.5 items-start my-1';
-      row.innerHTML = `
-        <div class="w-7 h-7 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 shrink-0 text-[10px] font-bold">IA</div>
-        <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 text-slate-300 flex items-center gap-2 text-xs">
-          <span class="flex gap-1 items-center">
-            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce"></span>
-            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.2s"></span>
-            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce" style="animation-delay: 0.4s"></span>
-          </span>
-          <span class="text-[11px] text-cyan-300 font-medium">CalcuSuiteIA Copilot está escribiendo...</span>
-        </div>
-      `;
-      this.messagesContainer.appendChild(row);
-      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-    }
-
-    hideTyping() {
-      const indicator = document.getElementById('chatTypingIndicator');
-      if (indicator) indicator.remove();
-    }
-
-    formatMarkdown(text) {
-      if (!text) return '';
-      let escaped = text
+    escapeHtml(str) {
+      return String(str || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      // Negrita **texto**
-      escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>');
-      // Enlaces markdown [texto](url)
-      escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-cyan-400 underline hover:text-cyan-300">$1</a>');
-      // Saltos de línea
-      escaped = escaped.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
-      return escaped;
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
-    appendNetworkRetryMessage(failedText) {
+    appendMessage(sender, text) {
+      const container = document.getElementById('csiaChatMessages');
+      if (!container) return;
       const row = document.createElement('div');
-      row.className = 'flex gap-2.5 items-start my-2';
-      row.innerHTML = `
-        <div class="w-7 h-7 rounded-lg bg-amber-950/80 border border-amber-800 flex items-center justify-center text-amber-400 shrink-0 text-[10px] font-bold">⚠️</div>
-        <div class="p-3 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800/80 max-w-[85%] text-xs leading-relaxed text-slate-300">
-          <p class="mb-2">Parece haber una intermitencia temporal en la red. Puedes reintentar enviar tu consulta o contactarnos directamente por WhatsApp:</p>
-          <div class="flex flex-wrap gap-2 mt-2">
-            <button id="retryWebchatBtn" class="px-2.5 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700 text-[11px] font-semibold transition-all">
-              🔄 Reintentar
-            </button>
-            <a href="https://wa.me/59894858791?text=${encodeURIComponent('Hola CalcuSuiteIA, tengo una consulta sobre la suite: ' + failedText)}" target="_blank" rel="noopener" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 text-[11px] font-semibold flex items-center gap-1 transition-all">
-              💬 Abrir WhatsApp
-            </a>
+      if (sender === 'user') {
+        row.className = 'flex justify-end';
+        row.innerHTML = `
+          <div class="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 max-w-[82%] leading-relaxed shadow-sm">
+            ${this.escapeHtml(text)}
           </div>
-        </div>
-      `;
-      this.messagesContainer.appendChild(row);
-      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-
-      const retryBtn = row.querySelector('#retryWebchatBtn');
-      if (retryBtn) {
-        retryBtn.addEventListener('click', () => {
-          row.remove();
-          this.sendMessage(failedText);
-        });
+        `;
+      } else if (sender === 'human') {
+        row.className = 'flex items-start gap-2.5';
+        const formatted = this.escapeHtml(text)
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n/g, '<br/>');
+        row.innerHTML = `
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold shrink-0">EJ</div>
+          <div class="bg-emerald-950/70 border border-emerald-500/40 text-emerald-100 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm">
+            <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Ejecutivo CalcuSuiteIA • En Vivo</div>
+            ${formatted}
+          </div>
+        `;
+      } else {
+        row.className = 'flex items-start gap-2.5';
+        const formatted = this.escapeHtml(text)
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n/g, '<br/>');
+        row.innerHTML = `
+          <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
+          <div class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm">
+            ${formatted}
+          </div>
+        `;
       }
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
     }
 
-    async sendMessage(text) {
-      this.hasInteracted = true;
-      this.appendMessage(text, true);
-      this.isBusy = true;
-      this.showTyping();
+    async sendMessage(messageText) {
+      if (!this.hasCompleteIdentity()) {
+        this.pendingQuickMessage = messageText;
+        this.syncGateVisibility();
+        return;
+      }
+
+      this.appendMessage('user', messageText);
+      this.isSending = true;
 
       const payload = {
         session_id: this.sessionId,
-        visitor_name: this.knownFields.full_name || null,
-        visitor_email: this.knownFields.email || null,
-        visitor_phone: this.knownFields.phone || null,
-        company_name: this.knownFields.company_name || null,
-        message: text,
-        page_metrics: window.CalcuTelemetry.getMetrics(),
+        visitor_name: this.knownFields.full_name,
+        visitor_email: this.knownFields.email,
+        visitor_phone: this.knownFields.phone,
+        company_name: this.knownFields.company_name,
+        message: messageText,
+        page_metrics: this.telemetry.getSnapshot(),
         known_fields: this.knownFields,
       };
 
-      let reply = null;
+      let replyData = null;
+      const endpoints = getActiveChatEndpoints();
 
-      // Intento por lista de endpoints
-      for (const endpoint of WEBCHAT_CONFIG.endpoints) {
+      for (const ep of endpoints) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const resp = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (resp.ok) {
+              replyData = await resp.json();
+              break;
+            }
+          } catch (err) {
+            if (attempt === 1) {
+              await new Promise((r) => setTimeout(r, 400));
+            }
+          }
+        }
+        if (replyData) break;
+      }
+
+      this.isSending = false;
+
+      if (replyData && replyData.reply) {
+        if (replyData.known_fields) {
+          this.saveKnownFields(replyData.known_fields);
+        }
+        this.appendMessage('ai', replyData.reply);
+      } else {
+        const f = this.knownFields;
+        this.appendMessage(
+          'ai',
+          `¡Gracias **${f.full_name}**! Hemos registrado tu consulta para **${f.company_name}** con prioridad directiva en nuestro CRM. Un especialista se contactará a **${f.email}** / **${f.phone}** a la brevedad.`
+        );
+      }
+    }
+
+    startHumanReplySync() {
+      if (this.syncTimer) clearInterval(this.syncTimer);
+      this.syncTimer = setInterval(() => {
+        this.pollHumanReplies();
+      }, 4500);
+    }
+
+    async pollHumanReplies() {
+      if (!this.sessionId || !this.hasCompleteIdentity()) return;
+      const endpoints = getActiveChatEndpoints();
+      for (const baseEp of endpoints) {
+        const syncUrl = `${baseEp}/${encodeURIComponent(this.sessionId)}/sync?after_id=${this.lastSyncedMessageId}`;
         try {
-          const resp = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+          const resp = await fetch(syncUrl, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          if (data.known_fields && Object.keys(data.known_fields).length > 0) {
+            this.saveKnownFields(data.known_fields);
+          }
+          const messages = Array.isArray(data.messages) ? data.messages : [];
+          for (const m of messages) {
+            if (m.id && m.id > this.lastSyncedMessageId) {
+              this.lastSyncedMessageId = m.id;
+            }
+            if (
+              m.direction === 'OUTBOUND' &&
+              (m.sender_type === 'HUMAN_AGENT' || m.is_ai_generated === false) &&
+              !this.seenHumanMessageIds.has(m.id)
+            ) {
+              this.seenHumanMessageIds.add(m.id);
+              this.appendMessage('human', m.message_text || '');
+              if (!this.isOpen) {
+                this.toggleChat(true);
+              }
+            }
+          }
+          break;
+        } catch {
+          // Silencioso en polling
+        }
+      }
+    }
+
+    // --- 3. Conexión de Formularios Web al Backend + Memoria del Chat ---
+    bindPageForms() {
+      const forms = document.querySelectorAll('form[data-csia-lead-form], #leadCaptureForm');
+      forms.forEach((form) => {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const statusBox = form.querySelector('.csia-form-status') || document.getElementById('leadFormStatus');
+
+          const fd = new FormData(form);
+          const honeypot = fd.get('website_url') || fd.get('honeypot') || '';
+          if (honeypot) return;
+
+          const leadPayload = {
+            nombre: (fd.get('nombre') || '').toString().trim(),
+            empresa: (fd.get('empresa') || '').toString().trim(),
+            email: (fd.get('email') || '').toString().trim(),
+            telefono: (fd.get('telefono') || '').toString().trim(),
+            interes: (fd.get('interes') || 'Demo Completa Enterprise').toString().trim(),
+            operation_scale: (fd.get('operation_scale') || '').toString().trim(),
+            mensaje: (fd.get('mensaje') || '').toString().trim(),
+            page_metrics: this.telemetry.getSnapshot(),
+          };
+
+          this.saveKnownFields({
+            full_name: leadPayload.nombre,
+            company_name: leadPayload.empresa,
+            email: leadPayload.email,
+            phone: leadPayload.telefono,
+            interest_module: leadPayload.interes,
+            operation_scale: leadPayload.operation_scale,
           });
 
-          if (resp.ok) {
-            const data = await resp.json();
-            reply = data.reply;
-            if (data.known_fields) {
-              this.saveKnownFields(data.known_fields);
-            }
-            if (data.is_escalated || data.was_promoted) {
-              this.isEscalated = true;
-              this.updateHeaderBadge();
-            }
-            break;
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.dataset.originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = 'Procesando y asignando ejecutivo...';
           }
-        } catch {}
-      }
 
-      this.hideTyping();
-      this.isBusy = false;
+          let ok = false;
+          const leadsEndpoints = getActiveLeadsEndpoints();
+          for (const ep of leadsEndpoints) {
+            try {
+              const resp = await fetch(ep, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(leadPayload),
+              });
+              if (resp.ok) {
+                ok = true;
+                break;
+              }
+            } catch {}
+          }
 
-      if (reply) {
-        this.appendMessage(reply, false);
-      } else {
-        // En caso de corte total de conectividad, ofrecer reintento interactivo
-        this.appendNetworkRetryMessage(text);
-      }
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = submitBtn.dataset.originalText || 'Solicitar Demo Corporativa';
+          }
+
+          if (statusBox) {
+            statusBox.classList.remove('hidden');
+            if (ok) {
+              statusBox.className =
+                'csia-form-status mt-4 p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs leading-relaxed';
+              statusBox.innerHTML = `
+                <strong>✅ ¡Solicitud registrada y priorizada en nuestro CRM!</strong><br/>
+                Gracias <strong>${this.escapeHtml(leadPayload.nombre)}</strong>. Un ejecutivo senior ya tiene asignada la ficha de <strong>${this.escapeHtml(leadPayload.empresa)}</strong> y se comunicará a <strong>${this.escapeHtml(leadPayload.email)}</strong>.
+              `;
+              form.reset();
+            } else {
+              statusBox.className =
+                'csia-form-status mt-4 p-4 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-200 text-xs leading-relaxed';
+              statusBox.innerHTML = `
+                <strong>✅ Datos guardados en tu sesión corporativa (${this.escapeHtml(leadPayload.empresa)}).</strong><br/>
+                Puedes continuar la conversación directamente en nuestro WebChat IA o escribirnos a <a class="underline font-bold" href="mailto:${CONFIG.contactEmail}">${CONFIG.contactEmail}</a>.
+              `;
+            }
+          }
+        });
+      });
     }
   }
 
-  // Inicializar cuando el DOM esté listo
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      window.CalcuChat = new CalcuWebChatUI();
-    });
-  } else {
-    window.CalcuChat = new CalcuWebChatUI();
-  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const telemetry = new PageTelemetryTracker();
+    window.CalcuChat = new CalcuWebChatWidget(telemetry);
+  });
 })();
