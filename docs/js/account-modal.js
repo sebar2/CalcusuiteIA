@@ -547,7 +547,7 @@
               <span class="text-base shrink-0">🛡️</span>
               <div>
                 <strong class="font-bold text-amber-300 block mb-0.5">Sugerencia de Seguridad Corporativa (2FA TOTP):</strong>
-                Al ingresar por primera vez con tu contraseña, te recomendamos dirigirte a <em>Configuración &gt; Seguridad</em> y activar la <strong>Verificación en 2 Pasos (2FA)</strong> para proteger el acceso a tus depósitos y datos financieros con doble factor.
+                Al ingresar por primera vez con tu contraseña, te recomendamos dirigirte a <em>Configuración &gt; Seguridad</em> y activar la <strong>Verificación en 2 Pasos (2FA)</strong> para proteger el acceso a tus depósitos y datos financieros con doble factor. Además, en <em>Licencias Multi-Tenant</em> tienes habilitada tu Orden de Compra con pago vía <strong>Mercado Pago Uruguay (Débito / hasta 12 cuotas)</strong> y emisión automática de <strong>e-Factura DGI</strong>.
               </div>
             </div>
           </div>
