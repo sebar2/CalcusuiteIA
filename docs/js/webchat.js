@@ -470,6 +470,10 @@
       this.sendMessage(initialMessage);
     }
 
+    updateHeaderBadge() {
+      this.updateProfileBadge();
+    }
+
     updateProfileBadge() {
       const badge = document.getElementById('csiaProfileStatusBadge');
       if (!badge) return;

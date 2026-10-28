@@ -74,7 +74,7 @@
             <div id="optionPionero" onclick="selectModalidad('PIONERO')" class="cursor-pointer p-4 rounded-2xl border-2 border-emerald-500/70 bg-emerald-950/20 hover:bg-emerald-950/30 transition-all relative">
               <div class="flex items-center justify-between mb-1.5">
                 <span class="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] tracking-wider uppercase">Recomendado</span>
-                <span class="w-4 h-4 rounded-full border-2 border-emerald-400 flex items-center justify-center bg-emerald-500 text-slate-950 text-[10px] font-bold">✓</span>
+                <span id="pioneroCheck" class="w-4 h-4 rounded-full border-2 border-emerald-400 flex items-center justify-center bg-emerald-500 text-slate-950 text-[10px] font-bold">✓</span>
               </div>
               <h4 class="text-sm font-bold text-white">Programa Pionero (Primeros 20)</h4>
               <p class="text-xs text-emerald-300 font-semibold mt-0.5">6 Meses 100% GRATIS + 50% OFF Vitalicio</p>
@@ -129,7 +129,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Corporativo de Acceso *</label>
-                <input type="email" id="accEmail" required placeholder="mgonzalez@empresa.com.uy" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="email" id="accEmail" autocomplete="username" required placeholder="mgonzalez@empresa.com.uy" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Teléfono / WhatsApp Directo *</label>
@@ -142,7 +142,7 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-200 mb-1">Contraseña de Acceso * (Mín. 6 caracteres)</label>
                 <div class="relative">
-                  <input type="password" id="accPassword" required minlength="6" placeholder="Define tu contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 pr-10" oninput="checkCsiaPasswordStrength()" />
+                  <input type="password" id="accPassword" autocomplete="new-password" required minlength="6" placeholder="Define tu contraseña segura" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 pr-10" oninput="checkCsiaPasswordStrength()" />
                   <button type="button" onclick="toggleCsiaPassword('accPassword', 'eye1')" class="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs">
                     <span id="eye1">👁️</span>
                   </button>
@@ -155,7 +155,7 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-200 mb-1">Confirmar Contraseña *</label>
                 <div class="relative">
-                  <input type="password" id="accConfirmPassword" required minlength="6" placeholder="Repite tu contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 pr-10" oninput="checkCsiaPasswordMatch()" />
+                  <input type="password" id="accConfirmPassword" autocomplete="new-password" required minlength="6" placeholder="Repite tu contraseña" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 pr-10" oninput="checkCsiaPasswordMatch()" />
                   <button type="button" onclick="toggleCsiaPassword('accConfirmPassword', 'eye2')" class="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs">
                     <span id="eye2">👁️</span>
                   </button>
@@ -325,6 +325,16 @@
         'cursor-pointer p-4 rounded-2xl border border-slate-700 bg-slate-950/60 hover:bg-slate-800/40 transition-all opacity-80 hover:opacity-100';
       if (commitBox) commitBox.classList.remove('hidden');
       if (btnText) btnText.textContent = 'Postular al Programa Pionero (6 Meses Gratis + 50% OFF Vitalicio)';
+      const pChk = document.getElementById('pioneroCheck');
+      const tChk = document.getElementById('trialCheck');
+      if (pChk) {
+        pChk.className = 'w-4 h-4 rounded-full border-2 border-emerald-400 flex items-center justify-center bg-emerald-500 text-slate-950 text-[10px] font-bold';
+        pChk.textContent = '✓';
+      }
+      if (tChk) {
+        tChk.className = 'w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px]';
+        tChk.textContent = '';
+      }
     } else {
       optPionero.className =
         'cursor-pointer p-4 rounded-2xl border border-slate-700 bg-slate-950/60 hover:bg-slate-800/40 transition-all opacity-80 hover:opacity-100';
@@ -332,6 +342,16 @@
         'cursor-pointer p-4 rounded-2xl border-2 border-blue-500/70 bg-blue-950/20 hover:bg-blue-950/30 transition-all relative';
       if (commitBox) commitBox.classList.add('hidden');
       if (btnText) btnText.textContent = 'Activar Trial Corporativo (14 Días Gratis)';
+      const pChk = document.getElementById('pioneroCheck');
+      const tChk = document.getElementById('trialCheck');
+      if (pChk) {
+        pChk.className = 'w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px]';
+        pChk.textContent = '';
+      }
+      if (tChk) {
+        tChk.className = 'w-4 h-4 rounded-full border-2 border-cyan-400 flex items-center justify-center bg-cyan-500 text-slate-950 text-[10px] font-bold';
+        tChk.textContent = '✓';
+      }
     }
   }
 
@@ -493,7 +513,7 @@
         selected_plan: selectedModalidad === 'PIONERO' ? 'Programa Pioneros (Vitalicio)' : 'Trial Corporativo (14 días)',
       });
       window.CalcuChat.isEscalated = true;
-      window.CalcuChat.updateHeaderBadge();
+      try { window.CalcuChat?.updateHeaderBadge?.(); } catch (e) {}
     }
 
     const waText =
@@ -519,7 +539,7 @@
           <h3 class="text-2xl font-black text-white tracking-tight mb-2">¡Cuenta Creada Exitosamente!</h3>
           <p class="text-xs text-slate-300 max-w-lg mx-auto leading-relaxed mb-6">
             Hemos aprovisionado tu entorno empresarial en PostgreSQL 16 para <strong>${payload.empresa}</strong>.<br>
-            Enviamos un correo de confirmación a <strong class="text-cyan-400">${payload.email}</strong> con tu enlace de activación.
+            Enviamos un correo de confirmación desde <strong class="text-emerald-400">info@calcusuiteia.com</strong> a <strong class="text-cyan-400">${payload.email}</strong> con tu enlace de activación.
           </p>
 
           <div class="bg-amber-950/30 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 text-left max-w-lg mx-auto mb-6">
@@ -533,9 +553,9 @@
           </div>
 
           <div class="flex flex-col sm:flex-row gap-3 justify-center max-w-lg mx-auto">
-            <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer"
+            <a href="https://app.calcusuiteia.com/?email=${encodeURIComponent(payload.email)}&verified=1" target="_blank" rel="noopener noreferrer"
                class="py-3.5 px-6 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-600/30 transition-all text-center flex items-center justify-center gap-2">
-              <span>Ir a la Plataforma (app.calcusuiteia.com)</span>
+              <span>🚀 Ir a la App Web e Iniciar Sesión Ahora →</span>
               <svg class="w-4 h-4 text-cyan-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
             </a>
             <a href="${waUrl}" target="_blank" rel="noopener noreferrer"
