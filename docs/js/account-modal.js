@@ -568,6 +568,93 @@
     }
   }
 
+  function generatePdfDocument(poData) {
+    const data = poData || {};
+    const poNumber = data.po_number || 'OC-2026-0001';
+    const companyName = data.company_name || data.empresa || 'Cliente Corporativo';
+    const rut = data.rut || 'Consumidor Final';
+    const contactName = data.contact_name || data.nombre || companyName;
+    const contactEmail = data.contact_email || data.email || 'info@calcusuiteia.com';
+    const currency = data.currency || 'USD';
+    const subtotal = Number(data.subtotal != null ? data.subtotal : 2940.0);
+    const discount = Number(data.discount_amount != null ? data.discount_amount : subtotal);
+    const iva = Number(data.tax_iva_amount != null ? data.tax_iva_amount : 0.0);
+    const total = Number(data.total_amount != null ? data.total_amount : Math.max(0, subtotal - discount + iva));
+    const paymentUrl =
+      data.payment_url ||
+      `https://www.mercadopago.com.uy/checkout/v1/redirect?pref_id=${encodeURIComponent(data.mp_preference_id || poNumber)}`;
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(paymentUrl)}`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Orden de Compra #${poNumber} - ${companyName}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A4 portrait; margin: 15mm; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; color: #0f172a; background: #ffffff; margin: 0; padding: 20px; }
+    .invoice-container { max-width: 700px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .text-center { text-align: center; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
+    th { background: #f8fafc; font-weight: 600; color: #475569; }
+    .qr-section { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px dashed #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <div class="text-center">
+      <div style="font-size:11px;font-weight:800;color:#00a2e8;text-transform:uppercase;">CALCUSUITEIA S.A.S. (CSIA) • ORDEN DE COMPRA OFICIAL URUGUAY</div>
+      <h1 style="margin:6px 0;font-size:22px;">ORDEN DE COMPRA #${poNumber}</h1>
+      <div style="font-size:12px;color:#64748b;">RUT Emisor: 219485010019 • Montevideo, Uruguay • info@calcusuiteia.com</div>
+    </div>
+    <div class="flex-between" style="margin-top:20px;padding:14px;background:#f8fafc;border-radius:10px;font-size:13px;">
+      <div>
+        <div><strong>Empresa:</strong> ${companyName}</div>
+        <div><strong>RUT / Doc.:</strong> ${rut}</div>
+      </div>
+      <div style="text-align:right;">
+        <div><strong>Contacto:</strong> ${contactName}</div>
+        <div><strong>Email:</strong> ${contactEmail}</div>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto / Plan Suscripción SaaS</th>
+          <th>Subtotal Lista</th>
+          <th>Descuento</th>
+          <th>Total Final</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Licencia Corporativa CalcuSuiteIA (${data.plan_type || 'PIONEER_6M'})</td>
+          <td>${currency} $${subtotal.toFixed(2)}</td>
+          <td>- ${currency} $${discount.toFixed(2)}</td>
+          <td><strong>${currency} $${total.toFixed(2)}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="qr-section">
+      <div style="font-size:12px;font-weight:800;margin-bottom:10px;">ESCANEE EL CÓDIGO QR PARA PAGAR CON MERCADO PAGO / TARJETA DE DÉBITO URUGUAY</div>
+      <img src="${qrSrc}" alt="QR Mercado Pago" width="150" height="150" onload="setTimeout(function(){window.print();},250);" />
+      <div style="font-size:11px;color:#475569;margin-top:8px;">${paymentUrl}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=860,height=900');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
   // Exponer globalmente
   window.openAccountModal = openAccountModal;
   window.closeAccountModal = closeAccountModal;
@@ -576,6 +663,7 @@
   window.toggleCsiaPassword = toggleCsiaPassword;
   window.checkCsiaPasswordStrength = checkCsiaPasswordStrength;
   window.checkCsiaPasswordMatch = checkCsiaPasswordMatch;
+  window.generatePdfDocument = generatePdfDocument;
 
   // Auto-crear DOM al cargar
   if (document.readyState === 'loading') {
