@@ -599,6 +599,9 @@
       this.isSending = false;
 
       if (replyData && replyData.reply) {
+        if (replyData.last_message_id && !isNaN(Number(replyData.last_message_id))) {
+          this.lastSyncedMessageId = Math.max(this.lastSyncedMessageId, Number(replyData.last_message_id));
+        }
         if (replyData.known_fields) {
           this.saveKnownFields(replyData.known_fields);
         }
@@ -636,16 +639,18 @@
           }
           const messages = Array.isArray(data.messages) ? data.messages : [];
           for (const m of messages) {
-            if (m.id && m.id > this.lastSyncedMessageId) {
-              this.lastSyncedMessageId = m.id;
+            const numericId = Number(m.id);
+            if (!isNaN(numericId) && numericId > this.lastSyncedMessageId) {
+              this.lastSyncedMessageId = numericId;
             }
             if (
               m.direction === 'OUTBOUND' &&
+              m.sender_type !== 'AI_AGENT' &&
               (m.sender_type === 'HUMAN_AGENT' || m.is_ai_generated === false) &&
               !this.seenHumanMessageIds.has(m.id)
             ) {
               this.seenHumanMessageIds.add(m.id);
-              this.appendMessage('human', m.message_text || '');
+              this.appendMessage('human', m.content || m.message_text || '');
               if (!this.isOpen) {
                 this.toggleChat(true);
               }
