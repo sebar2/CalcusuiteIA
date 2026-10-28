@@ -57,7 +57,17 @@ async function handleLeadSubmit(event) {
     telemetry: telemetry
   };
 
-  // 3. Estado de carga visual en boton
+  // 3. Estado de carga visual en boton y sincronizacion con WebChat
+  if (window.CalcuChat && typeof window.CalcuChat.saveKnownFields === 'function') {
+    window.CalcuChat.saveKnownFields({
+      full_name: payload.nombre,
+      company_name: payload.empresa,
+      email: payload.email,
+      phone: payload.telefono,
+      interest_module: payload.interes,
+      operation_scale: payload.escala
+    });
+  }
   submitBtn.disabled = true;
   if (btnText) btnText.textContent = 'Procesando solicitud...';
 
@@ -69,7 +79,7 @@ async function handleLeadSubmit(event) {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (res.ok) {

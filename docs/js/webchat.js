@@ -580,7 +580,7 @@
           try {
             const resp = await fetch(ep, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
               body: JSON.stringify(payload),
             });
             if (resp.ok) {
@@ -599,19 +599,14 @@
       this.isSending = false;
 
       if (replyData && replyData.reply) {
-        if (replyData.last_message_id && !isNaN(Number(replyData.last_message_id))) {
-          this.lastSyncedMessageId = Math.max(this.lastSyncedMessageId, Number(replyData.last_message_id));
+        const msgId = Number(replyData.message_id || replyData.last_message_id || 0);
+        if (!isNaN(msgId) && msgId > 0) {
+          this.lastSyncedMessageId = Math.max(this.lastSyncedMessageId, msgId);
         }
         if (replyData.known_fields) {
           this.saveKnownFields(replyData.known_fields);
         }
         this.appendMessage('ai', replyData.reply);
-      } else {
-        const f = this.knownFields;
-        this.appendMessage(
-          'ai',
-          `¡Gracias **${f.full_name}**! Hemos registrado tu consulta para **${f.company_name}** con prioridad directiva en nuestro CRM. Un especialista se contactará a **${f.email}** / **${f.phone}** a la brevedad.`
-        );
       }
     }
 
@@ -708,7 +703,7 @@
             try {
               const resp = await fetch(ep, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
                 body: JSON.stringify(leadPayload),
               });
               if (resp.ok) {

@@ -434,7 +434,7 @@
       try {
         const resp = await fetch(ep, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
           body: JSON.stringify(payload),
         });
         if (resp.ok) {
@@ -458,7 +458,7 @@
         try {
           const resp = await fetch(ep, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8', 'Accept': 'application/json' },
             body: JSON.stringify({
               nombre: payload.nombre,
               empresa: payload.empresa,
