@@ -22,85 +22,13 @@
 
   <!-- Tailwind CSS CDN & Lucide Icons -->
 
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <script src="https://unpkg.com/lucide@latest"></script>
-
-  
-
-  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-
-
-  <script>
-
-    tailwind.config = {
-
-      darkMode: 'class',
-
-      theme: {
-
-        extend: {
-
-          fontFamily: {
-
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
-
-          },
-
-          colors: {
-
-            brand: {
-
-              50: '#eff6ff',
-
-              100: '#dbeafe',
-
-              500: '#3b82f6',
-
-              600: '#2563eb',
-
-              700: '#1d4ed8',
-
-              800: '#1e40af',
-
-              900: '#1e3a8a',
-
-              950: '#0a192f',
-
-            },
-
-            accent: {
-
-              emerald: '#10b981',
-
-              violet: '#8b5cf6',
-
-              amber: '#f59e0b',
-
-            }
-
-          }
-
-        }
-
-      }
-
-    }
-
-  </script>
-
-  <!-- Estilos Modulares Externos -->
-
   <link rel="stylesheet" href="./css/style.css">
-
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
 
@@ -408,7 +336,7 @@
 
       <p class="mt-6 text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto font-normal leading-relaxed">
 
-        Plataforma unificada para empresas de distribución, almacenamiento y comercio B2B. Conecta en tiempo real la flota GPS, gestión WMS con escaneo móvil, sincronización oficial con Mercado Libre Uruguay (Kanban 5 etapas), Chat Omnicanal WhatsApp QR con audio .opus y portapapeles multimedia, facturación electrónica y liquidación fiscal DGI/BPS con inteligencia artificial.
+        <strong class="text-white font-semibold">CalcuSuiteIA</strong> es el ERP modular especializado en supply chain, logística 3PL y ventas B2B que centraliza la operación de punta a punta, integrando la gestión de almacenes con la pasarela de pagos y el ecosistema fiscal. Conecta en tiempo real la flota GPS, gestión WMS con escaneo móvil, sincronización oficial con Mercado Libre Uruguay (Kanban 5 etapas), Chat Omnicanal WhatsApp QR con audio .opus y portapapeles multimedia, facturación electrónica CFE y liquidación fiscal DGI/BPS con inteligencia artificial.
 
       </p>
 
@@ -621,8 +549,6 @@
         <video autoplay loop muted playsinline controls class="w-full h-auto max-h-[640px] object-cover bg-black" poster="./screenshots/27_gemelo_digital_3d_rack_spatial.png">
 
           <source src="./assets/video/gemelo_3d_demo.webm" type="video/webm">
-
-          <source src="./gemelo_3d_demo.webm" type="video/webm">
 
           Tu navegador no soporta reproducción de video WebM HTML5.
 
@@ -1996,14 +1922,10 @@
 
             </a>
 
-            <a href="./MANUAL_COMPLETO_CALCU_2026.html" target="_blank"
-
+            <a href="./documentacion.html"
                class="py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all">
-
               <i data-lucide="globe" class="w-4 h-4 text-blue-400"></i>
-
               <span>Ver Versión Web</span>
-
             </a>
 
           </div>
@@ -2447,62 +2369,12 @@
 
 
 
-  <!-- Helper Scripts -->
-
-  <script>
-
-    function toggleMobileDrawer() {
-
-      const drawer = document.getElementById('mobileDrawer');
-
-      if (drawer) {
-
-        drawer.classList.toggle('hidden');
-
-      }
-
-    }
-
-  </script>
-
-
-
   <!-- MODULAR JAVASCRIPT ARCHITECTURE -->
-
   <script src="./js/whatsapp-widget.js"></script>
-
   <script src="./js/leads.js"></script>
-
   <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
   <script src="./js/main.js"></script>
-
-
-  <script>
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => {
-          c.classList.remove('-translate-x-full');
-          c.classList.add('translate-x-0');
-        }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => {
-          d.classList.add('hidden');
-        }, 300);
-      }
-    }
-  </script>
-
 </body>
 
 </html>

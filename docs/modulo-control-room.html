@@ -7,40 +7,13 @@
   <meta name="description" content="Supervisión en tiempo real de operaciones, telemetría y seguridad empresarial. Trazabilidad inmutable de accesos bajo norma ISO 27001, RBAC y blindaje de datos.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ef4444'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#fef2f2',
-              400: '#f87171',
-              500: '#ef4444',
-              600: '#dc2626',
-              900: '#7f1d1d',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(239, 68, 68, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(239, 68, 68, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.15); }
-    .glow-red { text-shadow: 0 0 25px rgba(239, 68, 68, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-red-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -474,130 +447,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    function checkIsoScore() {
-      const active = document.querySelectorAll('.chk-iso:checked').length;
-      const total = document.querySelectorAll('.chk-iso').length;
-      const pct = Math.round((active / total) * 100);
-      let estado = 'ÓPTIMO';
-      if (pct < 60) estado = 'MEDIO';
-      if (pct < 30) estado = 'BAJO';
-
-      document.getElementById('txtIsoScore').textContent = `Nivel de Seguridad: ${estado} (${pct}% Controles ISO 27001 Activos).`;
-    }
-
-    // Copilot IA
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente consulta sobre seguridad corporativa. CalcuSuiteIA aplica una arquitectura de defensa en profundidad diseñada para proteger la información más crítica de tu negocio.";
-        const low = q.toLowerCase();
-
-        if (low.includes('aislamiento') || low.includes('tenant') || low.includes('empresa') || low.includes('otra')) {
-          answer = "🏢 **Aislamiento Multi-Tenant Estricto:** Cada cuenta tiene un identificador único (UID) y su base de datos o esquema propio en PostgreSQL 16. Los accesos se validan criptográficamente en cada consulta, impidiendo cualquier cruce entre empresas.";
-        } else if (low.includes('iso') || low.includes('27001') || low.includes('auditoria') || low.includes('forense')) {
-          answer = "📋 **Cumplimiento ISO 27001:** Mantenemos un registro inmutable de auditoría donde queda grabada cada acción: qué usuario inició sesión, qué registro modificó, la dirección IP de origen y la marca de tiempo UTC certificada.";
-        } else if (low.includes('2fa') || low.includes('doble factor') || low.includes('totp') || low.includes('autenticador')) {
-          answer = "🔑 **Autenticación 2FA TOTP:** Puedes activar el doble factor escaneando un código QR desde la sección de Perfil con Google Authenticator. Esto protege tu cuenta incluso si alguien adivinara tu contraseña.";
-        } else if (low.includes('pionero') || low.includes('gratis')) {
-          answer = "🎁 **Máxima Seguridad en Todos los Planes:** El blindaje ISO 27001, la bóveda criptográfica y el Control Room están activos desde el primer día en el Plan Pionero 100% gratuito.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-red-600/30 border border-red-500/40 rounded-2xl rounded-tr-sm p-3 text-red-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-red-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-red-600/30 text-red-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-red-400/80">CalcuSuiteIA Security Guardian</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-red-600/30 hover:bg-red-600/50 text-red-300 font-bold px-2.5 py-1 rounded-lg border border-red-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>

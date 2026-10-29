@@ -283,5 +283,44 @@ document.addEventListener('DOMContentLoaded', () => {
     window.lucide.createIcons();
   }
   // Pestaña inicial destacada
-  switchTab('meli');
+  if (typeof switchTab === 'function') {
+    switchTab('meli');
+  }
 });
+
+/**
+ * Control del Drawer Móvil
+ */
+function toggleMobileDrawer() {
+  const drawer = document.getElementById('mobileDrawer');
+  if (drawer) {
+    drawer.classList.toggle('hidden');
+  }
+}
+
+/**
+ * Control del Drawer Lateral de Logo / Módulos
+ */
+function openLogoDrawer() {
+  const d = document.getElementById('logoSlideDrawer');
+  const c = document.getElementById('logoSlideDrawerContent');
+  if (d && c) {
+    d.classList.remove('hidden');
+    setTimeout(() => {
+      c.classList.remove('-translate-x-full');
+      c.classList.add('translate-x-0');
+    }, 10);
+  }
+}
+
+function closeLogoDrawer() {
+  const d = document.getElementById('logoSlideDrawer');
+  const c = document.getElementById('logoSlideDrawerContent');
+  if (d && c) {
+    c.classList.remove('translate-x-0');
+    c.classList.add('-translate-x-full');
+    setTimeout(() => {
+      d.classList.add('hidden');
+    }, 300);
+  }
+}

@@ -7,40 +7,13 @@
   <meta name="description" content="Consola centralizada de mensajería: WhatsApp Directo QR sin costos por mensaje, notas de voz PTT .opus, pegado de imágenes Ctrl+V y Agente IA Guardián de Duplicados.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2310b981'><path d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#ecfdf5',
-              400: '#34d399',
-              500: '#10b981',
-              600: '#059669',
-              900: '#064e3b',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(16, 185, 129, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(16, 185, 129, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15); }
-    .glow-emerald { text-shadow: 0 0 25px rgba(16, 185, 129, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-emerald-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -474,134 +447,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    // Calculadora de Ahorro
-    function recalculateSimulator() {
-      const msg = parseFloat(document.getElementById('simMensajes')?.value) || 6500;
-      const costoMeta = parseFloat(document.getElementById('simCostoMeta')?.value) || 0.048;
-
-      const costoMensualMeta = Math.round(msg * costoMeta);
-      const ahorroAnual = costoMensualMeta * 12;
-
-      document.getElementById('resMetaCost').textContent = '$ ' + costoMensualMeta.toLocaleString('en-US') + ' USD / mes';
-      document.getElementById('resAhorroAnual').textContent = '$ ' + ahorroAnual.toLocaleString('en-US') + ' USD / año';
-    }
-    ['simMensajes', 'simCostoMeta'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
-    });
-
-    // Copilot IA
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente pregunta. La consola de Chat Omnicanal de CalcuSuiteIA está diseñada para acelerar tus ventas eliminando fricciones y costos por mensaje.";
-        const low = q.toLowerCase();
-
-        if (low.includes('numero') || low.includes('linea') || low.includes('simultaneo') || low.includes('multiple')) {
-          answer = "📱 **Múltiples Números y Operadores:** Puedes conectar distintas líneas de WhatsApp asignándolas por departamento (ej. Ventas, Depósito, Cobranzas) y atender todas desde la misma pantalla con permisos de usuario.";
-        } else if (low.includes('baneo') || low.includes('bloqueo') || low.includes('suspension') || low.includes('spam')) {
-          answer = "🛡️ **Anti-Bloqueo Inteligente:** Nuestro motor incluye temporizadores de despacho humano (intervalos aleatorios entre 4 y 12 segundos) y respeta las políticas oficiales para que tu número nunca sea marcado como spam.";
-        } else if (low.includes('audio') || low.includes('voz') || low.includes('microfono') || low.includes('opus')) {
-          answer = "🎙️ **Notas de Voz Reales (.opus):** Al grabar desde la computadora, el mensaje se codifica en Ogg Opus nativo. En el teléfono del cliente aparece con el ícono de micrófono verde de WhatsApp idéntico a un audio grabado con el celular.";
-        } else if (low.includes('pionero') || low.includes('gratis') || low.includes('costo')) {
-          answer = "🎁 **Plan Pionero 100% Bonificado:** Accedes a WhatsApp QR, CRM y chat omnicanal sin costo durante 6 meses completos y conservas 50% de descuento vitalicio para tu cuenta.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-emerald-600/30 border border-emerald-500/40 rounded-2xl rounded-tr-sm p-3 text-emerald-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-emerald-600/30 text-emerald-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-emerald-400/80">CalcuSuiteIA WhatsApp Copilot</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 font-bold px-2.5 py-1 rounded-lg border border-emerald-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>

@@ -7,38 +7,13 @@
   <meta name="description" content="Especificaciones de módulos, límites técnicos, guía de integraciones 2026 y Agente IA Asesor de Pauta & Difusión de CalcuSuiteIA.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
-          },
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -606,87 +581,9 @@
     </div>
   </footer>
 
-  <!-- Scripts del Asesor IA y Drawer -->
-  <script>
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => {
-          c.classList.remove('-translate-x-full');
-          c.classList.add('translate-x-0');
-        }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => {
-          d.classList.add('hidden');
-        }, 300);
-      }
-    }
-
-    function updateAdvisorSim() {
-      const budget = Number(document.getElementById('adBudgetInput').value);
-      const industry = document.getElementById('adIndustryInput').value;
-      const reach = document.getElementById('adReachInput').value;
-      document.getElementById('adBudgetLabel').innerText = `$${budget} USD`;
-
-      let pG = 0.40, pM = 0.30, pW = 0.20, pE = 0.10;
-      let estCpl = 4.2;
-      let comment = "";
-
-      if (industry === 'b2b_wholesale') {
-        pG = 0.45; pM = 0.20; pW = 0.25; pE = 0.10;
-        estCpl = 5.5;
-        comment = "Para distribución mayorista en Uruguay, priorice Google Search para captar compras de stock en volumen y WhatsApp Cloud API para cierre directo con listas de precios.";
-      } else if (industry === 'logistics_3pl') {
-        pG = 0.50; pM = 0.20; pW = 0.15; pE = 0.15;
-        estCpl = 6.8;
-        comment = "En logística 3PL y depósito, la intención de búsqueda en Google (pallets, almacenaje fiscal, ruteo) tiene la mayor tasa de conversión calificada.";
-      } else if (industry === 'retail_meli') {
-        pG = 0.25; pM = 0.45; pW = 0.20; pE = 0.10;
-        estCpl = 2.4;
-        comment = "En retail y MeLi, los formatos visuales de Meta Ads (Reels/Carruseles) generan alto volumen con soporte de WhatsApp para dudas previas.";
-      } else {
-        pG = 0.35; pM = 0.25; pW = 0.20; pE = 0.20;
-        estCpl = 4.8;
-        comment = "Estrategia equilibrada: Google Ads para captura inicial, reforzado con secuencias de correo masivo Resend para maduración de tratos B2B.";
-      }
-
-      const costG = Math.round(budget * pG);
-      const costM = Math.round(budget * pM);
-      const costW = Math.round(budget * pW);
-      const costE = Math.round(budget * pE);
-
-      document.getElementById('pctGoogle').innerText = `$${costG} USD (${Math.round(pG * 100)}%)`;
-      document.getElementById('pctMeta').innerText = `$${costM} USD (${Math.round(pM * 100)}%)`;
-      document.getElementById('pctWhatsApp').innerText = `$${costW} USD (${Math.round(pW * 100)}%)`;
-      document.getElementById('pctEmail').innerText = `$${costE} USD (${Math.round(pE * 100)}%)`;
-
-      document.getElementById('barGoogle').style.width = `${pG * 100}%`;
-      document.getElementById('barMeta').style.width = `${pM * 100}%`;
-      document.getElementById('barWhatsApp').style.width = `${pW * 100}%`;
-      document.getElementById('barEmail').style.width = `${pE * 100}%`;
-
-      const leads = Math.round(budget / estCpl);
-      document.getElementById('advisorLeadsEst').innerText = `≈ ${leads} Leads Calificados`;
-      document.getElementById('advisorComment').innerText = comment;
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      updateAdvisorSim();
-      if (window.lucide) {
-        window.lucide.createIcons();
-      }
-    });
-  </script>
-  <script src="./js/account-modal.js"></script>
+    <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
+  <script src="./js/main.js"></script>
+  <script src="./js/documentacion.js"></script>
 </body>
 </html>

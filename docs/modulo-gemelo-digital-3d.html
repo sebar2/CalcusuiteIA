@@ -7,40 +7,13 @@
   <meta name="description" content="Visualización y gestión tridimensional acelerada por WebGL Three.js para depósitos logísticos. Traslado de racks en bloque, detección AABB de colisiones y cubicaje espacial.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#ecfeff',
-              400: '#22d3ee',
-              500: '#06b6d4',
-              600: '#0891b2',
-              900: '#164e63',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(56, 189, 248, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(56, 189, 248, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.15); }
-    .glow-cyan { text-shadow: 0 0 25px rgba(6, 182, 212, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -246,7 +219,6 @@
       <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video relative group">
         <video controls loop muted autoplay playsinline class="w-full h-full object-cover">
           <source src="./assets/video/gemelo_3d_demo.webm" type="video/webm">
-          <source src="./gemelo_3d_demo.webm" type="video/webm">
           Tu navegador no soporta el formato de video.
         </video>
       </div>
@@ -498,140 +470,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    // Lógica del Simulador
-    function recalculateSimulator() {
-      const m2 = parseFloat(document.getElementById('simM2')?.value) || 1200;
-      const h = parseFloat(document.getElementById('simAltura')?.value) || 8.5;
-      const pasillo = parseFloat(document.getElementById('simPasillo')?.value) || 3.0;
-
-      const volBruto = m2 * h;
-      const factorOcupacion = pasillo > 3.5 ? 0.38 : (pasillo < 2.5 ? 0.52 : 0.45);
-      const pallets = Math.round((m2 * factorOcupacion) * (h / 2.1));
-      const racks = Math.round(pallets / 12);
-      const toneladas = Math.round(pallets * 1.0);
-
-      document.getElementById('resVolBruto').textContent = volBruto.toLocaleString('es-UY') + ' m³';
-      document.getElementById('resPallets').textContent = pallets.toLocaleString('es-UY') + ' slots';
-      document.getElementById('resRacks').textContent = racks.toLocaleString('es-UY') + ' cuerpos';
-      document.getElementById('resCarga').textContent = toneladas.toLocaleString('es-UY') + ' Ton';
-    }
-    ['simM2', 'simAltura', 'simPasillo'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
-    });
-
-    // Lógica del Copilot IA Amigable
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente consulta. El Gemelo Digital 3D de CalcuSuiteIA se conecta en vivo a tu inventario y permite planificar la distribución espacial antes de mover un solo pallet físico.";
-        const low = q.toLowerCase();
-
-        if (low.includes('colision') || low.includes('superpon') || low.includes('aabb')) {
-          answer = "🛡️ **Algoritmo AABB:** Cada rack tiene una caja tridimensional matemática. Si intentas moverlo sobre otro rack o sobre un pasillo delimitado, el sistema bloquea el desplazamiento y te alerta en rojo en el visor 3D para evitar accidentes operativos.";
-        } else if (low.includes('hardware') || low.includes('requisito') || low.includes('pc') || low.includes('tarjeta')) {
-          answer = "💻 **Requisitos muy ligeros:** Funciona directamente en Google Chrome o Edge en cualquier PC de oficina o tablet Android con WebGL estándar. No requiere tarjeta gráfica dedicada de alto rendimiento porque usamos técnicas de instanciación geométrica GPU ultra-optimizadas.";
-        } else if (low.includes('cuesta') || low.includes('precio') || low.includes('pionero') || low.includes('costo')) {
-          answer = "🎁 **100% Gratis durante la etapa Pionero (aprox. 6 meses)** con el 50% de descuento vitalicio garantizado al salir a producción comercial. Puedes activar tu cuenta Pionero ahora mismo haciendo clic en el botón inferior.";
-        } else if (low.includes('stock') || low.includes('artículo') || low.includes('lote')) {
-          answer = "📦 **Vínculo con el Inventario Real:** Cada pallet del 3D está enlazado al SKU, lote, fecha de vencimiento y proveedor en PostgreSQL 16. Si despachas por Mercado Libre o Factura CFE, el visor 3D libera la coordenada automáticamente.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-cyan-600/30 border border-cyan-500/40 rounded-2xl rounded-tr-sm p-3 text-cyan-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-cyan-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-cyan-400/80">CalcuSuiteIA 3D Copilot</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 font-bold px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>

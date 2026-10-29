@@ -7,38 +7,13 @@
   <meta name="description" content="Condiciones de contratación, garantía legal del Programa Pioneros (50% vitalicio) y cumplimiento de la Ley 18.331 en Uruguay.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
-          },
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
-              900: '#1e3a8a',
-              950: '#0a192f',
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -303,22 +278,11 @@
     </div>
   </footer>
 
-  <script>
-    function toggleMobileDrawer() {
-      const drawer = document.getElementById('mobileDrawer');
-      if (drawer) {
-        drawer.classList.toggle('hidden');
-      }
-    }
-  </script>
+  
 
   <!-- Telemetría y Chat IA Slot-Filling -->
-  <script src="./js/account-modal.js"></script>
+    <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
-  <script>
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  </script>
+  <script src="./js/main.js"></script>
 </body>
 </html>

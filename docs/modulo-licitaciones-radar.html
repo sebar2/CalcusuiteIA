@@ -7,40 +7,13 @@
   <meta name="description" content="Monitoreo automatizado de compras públicas en Uruguay (ARCE). Detección de llamados, análisis de pliegos con IA, estimación de márgenes y alertas de apertura.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='6'/><circle cx='12' cy='12' r='2'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#ecfeff',
-              400: '#22d3ee',
-              500: '#06b6d4',
-              600: '#0891b2',
-              900: '#164e63',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(6, 182, 212, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(6, 182, 212, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.15); }
-    .glow-cyan { text-shadow: 0 0 25px rgba(6, 182, 212, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -471,147 +444,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    // Calculadora de Licitaciones
-    function recalculateSimulator() {
-      const precioOferta = parseFloat(document.getElementById('simPrecioOferta')?.value) || 480000;
-      const precioRef = parseFloat(document.getElementById('simPrecioRef')?.value) || 520000;
-      const pondPrecio = parseFloat(document.getElementById('simPondPrecio')?.value) || 70;
-
-      const difPct = ((precioOferta - precioRef) / precioRef) * 100;
-      const txtDif = difPct < 0 
-        ? `${Math.abs(difPct).toFixed(1)}% Más Competitivo` 
-        : `+${difPct.toFixed(1)}% Sobre Referencia`;
-
-      let scorePrecio = 100 - (difPct * 1.5);
-      if (scorePrecio > 100) scorePrecio = 100;
-      if (scorePrecio < 20) scorePrecio = 20;
-
-      const puntajeTotal = Math.round((scorePrecio * (pondPrecio / 100)) + (90 * ((100 - pondPrecio) / 100)));
-      let probabilidad = 'MEDIA (65%)';
-      if (puntajeTotal >= 85) probabilidad = `MUY ALTA (${puntajeTotal}%)`;
-      else if (puntajeTotal < 60) probabilidad = `BAJA (${puntajeTotal}%)`;
-
-      document.getElementById('resDifPrecio').textContent = txtDif;
-      document.getElementById('resPuntaje').textContent = `${puntajeTotal} / 100 pts`;
-      document.getElementById('resProbabilidad').textContent = probabilidad;
-    }
-    ['simPrecioOferta', 'simPrecioRef', 'simPondPrecio'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
-    });
-
-    // Copilot IA
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente consulta sobre compras públicas. El Radar ARCE de CalcuSuiteIA monitorea en tiempo real todas las oportunidades estatales de Uruguay.";
-        const low = q.toLowerCase();
-
-        if (low.includes('organismo') || low.includes('ministerio') || low.includes('ute') || low.includes('antel') || low.includes('intendencia')) {
-          answer = "🏛️ **Cobertura Total del Estado:** Monitorea las 19 Intendencias Departamentales, Ministerios, Empresas Públicas (UTE, OSE, ANTEL, ANCAP), ASSE, Udelar y organismos descentralizados conectados a ARCE.";
-        } else if (low.includes('rupe') || low.includes('registro') || low.includes('inscrip')) {
-          answer = "📋 **Estado en RUPE:** Para venderle al Estado uruguayo es necesario estar inscripto en el RUPE (Registro Único de Proveedores del Estado). Nuestro sistema verifica si el pliego exige estado 'En Trámite' o 'Activo'.";
-        } else if (low.includes('excluyente') || low.includes('pliego') || low.includes('clausula') || low.includes('ia')) {
-          answer = "🔍 **Análisis de Cláusulas Excluyentes:** La IA procesa las condiciones de admisibilidad (garantías de mantenimiento, antecedentes mínimos, plazos de entrega y multas) para evitar que tu empresa sea descalificada por un error formal.";
-        } else if (low.includes('pionero') || low.includes('gratis')) {
-          answer = "🎁 **Acceso Pionero Sin Costo:** Puedes recibir alertas ARCE por WhatsApp y analizar pliegos sin cargo durante los 6 meses de la fase Pionero.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-cyan-600/30 border border-cyan-500/40 rounded-2xl rounded-tr-sm p-3 text-cyan-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-cyan-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-cyan-600/30 text-cyan-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-cyan-400/80">CalcuSuiteIA ARCE Copilot</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 font-bold px-2.5 py-1 rounded-lg border border-cyan-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>

@@ -7,40 +7,13 @@
   <meta name="description" content="Emisión de e-Facturas y e-Tickets homologados ante DGI Uruguay. Códigos QR reglamentarios, partida doble automática, CAE y liquidación mensual de IVA y BPS.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a855f7'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><polyline points='10 9 9 9 8 9'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#faf5ff',
-              400: '#c084fc',
-              500: '#a855f7',
-              600: '#9333ea',
-              900: '#581c87',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(168, 85, 247, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(168, 85, 247, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.15); }
-    .glow-purple { text-shadow: 0 0 25px rgba(168, 85, 247, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -483,137 +456,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    // Calculadora Fiscal DGI
-    function recalculateSimulator() {
-      const ventas = parseFloat(document.getElementById('simVentasMes')?.value) || 650000;
-      const compras = parseFloat(document.getElementById('simComprasMes')?.value) || 380000;
-      const tasa = parseFloat(document.getElementById('simTasaIva')?.value) || 22;
-
-      const ivaDebito = Math.round(ventas * (tasa / 100));
-      const ivaCredito = Math.round(compras * (tasa / 100));
-      const saldo = Math.round(ivaDebito - ivaCredito);
-
-      document.getElementById('resIvaDebito').textContent = '$ ' + ivaDebito.toLocaleString('es-UY') + ' UYU';
-      document.getElementById('resIvaCredito').textContent = '$ ' + ivaCredito.toLocaleString('es-UY') + ' UYU';
-      document.getElementById('resSaldoDgi').textContent = '$ ' + saldo.toLocaleString('es-UY') + ' UYU';
-    }
-    ['simVentasMes', 'simComprasMes', 'simTasaIva'].forEach(id => {
-      document.getElementById(id)?.addEventListener('input', recalculateSimulator);
-    });
-
-    // Copilot IA
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente consulta tributaria. CalcuSuiteIA está homologado y estructurado conforme a todas las disposiciones del sistema de facturación electrónica de DGI Uruguay.";
-        const low = q.toLowerCase();
-
-        if (low.includes('cae') || low.includes('tramite') || low.includes('homolog') || low.includes('autoriza')) {
-          answer = "📑 **Gestión del CAE ante DGI:** El CAE se solicita directamente en los servicios en línea de DGI con tu RUT. Una vez obtenido el archivo de constancia, lo subes a CalcuSuiteIA en 1 clic y el sistema administra los números correlativos automáticamente.";
-        } else if (low.includes('requisito') || low.includes('certificado') || low.includes('firma')) {
-          answer = "🔑 **Requisitos Básicos:** Solo necesitas tu RUT activo en DGI y un Certificado Digital de Firma Electrónica (ej. Abitab o Correo Uruguayo). Nuestro equipo te asiste en la configuración inicial sin complicaciones.";
-        } else if (low.includes('contador') || low.includes('excel') || low.includes('libro diario') || low.includes('partida doble')) {
-          answer = "📊 **Integración Total con tu Contador:** Puedes descargar en cualquier momento el Libro Diario, Libro Mayor y Balance de Comprobación en Excel. Tu contador recibe los asientos perfectamente cuadrados con cuentas Debe y Haber.";
-        } else if (low.includes('pionero') || low.includes('gratis')) {
-          answer = "🎁 **Plan Pionero 100% Bonificado:** Obtienes el módulo de facturación CFE y contabilidad sin costo durante 6 meses con 50% de descuento vitalicio garantizado al salir de la fase Pionero.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-purple-600/30 border border-purple-500/40 rounded-2xl rounded-tr-sm p-3 text-purple-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-purple-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-purple-400/80">CalcuSuiteIA Tax Copilot</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 font-bold px-2.5 py-1 rounded-lg border border-purple-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>

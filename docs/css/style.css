@@ -65,6 +65,38 @@ body {
   transform: translateY(-4px);
 }
 
+.glow-blue {
+  text-shadow: 0 0 25px rgba(59, 130, 246, 0.5);
+}
+
+.glow-cyan {
+  text-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
+}
+
+.glow-emerald {
+  text-shadow: 0 0 25px rgba(16, 185, 129, 0.5);
+}
+
+.glow-rose {
+  text-shadow: 0 0 25px rgba(244, 63, 94, 0.5);
+}
+
+.glow-red {
+  text-shadow: 0 0 25px rgba(239, 68, 68, 0.5);
+}
+
+.glow-pink {
+  text-shadow: 0 0 25px rgba(236, 72, 153, 0.5);
+}
+
+.glow-purple {
+  text-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
+}
+
+.glow-amber {
+  text-shadow: 0 0 25px rgba(245, 158, 11, 0.5);
+}
+
 .glass-card-emerald {
   background: rgba(6, 78, 59, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.35);

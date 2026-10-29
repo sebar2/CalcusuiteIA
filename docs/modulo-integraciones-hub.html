@@ -7,40 +7,13 @@
   <meta name="description" content="Bóveda centralizada de integraciones 2026: 11 canales comerciales oficiales bajo cifrado militar AES-256. Atribución de ROAS y CAC, webhooks HMAC y sincronización CRM.">
   
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'><path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/><polyline points='15 3 21 3 21 9'/><line x1='10' y1='14' x2='21' y2='3'/></svg>">
-  <script>(function(){const w=console.warn;console.warn=function(...a){if(a[0]&&String(a[0]).includes('cdn.tailwindcss.com'))return;return w.apply(console,a);};})();</script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              400: '#60a5fa',
-              500: '#3b82f6',
-              600: '#2563eb',
-              900: '#1e3a8a',
-              950: '#0a0f1d',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(59, 130, 246, 0.15); }
-    .glass-card-hover:hover { border-color: rgba(59, 130, 246, 0.4); transform: translateY(-3px); transition: all 0.25s ease; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.15); }
-    .glow-blue { text-shadow: 0 0 25px rgba(59, 130, 246, 0.5); }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/tailwind-config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
 
@@ -347,6 +320,77 @@
           </div>
           <p class="text-xs text-slate-300">Sincronización de pedidos, stock central, mensajería y publicación asistida con IA.</p>
         </div>
+
+        <div class="glass-card p-5 rounded-xl border border-purple-500/40 relative overflow-hidden">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5"><i data-lucide="file-check-2" class="w-4 h-4"></i> Emisión Fiscal CFE / DGI</span>
+            <span class="text-[10px] bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800 font-mono">Certificado</span>
+          </div>
+          <p class="text-xs text-slate-300 mb-2">Comprobantes Fiscales Electrónicos (e-Factura, e-Ticket, e-Remito) con timbrado CAE y código QR DGI interactivo.</p>
+          <div class="text-[10px] text-purple-300/90 font-medium border-t border-purple-900/50 pt-2 flex items-center gap-1">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-purple-400 shrink-0"></i>
+            <span>Emisión en alianza con emisores electrónicos certificados.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: ARQUITECTURA DE EMISIÓN FISCAL EN ALIANZA CON EMISORES ELECTRÓNICOS CERTIFICADOS -->
+    <div class="mt-16 glass-card rounded-2xl p-6 sm:p-8 border border-purple-500/30">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="p-3 rounded-xl bg-purple-500/20 text-purple-400">
+            <i data-lucide="building" class="w-7 h-7"></i>
+          </div>
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-purple-400 block">Arquitectura Fiscal DGI Uruguay</span>
+            <h3 class="text-xl font-black text-white">Emisión Fiscal en Alianza con Emisores Electrónicos Certificados</h3>
+          </div>
+        </div>
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-950/80 border border-purple-700/60 text-purple-300 text-xs font-bold">
+          <i data-lucide="shield-check" class="w-4 h-4 text-purple-400"></i>
+          <span>Protocolo Seguro CFE &bull; CAE Vigente</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
+          <div class="flex items-center gap-2 text-purple-400 font-bold text-xs">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Tipos de CFE Homologados</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Emisión de e-Factura (111), e-Ticket (101), Notas de Crédito/Débito (112, 102), e-Remitos de despacho (181) y e-Resguardo (182) con desglose automático de IVA 22%, 10% y Exento.
+          </p>
+        </div>
+
+        <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
+          <div class="flex items-center gap-2 text-cyan-400 font-bold text-xs">
+            <i data-lucide="qr-code" class="w-4 h-4"></i>
+            <span>Timbrado CAE & Código QR DGI</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Firma digital XML, control de correlativos de serie/rango autorizados por DGI y generación instantánea del código QR oficial para validación pública inmediata desde cualquier smartphone.
+          </p>
+        </div>
+
+        <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
+          <div class="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            <span>Asiento en Libro Diario & FP&A</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Cada comprobante emitido asienta en milisegundos en el Libro Diario Auxiliar, actualiza Cuentas por Cobrar (AR), deduce stock WMS y alimenta el Flujo de Caja y Libro Mayor de Cierres Inmutables.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-6 p-4 rounded-xl bg-purple-950/30 border border-purple-800/40 text-xs text-slate-300 flex items-start gap-3">
+        <i data-lucide="info" class="w-5 h-5 text-purple-400 shrink-0 mt-0.5"></i>
+        <div>
+          <strong class="text-white">Declaración de Responsabilidad Fiscal:</strong>
+          La emisión y timbrado tributario se realiza en estricto cumplimiento de la normativa DGI de la República Oriental del Uruguay, operando <strong class="text-purple-300">en alianza con emisores electrónicos certificados</strong> para garantizar la validez legal, firma digital y resguardo inmutable de cada comprobante.
+        </div>
       </div>
     </div>
 
@@ -493,124 +537,7 @@
     </div>
   </div>
 
-  <script src="./js/account-modal.js"></script>
-  <script>
-    lucide.createIcons();
-
-    function openLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        d.classList.remove('hidden');
-        setTimeout(() => { c.classList.remove('-translate-x-full'); c.classList.add('translate-x-0'); }, 10);
-      }
-    }
-    function closeLogoDrawer() {
-      const d = document.getElementById('logoSlideDrawer');
-      const c = document.getElementById('logoSlideDrawerContent');
-      if (d && c) {
-        c.classList.remove('translate-x-0');
-        c.classList.add('-translate-x-full');
-        setTimeout(() => { d.classList.add('hidden'); }, 300);
-      }
-    }
-
-    function openScreenshotModal(src, title) {
-      const m = document.getElementById('screenshotModal');
-      const img = document.getElementById('screenshotModalImg');
-      const t = document.getElementById('screenshotModalTitle');
-      if (m && img && t) {
-        img.src = src;
-        t.textContent = title;
-        m.classList.remove('hidden');
-        m.classList.add('flex');
-      }
-    }
-    function closeScreenshotModal() {
-      const m = document.getElementById('screenshotModal');
-      if (m) {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      }
-    }
-
-    function checkChannels() {
-      const count = document.querySelectorAll('.chk-channel:checked').length;
-      document.getElementById('txtCompatibilidad').textContent = `${count} canales seleccionados • Integración 100% Soportada en 1 Clic con Bóveda AES-256.`;
-    }
-
-    // Copilot IA
-    function askCopilot(question) {
-      document.getElementById('copilotInput').value = question;
-      handleCopilotSubmit(new Event('submit'));
-    }
-
-    function handleCopilotSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('copilotInput');
-      const q = input.value.trim();
-      if (!q) return;
-
-      appendMessage('user', q);
-      input.value = '';
-
-      setTimeout(() => {
-        let answer = "Excelente consulta. El Hub de Integraciones de CalcuSuiteIA unifica tus canales de venta y comunicación con los más altos estándares de ciberseguridad.";
-        const low = q.toLowerCase();
-
-        if (low.includes('aes') || low.includes('cifrado') || low.includes('seguridad') || low.includes('token') || low.includes('clave')) {
-          answer = "🔒 **Bóveda AES-256 GCM:** Cada token o secreto se encripta antes de tocar el disco. En la base de datos y en los registros de auditoría se muestran siempre enmascarados (ej: `whsec_****`), impidiendo cualquier filtración inadvertida.";
-        } else if (low.includes('marketplace') || low.includes('limite') || low.includes('lote') || low.includes('facebook')) {
-          answer = "📊 **Límites de Facebook Marketplace 2026:** El sistema respeta el límite estricto de 30 solicitudes por minuto mediante encolamiento asíncrono, evitando cualquier sanción de catálogo.";
-        } else if (low.includes('cac') || low.includes('roas') || low.includes('costo') || low.includes('inversion')) {
-          answer = "📈 **Atribución Precisa de ROAS y CAC:** Al conectar Google Ads o Meta Leads, cada venta cerrada en el CRM rastrea el costo de adquisición original para que sepas qué canal genera dinero real y cuál gasta sin retorno.";
-        } else if (low.includes('pionero') || low.includes('gratis')) {
-          answer = "🎁 **Integraciones Incluidas en Pionero:** Durante los 6 meses del Plan Pionero puedes conectar los 11 canales sin límite de tráfico con soporte de nuestros arquitectos.";
-        }
-        appendMessage('bot', answer);
-      }, 400);
-    }
-
-    function appendMessage(sender, text) {
-      const box = document.getElementById('copilotChatBox');
-      const div = document.createElement('div');
-      div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
-      
-      if (sender === 'user') {
-        div.innerHTML = `
-          <div class="ml-auto bg-blue-600/30 border border-blue-500/40 rounded-2xl rounded-tr-sm p-3 text-blue-100 max-w-xl text-right">
-            ${escapeHTML(text)}
-          </div>
-          <div class="w-7 h-7 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0">
-            <i data-lucide="user" class="w-4 h-4"></i>
-          </div>
-        `;
-      } else {
-        div.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center shrink-0">
-            <i data-lucide="bot" class="w-4 h-4"></i>
-          </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-            <div>${text}</div>
-            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span class="text-[11px] text-blue-400/80">CalcuSuiteIA Integrations Copilot</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 font-bold px-2.5 py-1 rounded-lg border border-blue-500/30 transition-colors">
-                Activar Plan Pionero Gratis &rarr;
-              </button>
-            </div>
-          </div>
-        `;
-      }
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-      lucide.createIcons();
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, tag => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-      }[tag] || tag));
-    }
-  </script>
+    <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
 </body>
 </html>
