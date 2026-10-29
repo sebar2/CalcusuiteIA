@@ -41,6 +41,7 @@ app/
 frontend/
 tests/
 scripts/
+deploy/
 alembic/
 ui/
 data/
