@@ -1,11 +1,18 @@
-# Entorno y Secretos
+# ==============================================================================
+# CALCU ENTERPRISE SUITE 2026 - REGLAS ESTRICTAS DE BLINDAJE (.gitignore)
+# Repositorio Público Exclusivo para Presentación Web (docs/, project_docs/)
+# Protección de Propiedad Intelectual, Secretos y Código Fuente Privado
+# ==============================================================================
+
+# Entorno y Secretos (CWE-312, CWE-798)
+.env*
 .env
 .env.local
 .env.*.local
 *.env
 .env.example
 
-# Python & Caches
+# Python, Caches y Dependencias
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,24 +26,26 @@ build/
 .venv/
 venv/
 ENV/
+node_modules/
 
-# Base de datos local
+# Bases de Datos Locales y Archivos Temporales de Transacciones
 *.db
 *.sqlite
+*.sqlite*
 *.sqlite3
 calcu.db
 calcu_demo.db
 *.bak
 *.db.bak
 
-# Logs & Temporales
+# Logs, Scraping y Temporales
 *.log
 scratch/
 .DS_Store
 Thumbs.db
 tenants_data/
 
-# Exclusión de código fuente de desarrollo para repositorio público de presentación
+# Exclusión Estricta de Código Fuente Privado del ERP
 app/
 frontend/
 tests/
@@ -66,6 +75,4 @@ Calcu3PL-Logistica.apk
 /MANUAL_CALCU_SUITE_IA_CLIENTES_SOCIOS.pdf
 /MANUAL_COMPLETO_CALCU_2026.pdf
 /MANUAL_DE_USUARIO_CALCU_3PL.pdf
-
 Calcu-Enterprise-SuperAdmin.apk
-

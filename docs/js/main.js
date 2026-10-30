@@ -324,3 +324,29 @@ function closeLogoDrawer() {
     }, 300);
   }
 }
+
+
+/**
+ * ==========================================================================
+ * HARDENING Y POLÍTICA DE COOKIES (OWASP / ISO 27001)
+ * En cumplimiento de la política de seguridad:
+ * - Prohibida la persistencia a 1 año (2027) en el navegador del cliente.
+ * - Toda cookie del cliente debe ser de sesión efímera o con max-age <= 3600s,
+ *   con directivas obligatorias Secure y SameSite=Strict.
+ * ==========================================================================
+ */
+const CookieGuardian = {
+  set(name, value, maxAgeSeconds = 3600) {
+    const safeMaxAge = Math.min(Number(maxAgeSeconds) || 3600, 3600);
+    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; max-age=${safeMaxAge}; path=/; SameSite=Strict${secureFlag}`;
+  },
+  get(name) {
+    const matches = document.cookie.match(new RegExp('(?:^|; )' + encodeURIComponent(name).replace(/[-.\+*]/g, '\\$&') + '=([^;]*)'));
+    return matches ? decodeURIComponent(matches[1]) : null;
+  },
+  delete(name) {
+    document.cookie = `${encodeURIComponent(name)}=; max-age=0; path=/; SameSite=Strict`;
+  }
+};
+window.CookieGuardian = CookieGuardian;
