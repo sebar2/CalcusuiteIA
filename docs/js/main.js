@@ -188,6 +188,55 @@ const GALLERY_DATA = {
       'Restricción granular de acceso a módulos sensibles'
     ]
   }
+,
+  'broker_otc': {
+    image: './screenshots/29_broker_mesa_dinero_otc_kanban.png',
+    url: 'https://calcu.enterprise.app/broker/otc-kanban',
+    badge: 'Módulo Mesa de Dinero, Cripto OTC & Forex',
+    title: 'Pipeline Kanban 7 Etapas & Cotizador OTC Congelado 15 Minutos',
+    desc: 'Gestión de operaciones mayoristas OTC (USDT/USD, BTC, Oro) con cotizaciones instantáneas fijadas a 15 minutos, 100% de comisión neta para la mesa y carteras privadas aisladas por Chinese Wall.',
+    bullets: [
+      'Tablero Kanban con 7 etapas: Captación, KYC, Cotización Congelada, Fondeo, Ejecución, Liquidación y Cerrado',
+      'Cálculo en vivo de comisiones netas y spreads calibrables en basis points (bps)',
+      'Generación de recibos criptográficos congelados y bitácora SENACLAFT'
+    ]
+  },
+  'broker_quant': {
+    image: './screenshots/30_broker_tradingview_quant_backtester.png',
+    url: 'https://calcu.enterprise.app/broker/quant-backtesting',
+    badge: 'Laboratorio Cuantitativo & TradingView',
+    title: 'TradingView Lightweight Charts & Backtesting con Volatilidad ATR',
+    desc: 'Gráficos profesionales TradingView con osciladores y medias Golden Cross (SMA 50/200), canales Donchian y backtester algorítmico institucional con Stop Loss dinámico por Average True Range (ATR).',
+    bullets: [
+      'Gráficos reactivos en tiempo real con velas japonesas e indicadores técnicos',
+      'Simulador histórico con métricas institucionales: Win Rate, Profit Factor, Max Drawdown y Sharpe Ratio',
+      'Blindaje dinámico por ATR para filtrar falsas rupturas (whipsaws) en zonas laterales'
+    ]
+  },
+  'broker_radar': {
+    image: './screenshots/31_broker_radar_predictivo_noticias_pfi.png',
+    url: 'https://calcu.enterprise.app/broker/predictive-radar',
+    badge: 'Radar Predictivo & Previsiones IA',
+    title: 'Radar Predictivo Macroeconómico, Impacto ΔP e Índice PFI',
+    desc: 'Ingesta en vivo de noticias con enlaces directos a fuentes verificables (Federal Reserve, CoinDesk, ForexLive, BCU). Cálculo del diferencial estimado ΔP y del Índice Predictivo PFI (0 a 100).',
+    bullets: [
+      'Fórmula PFI: 40% Tendencia EMA + 35% Sentimiento Noticias + 25% Flujo de Liquidez P2P',
+      'Detección automática de régimen de mercado: Alcista, Rango o Presión Bajista',
+      'Protocolo de arbitraje preventivo: alerta automática para congelar cotizaciones'
+    ]
+  },
+  'broker_gemini': {
+    image: './screenshots/32_broker_gemini2_copilot_infografia_hd.png',
+    url: 'https://calcu.enterprise.app/broker/ai-debate-infographic',
+    badge: 'Debate Multi-Agente & Copiloto Gemini 2.0',
+    title: 'Debate Multi-Agente en Vivo, Copiloto Gemini 2.0 e Infografías HD',
+    desc: 'Deliberación colaborativa entre Gemini 2.0, Ollama Local (qwen2.5:7b) y el Agente Broker. Copiloto interactivo para consultas macro y generador de infografías ejecutivas HD con firma SHA-256.',
+    bullets: [
+      'Consenso colegiado entre 3 agentes de IA con rangos de precios objetivo y directivas',
+      'Copiloto macroeconómico integrado con Gemini 2.0 para consultas en lenguaje natural',
+      'Generación y exportación de infografías ejecutivas HD 1200x675 para inversores VIP'
+    ]
+  }
 };
 
 let currentTabKey = 'meli';

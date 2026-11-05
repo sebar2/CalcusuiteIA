@@ -261,6 +261,43 @@ const MODULE_KNOWLEDGE_BASES = {
       },
     ],
   },
+
+  'modulo-mesa-dinero-broker': {
+    title: 'Mesa de Dinero, Cripto OTC & Forex WeTrade MT5',
+    badge: 'CalcuSuiteIA Quant Broker Copilot',
+    color: 'amber',
+    defaultAnswer: 'Excelente consulta para la Mesa de Dinero. El módulo combina cotizaciones OTC congeladas, carteras privadas aisladas por Chinese Wall, TradingView Lightweight Charts y previsión predictiva multi-agente.',
+    rules: [
+      {
+        keywords: ['comision', 'porcentaje', 'ganancia', 'tarifa', 'broker'],
+        answer: '🏛️ **100% Comisión Neta para la Mesa:** Las comisiones generadas por spreads OTC (ej. 185 bps / 1.85%) y rebates Forex WeTrade MT5 (.50/lote) se asignan íntegramente a tu cartera operativa sin deducciones.',
+      },
+      {
+        keywords: ['congelar', 'recibo', '15 minutos', 'cotizacion', 'validez'],
+        answer: '⏱️ **Recibos Congelados a 15 Minutos:** El cotizador bloquea el tipo de cambio pactado (ej. USDT/USD o BTC) por 15 minutos mediante un hash criptográfico, protegiendo a la mesa y al cliente contra la volatilidad durante la transferencia bancaria.',
+      },
+      {
+        keywords: ['chinese wall', 'privacidad', 'cartera', 'javier', 'alejandra', 'aislamiento'],
+        answer: '🔒 **Chinese Wall Estricto:** Cada broker (Javier, Alejandra, etc.) gestiona sus clientes, operaciones y márgenes en carteras privadas completamente herméticas. Solo la Dirección de Mesa tiene visión global consolidada.',
+      },
+      {
+        keywords: ['radar', 'pfi', 'prediccion', 'noticias', 'sentimiento', 'delta p'],
+        answer: '📡 **Radar Predictivo & PFI:** El Índice PFI (0 a 100) pondera 40% tendencia EMA, 35% sentimiento de noticias macro (Fed, CoinDesk, BCU) y 25% liquidez P2P. Si el impacto exógeno ΔP supera el umbral, el sistema alerta congelar cotizaciones preventivamente.',
+      },
+      {
+        keywords: ['agentes', 'gemini', 'ollama', 'debate', 'consenso', 'ia learning'],
+        answer: '🤖 **Debate Multi-Agente en Tiempo Real:** 3 agentes (Gemini 2.0 Macro, Ollama Local qwen2.5:7b y Agente Broker) deliberan en vivo para fijar el rango de precios y táctica de mesa. Además, un 4to agente (IA Learning) evalúa aciertos diarios y recalibra los pesos predictivos.',
+      },
+      {
+        keywords: ['tradingview', 'backtest', 'atr', 'whipsaw', 'golden cross'],
+        answer: '📈 **TradingView & Backtesting ATR:** Gráficos reactivos con medias móviles SMA 50/200, canales Donchian y Stop Loss trailing dinámico calibrado por ATR(14) para filtrar falsas rupturas en mercados laterales.',
+      },
+      {
+        keywords: ['pionero', 'gratis', 'costo', 'activar'],
+        answer: '🌟 **Plan Pionero 100% Bonificado:** Accedes a la Mesa de Dinero, CRM de clientes VIP, TradingView y backtester institucional sin costo durante 6 meses completos, con 50% de descuento vitalicio garantizado.',
+      },
+    ],
+  },
 };
 
 // Determinar el módulo activo según la URL

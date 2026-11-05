@@ -13,12 +13,16 @@
     primaryEndpoint: 'https://app.calcusuiteia.com/api/v1/public/webchat',
     leadsEndpoint: 'https://app.calcusuiteia.com/api/v1/public/leads',
     localEndpoints: [
+      'http://127.0.0.1:8080/api/v1/public/webchat',
+      'http://localhost:8080/api/v1/public/webchat',
+      'http://127.0.0.1:8000/api/v1/public/webchat',
       'http://localhost:8000/api/v1/public/webchat',
-      'http://localhost:5173/api/v1/public/webchat',
     ],
     localLeadsEndpoints: [
+      'http://127.0.0.1:8080/api/v1/public/leads',
+      'http://localhost:8080/api/v1/public/leads',
+      'http://127.0.0.1:8000/api/v1/public/leads',
       'http://localhost:8000/api/v1/public/leads',
-      'http://localhost:5173/api/v1/public/leads',
     ],
     contactEmail: 'contacto@calcusuiteia.com',
     appPortalUrl: 'https://app.calcusuiteia.com',
@@ -107,6 +111,7 @@
   // --- 2. Controlador del Widget de WebChat IA con Pre-Chat Gate Obligatorio ---
   class CalcuWebChatWidget {
     constructor(telemetry) {
+      this.sanitizeStorage();
       this.telemetry = telemetry;
       this.sessionId = this.getOrCreateSessionId();
       this.knownFields = this.loadKnownFields();
@@ -121,16 +126,61 @@
       this.startHumanReplySync();
     }
 
+    sanitizeStorage() {
+      const legacyKeys = [
+        'csia_webchat_session_id',
+        'csia_known_fields',
+        'csia_visitor_profile',
+        'calcu_lead_data',
+        'calcu_visitor_name',
+        'calcu_visitor_email',
+        'calcu_visitor_phone',
+        'calcu_visitor_company',
+        'calcu_prospect_info'
+      ];
+      try {
+        legacyKeys.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {}
+    }
+
+    clearAndResetSession() {
+      try {
+        sessionStorage.removeItem('csia_webchat_session_id');
+        sessionStorage.removeItem('csia_known_fields');
+        sessionStorage.removeItem('csia_visitor_profile');
+        sessionStorage.removeItem('csia_pages_visited');
+      } catch (e) {}
+      this.knownFields = {};
+      this.sessionId = this.getOrCreateSessionId();
+      this.seenHumanMessageIds.clear();
+      this.lastSyncedMessageId = 0;
+
+      const msgContainer = document.getElementById('csiaChatMessages');
+      if (msgContainer) {
+        msgContainer.innerHTML = `
+          <div class="flex items-start gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
+            <div id="csiaWelcomeBubble" class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm">
+              ¡Sesión reiniciada y datos efímeros eliminados! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong>. ¿Qué módulo te gustaría consultar hoy?
+            </div>
+          </div>
+        `;
+      }
+      this.populateGateInputs();
+      this.syncGateVisibility();
+      this.updateProfileBadge();
+    }
+
     getOrCreateSessionId() {
       try {
-        let sid = localStorage.getItem('csia_webchat_session_id');
+        let sid = sessionStorage.getItem('csia_webchat_session_id');
         if (!sid) {
           sid =
             'web-' +
             ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
               (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
             );
-          localStorage.setItem('csia_webchat_session_id', sid);
+          sessionStorage.setItem('csia_webchat_session_id', sid);
         }
         return sid;
       } catch {
@@ -141,13 +191,13 @@
     loadKnownFields() {
       let merged = {};
       try {
-        const rawKnown = localStorage.getItem('csia_known_fields');
+        const rawKnown = sessionStorage.getItem('csia_known_fields');
         if (rawKnown) {
           merged = { ...merged, ...JSON.parse(rawKnown) };
         }
       } catch {}
       try {
-        const rawProfile = localStorage.getItem('csia_visitor_profile');
+        const rawProfile = sessionStorage.getItem('csia_visitor_profile');
         if (rawProfile) {
           const parsedProfile = JSON.parse(rawProfile);
           merged = { ...merged, ...parsedProfile };
@@ -177,14 +227,14 @@
       });
       this.knownFields = { ...this.knownFields, ...clean };
       try {
-        localStorage.setItem('csia_known_fields', JSON.stringify(this.knownFields));
+        sessionStorage.setItem('csia_known_fields', JSON.stringify(this.knownFields));
         const profilePayload = {
           full_name: this.knownFields.full_name || '',
           phone: this.knownFields.phone || '',
           email: this.knownFields.email || '',
           company_name: this.knownFields.company_name || '',
         };
-        localStorage.setItem('csia_visitor_profile', JSON.stringify(profilePayload));
+        sessionStorage.setItem('csia_visitor_profile', JSON.stringify(profilePayload));
       } catch {}
       this.updateProfileBadge();
       this.syncGateVisibility();
@@ -224,16 +274,24 @@
                   Copilot Comercial B2B
                   <span class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Online</span>
                 </div>
+                <div class="text-[10px] text-cyan-400 font-medium tracking-tight">
+                  Asistente IA · Sesión efímera protegida bajo ISO 27001 y Ley N° 18.331
+                </div>
                 <div id="csiaProfileStatusBadge" class="text-[11px] text-slate-400 truncate max-w-[235px]">
                   CalcuSuiteIA • Atención Corporativa
                 </div>
               </div>
             </div>
-            <button id="csiaChatCloseBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors" aria-label="Cerrar chat">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
+            <div class="flex items-center gap-1">
+              <button id="csiaResetSessionBtn" class="text-slate-400 hover:text-amber-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-xs flex items-center gap-1" title="Finalizar y Borrar Sesión" aria-label="Finalizar y Borrar Sesión">
+                <span>🗑️</span>
+              </button>
+              <button id="csiaChatCloseBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors" aria-label="Cerrar chat">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <!-- PASO PREVIO OBLIGATORIO: PRE-CHAT GATE (CERO CAMPOS NULL) -->
@@ -353,6 +411,16 @@
 
       toggleBtn.addEventListener('click', () => this.toggleChat());
       closeBtn.addEventListener('click', () => this.toggleChat(false));
+
+      const resetBtn = document.getElementById('csiaResetSessionBtn');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm('¿Deseas finalizar la sesión y borrar de inmediato todos tus datos de este navegador?')) {
+            this.clearAndResetSession();
+          }
+        });
+      }
 
       if (gateForm) {
         gateForm.addEventListener('submit', (e) => {

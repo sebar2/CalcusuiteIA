@@ -18,6 +18,8 @@ const LEADS_CONFIG = {
     ? ["https://app.calcusuiteia.com/api/v1/public/leads"]
     : [
         "https://app.calcusuiteia.com/api/v1/public/leads",
+        "http://127.0.0.1:8080/api/v1/public/leads",
+        "http://localhost:8080/api/v1/public/leads",
         "http://127.0.0.1:8000/api/v1/public/leads",
         "http://localhost:8000/api/v1/public/leads"
       ]
@@ -35,7 +37,19 @@ async function handleLeadSubmit(event) {
   const btnText = document.getElementById('btnText');
   const alertBox = document.getElementById('formAlert');
 
-  // 1. Verificacion de Honeypot Anti-Bot
+  // 1. Verificacion de Consentimiento Obligatorio Ley N° 18.331 (Uruguay)
+  const consentCheckbox = document.getElementById('consentLey18331');
+  if (consentCheckbox && !consentCheckbox.checked) {
+    if (alertBox) {
+      alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 block';
+      alertBox.innerHTML = '⚠️ Debes aceptar la Política de Privacidad conforme a la Ley N° 18.331 para continuar.';
+      alertBox.classList.remove('hidden');
+    }
+    consentCheckbox.focus();
+    return;
+  }
+
+  // 1.1 Verificacion de Honeypot Anti-Bot
   const honeypotVal = document.getElementById('honeypot')?.value;
   if (honeypotVal) {
     alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 block';
@@ -44,7 +58,7 @@ async function handleLeadSubmit(event) {
     return;
   }
 
-  // 2. Extraccion y normalizacion de campos con Telemetria
+  // 2. Extraccion y normalizacion de campos con Telemetria y Consentimiento
   const telemetry = window.CalcuTelemetry ? window.CalcuTelemetry.getMetrics() : {};
   const payload = {
     nombre: document.getElementById('nombre').value.trim(),
@@ -54,6 +68,8 @@ async function handleLeadSubmit(event) {
     interes: document.getElementById('interes').value,
     mensaje: document.getElementById('mensaje')?.value?.trim() || '',
     escala: document.getElementById('escala')?.value || 'Mediana',
+    consent_ley_18331: true,
+    consent_timestamp: new Date().toISOString(),
     telemetry: telemetry
   };
 

@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Mesa de Dinero, Cripto OTC & Forex WeTrade MT5 (IB) | CalcuSuiteIA Enterprise 2026</title>
+  <meta name="description" content="Terminal institucional de corretaje: Pipeline Kanban 7 etapas con 100% comisión propia, Cotizador OTC 15 min, TradingView Charts, Radar Predictivo IA, Índice PFI, Debate Multi-Agente y Chinese Wall.">
+  
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f59e0b'><path d='M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-amber-500 selection:text-slate-950 flex flex-col font-sans relative overflow-x-hidden">
+
+  <!-- Drawer Lateral -->
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+    <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
+      <div>
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 via-orange-500 to-yellow-500 flex items-center justify-center text-white shadow-lg p-1.5">
+              <i data-lucide="landmark" class="w-6 h-6 text-amber-200"></i>
+            </div>
+            <div>
+              <span class="text-xl font-black text-white">CalcuSuite<span class="text-amber-400">IA</span></span>
+              <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
+            </div>
+          </div>
+          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <a href="index.html" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs border border-slate-700 hover:border-slate-600 shadow transition-all">
+            <i data-lucide="home" class="w-4 h-4 text-amber-400"></i>
+            <span>Volver a Inicio</span>
+          </a>
+          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer">
+            <i data-lucide="sparkles" class="w-4 h-4 text-amber-200"></i>
+            <span>Crear Cuenta Pionero (Gratis)</span>
+          </button>
+        </div>
+
+        <div class="mt-8">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos Especializados</span>
+          <div class="space-y-2">
+            <a href="modulo-mesa-dinero-broker.html" class="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-300 font-bold transition-all flex items-center gap-2.5">
+              <i data-lucide="coins" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="block">Mesa de Dinero & Cripto OTC</span>
+                <span class="text-[10px] text-amber-400/80 font-normal">Forex WeTrade MT5, TradingView & Radar PFI</span>
+              </div>
+            </a>
+            <a href="modulo-gemelo-digital-3d.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Gemelo Digital 3D & WMS</span>
+                <span class="text-[10px] text-slate-500">Racks paramétricos e inventario espacial</span>
+              </div>
+            </a>
+            <a href="modulo-logistica-3pl.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="truck" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Logística 3PL & Flota GPS</span>
+                <span class="text-[10px] text-slate-500">Monitoreo satelital y liquidación</span>
+              </div>
+            </a>
+            <a href="modulo-mercadolibre.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mercado Libre Uruguay Oficial</span>
+                <span class="text-[10px] text-slate-500">Kanban 5 etapas y publicación IA</span>
+              </div>
+            </a>
+            <a href="modulo-chat-omnicanal.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="message-square" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Chat Omnicanal & WhatsApp QR</span>
+                <span class="text-[10px] text-slate-500">Audios .opus y notas pegadas</span>
+              </div>
+            </a>
+            <a href="modulo-integraciones-hub.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="share-2" class="w-4 h-4 text-blue-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Hub de Integraciones 2026</span>
+                <span class="text-[10px] text-slate-500">11 canales y Bóveda AES-256</span>
+              </div>
+            </a>
+            <a href="modulo-facturacion-cfe.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-text" class="w-4 h-4 text-purple-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Facturación CFE & DGI</span>
+                <span class="text-[10px] text-slate-500">e-Facturas, QR y Liquidación Fiscal</span>
+              </div>
+            </a>
+            <a href="modulo-licitaciones-radar.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="file-search" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Radar Licitaciones ARCE & 19 Intendencias</span>
+                <span class="text-[10px] text-slate-500">Compras estatales y dispersión de precios</span>
+              </div>
+            </a>
+            <a href="modulo-cobranzas-finanzas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-rose-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="credit-card" class="w-4 h-4 text-rose-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Cobranzas B2B & Finanzas</span>
+                <span class="text-[10px] text-slate-500">Intimación 48h y DSI</span>
+              </div>
+            </a>
+            <a href="modulo-difusion-campanas.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-pink-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="radio" class="w-4 h-4 text-pink-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Difusión & Campañas Masivas</span>
+                <span class="text-[10px] text-slate-500">Simulador de ROI y pauta multicanal</span>
+              </div>
+            </a>
+            <a href="modulo-control-room.html" class="p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-red-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="shield-alert" class="w-4 h-4 text-red-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Control Room & ISO 27001</span>
+                <span class="text-[10px] text-slate-500">Auditoría perimetral y RBAC</span>
+              </div>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
+        <span>CalcuSuiteIA • Multi-Tenant 2026</span>
+        <a href="https://app.calcusuiteia.com" target="_blank" class="text-amber-400 hover:underline font-semibold flex items-center gap-1">
+          <span>Abrir Terminal</span>
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navbar -->
+  <header class="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0a0f1d]/90 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Brand Logo con Drawer al Clic -->
+      <div onclick="openLogoDrawer()" class="flex items-center gap-3 group cursor-pointer select-none" title="Abrir Menú de Navegación Rápida">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 via-orange-500 to-yellow-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/25 group-hover:scale-105 transition-transform p-1.5">
+          <i data-lucide="landmark" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">CalcuSuite<span class="text-amber-400">IA</span></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono font-bold uppercase tracking-wider">BROKER</span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-medium">Mesa de Dinero, Cripto OTC & Forex WeTrade</p>
+        </div>
+      </div>
+
+      <!-- Links Desktop -->
+      <nav class="hidden lg:flex items-center gap-6 text-xs xl:text-sm font-medium text-slate-300">
+        <a href="index.html" class="hover:text-amber-400 transition-colors">Inicio</a>
+        <a href="index.html#modulos" class="hover:text-amber-400 transition-colors">Todos los Módulos</a>
+        <a href="#estaciones" class="hover:text-amber-400 transition-colors">8 Estaciones</a>
+        <a href="#screenshots" class="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>Capturas Reales
+        </a>
+        <a href="#copiloto" class="hover:text-amber-400 transition-colors">Copiloto IA</a>
+        <a href="documentacion.html" class="hover:text-amber-400 transition-colors">Documentación</a>
+      </nav>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3">
+        <a href="./Calcu_Broker_Desk_v2026.apk" download class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all" title="Descargar APK Solo Broker Desk (HTTPS Cloudflare)">
+          <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>APK Broker Desk (HTTPS)</span>
+        </a>
+        <a href="./Calcu_Completa_Mobile_v2026.apk" download class="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold transition-all" title="Descargar APK Suite Completa (HTTPS Cloudflare)">
+          <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <span>APK Completa</span>
+        </a>
+        <button onclick="openAccountModal('PIONERO')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/25 transition-all cursor-pointer">
+          Plan Pionero Gratis
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase tracking-wider mb-6">
+      <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+      <span>Estación Institucional de Corretaje & Arbitraje 2026</span>
+    </div>
+
+    <h1 class="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white max-w-4xl">
+      Mesa de Dinero, <span class="bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-300 bg-clip-text text-transparent">Cripto OTC Mayorista</span> & Forex WeTrade MT5
+    </h1>
+
+    <p class="mt-6 text-sm sm:text-lg text-slate-300 max-w-3xl leading-relaxed">
+      Estación institucional de negociación cuantitativa con carteras privadas aisladas (<strong>"Chinese Wall"</strong>), cotizaciones congeladas a 15 minutos, gráficos <strong>TradingView Lightweight Charts</strong>, Radar Predictivo IA con ingesta de noticias en vivo, debate multi-agente en tiempo real (Gemini 2.0 y Ollama) y generador de infografías HD.
+    </p>
+
+    <!-- KPI Grid -->
+    <div class="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-4xl text-left">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
+        <span class="text-[11px] text-slate-400 font-bold uppercase block">Comisión Neta</span>
+        <span class="text-2xl font-black text-emerald-400 mt-1 block">100% Mesa</span>
+        <span class="text-[10px] text-slate-500">Asignación directa a cartera</span>
+      </div>
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
+        <span class="text-[11px] text-slate-400 font-bold uppercase block">Spread OTC Base</span>
+        <span class="text-2xl font-black text-amber-400 mt-1 block">185 bps</span>
+        <span class="text-[10px] text-slate-500">1.85% calibrable en vivo</span>
+      </div>
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
+        <span class="text-[11px] text-slate-400 font-bold uppercase block">Pipeline Kanban</span>
+        <span class="text-2xl font-black text-cyan-400 mt-1 block">7 Etapas</span>
+        <span class="text-[10px] text-slate-500">Recibos congelados 15 min</span>
+      </div>
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
+        <span class="text-[11px] text-slate-400 font-bold uppercase block">Consenso IA</span>
+        <span class="text-2xl font-black text-purple-400 mt-1 block">4 Agentes</span>
+        <span class="text-[10px] text-slate-500">Gemini 2.0 + Ollama + IA Learning</span>
+      </div>
+    </div>
+
+    <div class="mt-8 flex flex-col sm:flex-row gap-4">
+      <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-sm shadow-xl shadow-amber-600/30 flex items-center justify-center gap-2 transition-all">
+        <i data-lucide="play" class="w-4 h-4"></i>
+        <span>Iniciar Sesión en el Terminal</span>
+      </a>
+      <a href="./Calcu_Broker_Desk_v2026.apk" download class="px-6 py-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/10">
+        <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i>
+        <span>Descargar APK Broker Desk (HTTPS)</span>
+      </a>
+      <a href="./Calcu_Completa_Mobile_v2026.apk" download class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center justify-center gap-2 transition-all">
+        <i data-lucide="download" class="w-4 h-4 text-cyan-400"></i>
+        <span>Descargar APK Suite Completa</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- 8 ESTACIONES DEL ECOSISTEMA BROKER -->
+  <section id="estaciones" class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div class="text-center mb-16">
+      <span class="text-xs font-bold tracking-widest text-amber-400 uppercase">Arquitectura Cuantitativa & Comercial</span>
+      <h2 class="mt-2 text-3xl sm:text-4xl font-extrabold text-white">Las 8 Estaciones de tu Mesa de Dinero</h2>
+      <p class="mt-3 text-slate-400 text-sm max-w-2xl mx-auto">
+        Todo el ciclo de operaciones mayoristas, desde la captación en redes hasta la liquidación bancaria, el arbitraje preventivo y la custodia en bóveda.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- ESTACIÓN 1 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-amber-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4 font-black">1</div>
+          <h3 class="text-lg font-bold text-white mb-2">Pipeline Kanban & Cotizador</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Tablero de 7 etapas: Captación, KYC, Cotización Congelada (15 min), Fondeo, Ejecución, Liquidación y Cerrado. 100% de comisión neta propia para el broker.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-amber-400 font-semibold">
+          Recibos criptográficos congelados
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 2 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-cyan-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 font-black">2</div>
+          <h3 class="text-lg font-bold text-white mb-2">TradingView & Backtester ATR</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Gráficos interactivos TradingView Lightweight Charts en vivo. Simulador empírico con Golden Cross 50/200, canales Donchian y Stop Loss trailing dinámico por volatilidad ATR.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-cyan-400 font-semibold">
+          Filtro anti-whipsaw por volatilidad
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 3 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-emerald-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 font-black">3</div>
+          <h3 class="text-lg font-bold text-white mb-2">Radar Predictivo & ΔP Impact</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Ingesta de titulares macroeconómicos con enlaces HTTPS externos reales y verificables. Cuantificación instantánea de sentimiento e impacto en dólares: ΔP_est.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-emerald-400 font-semibold">
+          Alerta de congelar cotizaciones
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 4 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-yellow-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 font-black">4</div>
+          <h3 class="text-lg font-bold text-white mb-2">Índice Predictivo PFI</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Score sintético de 0 a 100 que pondera tendencia técnica EMA, sentimiento de noticias y liquidez P2P: PFI &gt; 70 Alcista, 40-70 Rango, &lt; 40 Presión bajista.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-yellow-400 font-semibold">
+          Auto-ajuste de spread OTC por régimen
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 5 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-purple-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-4 font-black">5</div>
+          <h3 class="text-lg font-bold text-white mb-2">Debate Multi-Agente en Vivo</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Deliberación en vivo entre Gemini 2.0 (Macro Global), Ollama Local qwen2.5:7b (Quant Volatilidad) y el Agente Broker Director para fijar rango objetivo y directivas tácticas.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-purple-400 font-semibold">
+          Dashboard de consenso multi-agente
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 6 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-teal-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center mb-4 font-black">6</div>
+          <h3 class="text-lg font-bold text-white mb-2">IA Learning & Snapshots BD</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Persistencia diaria de previsiones en base de datos. Un cuarto agente aprende evaluando los aciertos y recalibra dinámicamente los pesos w_ema, w_noticias y w_p2p.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-teal-400 font-semibold">
+          Aprendizaje continuo auditado
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 7 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-blue-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center mb-4 font-black">7</div>
+          <h3 class="text-lg font-bold text-white mb-2">Copiloto Gemini 2.0 & HD Infografía</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Consola interactiva de preguntas macroeconómicas en la sección con pills rápidas, y generador de infografías HD 1200x675 PNG con sello criptográfico SHA-256 para clientes VIP.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-blue-400 font-semibold">
+          Descarga en 1 clic de PNG corporativo
+        </div>
+      </div>
+
+      <!-- ESTACIÓN 8 -->
+      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80 hover:border-rose-500/40 transition-all flex flex-col justify-between">
+        <div>
+          <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4 font-black">8</div>
+          <h3 class="text-lg font-bold text-white mb-2">Chinese Wall, CRM & Escudo KYC</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Aislamiento estricto de carteras privadas para Javier y Alejandra. CRM de Inversores VIP y semáforo Anti-Triangulación P2P (Itaú/BROU) con bitácora SENACLAFT.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-rose-400 font-semibold">
+          Cumplimiento SENACLAFT & Ley 18.331
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSPECCIÓN DE INTERFACES / GALERÍA DE CAPTURAS REALES HD -->
+  <section id="screenshots" class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-12">
+      <span class="text-xs font-bold tracking-widest text-amber-400 uppercase">Inspección de Interfaces de Producción</span>
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Capturas Reales del Terminal Cuantitativo</h2>
+      <p class="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto mt-2">
+        Haga clic en cualquiera de las 4 capturas para ampliarlas en alta definición y revisar las funcionalidades operativas en detalle.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- Captura 1: Pipeline Kanban -->
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/29_broker_mesa_dinero_otc_kanban.png', 'Mesa de Dinero: Pipeline Kanban 7 Etapas & Cotizador OTC Congelado 15m')">
+        <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
+          <img src="./screenshots/29_broker_mesa_dinero_otc_kanban.png" alt="Mesa de Dinero Pipeline Kanban" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
+        </div>
+        <span class="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Estación 1 • Operativa OTC</span>
+        <h3 class="text-sm font-bold text-white mt-1">Pipeline Kanban 7 Etapas</h3>
+        <p class="text-xs text-slate-400 mt-1">Cotizador congelado a 15 min, cálculo de spreads en bps y 100% comisión neta propia.</p>
+      </div>
+
+      <!-- Captura 2: TradingView & Quant -->
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/30_broker_tradingview_quant_backtester.png', 'Laboratorio Cuantitativo: TradingView Charts & Backtester Institucional ATR')">
+        <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
+          <img src="./screenshots/30_broker_tradingview_quant_backtester.png" alt="TradingView & Backtester ATR" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
+        </div>
+        <span class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Estación 2 • TradingView</span>
+        <h3 class="text-sm font-bold text-white mt-1">Backtester Algorítmico ATR</h3>
+        <p class="text-xs text-slate-400 mt-1">Curva de equidad vs Benchmark, Golden Cross, Donchian y Stop Loss trailing por volatilidad.</p>
+      </div>
+
+      <!-- Captura 3: Radar Predictivo & Noticias -->
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/31_broker_radar_predictivo_noticias_pfi.png', 'Radar Predictivo Macroeconómico: Noticias Verificables, ΔP Impact e Índice PFI')">
+        <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
+          <img src="./screenshots/31_broker_radar_predictivo_noticias_pfi.png" alt="Radar Predictivo Noticias PFI" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
+        </div>
+        <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Estaciones 3 & 4 • Previsión</span>
+        <h3 class="text-sm font-bold text-white mt-1">Radar Predictivo & PFI</h3>
+        <p class="text-xs text-slate-400 mt-1">Ingesta con enlaces HTTPS verificables, score PFI (0 a 100) y alerta de arbitraje preventivo.</p>
+      </div>
+
+      <!-- Captura 4: Debate 3 Agentes & Infografía -->
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/32_broker_gemini2_copilot_infografia_hd.png', 'Debate Multi-Agente en Vivo: Gemini 2.0, Ollama Local e Infografías HD con SHA-256')">
+        <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
+          <img src="./screenshots/32_broker_gemini2_copilot_infografia_hd.png" alt="Debate 3 Agentes e Infografía HD" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+          <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
+        </div>
+        <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">Estaciones 5 & 7 • IA Avanzada</span>
+        <h3 class="text-sm font-bold text-white mt-1">Debate Multi-Agente & HD</h3>
+        <p class="text-xs text-slate-400 mt-1">Deliberación colegiada en tiempo real y generación de infografías 1200x675 para clientes VIP.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN INTERACTIVA: COPILOTO IA TEMÁTICO DE LA MESA DE DINERO -->
+  <section id="copiloto" class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
+    <div class="p-6 sm:p-10 rounded-3xl bg-slate-900/60 border border-amber-500/30 shadow-2xl relative">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/30">
+          <i data-lucide="bot" class="w-6 h-6 text-amber-200"></i>
+        </div>
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold">Asistente Cuantitativo en Vivo</span>
+          <h2 class="text-xl sm:text-2xl font-black text-white">Copiloto IA de la Mesa de Dinero</h2>
+        </div>
+      </div>
+
+      <p class="text-xs sm:text-sm text-slate-300 mb-6">
+        Consulte al copiloto temático sobre políticas de comisiones 100% propias, cotizaciones congeladas a 15 minutos, Chinese Wall, el Índice Predictivo PFI o la activación en el Plan Pionero.
+      </p>
+
+      <!-- Botones de Preguntas Rápidas (Pills) -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button onclick="document.getElementById('copilotInput').value='¿Cómo se calculan las comisiones de la mesa?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Cómo se calculan las comisiones?
+        </button>
+        <button onclick="document.getElementById('copilotInput').value='¿Cómo funciona el recibo congelado a 15 minutos?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Cómo funciona el recibo a 15 minutos?
+        </button>
+        <button onclick="document.getElementById('copilotInput').value='¿Qué es el Chinese Wall y cómo protege a Javier y Alejandra?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Qué es el Chinese Wall?
+        </button>
+        <button onclick="document.getElementById('copilotInput').value='¿Cómo calcula el Radar el Índice PFI y el impacto Delta P?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Cómo calcula el Radar el PFI?
+        </button>
+        <button onclick="document.getElementById('copilotInput').value='¿Cómo debaten Gemini 2.0 y Ollama y qué hace el 4to agente?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Cómo debaten los 3 agentes y el 4to agente?
+        </button>
+        <button onclick="document.getElementById('copilotInput').value='¿Qué incluye el Plan Pionero para la Mesa de Dinero?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+          ¿Qué incluye el Plan Pionero?
+        </button>
+      </div>
+
+      <!-- Ventana de Chat del Copiloto -->
+      <div id="copilotChatBox" class="h-64 overflow-y-auto space-y-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800 mb-4 font-sans text-xs sm:text-sm">
+        <div class="flex items-start gap-2.5">
+          <div class="w-7 h-7 rounded-lg bg-amber-600/30 text-amber-400 flex items-center justify-center shrink-0">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
+            ¡Hola! Soy el Copiloto Inteligente de la <strong>Mesa de Dinero & Cripto OTC</strong>. Pregúntame sobre spreads mayoristas, recibos congelados, Chinese Wall, TradingView o el Radar Predictivo PFI.
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <span class="text-[11px] text-amber-400/80 font-semibold">Mesa de Dinero & WeTrade IB</span>
+              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30 transition-colors">
+                Activar Plan Pionero &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulario de Envío de Pregunta -->
+      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+        <input type="text" id="copilotInput" placeholder="Escribe tu consulta sobre la Mesa de Dinero, spreads, Chinese Wall, PFI..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500 transition-colors">
+        <button type="submit" class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-amber-600/20">
+          <span>Consultar</span>
+          <i data-lucide="send" class="w-4 h-4"></i>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- CTA FINAL -->
+  <section class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div class="p-10 sm:p-14 rounded-3xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-orange-950/60 border border-amber-500/30 text-center relative overflow-hidden shadow-2xl">
+      <div class="relative z-10 max-w-2xl mx-auto">
+        <span class="text-xs font-bold uppercase tracking-widest text-amber-300 block mb-2">MESA DE DINERO Y TRADING CUANTITATIVO</span>
+        <h2 class="text-3xl sm:text-4xl font-black text-white">¿Listo para operar tu mesa con Inteligencia Cuantitativa?</h2>
+        <p class="mt-4 text-sm text-slate-300">
+          Accede al terminal web en la nube o descarga la APK oficial para Android compatible con dispositivos móviles.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+          <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="px-8 py-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-sm shadow-xl shadow-amber-600/30 flex items-center justify-center gap-2">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <span>Acceder a la Mesa de Dinero</span>
+          </a>
+          <a href="./Calcu_Broker_Desk_v2026.apk" download class="px-8 py-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10">
+            <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>
+            <span>Descargar APK Solo Broker (HTTPS)</span>
+          </a>
+          <a href="./Calcu_Completa_Mobile_v2026.apk" download class="px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm flex items-center justify-center gap-2">
+            <i data-lucide="download" class="w-4 h-4 text-cyan-400"></i>
+            <span>Descargar APK Completa</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-800/80 py-8 bg-[#070b16] text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="font-black text-white">CalcuSuite<span class="text-amber-400">IA</span></span>
+        <span>&bull; Arquitectura Multi-Tenant 2026</span>
+      </div>
+      <div class="flex items-center gap-4 text-slate-400">
+        <a href="index.html" class="hover:text-white">Inicio</a>
+        <a href="documentacion.html" class="hover:text-white">Documentación</a>
+        <a href="seguridad.html" class="hover:text-white">Seguridad</a>
+        <a href="terminos.html" class="hover:text-white">Términos</a>
+      </div>
+      <div>RUT 218994020015 &bull; Montevideo, Uruguay</div>
+    </div>
+  </footer>
+
+  <!-- Lightbox Modal para Screenshots -->
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+    <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
+        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-2 bg-black/60 flex items-center justify-center">
+        <img id="screenshotModalImg" src="" alt="" class="max-h-[75vh] w-auto object-contain rounded-lg">
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/account-modal.js"></script>
+  <script src="./js/showcase.js"></script>
+</body>
+</html>

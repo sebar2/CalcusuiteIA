@@ -74,6 +74,13 @@
         <div class="mt-8">
           <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-3">Módulos del Ecosistema</span>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <a href="modulo-mesa-dinero-broker.html" class="p-2.5 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 text-amber-200 hover:text-white transition-all flex items-center gap-2.5">
+              <i data-lucide="coins" class="w-4 h-4 text-amber-400 shrink-0"></i>
+              <div>
+                <span class="font-bold block">Mesa Dinero & Cripto OTC</span>
+                <span class="text-[10px] text-amber-300/80">Forex MT5 & Radar PFI IA</span>
+              </div>
+            </a>
             <a href="modulo-gemelo-digital-3d.html" class="p-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all flex items-center gap-2.5">
               <i data-lucide="box" class="w-4 h-4 text-cyan-400 shrink-0"></i>
               <div>
@@ -362,7 +369,7 @@
 
           <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
 
-          <span>Descargar APK Móvil (5.95 MB)</span>
+          <span>Descargar APK Móvil (6.06 MB)</span>
 
         </a>
 
@@ -658,9 +665,38 @@
 
 
 
-      <!-- Feature Grid (10 Módulos Clave) -->
+      <!-- Feature Grid (11 Módulos Clave) -->
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+        <!-- CARD 0: MESA DE DINERO, CRIPTO OTC & FOREX WETRADE MT5 -->
+        <div class="glass-card glass-card-hover p-6 rounded-2xl flex flex-col justify-between border-amber-500/30">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6">
+              <i data-lucide="coins" class="w-6 h-6"></i>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <h3 class="text-xl font-bold text-white">Mesa de Dinero & Cripto OTC</h3>
+              <span class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold uppercase">NUEVO 2026</span>
+            </div>
+            <p class="text-sm text-slate-400 leading-relaxed mb-4">
+              Terminal de corretaje mayorista con carteras privadas aisladas (<strong>Chinese Wall</strong>) para directores. Pipeline Kanban de 7 etapas con 100% comisión neta, cotizador rápido con recibos congelados a 15 min, gráficos TradingView y Radar Predictivo IA con debate en vivo de 4 agentes.
+            </p>
+            <ul class="text-xs text-slate-300 space-y-2 mb-6">
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i> Cotizador OTC con spread base 185 bps (USDT, BTC, XAU/USD)</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i> Radar de Noticias con impacto diferencial ΔP e Índice PFI (0-100)</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i> Debate colaborativo en vivo Gemini 2.0, Ollama Local e IA Learning</li>
+              <li class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-amber-400"></i> Generador de infografías HD 1200x675 PNG y escudo KYC SENACLAFT</li>
+            </ul>
+          </div>
+          <div class="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <a href="modulo-mesa-dinero-broker.html" class="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all">
+              <span>Explorar Módulo & Demo</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+            <span class="text-xs text-amber-400/80 font-mono font-semibold">100% Comisión Propia</span>
+          </div>
+        </div>
 
         
 
@@ -1333,6 +1369,10 @@
         <!-- Tab selector buttons (Deslizable en móvil) -->
 
         <div class="mt-6 md:mt-0 flex flex-wrap gap-2" id="galleryTabs">
+          <button onclick="switchTab('broker_otc')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="broker_otc">Mesa OTC Kanban</button>
+          <button onclick="switchTab('broker_quant')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="broker_quant">TradingView & Quant</button>
+          <button onclick="switchTab('broker_radar')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="broker_radar">Radar PFI & Noticias</button>
+          <button onclick="switchTab('broker_gemini')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all" data-tab="broker_gemini">Debate 3 Agentes & HD</button>
 
           <button onclick="switchTab('gemelo3d')" class="tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md" data-tab="gemelo3d">Gemelo 3D Espacial</button>
 
@@ -1824,7 +1864,7 @@
 
               <div class="flex justify-between"><span>Modo de Operación:</span><span class="text-white font-medium">Online / Offline con Auto-Sync</span></div>
 
-              <div class="flex justify-between"><span>Archivo:</span><span class="text-emerald-400 font-mono">Calcu_3PL_Mobile_v2026.apk (6.88 MB)</span></div>
+              <div class="flex justify-between"><span>Archivo:</span><span class="text-emerald-400 font-mono">Calcu_3PL_Mobile_v2026.apk (6.06 MB)</span></div>
 
             </div>
 
@@ -2158,6 +2198,15 @@
 
 
 
+          <!-- Checkbox Obligatorio Ley N° 18.331 Uruguay -->
+          <div class="pt-1">
+            <label class="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+              <input type="checkbox" id="consentLey18331" name="consent_ley_18331" required
+                     class="mt-0.5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500">
+              <span>Acepto la <a href="javascript:void(0)" onclick="openPrivacyModal()" class="text-blue-400 hover:underline font-semibold">Política de Privacidad</a> y autorizo el tratamiento de mis datos comerciales por CalcuSuiteIA (<a href="mailto:contacto@calcusuiteia.com" class="text-blue-400 hover:underline">contacto@calcusuiteia.com</a>) conforme a la <strong>Ley N° 18.331 (Uruguay)</strong>.</span>
+            </label>
+          </div>
+
           <!-- Submit Button & Disclaimer -->
 
           <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -2371,6 +2420,7 @@
   <script src="./js/whatsapp-widget.js"></script>
   <script src="./js/leads.js"></script>
   <script src="./js/account-modal.js"></script>
+  <script src="./js/privacy-policy.js"></script>
   <script src="./js/webchat.js"></script>
   <script src="./js/main.js"></script>
 </body>
