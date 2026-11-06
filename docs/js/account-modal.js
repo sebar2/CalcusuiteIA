@@ -105,11 +105,11 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre y Apellido *</label>
-                <input type="text" id="accNombre" required placeholder="Ej: Ing. Martín González" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="accNombre" autocomplete="name" required placeholder="Ej: Ing. Martín González" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Cargo / Rol en la Empresa *</label>
-                <input type="text" id="accCargo" required placeholder="Ej: Gerente de Operaciones / Director" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="accCargo" autocomplete="organization-title" required placeholder="Ej: Gerente de Operaciones / Director" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
             </div>
 
@@ -117,11 +117,11 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Razón Social / Empresa *</label>
-                <input type="text" id="accEmpresa" required placeholder="Ej: Logística & Distribución Sur S.A." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="accEmpresa" autocomplete="organization" required placeholder="Ej: Logística & Distribución Sur S.A." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">RUT / Identificación Fiscal *</label>
-                <input type="text" id="accRut" required placeholder="Ej: 219988770014" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="accRut" autocomplete="off" required placeholder="Ej: 219988770014" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
             </div>
 
@@ -129,11 +129,11 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Correo Corporativo de Acceso *</label>
-                <input type="email" id="accEmail" autocomplete="username" required placeholder="mgonzalez@empresa.com.uy" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="email" id="accEmail" autocomplete="username email" required placeholder="mgonzalez@empresa.com.uy" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Teléfono / WhatsApp Directo *</label>
-                <input type="tel" id="accTelefono" required placeholder="+598 94 858 791" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="tel" id="accTelefono" autocomplete="tel" required placeholder="+598 94 858 791" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
             </div>
 
@@ -180,7 +180,7 @@
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Escala Operativa Aprox. *</label>
-                <input type="text" id="accEscala" required placeholder="Ej: 800 m², 12 camiones, 3.500 SKUs" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="accEscala" autocomplete="off" required placeholder="Ej: 800 m², 12 camiones, 3.500 SKUs" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
               </div>
             </div>
 

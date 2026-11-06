@@ -312,22 +312,22 @@
               <form id="csiaPreChatGateForm" class="space-y-2.5" novalidate>
                 <div>
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Nombre Completo *</label>
-                  <input id="csiaGateName" type="text" required placeholder="Ej: Martín Rodríguez"
+                  <input id="csiaGateName" type="text" autocomplete="name" required placeholder="Ej: Martín Rodríguez"
                     class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Teléfono / WhatsApp *</label>
-                  <input id="csiaGatePhone" type="tel" required placeholder="Ej: +598 99 123 456"
+                  <input id="csiaGatePhone" type="tel" autocomplete="tel" required placeholder="Ej: +598 99 123 456"
                     class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Correo Electrónico *</label>
-                  <input id="csiaGateEmail" type="email" required placeholder="nombre@empresa.com.uy"
+                  <input id="csiaGateEmail" type="email" autocomplete="email" required placeholder="nombre@empresa.com.uy"
                     class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
                 </div>
                 <div>
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Empresa / Razón Social *</label>
-                  <input id="csiaGateCompany" type="text" required placeholder="Ej: Distribuidora del Plata S.A."
+                  <input id="csiaGateCompany" type="text" autocomplete="organization" required placeholder="Ej: Distribuidora del Plata S.A."
                     class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
                 </div>
 

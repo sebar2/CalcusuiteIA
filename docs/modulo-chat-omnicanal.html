@@ -324,7 +324,7 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-300 mb-2">Costo por Mensaje con CalcuSuiteIA QR:</label>
-          <input type="text" value="$0.00 USD (Ilimitado)" disabled class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-emerald-400 font-bold text-sm">
+          <input type="text" value="$0.00 USD (Ilimitado)" disabled autocomplete="off" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-emerald-400 font-bold text-sm">
         </div>
       </div>
 
@@ -391,7 +391,7 @@
 
       <!-- Formulario -->
       <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
-        <input type="text" id="copilotInput" placeholder="Escribe tu consulta sobre WhatsApp Directo o chat omnicanal..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400">
+        <input type="text" id="copilotInput" autocomplete="off" placeholder="Escribe tu consulta sobre WhatsApp Directo o chat omnicanal..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400">
         <button type="submit" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
           <i data-lucide="send" class="w-4 h-4"></i>
           <span class="hidden sm:inline">Enviar</span>
