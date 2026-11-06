@@ -26,6 +26,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/experience.css">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -845,6 +846,110 @@
       </div>
 
     </section>
+
+    <!-- ===================================================================== -->
+    <!-- SOLUCIONES POR ROL EJECUTIVO (BENCHMARK SALESFORCE CUSTOMER 360)     -->
+    <!-- ===================================================================== -->
+    <section id="roles" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+      
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <span class="csia-pill-badge csia-pill-blue mb-3">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          Soluciones por Rol &bull; Experiencia Salesforce-Grade
+        </span>
+        <h2 class="text-3xl sm:text-5xl font-black text-white tracking-tight">
+          Diseñado para el Ritmo Real de tu Equipo
+        </h2>
+        <p class="mt-4 text-slate-300 text-sm sm:text-base leading-relaxed">
+          Cada directivo cuenta con un panel especializado para su toma de decisiones. Desde el control de EBITDA y márgenes hasta la gestión física de racks y camiones en ruta.
+        </p>
+      </div>
+
+      <!-- Selector de Roles -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mb-10 max-w-4xl mx-auto">
+        <button id="role-btn-ceo" onclick="switchRoleView('ceo')" class="csia-tab-btn csia-tab-active">
+          <span>👔 CEO & Dirección</span>
+        </button>
+        <button id="role-btn-operaciones" onclick="switchRoleView('operaciones')" class="csia-tab-btn csia-tab-inactive">
+          <span>📦 Operaciones & 3PL</span>
+        </button>
+        <button id="role-btn-comercial" onclick="switchRoleView('comercial')" class="csia-tab-btn csia-tab-inactive">
+          <span>🛍️ Ventas & MeLi</span>
+        </button>
+        <button id="role-btn-finanzas" onclick="switchRoleView('finanzas')" class="csia-tab-btn csia-tab-inactive">
+          <span>📊 Finanzas & DGI</span>
+        </button>
+      </div>
+
+      <!-- Tarjeta Dinámica del Rol Seleccionado -->
+      <div class="csia-role-card max-w-5xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-7 space-y-4">
+            <span id="roleBadge" class="text-xs font-bold uppercase tracking-wider text-cyan-400">
+              Para Directores Generales & CEOs
+            </span>
+            <h3 id="roleTitle" class="text-2xl sm:text-3xl font-extrabold text-white">
+              Control Ejecutivo & Rentabilidad de Punta a Punta
+            </h3>
+            <p id="roleDesc" class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Supervisa tu empresa desde una única pantalla con gobernanza perimetral ISO/IEC 27001. Elimina la dispersión de información entre sucursales, camiones y depósitos con reportes consolidados en tiempo real.
+            </p>
+            
+            <ul id="rolePointsContainer" class="space-y-2 pt-2">
+              <li class="flex items-start gap-2.5 text-xs text-slate-300">
+                <span class="text-cyan-400 font-bold shrink-0 mt-0.5">✓</span>
+                <span>Dashboard ejecutivo con alertas predictivas de desvíos de presupuesto.</span>
+              </li>
+              <li class="flex items-start gap-2.5 text-xs text-slate-300">
+                <span class="text-cyan-400 font-bold shrink-0 mt-0.5">✓</span>
+                <span>Trazabilidad total de accesos y auditoría de cambios por usuario con RBAC.</span>
+              </li>
+              <li class="flex items-start gap-2.5 text-xs text-slate-300">
+                <span class="text-cyan-400 font-bold shrink-0 mt-0.5">✓</span>
+                <span>Soporte directo prioritario VIP y acompañamiento de ingeniería.</span>
+              </li>
+            </ul>
+
+            <div class="pt-4 flex flex-wrap items-center gap-3">
+              <button onclick="openAccountModal('PIONERO')" class="csia-btn-primary text-xs">
+                <span>Solicitar Sandbox Gratuita para mi Empresa &rarr;</span>
+              </button>
+              <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20quisiera%20coordinar%20una%20demostraci%C3%B3n%20para%20el%20equipo%20directivo" target="_blank" class="csia-btn-secondary text-xs">
+                <i data-lucide="calendar" class="w-4 h-4 text-cyan-400"></i>
+                <span>Agendar Demo Personalizada</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 space-y-4">
+            <div id="roleKpisContainer" class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+              <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                <span class="text-2xl font-black text-cyan-400 font-mono block">100% en Vivo</span>
+                <span class="text-xs font-bold text-white block mt-1">Visibilidad Operativa</span>
+                <span class="text-[10px] text-slate-400 block">Sin planillas manuales</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                <span class="text-2xl font-black text-cyan-400 font-mono block">-32%</span>
+                <span class="text-xs font-bold text-white block mt-1">Reducción de Costos Fijos</span>
+                <span class="text-[10px] text-slate-400 block">Por automatización de procesos</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+                <span class="text-2xl font-black text-cyan-400 font-mono block">Multi-Tenant</span>
+                <span class="text-xs font-bold text-white block mt-1">Aislamiento de Datos</span>
+                <span class="text-[10px] text-slate-400 block">PostgreSQL 16 dedicado</span>
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2.5">
+              <i data-lucide="shield-check" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+              <span>Cumplimiento Ley N° 18.331 y arquitectura segura lista para homologación.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
 
 
 

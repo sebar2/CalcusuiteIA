@@ -1,15 +1,15 @@
 /**
  * ==========================================================================
- * CALCUSUITEIA - SHOWROOM OPERATIVO INTERACTIVO EN VIVO (HERO 2.0)
- * Benchmarks: Apollo.io + Vestta.io + Kommo.com
- * Simuladores en tiempo real de WMS 3D, Flota 3PL, Mercado Libre y WhatsApp IA
+ * CALCUSUITEIA - MOTOR INTERACTIVO DE EXPERIENCIA (INTERACTIVE-SHOWROOM.JS)
+ * Inspirado en Salesforce Customer 360 / Agentforce & Kommo Conversational CRM
+ * Conmutadores Dinámicos: Módulos Operativos + Vistas por Rol Ejecutivo
  * ==========================================================================
  */
 
 (function () {
   'use strict';
 
-  // 1. Conmutador de Pestañas del Showroom
+  // 1. Conmutador de Pestañas de Módulos (Showroom Operativo)
   window.switchShowroomTab = function (tabId) {
     const tabs = ['wms', 'logistica', 'meli', 'whatsapp', 'finanzas'];
     tabs.forEach(t => {
@@ -17,18 +17,129 @@
       const panel = document.getElementById('tab-panel-' + t);
       if (btn && panel) {
         if (t === tabId) {
-          btn.className = 'showroom-tab-active px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-2 cursor-pointer';
+          btn.className = 'csia-tab-btn csia-tab-active';
           panel.classList.remove('hidden');
-          panel.classList.add('animate-in', 'fade-in', 'duration-300');
+          panel.classList.add('csia-animate-fade-up');
         } else {
-          btn.className = 'showroom-tab-inactive px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer';
+          btn.className = 'csia-tab-btn csia-tab-inactive';
           panel.classList.add('hidden');
+          panel.classList.remove('csia-animate-fade-up');
         }
       }
     });
   };
 
-  // 2. Simulador Interactivo 1: WMS & Depósito 3D
+  // 2. Conmutador de Soluciones por Rol Ejecutivo (Customer 360 Estilo Salesforce)
+  const ROLE_DATA = {
+    ceo: {
+      title: 'Control Ejecutivo & Rentabilidad de Punta a Punta',
+      badge: 'Para Directores Generales & CEOs',
+      desc: 'Supervisa tu empresa desde una única pantalla con gobernanza perimetral ISO/IEC 27001. Elimina la dispersión de información entre sucursales, camiones y depósitos con reportes consolidados en tiempo real.',
+      kpis: [
+        { label: 'Visibilidad Operativa', val: '100% en Vivo', desc: 'Sin planillas manuales' },
+        { label: 'Reducción de Costos Fijos', val: '-32%', desc: 'Por automatización de procesos' },
+        { label: 'Aislamiento de Datos', val: 'Multi-Tenant', desc: 'PostgreSQL 16 dedicado' }
+      ],
+      points: [
+        'Dashboard ejecutivo con alertas predictivas de desvíos de presupuesto.',
+        'Trazabilidad total de accesos y auditoría de cambios por usuario con RBAC.',
+        'Soporte directo prioritario VIP y acompañamiento de ingeniería.'
+      ]
+    },
+    operaciones: {
+      title: 'WMS Espacial, Racks 3D y Ruteo de Flota 3PL',
+      badge: 'Para Gerentes de Operaciones & Logística',
+      desc: 'Gestiona la entrada, almacenamiento y despacho de mercadería con detección de colisiones 3D. Controla la flota de camiones con telemetría GPS, geocercas y costos automáticos de combustible por km.',
+      kpis: [
+        { label: 'Precisión de Inventario', val: '99.8%', desc: 'Con escaneo de códigos QR' },
+        { label: 'Tiempo de Despacho', val: '-45 min', desc: 'Rutas optimizadas por satélite' },
+        { label: 'Cálculo de Fletes', val: 'En el Acto', desc: 'Con precios ANCAP actualizados' }
+      ],
+      points: [
+        'Gemelo Digital 3D de depósito con asignación inteligente de pasillos y racks.',
+        'APK móvil Android para choferes y operarios con prueba de entrega fotográfica.',
+        'Cálculo dinámico de stock mínimo (ROP) y alertas tempranas de quiebre.'
+      ]
+    },
+    comercial: {
+      title: 'Omnicanalidad, Mercado Libre & WhatsApp con IA',
+      badge: 'Para Directores Comerciales & Ventas B2B',
+      desc: 'Centraliza todas las conversaciones de ventas en una bandeja omnicanal con WhatsApp QR nativo y notas de voz .opus reales. Sincroniza publicaciones de Mercado Libre en un Kanban de 5 etapas.',
+      kpis: [
+        { label: 'Tiempo de Respuesta', val: '< 15 seg', desc: 'Con Copilot IA 24/7' },
+        { label: 'Tasa de Cierre de Leads', val: '+40%', desc: 'Flujo conversacional sin fricción' },
+        { label: 'Control de SLA MeLi', val: '100% en Plazo', desc: 'Etiquetas automáticas de envío' }
+      ],
+      points: [
+        'Chat Omnicanal multi-número para atender ventas y soporte sin riesgo de baneo.',
+        'Publicación asistida en Mercado Libre con cálculo de comisiones y envíos 3 vías.',
+        'Asesor comercial inteligente entrenado en tu catálogo de productos.'
+      ]
+    },
+    finanzas: {
+      title: 'Facturación CFE DGI, Cobranzas en 5 Etapas & Mesa de Dinero',
+      badge: 'Para CFOs, Contadores & Finanzas',
+      desc: 'Emite comprobantes fiscales electrónicos oficiales (e-Facturas 111) validados en el acto ante DGI. Automatiza el cobro con intimaciones legales fehacientes y monitorea el arbitraje cambiario de tesorería.',
+      kpis: [
+        { label: 'Días de Calle (DSO)', val: '-28 Días', desc: 'Aceleración del flujo de caja' },
+        { label: 'Emisión de CFE', val: 'Instantánea', desc: 'Con CAE oficial autorizado' },
+        { label: 'Partida Doble', val: '100% Cuadrada', desc: 'Sincronizada con el Libro Diario' }
+      ],
+      points: [
+        'Cobranzas automatizadas con links directos de pago QR de Mercado Pago.',
+        'Mesa de Dinero con spreads transparentes y muralla china (Chinese Wall).',
+        'Liquidación fiscal asistida para formularios DGI 2178 y nómina BPS.'
+      ]
+    }
+  };
+
+  window.switchRoleView = function (roleId) {
+    const roles = ['ceo', 'operaciones', 'comercial', 'finanzas'];
+    roles.forEach(r => {
+      const btn = document.getElementById('role-btn-' + r);
+      if (btn) {
+        if (r === roleId) {
+          btn.className = 'csia-tab-btn csia-tab-active';
+        } else {
+          btn.className = 'csia-tab-btn csia-tab-inactive';
+        }
+      }
+    });
+
+    const data = ROLE_DATA[roleId];
+    if (!data) return;
+
+    const badgeEl = document.getElementById('roleBadge');
+    const titleEl = document.getElementById('roleTitle');
+    const descEl = document.getElementById('roleDesc');
+    const kpisEl = document.getElementById('roleKpisContainer');
+    const pointsEl = document.getElementById('rolePointsContainer');
+
+    if (badgeEl) badgeEl.textContent = data.badge;
+    if (titleEl) titleEl.textContent = data.title;
+    if (descEl) descEl.textContent = data.desc;
+
+    if (kpisEl) {
+      kpisEl.innerHTML = data.kpis.map(k => `
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
+          <span class="text-2xl font-black text-cyan-400 font-mono block">${k.val}</span>
+          <span class="text-xs font-bold text-white block mt-1">${k.label}</span>
+          <span class="text-[10px] text-slate-400 block">${k.desc}</span>
+        </div>
+      `).join('');
+    }
+
+    if (pointsEl) {
+      pointsEl.innerHTML = data.points.map(p => `
+        <li class="flex items-start gap-2.5 text-xs text-slate-300">
+          <span class="text-cyan-400 font-bold shrink-0 mt-0.5">✓</span>
+          <span>${p}</span>
+        </li>
+      `).join('');
+    }
+  };
+
+  // 3. Simulador 1: WMS & Depósito 3D
   window.toggleWmsRackSlot = function (slotId) {
     const slot = document.getElementById(slotId);
     const badge = document.getElementById('wmsSlotStatus');
@@ -47,7 +158,6 @@
       slot.innerHTML = '<span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span><span class="text-xs text-white font-mono font-bold">' + slotId + '</span>';
     }
 
-    // Recalcular ocupación
     const allSlots = document.querySelectorAll('.wms-slot');
     const occ = document.querySelectorAll('.wms-slot[data-occupied="true"]').length;
     const total = allSlots.length;
@@ -61,7 +171,7 @@
     }
   };
 
-  // 3. Simulador Interactivo 2: Logística 3PL & Flota
+  // 4. Simulador 2: Logística 3PL & Flota
   window.update3plSimulator = function () {
     const kmInput = document.getElementById('srKm');
     const gasoilInput = document.getElementById('srGasoil');
@@ -73,7 +183,6 @@
     const gasoil = parseFloat(gasoilInput.value) || 0;
     const margen = parseFloat(margenInput.value) || 0;
 
-    // Fórmula logística: Consumo 32L/100km + mantenimiento $18/km + chofer fijo $1200
     const litros = (km * 32) / 100;
     const costoCombustible = litros * gasoil;
     const costoMantenimiento = km * 18.5;
@@ -82,16 +191,23 @@
     const precioVenta = Math.round(costoOperativo * (1 + margen / 100));
     const ganancia = precioVenta - costoOperativo;
 
-    document.getElementById('srKmVal').textContent = km + ' km';
-    document.getElementById('srGasoilVal').textContent = '$' + gasoil + ' UYU';
-    document.getElementById('srMargenVal').textContent = margen + '%';
+    const kmVal = document.getElementById('srKmVal');
+    const gasoilVal = document.getElementById('srGasoilVal');
+    const margenVal = document.getElementById('srMargenVal');
+    const costoOp = document.getElementById('srCostoOp');
+    const precioVentaEl = document.getElementById('srPrecioVenta');
+    const gananciaEl = document.getElementById('srGanancia');
 
-    document.getElementById('srCostoOp').textContent = '$' + costoOperativo.toLocaleString('es-UY') + ' UYU';
-    document.getElementById('srPrecioVenta').textContent = '$' + precioVenta.toLocaleString('es-UY') + ' UYU';
-    document.getElementById('srGanancia').textContent = '+$' + ganancia.toLocaleString('es-UY') + ' UYU';
+    if (kmVal) kmVal.textContent = km + ' km';
+    if (gasoilVal) gasoilVal.textContent = '$' + gasoil + ' UYU';
+    if (margenVal) margenVal.textContent = margen + '%';
+
+    if (costoOp) costoOp.textContent = '$' + costoOperativo.toLocaleString('es-UY') + ' UYU';
+    if (precioVentaEl) precioVentaEl.textContent = '$' + precioVenta.toLocaleString('es-UY') + ' UYU';
+    if (gananciaEl) gananciaEl.textContent = '+$' + ganancia.toLocaleString('es-UY') + ' UYU';
   };
 
-  // 4. Simulador Interactivo 3: Mercado Libre Kanban
+  // 5. Simulador 3: Mercado Libre Kanban
   let meliStep = 0;
   const meliStages = ['Nuevas Órdenes', 'Picking en Depósito', 'Embalaje & Etiqueta', 'Despacho en Ruta', 'Entregado con Éxito'];
   const meliIcons = ['📥', '📦', '🏷️', '🚚', '✅'];
@@ -117,7 +233,6 @@
 
     if (stepText) stepText.textContent = 'Etapa ' + (meliStep + 1) + ' de 5';
 
-    // Animación visual
     if (card) {
       card.classList.add('scale-95', 'opacity-75');
       setTimeout(() => {
@@ -137,7 +252,7 @@
     }
   };
 
-  // 5. Simulador Interactivo 4: WhatsApp Omnicanal Copilot
+  // 6. Simulador 4: WhatsApp Omnicanal Copilot
   window.askShowroomCopilot = function (queryType) {
     const box = document.getElementById('waChatMessages');
     if (!box) return;
@@ -156,14 +271,12 @@
       botReply = '📊 **Facturación CFE Inmediata:** Emitimos e-Factura 111 con CAE oficial validado en el acto ante DGI y enviamos el PDF con Código QR fiscal al WhatsApp del cliente automáticamente.';
     }
 
-    // Agregar mensaje usuario
     const userDiv = document.createElement('div');
     userDiv.className = 'flex justify-end mb-2.5 animate-in fade-in duration-200';
-    userDiv.innerHTML = '<div class="bg-cyan-700 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm">' + userMsg + '</div>';
+    userDiv.innerHTML = '<div class="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm">' + userMsg + '</div>';
     box.appendChild(userDiv);
     box.scrollTop = box.scrollHeight;
 
-    // Simular escritura bot
     setTimeout(() => {
       const botDiv = document.createElement('div');
       botDiv.className = 'flex justify-start mb-2.5 animate-in fade-in duration-200';
@@ -173,8 +286,11 @@
     }, 450);
   };
 
-  // Inicialización al cargar la página
+  // Inicialización
   document.addEventListener('DOMContentLoaded', () => {
     update3plSimulator();
+    if (typeof switchRoleView === 'function') {
+      switchRoleView('ceo');
+    }
   });
 })();
