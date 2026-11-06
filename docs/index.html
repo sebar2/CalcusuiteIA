@@ -32,6 +32,9 @@
 
 
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
+  <!-- Neutralizador defensivo de extensiones Chrome (User-Agent Switcher) -->
+  <div id="uas-port" style="display:none;" data-id="csia-safe"></div>
+
 
   <!-- Drawer Desplegable Lateral Superior Izquierdo (~55% de pantalla) al hacer clic en el Logo -->
   <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
@@ -155,7 +158,7 @@
               <i data-lucide="book-open" class="w-4 h-4 text-blue-400 shrink-0"></i>
               <div>
                 <span class="font-bold block">Manual Completo 2026</span>
-                <span class="text-[10px] text-slate-500">26 Capítulos & Asesor IA de Difusión y Pauta</span>
+                <span class="text-[10px] text-slate-500">29 Módulos & Copilot IA Contextual</span>
               </div>
             </a>
           </div>
@@ -288,7 +291,7 @@
       </a>
       <a href="documentacion.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-amber-400 font-medium text-sm">
         <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i>
-        <span>Manual 2026 (26 Caps)</span>
+        <span>Manual 2026 (29 Módulos)</span>
       </a>
       <a href="blog.html" class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-200 hover:bg-slate-900 hover:text-rose-400 font-medium text-sm">
         <i data-lucide="newspaper" class="w-4 h-4 text-rose-400"></i>
@@ -351,50 +354,28 @@
 
       <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
 
-        <a href="#demo" 
+        <button onclick="openAccountModal('PIONERO')" 
+           class="px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-sm tracking-wide shadow-xl shadow-cyan-600/30 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer">
+          <i data-lucide="sparkles" class="w-4 h-4 text-cyan-200"></i>
+          <span>Solicitar Sandbox Gratuita (Pioneros)</span>
+        </button>
 
-           class="px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm tracking-wide shadow-lg shadow-blue-500/30 flex items-center gap-2 transition-all hover:scale-105">
-
-          <i data-lucide="sparkles" class="w-4 h-4"></i>
-
-          <span>Solicitar Acceso a la Demo</span>
-
+        <a href="#showroom" 
+           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
+          <i data-lucide="play-circle" class="w-4 h-4 text-cyan-400"></i>
+          <span>Ver Plataforma en Acción (Showroom)</span>
         </a>
 
-
-
-        <a href="./Calcu_3PL_Mobile_v2026.apk" download 
-
-           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
-
-          <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
-
-          <span>Descargar APK Móvil (6.06 MB)</span>
-
+        <a href="documentacion.html" 
+           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
+          <i data-lucide="book-open" class="w-4 h-4 text-amber-400"></i>
+          <span>Manual 2026 (29 Módulos)</span>
         </a>
 
-
-
-        <a href="./MANUAL_COMPLETO_CALCU_2026.pdf" target="_blank"
-
-           class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
-
-          <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i>
-
-          <span>Manual Oficial (PDF 26 Caps)</span>
-
-        </a>
-
-
-
-        <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20quiero%20consultar%20por%20el%20Programa%20Pioneros%20y%20la%20demo%20de%20Calcu%20Suite" target="_blank"
-
+        <a href="https://wa.me/59894858791?text=Hola%20Sebasti%C3%A1n%2C%20quiero%20conocer%20la%20plataforma%20CalcuSuiteIA%20y%20el%20Programa%20Pionero" target="_blank"
            class="px-6 py-3.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-semibold text-sm flex items-center gap-2 transition-all hover:scale-105">
-
           <i data-lucide="message-circle" class="w-4 h-4 text-emerald-400"></i>
-
-          <span>WhatsApp Directo</span>
-
+          <span>WhatsApp Directo (+598 94 858 791)</span>
         </a>
 
       </div>
@@ -485,37 +466,386 @@
 
       </div>
 
-          <!-- CREDENCIALES OFICIALES DEMO 2026 -->
-
-      <div class="mt-8 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-slate-900/90 border border-cyan-500/40 shadow-xl shadow-cyan-950/30 backdrop-blur-md">
-
+          <!-- CONVERSIÓN PIONEROS & SANDBOX AISLADA (LEAD-FIRST) -->
+      <div class="mt-8 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-slate-900/90 border border-emerald-500/40 shadow-xl shadow-emerald-950/30 backdrop-blur-md">
         <div class="flex items-center gap-2 text-xs text-slate-300">
-
-          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
-
-          <span class="font-bold text-white">Acceso Inmediato Sandbox:</span>
-
-          <span>Usuario:</span> <code class="px-2.5 py-1 rounded-md bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/80">demo</code>
-
-          <span>Contraseña:</span> <code class="px-2.5 py-1 rounded-md bg-cyan-950 text-cyan-300 font-mono font-bold border border-cyan-800/80">demo123</code>
-
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="font-bold text-white">Programa Pionero 2026:</span>
+          <span class="text-emerald-300 font-semibold">20 Cupos con 6 Meses 100% Gratis + 50% OFF Vitalicio</span>
         </div>
-
         <span class="text-xs text-slate-600">|</span>
-
-        <span class="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-
-          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-
-          <span>Rol Controller Admin &bull; Esquema PostgreSQL Aislado</span>
-
-        </span>
-
+        <button onclick="openAccountModal('PIONERO')" class="text-xs text-cyan-400 hover:text-cyan-300 font-bold underline underline-offset-4 flex items-center gap-1.5 transition-colors cursor-pointer">
+          <span>Crear Cuenta Corporativa & Acceder a Sandbox Dedicada &rarr;</span>
+        </button>
       </div>
 
 
 
     </section>
+
+    <!-- ===================================================================== -->
+    <!-- SHOWROOM OPERATIVO INTERACTIVO EN VIVO (BENCHMARK APOLLO / VESTTA / KOMMO) -->
+    <!-- ===================================================================== -->
+    <section id="showroom" class="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-900">
+      
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <span class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 uppercase tracking-wider inline-flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+          Showroom Interactivo en Vivo &bull; Explora sin Fricción
+        </span>
+        <h2 class="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">
+          Tu Operación Conectada en Tiempo Real
+        </h2>
+        <p class="mt-4 text-slate-300 text-sm sm:text-base leading-relaxed">
+          Interactúa con los módulos clave antes de implementar. Desde la gestión de racks en depósito y el ruteo de flota, hasta el despacho en Mercado Libre y la cotización instantánea por WhatsApp.
+        </p>
+      </div>
+
+      <!-- Selector de Pestañas del Showroom -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mb-8 max-w-4xl mx-auto">
+        <button id="tab-btn-wms" onclick="switchShowroomTab('wms')" class="showroom-tab-active px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/30 transition-all flex items-center gap-2 cursor-pointer">
+          <span>📦 WMS & Gemelo 3D</span>
+        </button>
+        <button id="tab-btn-logistica" onclick="switchShowroomTab('logistica')" class="showroom-tab-inactive px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer">
+          <span>🚚 Flota 3PL & Costos</span>
+        </button>
+        <button id="tab-btn-meli" onclick="switchShowroomTab('meli')" class="showroom-tab-inactive px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer">
+          <span>🛍️ Mercado Libre Kanban</span>
+        </button>
+        <button id="tab-btn-whatsapp" onclick="switchShowroomTab('whatsapp')" class="showroom-tab-inactive px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer">
+          <span>💬 WhatsApp & Copilot IA</span>
+        </button>
+        <button id="tab-btn-finanzas" onclick="switchShowroomTab('finanzas')" class="showroom-tab-inactive px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition-all flex items-center gap-2 cursor-pointer">
+          <span>📊 Mesa de Dinero & CFE</span>
+        </button>
+      </div>
+
+      <!-- Contenedor Maestro del Showroom -->
+      <div class="glass-card rounded-3xl border border-slate-800 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+        <div class="absolute -top-32 -right-32 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-32 -left-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- PANEL 1: WMS & DEPOSITO 3D -->
+        <div id="tab-panel-wms" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-5 space-y-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Gestión de Almacenes Inteligente</span>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Gemelo Digital 3D & WMS Espacial</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Controla la ocupación de racks en tiempo real con detección de colisiones AABB. Haz clic en cualquier celda para simular la carga o retiro de un pallet y observa cómo se recalcula la volumetría y el punto de reposición (ROP).
+            </p>
+            <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div class="flex items-center justify-between text-xs font-medium text-slate-300">
+                <span>Ocupación de Racks en Vivo:</span>
+                <span id="wmsOccupancyText" class="text-cyan-400 font-bold font-mono">75% Ocupado (9/12)</span>
+              </div>
+              <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div id="wmsOccupancyBar" class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300" style="width: 75%;"></div>
+              </div>
+              <div id="wmsSlotStatus" class="text-xs text-slate-400 pt-1">Toca un casillero para mover un pallet</div>
+            </div>
+            <div class="pt-2">
+              <button onclick="openAccountModal('PIONERO')" class="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-cyan-600/25 flex items-center gap-2 transition-all">
+                <span>Configurar Mi Depósito &rarr;</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-950/90 rounded-2xl border border-slate-800 p-6 shadow-inner">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-5">
+              <div class="flex items-center gap-2">
+                <div class="w-3 h-3 rounded-full bg-rose-500"></div>
+                <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <span class="text-xs text-slate-400 font-mono ml-2">rack_editor_3d.viewer &bull; Pasillo Central A-01</span>
+              </div>
+              <span class="text-[10px] text-cyan-400 font-bold px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800">Interactivo</span>
+            </div>
+
+            <div class="grid grid-cols-4 gap-3 text-xs">
+              <div id="R-A1" data-occupied="true" onclick="toggleWmsRackSlot('R-A1')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-A1</span>
+              </div>
+              <div id="R-A2" data-occupied="true" onclick="toggleWmsRackSlot('R-A2')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-A2</span>
+              </div>
+              <div id="R-A3" data-occupied="false" onclick="toggleWmsRackSlot('R-A3')" class="wms-slot p-2.5 rounded-lg border border-dashed border-slate-700 bg-slate-950/60 text-center cursor-pointer transition-all hover:border-cyan-500">
+                <span class="text-[10px] text-slate-500 block">Vacío</span>
+                <span class="text-xs text-slate-600 font-mono">R-A3</span>
+              </div>
+              <div id="R-A4" data-occupied="true" onclick="toggleWmsRackSlot('R-A4')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-A4</span>
+              </div>
+
+              <div id="R-B1" data-occupied="true" onclick="toggleWmsRackSlot('R-B1')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-B1</span>
+              </div>
+              <div id="R-B2" data-occupied="true" onclick="toggleWmsRackSlot('R-B2')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-B2</span>
+              </div>
+              <div id="R-B3" data-occupied="true" onclick="toggleWmsRackSlot('R-B3')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-B3</span>
+              </div>
+              <div id="R-B4" data-occupied="false" onclick="toggleWmsRackSlot('R-B4')" class="wms-slot p-2.5 rounded-lg border border-dashed border-slate-700 bg-slate-950/60 text-center cursor-pointer transition-all hover:border-cyan-500">
+                <span class="text-[10px] text-slate-500 block">Vacío</span>
+                <span class="text-xs text-slate-600 font-mono">R-B4</span>
+              </div>
+
+              <div id="R-C1" data-occupied="true" onclick="toggleWmsRackSlot('R-C1')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-C1</span>
+              </div>
+              <div id="R-C2" data-occupied="false" onclick="toggleWmsRackSlot('R-C2')" class="wms-slot p-2.5 rounded-lg border border-dashed border-slate-700 bg-slate-950/60 text-center cursor-pointer transition-all hover:border-cyan-500">
+                <span class="text-[10px] text-slate-500 block">Vacío</span>
+                <span class="text-xs text-slate-600 font-mono">R-C2</span>
+              </div>
+              <div id="R-C3" data-occupied="true" onclick="toggleWmsRackSlot('R-C3')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-C3</span>
+              </div>
+              <div id="R-C4" data-occupied="true" onclick="toggleWmsRackSlot('R-C4')" class="wms-slot p-2.5 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105">
+                <span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span>
+                <span class="text-xs text-white font-mono font-bold">R-C4</span>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-cyan-400"></span> Ocupado (Pallet Asignado)</span>
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full border border-dashed border-slate-500"></span> Disponible</span>
+              <span class="text-cyan-400 font-mono">Capacidad: 1.200 kg / posición</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 2: FLOTA 3PL & COSTOS -->
+        <div id="tab-panel-logistica" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-5 space-y-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Simulador de Fletes & Flota</span>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Rentabilidad por Kilómetro y Viaje</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Mueve los controles para calcular en tiempo real el costo exacto de combustible, mantenimiento, peajes y chofer para cualquier ruta en Uruguay, asegurando tu margen neto.
+            </p>
+            <div class="space-y-3 p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs">
+              <div>
+                <div class="flex justify-between text-slate-300 mb-1">
+                  <span>Distancia de Ruta:</span>
+                  <strong id="srKmVal" class="text-emerald-400 font-mono">280 km</strong>
+                </div>
+                <input type="range" id="srKm" min="20" max="800" step="10" value="280" oninput="update3plSimulator()" class="w-full accent-emerald-500">
+              </div>
+              <div>
+                <div class="flex justify-between text-slate-300 mb-1">
+                  <span>Precio Gasoil 50S (ANCAP):</span>
+                  <strong id="srGasoilVal" class="text-emerald-400 font-mono">$56.5 UYU</strong>
+                </div>
+                <input type="range" id="srGasoil" min="45" max="75" step="0.5" value="56.5" oninput="update3plSimulator()" class="w-full accent-emerald-500">
+              </div>
+              <div>
+                <div class="flex justify-between text-slate-300 mb-1">
+                  <span>Margen de Ganancia Deseado:</span>
+                  <strong id="srMargenVal" class="text-emerald-400 font-mono">35%</strong>
+                </div>
+                <input type="range" id="srMargen" min="10" max="70" step="5" value="35" oninput="update3plSimulator()" class="w-full accent-emerald-500">
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-950/90 rounded-2xl border border-slate-800 p-6 shadow-inner">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center mb-6">
+              <div class="p-4 rounded-xl bg-slate-900 border border-slate-800">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Costo Operativo Base</span>
+                <span id="srCostoOp" class="text-xl font-mono font-bold text-slate-200">$11.646 UYU</span>
+              </div>
+              <div class="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/40">
+                <span class="text-[10px] uppercase font-bold text-emerald-300 block mb-1">Precio Sugerido Cliente</span>
+                <span id="srPrecioVenta" class="text-xl font-mono font-bold text-emerald-400">$15.722 UYU</span>
+              </div>
+              <div class="p-4 rounded-xl bg-cyan-950/40 border border-cyan-500/40">
+                <span class="text-[10px] uppercase font-bold text-cyan-300 block mb-1">Margen Neto Limpio</span>
+                <span id="srGanancia" class="text-xl font-mono font-bold text-cyan-400">+$4.076 UYU</span>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs space-y-2 text-slate-300">
+              <div class="flex justify-between"><span>🚚 Unidad Asignada:</span><strong class="text-white">Scania R450 &bull; Matrícula STP-4821</strong></div>
+              <div class="flex justify-between"><span>📍 Ruta:</span><strong class="text-white">Montevideo (Pto) &rarr; Rivera (Zona Franca)</strong></div>
+              <div class="flex justify-between"><span>📡 GPS Telemetría:</span><span class="text-emerald-400 font-semibold">En movimiento (78 km/h) &bull; Geocerca Activa</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 3: MERCADO LIBRE KANBAN -->
+        <div id="tab-panel-meli" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-5 space-y-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Sincronización E-Commerce Oficial</span>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Pipeline MeLi Kanban en 5 Etapas</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Cada venta en Mercado Libre entra de inmediato al flujo logístico. Haz clic en el botón para avanzar la orden simulada y ver cómo el stock de depósito se reserva y emite la etiqueta de despacho automáticamente.
+            </p>
+            <div class="pt-2">
+              <button onclick="advanceMeliOrder()" class="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs tracking-wider uppercase shadow-lg shadow-amber-500/25 flex items-center gap-2 transition-all cursor-pointer">
+                <span>Avanzar Orden #MLU-9842 &rarr;</span>
+              </button>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Auditoría en Tiempo Real:</div>
+              <ul id="meliAuditLog" class="space-y-1">
+                <li class="text-[11px] text-slate-300 flex items-center justify-between py-1 border-b border-slate-800/80">
+                  <span>📥 Venta confirmada por Mercado Libre API</span>
+                  <span class="text-slate-500 font-mono text-[10px]">Hace 2m</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-950/90 rounded-2xl border border-slate-800 p-6 shadow-inner">
+            <div id="meliCardContainer" class="p-5 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-xl transition-all">
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-amber-400 font-mono font-bold">Orden #MLU-9842</span>
+                <span id="meliStatusBadge" class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold text-xs">
+                  📥 Nuevas Órdenes
+                </span>
+              </div>
+              <div class="text-sm font-bold text-white mb-1">Set 4 Neumáticos 205/55 R16 Bridgestone</div>
+              <div class="text-xs text-slate-400 mb-3">Comprador: Logística del Plata S.A. &bull; Total: $18.400 UYU</div>
+              <div class="grid grid-cols-2 gap-2 text-[11px] p-3 rounded-xl bg-slate-950 border border-slate-800 mb-4">
+                <div><span class="text-slate-500">SKU:</span> <strong class="text-white">TIRE-2055516</strong></div>
+                <div><span class="text-slate-500">Depósito:</span> <strong class="text-cyan-400">Rack A-02</strong></div>
+                <div><span class="text-slate-500">SLA Mercado Envíos:</span> <strong class="text-emerald-400">En plazo (&lt; 2h)</strong></div>
+                <div><span class="text-slate-500">Factura CFE:</span> <strong class="text-purple-400">e-Factura 111 Auto</strong></div>
+              </div>
+              <div class="flex items-center justify-between text-xs text-slate-400">
+                <span id="meliStepNumber" class="font-semibold text-amber-400">Etapa 1 de 5</span>
+                <span>Toca el botón para mover al siguiente estado</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 4: WHATSAPP COPILOT IA -->
+        <div id="tab-panel-whatsapp" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-5 space-y-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">Omnicanalidad & CRM Inteligente</span>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Copilot de Ventas en WhatsApp QR</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Atiende consultas a cualquier hora sin perder ventas. La IA consulta el stock en WMS, calcula fletes y envía cotizaciones formales al instante con tu número oficial.
+            </p>
+            <div class="space-y-2">
+              <span class="text-xs text-slate-400 font-semibold block">Prueba una pregunta rápida:</span>
+              <div class="flex flex-col gap-2">
+                <button onclick="askShowroomCopilot('stock')" class="text-left px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 text-xs text-slate-200 transition-all cursor-pointer">
+                  📦 Consultar stock de 50 bultos para hoy
+                </button>
+                <button onclick="askShowroomCopilot('flete')" class="text-left px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 text-xs text-slate-200 transition-all cursor-pointer">
+                  🚚 Cotizar flete de 6 pallets a Canelones
+                </button>
+                <button onclick="askShowroomCopilot('cfe')" class="text-left px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/50 text-xs text-slate-200 transition-all cursor-pointer">
+                  📊 Cómo se emite la e-Factura 111 con DGI
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-950/90 rounded-2xl border border-slate-800 p-5 shadow-inner">
+            <div class="flex items-center gap-3 pb-3 border-b border-slate-800 mb-4">
+              <div class="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-emerald-600/30">
+                💬
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-white">WhatsApp Corporativo &bull; +598 94 858 791</h4>
+                <span class="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Copilot IA Activo 24/7
+                </span>
+              </div>
+            </div>
+
+            <div id="waChatMessages" class="h-64 overflow-y-auto space-y-2 pr-1 font-sans">
+              <div class="flex justify-start mb-2.5">
+                <div class="bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2 text-xs max-w-[85%] leading-relaxed shadow-sm">
+                  Hola, soy el Copilot de <strong>CalcuSuiteIA</strong>. Puedo informarte stock en depósito, cotizar fletes o consultar estado de facturas CFE. Selecciona una pregunta arriba para probar en vivo.
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+              <span>Tecnología: Gemini 2.0 Flash + PostgreSQL 16</span>
+              <button onclick="openAccountModal('PIONERO')" class="text-cyan-400 hover:underline font-bold">Activar en tu Tenant &rarr;</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL 5: MESA DE DINERO & FINANZAS -->
+        <div id="tab-panel-finanzas" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-5 space-y-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-purple-400">Finanzas, Arbitraje & DGI</span>
+            <h3 class="text-2xl sm:text-3xl font-extrabold text-white">Mesa de Dinero & e-Facturación CFE</h3>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Monitorea spreads cambiarios y liquidez en dólares, pesos uruguayos y cripto OTC bajo estricta muralla china (Chinese Wall), mientras el motor contable sincroniza el Libro Diario y emite comprobantes electrónicos con DGI.
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span class="text-slate-400 block text-[10px]">Dólar e-BROU:</span>
+                <strong class="text-white font-mono text-sm">41.85 / 42.15</strong>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span class="text-slate-400 block text-[10px]">Spread Broker OTC:</span>
+                <strong class="text-emerald-400 font-mono text-sm">+0.85% PFI</strong>
+              </div>
+            </div>
+            <div class="pt-2">
+              <button onclick="openAccountModal('PIONERO')" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs tracking-wider uppercase shadow-lg shadow-purple-600/25 flex items-center gap-2 transition-all">
+                <span>Evaluar Módulo Financiero &rarr;</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:col-span-7 bg-slate-950/90 rounded-2xl border border-slate-800 p-6 shadow-inner">
+            <div class="space-y-4 text-xs">
+              <div class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">🏛️</div>
+                  <div>
+                    <h4 class="font-bold text-white">e-Factura Electrónica DGI (Tipo 111)</h4>
+                    <span class="text-[10px] text-slate-400">CAE Activo N° 2026-998811 &bull; Rango: 1 al 50.000</span>
+                  </div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">Validada OK</span>
+              </div>
+
+              <div class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">⚖️</div>
+                  <div>
+                    <h4 class="font-bold text-white">Chinese Wall & Segregación Patrimonial</h4>
+                    <span class="text-[10px] text-slate-400">Aislamiento estricto entre fondos de clientes y tesorería</span>
+                  </div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold text-[10px]">Auditado ISO</span>
+              </div>
+
+              <div class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">📈</div>
+                  <div>
+                    <h4 class="font-bold text-white">TradingView & Quant Backtester</h4>
+                    <span class="text-[10px] text-slate-400">Estrategias algorítmicas de cobertura FX para importadores</span>
+                  </div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px]">En Tiempo Real</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
 
 
 
@@ -1918,7 +2248,7 @@
 
               </div>
 
-              <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40">26 Capítulos Oficiales</span>
+              <span class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40">29 Módulos Oficiales 2026</span>
 
             </div>
 
@@ -1936,9 +2266,9 @@
 
             <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2 mb-6">
 
-              <div class="flex justify-between"><span>Formato:</span><span class="text-white font-medium">PDF Vectorial con 26 Capturas Reales</span></div>
+              <div class="flex justify-between"><span>Formato:</span><span class="text-white font-medium">Dossier Ejecutivo & 29 Módulos Operativos</span></div>
 
-              <div class="flex justify-between"><span>Versión Web:</span><span class="text-white font-medium">HTML Interactivo (26 Capítulos)</span></div>
+              <div class="flex justify-between"><span>Versión Web:</span><span class="text-white font-medium">HTML Interactivo (29 Módulos)</span></div>
 
               <div class="flex justify-between"><span>Archivo:</span><span class="text-blue-400 font-mono">MANUAL_COMPLETO_CALCU_2026.pdf</span></div>
 
@@ -1950,15 +2280,15 @@
 
           <div class="flex flex-col sm:flex-row gap-3">
 
-            <a href="./MANUAL_COMPLETO_CALCU_2026.pdf" target="_blank"
+            <button onclick="openAccountModal('TRIAL')"
 
-               class="flex-1 py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02]">
+               class="flex-1 py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] cursor-pointer">
 
               <i data-lucide="file-down" class="w-4 h-4"></i>
 
-              <span>Abrir / Descargar PDF</span>
+              <span>Solicitar Dossier Ejecutivo & Manual PDF</span>
 
-            </a>
+            </button>
 
             <a href="./documentacion.html"
                class="py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all">
@@ -2002,12 +2332,10 @@
 
           </p>
 
-          <div class="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-500/30 text-xs text-cyan-300">
-
-            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-
-            <span>Evaluación Inmediata Sandbox: Usuario: <code class="font-mono font-bold text-white">admin</code> &bull; Clave: <code class="font-mono font-bold text-white">demo123</code></span>
-
+          <div class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="font-bold text-white">Aprovisionamiento Automático:</span>
+            <span>Registro directo con esquema PostgreSQL 16 aislado y credenciales propias</span>
           </div>
 
         </div>
@@ -2361,7 +2689,7 @@
         <ul class="space-y-2 text-slate-400">
           <li><a href="nosotros.html" class="hover:text-white transition-colors">Nosotros & Propósito</a></li>
           <li><a href="seguridad.html" class="hover:text-white transition-colors">Seguridad & Arquitectura</a></li>
-          <li><a href="documentacion.html" class="hover:text-white transition-colors">Manual 2026 (26 Capítulos)</a></li>
+          <li><a href="documentacion.html" class="hover:text-white transition-colors">Manual 2026 (29 Módulos)</a></li>
           <li><a href="blog.html" class="hover:text-white transition-colors">Blog de Ingeniería & Logística</a></li>
           <li><a href="terminos.html" class="hover:text-white transition-colors">Términos, Garantía & Privacidad</a></li>
         </ul>
@@ -2423,6 +2751,7 @@
   <script src="./js/privacy-policy.js"></script>
   <script src="./js/webchat.js"></script>
   <script src="./js/main.js"></script>
+  <script src="js/interactive-showroom.js"></script>
 </body>
 
 </html>
