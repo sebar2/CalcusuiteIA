@@ -157,14 +157,18 @@
 
       const msgContainer = document.getElementById('csiaChatMessages');
       if (msgContainer) {
-        msgContainer.innerHTML = `
-          <div class="flex items-start gap-2.5">
-            <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
-            <div id="csiaWelcomeBubble" class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm">
-              ¡Sesión reiniciada y datos efímeros eliminados! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong>. ¿Qué módulo te gustaría consultar hoy?
-            </div>
-          </div>
-        `;
+        const { clear, el } = window.csiaDom;
+        clear(msgContainer);
+        msgContainer.appendChild(
+          el('div', { className: 'flex items-start gap-2.5' },
+            el('div', { className: 'w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0', text: 'IA' }),
+            el('div', { id: 'csiaWelcomeBubble', className: 'bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm' },
+              '¡Sesión reiniciada y datos efímeros eliminados! Soy el asistente ejecutivo de ',
+              el('strong', { text: 'CalcuSuiteIA' }),
+              '. ¿Qué módulo te gustaría consultar hoy?'
+            )
+          )
+        );
       }
       this.populateGateInputs();
       this.syncGateVisibility();
@@ -241,162 +245,124 @@
     }
 
     renderWidget() {
-      const container = document.createElement('div');
-      container.id = 'csia-webchat-root';
-      container.innerHTML = `
-        <!-- Botón Flotante WebChat IA -->
-        <button id="csiaChatToggleBtn" aria-label="Abrir WebChat IA CalcuSuiteIA"
-          class="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white font-bold text-xs shadow-2xl shadow-cyan-500/30 hover:scale-[1.03] active:scale-95 transition-all border border-cyan-300/30">
-          <span class="relative flex h-3 w-3">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
-          </span>
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-          <span>Asesor IA En Línea</span>
-        </button>
+      const { el, svg } = window.csiaDom;
+      const gateField = (label, id, type, autocomplete, placeholder) =>
+        el('div', null,
+          el('label', { className: 'block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1', text: label }),
+          el('input', {
+            id, type, autocomplete, required: true, placeholder,
+            className: 'w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500'
+          })
+        );
+      const quickPills = (cls) => [
+        ['Quiero evaluar el Gemelo Digital 3D para mi depósito', 'text-cyan-300', '📦 Gemelo 3D'],
+        ['Me interesa el Programa Pioneros con 6 meses gratis y 50% vitalicio', 'text-emerald-300', '💎 Programa Pioneros'],
+        ['Quiero hablar con un asesor para agendar una demo corporativa', 'text-amber-300', '👤 Hablar con Ejecutivo'],
+      ].map(p => el('button', {
+        type: 'button',
+        'data-quick-msg': p[0],
+        className: `csia-quick-pill ${cls} px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 ${p[1]} border border-slate-700 transition-colors`,
+        text: p[2]
+      }));
 
-        <!-- Ventana de Chat -->
-        <div id="csiaChatWindow"
-          class="fixed bottom-24 right-6 z-50 hidden w-[390px] max-w-[calc(100vw-2rem)] bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex-col"
-          style="height: 560px; max-height: calc(100vh - 7.5rem);">
-          
-          <!-- Cabecera -->
-          <div class="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700/80 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xs shadow-md border border-white/15">
-                CS<span class="text-cyan-200">IA</span>
-              </div>
-              <div>
-                <div class="text-sm font-bold text-white flex items-center gap-2">
-                  Copilot Comercial B2B
-                  <span class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Online</span>
-                </div>
-                <div class="text-[10px] text-cyan-400 font-medium tracking-tight">
-                  Asistente IA · Sesión efímera protegida bajo ISO 27001 y Ley N° 18.331
-                </div>
-                <div id="csiaProfileStatusBadge" class="text-[11px] text-slate-400 truncate max-w-[235px]">
-                  CalcuSuiteIA • Atención Corporativa
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-1">
-              <button id="csiaResetSessionBtn" class="text-slate-400 hover:text-amber-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-xs flex items-center gap-1" title="Finalizar y Borrar Sesión" aria-label="Finalizar y Borrar Sesión">
-                <span>🗑️</span>
-              </button>
-              <button id="csiaChatCloseBtn" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors" aria-label="Cerrar chat">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- PASO PREVIO OBLIGATORIO: PRE-CHAT GATE (CERO CAMPOS NULL) -->
-          <div id="csiaPreChatGate" class="flex-1 overflow-y-auto p-5 bg-slate-950/85 flex flex-col justify-between">
-            <div>
-              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider mb-3">
-                <span>⚡ Atención Ejecutiva Personalizada</span>
-              </div>
-              <h3 class="text-sm font-extrabold text-white mb-1">Identificación Corporativa Rápida</h3>
-              <p class="text-[11px] text-slate-400 leading-relaxed mb-3">
-                Completa tus datos una única vez para asignarte prioridad en nuestro CRM y chatear en vivo con nuestro especialista.
-              </p>
-
-              <div id="csiaGatePendingTopicBanner" class="hidden mb-3 px-3 py-2 rounded-xl bg-blue-950/60 border border-blue-500/40 text-[11px] text-blue-200">
-                Consulta seleccionada: <strong id="csiaGatePendingTopicText" class="text-white"></strong>
-              </div>
-
-              <form id="csiaPreChatGateForm" class="space-y-2.5" novalidate>
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Nombre Completo *</label>
-                  <input id="csiaGateName" type="text" autocomplete="name" required placeholder="Ej: Martín Rodríguez"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Teléfono / WhatsApp *</label>
-                  <input id="csiaGatePhone" type="tel" autocomplete="tel" required placeholder="Ej: +598 99 123 456"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Correo Electrónico *</label>
-                  <input id="csiaGateEmail" type="email" autocomplete="email" required placeholder="nombre@empresa.com.uy"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
-                </div>
-                <div>
-                  <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">Empresa / Razón Social *</label>
-                  <input id="csiaGateCompany" type="text" autocomplete="organization" required placeholder="Ej: Distribuidora del Plata S.A."
-                    class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
-                </div>
-
-                <div id="csiaGateError" class="hidden text-[11px] text-rose-300 bg-rose-950/60 border border-rose-500/40 rounded-xl px-3 py-2"></div>
-
-                <button type="submit"
-                  class="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/25 transition-all flex items-center justify-center gap-2">
-                  <span>Iniciar Chat con Especialista IA →</span>
-                </button>
-              </form>
-            </div>
-
-            <!-- Píldoras rápidas también visibles en el Gate para elegir tema -->
-            <div class="pt-3 mt-3 border-t border-slate-800/80">
-              <div class="text-[10px] text-slate-500 mb-1.5 font-semibold">O selecciona un tema directo:</div>
-              <div class="flex flex-wrap gap-1.5">
-                <button type="button" data-quick-msg="Quiero evaluar el Gemelo Digital 3D para mi depósito"
-                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-colors">
-                  📦 Gemelo 3D
-                </button>
-                <button type="button" data-quick-msg="Me interesa el Programa Pioneros con 6 meses gratis y 50% vitalicio"
-                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition-colors">
-                  💎 Programa Pioneros
-                </button>
-                <button type="button" data-quick-msg="Quiero hablar con un asesor para agendar una demo corporativa"
-                  class="csia-quick-pill text-[10px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition-colors">
-                  👤 Hablar con Ejecutivo
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Mensajes del Chat (Activo tras completar el Pre-Chat Gate) -->
-          <div id="csiaChatMessages" class="hidden flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950/70 text-xs">
-            <div class="flex items-start gap-2.5">
-              <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
-              <div id="csiaWelcomeBubble" class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm">
-                ¡Hola! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong>. ¿Qué módulo o proceso operativo te gustaría optimizar hoy (Gemelo 3D, Logística 3PL, Mercado Libre, Licitaciones ARCE o Finanzas)?
-              </div>
-            </div>
-          </div>
-
-          <!-- Sugerencias Rápidas en Chat Activo -->
-          <div id="csiaQuickPrompts" class="hidden px-4 py-2 bg-slate-900/90 border-t border-slate-800/80 flex gap-1.5 overflow-x-auto no-scrollbar">
-            <button type="button" data-quick-msg="Quiero evaluar el Gemelo Digital 3D para mi depósito"
-              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition-colors">
-              📦 Gemelo 3D
-            </button>
-            <button type="button" data-quick-msg="Me interesa el Programa Pioneros con 6 meses gratis y 50% vitalicio"
-              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition-colors">
-              💎 Programa Pioneros
-            </button>
-            <button type="button" data-quick-msg="Quiero hablar con un asesor para agendar una demo corporativa"
-              class="csia-quick-pill shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition-colors">
-              👤 Hablar con Ejecutivo
-            </button>
-          </div>
-
-          <!-- Input del Chat (Activo tras completar el Pre-Chat Gate) -->
-          <form id="csiaChatForm" class="hidden p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
-            <input id="csiaChatInput" type="text" placeholder="Escribe tu consulta aquí..." autocomplete="off"
-              class="flex-1 bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
-            <button type="submit"
-              class="px-3.5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors shrink-0">
-              Enviar
-            </button>
-          </form>
-        </div>
-      `;
+      const container = el('div', { id: 'csia-webchat-root' },
+        el('button', {
+          id: 'csiaChatToggleBtn',
+          'aria-label': 'Abrir WebChat IA CalcuSuiteIA',
+          className: 'fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white font-bold text-xs shadow-2xl shadow-cyan-500/30 hover:scale-[1.03] active:scale-95 transition-all border border-cyan-300/30'
+        },
+          el('span', { className: 'relative flex h-3 w-3' },
+            el('span', { className: 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75' }),
+            el('span', { className: 'relative inline-flex rounded-full h-3 w-3 bg-emerald-400' })
+          ),
+          svg('0 0 24 24', 'w-5 h-5', ['M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z']),
+          el('span', { text: 'Asesor IA En Línea' })
+        ),
+        el('div', {
+          id: 'csiaChatWindow',
+          className: 'fixed bottom-24 right-6 z-50 hidden w-[390px] max-w-[calc(100vw-2rem)] bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex-col',
+          style: 'height: 560px; max-height: calc(100vh - 7.5rem);'
+        },
+          el('div', { className: 'px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700/80 flex items-center justify-between' },
+            el('div', { className: 'flex items-center gap-3' },
+              el('div', { className: 'w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xs shadow-md border border-white/15' },
+                'CS', el('span', { className: 'text-cyan-200', text: 'IA' })
+              ),
+              el('div', null,
+                el('div', { className: 'text-sm font-bold text-white flex items-center gap-2' },
+                  'Copilot Comercial B2B ',
+                  el('span', { className: 'px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold', text: 'Online' })
+                ),
+                el('div', { className: 'text-[10px] text-cyan-400 font-medium tracking-tight', text: 'Asistente IA · Sesión efímera protegida bajo ISO 27001 y Ley N° 18.331' }),
+                el('div', { id: 'csiaProfileStatusBadge', className: 'text-[11px] text-slate-400 truncate max-w-[235px]', text: 'CalcuSuiteIA • Atención Corporativa' })
+              )
+            ),
+            el('div', { className: 'flex items-center gap-1' },
+              el('button', {
+                id: 'csiaResetSessionBtn',
+                className: 'text-slate-400 hover:text-amber-400 p-1.5 rounded-lg hover:bg-slate-800 transition-colors text-xs flex items-center gap-1',
+                title: 'Finalizar y Borrar Sesión',
+                'aria-label': 'Finalizar y Borrar Sesión'
+              }, el('span', { text: '🗑️' })),
+              el('button', {
+                id: 'csiaChatCloseBtn',
+                className: 'text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors',
+                'aria-label': 'Cerrar chat'
+              }, svg('0 0 24 24', 'w-5 h-5', ['M6 18L18 6M6 6l12 12']))
+            )
+          ),
+          el('div', { id: 'csiaPreChatGate', className: 'flex-1 overflow-y-auto p-5 bg-slate-950/85 flex flex-col justify-between' },
+            el('div', null,
+              el('div', { className: 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider mb-3' },
+                el('span', { text: '⚡ Atención Ejecutiva Personalizada' })
+              ),
+              el('h3', { className: 'text-sm font-extrabold text-white mb-1', text: 'Identificación Corporativa Rápida' }),
+              el('p', { className: 'text-[11px] text-slate-400 leading-relaxed mb-3', text: 'Completa tus datos una única vez para asignarte prioridad en nuestro CRM y chatear en vivo con nuestro especialista.' }),
+              el('div', { id: 'csiaGatePendingTopicBanner', className: 'hidden mb-3 px-3 py-2 rounded-xl bg-blue-950/60 border border-blue-500/40 text-[11px] text-blue-200' },
+                'Consulta seleccionada: ', el('strong', { id: 'csiaGatePendingTopicText', className: 'text-white' })
+              ),
+              el('form', { id: 'csiaPreChatGateForm', className: 'space-y-2.5', novalidate: true },
+                gateField('Nombre Completo *', 'csiaGateName', 'text', 'name', 'Ej: Martín Rodríguez'),
+                gateField('Teléfono / WhatsApp *', 'csiaGatePhone', 'tel', 'tel', 'Ej: +598 99 123 456'),
+                gateField('Correo Electrónico *', 'csiaGateEmail', 'email', 'email', 'nombre@empresa.com.uy'),
+                gateField('Empresa / Razón Social *', 'csiaGateCompany', 'text', 'organization', 'Ej: Distribuidora del Plata S.A.'),
+                el('div', { id: 'csiaGateError', className: 'hidden text-[11px] text-rose-300 bg-rose-950/60 border border-rose-500/40 rounded-xl px-3 py-2' }),
+                el('button', {
+                  type: 'submit',
+                  className: 'w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/25 transition-all flex items-center justify-center gap-2'
+                }, el('span', { text: 'Iniciar Chat con Especialista IA →' }))
+              )
+            ),
+            el('div', { className: 'pt-3 mt-3 border-t border-slate-800/80' },
+              el('div', { className: 'text-[10px] text-slate-500 mb-1.5 font-semibold', text: 'O selecciona un tema directo:' }),
+              el('div', { className: 'flex flex-wrap gap-1.5' }, quickPills('text-[10px]'))
+            )
+          ),
+          el('div', { id: 'csiaChatMessages', className: 'hidden flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950/70 text-xs' },
+            el('div', { className: 'flex items-start gap-2.5' },
+              el('div', { className: 'w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0', text: 'IA' }),
+              el('div', { id: 'csiaWelcomeBubble', className: 'bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 leading-relaxed shadow-sm' },
+                '¡Hola! Soy el asistente ejecutivo de ', el('strong', { text: 'CalcuSuiteIA' }),
+                '. ¿Qué módulo o proceso operativo te gustaría optimizar hoy (Gemelo 3D, Logística 3PL, Mercado Libre, Licitaciones ARCE o Finanzas)?'
+              )
+            )
+          ),
+          el('div', { id: 'csiaQuickPrompts', className: 'hidden px-4 py-2 bg-slate-900/90 border-t border-slate-800/80 flex gap-1.5 overflow-x-auto no-scrollbar' },
+            quickPills('shrink-0 text-[11px]')
+          ),
+          el('form', { id: 'csiaChatForm', className: 'hidden p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2' },
+            el('input', {
+              id: 'csiaChatInput', type: 'text', placeholder: 'Escribe tu consulta aquí...', autocomplete: 'off',
+              className: 'flex-1 bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500'
+            }),
+            el('button', {
+              type: 'submit',
+              className: 'px-3.5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors shrink-0',
+              text: 'Enviar'
+            })
+          )
+        )
+      );
 
       document.body.appendChild(container);
       this.updateProfileBadge();
@@ -491,11 +457,14 @@
         promptsEl.classList.remove('hidden');
         formEl.classList.remove('hidden');
         if (welcomeEl && this.knownFields.full_name) {
-          welcomeEl.innerHTML = `¡Hola <strong>${this.escapeHtml(
-            this.knownFields.full_name
-          )}</strong>! Soy el asistente ejecutivo de <strong>CalcuSuiteIA</strong> para <strong>${this.escapeHtml(
-            this.knownFields.company_name
-          )}</strong>. ¿Qué módulo o proceso operativo te gustaría optimizar hoy?`;
+          const { clear, el } = window.csiaDom;
+          clear(welcomeEl);
+          welcomeEl.append(
+            '¡Hola ', el('strong', { text: this.knownFields.full_name }),
+            '! Soy el asistente ejecutivo de ', el('strong', { text: 'CalcuSuiteIA' }),
+            ' para ', el('strong', { text: this.knownFields.company_name }),
+            '. ¿Qué módulo o proceso operativo te gustaría optimizar hoy?'
+          );
         }
       } else {
         gateEl.classList.remove('hidden');
@@ -587,37 +556,31 @@
     appendMessage(sender, text) {
       const container = document.getElementById('csiaChatMessages');
       if (!container) return;
-      const row = document.createElement('div');
+      const { el, appendFormatted } = window.csiaDom;
+      let row;
       if (sender === 'user') {
-        row.className = 'flex justify-end';
-        row.innerHTML = `
-          <div class="bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 max-w-[82%] leading-relaxed shadow-sm">
-            ${this.escapeHtml(text)}
-          </div>
-        `;
+        row = el('div', { className: 'flex justify-end' },
+          el('div', {
+            className: 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5 max-w-[82%] leading-relaxed shadow-sm',
+            text: String(text || '')
+          })
+        );
       } else if (sender === 'human') {
-        row.className = 'flex items-start gap-2.5';
-        const formatted = this.escapeHtml(text)
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\n/g, '<br/>');
-        row.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold shrink-0">EJ</div>
-          <div class="bg-emerald-950/70 border border-emerald-500/40 text-emerald-100 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm">
-            <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Ejecutivo CalcuSuiteIA • En Vivo</div>
-            ${formatted}
-          </div>
-        `;
+        const bubble = el('div', { className: 'bg-emerald-950/70 border border-emerald-500/40 text-emerald-100 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm' },
+          el('div', { className: 'text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1', text: 'Ejecutivo CalcuSuiteIA • En Vivo' })
+        );
+        appendFormatted(bubble, text);
+        row = el('div', { className: 'flex items-start gap-2.5' },
+          el('div', { className: 'w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold shrink-0', text: 'EJ' }),
+          bubble
+        );
       } else {
-        row.className = 'flex items-start gap-2.5';
-        const formatted = this.escapeHtml(text)
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\n/g, '<br/>');
-        row.innerHTML = `
-          <div class="w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0">IA</div>
-          <div class="bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm">
-            ${formatted}
-          </div>
-        `;
+        const bubble = el('div', { className: 'bg-slate-800/90 border border-slate-700/70 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[85%] leading-relaxed shadow-sm' });
+        appendFormatted(bubble, text);
+        row = el('div', { className: 'flex items-start gap-2.5' },
+          el('div', { className: 'w-7 h-7 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 font-bold shrink-0', text: 'IA' }),
+          bubble
+        );
       }
       container.appendChild(row);
       container.scrollTop = container.scrollHeight;
@@ -765,8 +728,8 @@
 
           if (submitBtn) {
             submitBtn.disabled = true;
-            submitBtn.dataset.originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = 'Procesando y asignando ejecutivo...';
+            submitBtn.dataset.originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Procesando y asignando ejecutivo...';
           }
 
           let ok = false;
@@ -787,26 +750,31 @@
 
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = submitBtn.dataset.originalText || 'Solicitar Demo Corporativa';
+            submitBtn.textContent = submitBtn.dataset.originalText || 'Solicitar Demo Corporativa';
           }
 
           if (statusBox) {
+            const { clear, el } = window.csiaDom;
+            clear(statusBox);
             statusBox.classList.remove('hidden');
             if (ok) {
               statusBox.className =
                 'csia-form-status mt-4 p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 text-xs leading-relaxed';
-              statusBox.innerHTML = `
-                <strong>✅ ¡Solicitud registrada y priorizada en nuestro CRM!</strong><br/>
-                Gracias <strong>${this.escapeHtml(leadPayload.nombre)}</strong>. Un ejecutivo senior ya tiene asignada la ficha de <strong>${this.escapeHtml(leadPayload.empresa)}</strong> y se comunicará a <strong>${this.escapeHtml(leadPayload.email)}</strong>.
-              `;
+              statusBox.append(
+                el('strong', { text: '✅ ¡Solicitud registrada y priorizada en nuestro CRM!' }), el('br'),
+                'Gracias ', el('strong', { text: leadPayload.nombre }),
+                '. Un ejecutivo senior ya tiene asignada la ficha de ', el('strong', { text: leadPayload.empresa }),
+                ' y se comunicará a ', el('strong', { text: leadPayload.email }), '.'
+              );
               form.reset();
             } else {
               statusBox.className =
                 'csia-form-status mt-4 p-4 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-200 text-xs leading-relaxed';
-              statusBox.innerHTML = `
-                <strong>✅ Datos guardados en tu sesión corporativa (${this.escapeHtml(leadPayload.empresa)}).</strong><br/>
-                Puedes continuar la conversación directamente en nuestro WebChat IA o escribirnos a <a class="underline font-bold" href="mailto:${CONFIG.contactEmail}">${CONFIG.contactEmail}</a>.
-              `;
+              statusBox.append(
+                el('strong', { text: `✅ Datos guardados en tu sesión corporativa (${leadPayload.empresa}).` }), el('br'),
+                'Puedes continuar la conversación directamente en nuestro WebChat IA o escribirnos a ',
+                el('a', { className: 'underline font-bold', href: `mailto:${CONFIG.contactEmail}`, text: CONFIG.contactEmail }), '.'
+              );
             }
           }
         });

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://app.calcusuiteia.com https://api.calcusuiteia.com https://calcusuiteia.com http://127.0.0.1:8000 http://localhost:8000; object-src 'none'; base-uri 'self'; form-action 'self' https://app.calcusuiteia.com;">
   <title>Mesa de Dinero, Cripto OTC & Forex WeTrade MT5 (IB) | CalcuSuiteIA Enterprise 2026</title>
   <meta name="description" content="Terminal institucional de corretaje: Pipeline Kanban 7 etapas con 100% comisión propia, Cotizador OTC 15 min, TradingView Charts, Radar Predictivo IA, Índice PFI, Debate Multi-Agente y Chinese Wall.">
   
@@ -11,13 +12,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/lucide.min.js"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-amber-500 selection:text-slate-950 flex flex-col font-sans relative overflow-x-hidden">
   <div id="uas-port" style="display:none;" data-id="csia-safe"></div>
 
   <!-- Drawer Lateral -->
-  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]">
     <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
       <div>
         <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
@@ -30,7 +31,7 @@
               <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
             </div>
           </div>
-          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
@@ -40,7 +41,7 @@
             <i data-lucide="home" class="w-4 h-4 text-amber-400"></i>
             <span>Volver a Inicio</span>
           </a>
-          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]],[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer">
             <i data-lucide="sparkles" class="w-4 h-4 text-amber-200"></i>
             <span>Crear Cuenta Pionero (Gratis)</span>
           </button>
@@ -132,7 +133,7 @@
 
       <div class="pt-6 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center justify-between">
         <span>CalcuSuiteIA • Multi-Tenant 2026</span>
-        <a href="https://app.calcusuiteia.com" target="_blank" class="text-amber-400 hover:underline font-semibold flex items-center gap-1">
+        <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline font-semibold flex items-center gap-1">
           <span>Abrir Terminal</span>
           <i data-lucide="external-link" class="w-3 h-3"></i>
         </a>
@@ -145,7 +146,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
       
       <!-- Brand Logo con Drawer al Clic -->
-      <div onclick="openLogoDrawer()" class="flex items-center gap-3 group cursor-pointer select-none" title="Abrir Menú de Navegación Rápida">
+      <div data-on-click="[[&quot;call&quot;,&quot;openLogoDrawer&quot;,[]]]" class="flex items-center gap-3 group cursor-pointer select-none" title="Abrir Menú de Navegación Rápida">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 via-orange-500 to-yellow-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/25 group-hover:scale-105 transition-transform p-1.5">
           <i data-lucide="landmark" class="w-6 h-6 text-white"></i>
         </div>
@@ -172,15 +173,15 @@
 
       <!-- Action Buttons -->
       <div class="flex items-center gap-3">
-        <a href="./Calcu_Broker_Desk_v2026.apk" download class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all" title="Descargar APK Solo Broker Desk (HTTPS Cloudflare)">
+        <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Broker_Desk_v2026.apk" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all" title="Descargar APK Broker Desk desde GitHub Releases (Verificado SHA-256)">
           <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span>APK Broker Desk (HTTPS)</span>
+          <span>APK Broker Desk (SHA-256)</span>
         </a>
-        <a href="./Calcu_Completa_Mobile_v2026.apk" download class="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold transition-all" title="Descargar APK Suite Completa (HTTPS Cloudflare)">
+        <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Completa_Mobile_v2026.apk" target="_blank" rel="noopener noreferrer" class="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-semibold transition-all" title="Descargar APK Suite Completa desde GitHub Releases (Verificado SHA-256)">
           <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
           <span>APK Completa</span>
         </a>
-        <button onclick="openAccountModal('PIONERO')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/25 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/25 transition-all cursor-pointer">
           Plan Pionero Gratis
         </button>
       </div>
@@ -231,15 +232,19 @@
         <i data-lucide="play" class="w-4 h-4"></i>
         <span>Iniciar Sesión en el Terminal</span>
       </a>
-      <a href="./Calcu_Broker_Desk_v2026.apk" download class="px-6 py-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/10">
+      <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Broker_Desk_v2026.apk" target="_blank" rel="noopener noreferrer" class="px-6 py-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/10">
         <i data-lucide="smartphone" class="w-4 h-4 text-amber-400"></i>
-        <span>Descargar APK Broker Desk (HTTPS)</span>
+        <span>Descargar APK Broker Desk (SHA-256)</span>
       </a>
-      <a href="./Calcu_Completa_Mobile_v2026.apk" download class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center justify-center gap-2 transition-all">
+      <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Completa_Mobile_v2026.apk" target="_blank" rel="noopener noreferrer" class="px-6 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-semibold text-sm flex items-center justify-center gap-2 transition-all">
         <i data-lucide="download" class="w-4 h-4 text-cyan-400"></i>
         <span>Descargar APK Suite Completa</span>
       </a>
     </div>
+    <p class="mt-3 text-xs text-slate-400">
+      Distribución oficial firmada vía GitHub Releases · Verificar integridad pública en
+      <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/SHA256SUMS.txt" target="_blank" rel="noopener noreferrer" class="text-amber-300 underline font-mono">SHA256SUMS.txt</a>.
+    </p>
   </section>
 
   <!-- 8 ESTACIONES DEL ECOSISTEMA BROKER -->
@@ -357,7 +362,7 @@
           <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4 font-black">8</div>
           <h3 class="text-lg font-bold text-white mb-2">Chinese Wall, CRM & Escudo KYC</h3>
           <p class="text-xs text-slate-400 leading-relaxed">
-            Aislamiento estricto de carteras privadas para Javier y Alejandra. CRM de Inversores VIP y semáforo Anti-Triangulación P2P (Itaú/BROU) con bitácora SENACLAFT.
+            Aislamiento estricto de carteras privadas para cada Broker autorizado (Chinese Wall). CRM de Inversores VIP y semáforo Anti-Triangulación P2P (Itaú/BROU) con bitácora SENACLAFT.
           </p>
         </div>
         <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-rose-400 font-semibold">
@@ -379,7 +384,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <!-- Captura 1: Pipeline Kanban -->
-      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/29_broker_mesa_dinero_otc_kanban.png', 'Mesa de Dinero: Pipeline Kanban 7 Etapas & Cotizador OTC Congelado 15m')">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition-all cursor-pointer group" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/29_broker_mesa_dinero_otc_kanban.png&quot;,&quot;Mesa de Dinero: Pipeline Kanban 7 Etapas &amp; Cotizador OTC Congelado 15m&quot;]]]">
         <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
           <img src="./screenshots/29_broker_mesa_dinero_otc_kanban.png" alt="Mesa de Dinero Pipeline Kanban" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
           <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
@@ -390,7 +395,7 @@
       </div>
 
       <!-- Captura 2: TradingView & Quant -->
-      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/30_broker_tradingview_quant_backtester.png', 'Laboratorio Cuantitativo: TradingView Charts & Backtester Institucional ATR')">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all cursor-pointer group" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/30_broker_tradingview_quant_backtester.png&quot;,&quot;Laboratorio Cuantitativo: TradingView Charts &amp; Backtester Institucional ATR&quot;]]]">
         <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
           <img src="./screenshots/30_broker_tradingview_quant_backtester.png" alt="TradingView & Backtester ATR" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
           <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
@@ -401,7 +406,7 @@
       </div>
 
       <!-- Captura 3: Radar Predictivo & Noticias -->
-      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/31_broker_radar_predictivo_noticias_pfi.png', 'Radar Predictivo Macroeconómico: Noticias Verificables, ΔP Impact e Índice PFI')">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 transition-all cursor-pointer group" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/31_broker_radar_predictivo_noticias_pfi.png&quot;,&quot;Radar Predictivo Macroeconómico: Noticias Verificables, ΔP Impact e Índice PFI&quot;]]]">
         <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
           <img src="./screenshots/31_broker_radar_predictivo_noticias_pfi.png" alt="Radar Predictivo Noticias PFI" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
           <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
@@ -412,7 +417,7 @@
       </div>
 
       <!-- Captura 4: Debate 3 Agentes & Infografía -->
-      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 transition-all cursor-pointer group" onclick="openScreenshotModal('./screenshots/32_broker_gemini2_copilot_infografia_hd.png', 'Debate Multi-Agente en Vivo: Gemini 2.0, Ollama Local e Infografías HD con SHA-256')">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 transition-all cursor-pointer group" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/32_broker_gemini2_copilot_infografia_hd.png&quot;,&quot;Debate Multi-Agente en Vivo: Gemini 2.0, Ollama Local e Infografías HD con SHA-256&quot;]]]">
         <div class="aspect-video rounded-xl overflow-hidden border border-slate-800 bg-slate-950 mb-3 relative">
           <img src="./screenshots/32_broker_gemini2_copilot_infografia_hd.png" alt="Debate 3 Agentes e Infografía HD" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
           <div class="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors"></div>
@@ -443,22 +448,22 @@
 
       <!-- Botones de Preguntas Rápidas (Pills) -->
       <div class="flex flex-wrap gap-2 mb-4">
-        <button onclick="document.getElementById('copilotInput').value='¿Cómo se calculan las comisiones de la mesa?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Cómo se calculan las comisiones de la mesa?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Cómo se calculan las comisiones?
         </button>
-        <button onclick="document.getElementById('copilotInput').value='¿Cómo funciona el recibo congelado a 15 minutos?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Cómo funciona el recibo congelado a 15 minutos?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Cómo funciona el recibo a 15 minutos?
         </button>
-        <button onclick="document.getElementById('copilotInput').value='¿Qué es el Chinese Wall y cómo protege a Javier y Alejandra?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Qué es el Chinese Wall y cómo protege cada cartera?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Qué es el Chinese Wall?
         </button>
-        <button onclick="document.getElementById('copilotInput').value='¿Cómo calcula el Radar el Índice PFI y el impacto Delta P?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Cómo calcula el Radar el Índice PFI y el impacto Delta P?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Cómo calcula el Radar el PFI?
         </button>
-        <button onclick="document.getElementById('copilotInput').value='¿Cómo debaten Gemini 2.0 y Ollama y qué hace el 4to agente?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Cómo debaten Gemini 2.0 y Ollama y qué hace el 4to agente?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Cómo debaten los 3 agentes y el 4to agente?
         </button>
-        <button onclick="document.getElementById('copilotInput').value='¿Qué incluye el Plan Pionero para la Mesa de Dinero?'; handleCopilotSubmit(event);" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
+        <button data-on-click="[[&quot;set&quot;,&quot;copilotInput&quot;,&quot;¿Qué incluye el Plan Pionero para la Mesa de Dinero?&quot;],[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer">
           ¿Qué incluye el Plan Pionero?
         </button>
       </div>
@@ -473,7 +478,7 @@
             ¡Hola! Soy el Copiloto Inteligente de la <strong>Mesa de Dinero & Cripto OTC</strong>. Pregúntame sobre spreads mayoristas, recibos congelados, Chinese Wall, TradingView o el Radar Predictivo PFI.
             <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
               <span class="text-[11px] text-amber-400/80 font-semibold">Mesa de Dinero & WeTrade IB</span>
-              <button onclick="openAccountModal('PIONERO')" class="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30 transition-colors">
+              <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30 transition-colors">
                 Activar Plan Pionero &rarr;
               </button>
             </div>
@@ -482,7 +487,7 @@
       </div>
 
       <!-- Formulario de Envío de Pregunta -->
-      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+      <form id="copilotForm" data-on-submit="[[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="flex gap-2">
         <input type="text" id="copilotInput" autocomplete="off" placeholder="Escribe tu consulta sobre la Mesa de Dinero, spreads, Chinese Wall, PFI..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-500 transition-colors">
         <button type="submit" class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-amber-600/20">
           <span>Consultar</span>
@@ -506,11 +511,11 @@
             <i data-lucide="log-in" class="w-4 h-4"></i>
             <span>Acceder a la Mesa de Dinero</span>
           </a>
-          <a href="./Calcu_Broker_Desk_v2026.apk" download class="px-8 py-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10">
+          <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Broker_Desk_v2026.apk" target="_blank" rel="noopener noreferrer" class="px-8 py-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10">
             <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>
-            <span>Descargar APK Solo Broker (HTTPS)</span>
+            <span>Descargar APK Solo Broker (SHA-256)</span>
           </a>
-          <a href="./Calcu_Completa_Mobile_v2026.apk" download class="px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm flex items-center justify-center gap-2">
+          <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/Calcu_Completa_Mobile_v2026.apk" target="_blank" rel="noopener noreferrer" class="px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-sm flex items-center justify-center gap-2">
             <i data-lucide="download" class="w-4 h-4 text-cyan-400"></i>
             <span>Descargar APK Completa</span>
           </a>
@@ -537,11 +542,11 @@
   </footer>
 
   <!-- Lightbox Modal para Screenshots -->
-  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]">
     <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
       <div class="flex items-center justify-between p-4 border-b border-slate-800">
         <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
-        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+        <button data-on-click="[[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -551,7 +556,10 @@
     </div>
   </div>
 
+  <script src="./js/dom-safe.js"></script>
+  <script src="./js/csp-actions.js"></script>
   <script src="./js/account-modal.js"></script>
   <script src="./js/showcase.js"></script>
+  <script src="./js/command-palette.js"></script>
 </body>
 </html>

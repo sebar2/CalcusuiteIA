@@ -76,3 +76,4 @@ document.addEventListener('DOMContentLoaded', () => {
     window.lucide.createIcons();
   }
 });
+window.updateAdvisorSim = updateAdvisorSim;

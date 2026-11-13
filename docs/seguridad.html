@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://app.calcusuiteia.com https://api.calcusuiteia.com https://calcusuiteia.com http://127.0.0.1:8000 http://localhost:8000; object-src 'none'; base-uri 'self'; form-action 'self' https://app.calcusuiteia.com;">
   <title>Seguridad & Arquitectura | CalcuSuiteIA Enterprise 2026</title>
   <meta name="description" content="Blindaje defensivo de CalcuSuiteIA: aislamiento de datos Schema-per-Tenant, bóveda AES-256, Cloudflare Zero Trust y 2FA TOTP.">
   
@@ -11,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/lucide.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
   <div id="uas-port" style="display:none;" data-id="csia-safe"></div>
@@ -68,7 +69,7 @@
         </a>
 
         <!-- Crear Cuenta -->
-        <button onclick="openAccountModal('PIONERO')" 
+        <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" 
                 class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs tracking-wide shadow-md shadow-cyan-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all">
           <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
           <span>Crear Cuenta</span>
@@ -85,7 +86,7 @@
 
         <!-- Mobile Hamburger Toggle -->
         <button id="mobileNavToggle" 
-                onclick="toggleMobileDrawer()" 
+                data-on-click="[[&quot;call&quot;,&quot;toggleMobileDrawer&quot;,[]]]" 
                 aria-label="Abrir menú de navegación móvil"
                 class="lg:hidden p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
           <i data-lucide="menu" class="w-6 h-6" id="mobileMenuIcon"></i>
@@ -96,11 +97,11 @@
         <!-- Menu Desplegable / Drawer Movil -->
     <div id="mobileDrawer" class="hidden lg:hidden border-t border-slate-800/80 bg-slate-950/95 px-4 pt-4 pb-6 space-y-3 transition-all">
       <div class="grid grid-cols-2 gap-2 mb-2">
-        <a href="https://app.calcusuiteia.com" target="_blank" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold text-xs text-center shadow">
+        <a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-semibold text-xs text-center shadow">
           <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
           <span>Entrar a la App</span>
         </a>
-        <button onclick="toggleMobileDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold text-xs text-center shadow-lg shadow-cyan-600/30">
+        <button data-on-click="[[&quot;call&quot;,&quot;toggleMobileDrawer&quot;,[]],[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold text-xs text-center shadow-lg shadow-cyan-600/30">
           <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
           <span>Crear Cuenta</span>
         </button>
@@ -161,11 +162,11 @@
         </div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xl font-bold text-white">1. Aislamiento Físico y Lógico: Schema-per-Tenant</h3>
-            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">PostgreSQL 16</span>
+            <h3 class="text-xl font-bold text-white">1. Aislamiento Multi-Tenant en Motor: FORCE RLS</h3>
+            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">PostgreSQL 16 · 30 Tablas</span>
           </div>
           <p class="text-sm text-slate-300 leading-relaxed">
-            A diferencia de los sistemas SaaS convencionales que comparten tablas con una simple columna <code class="text-blue-400">tenant_id</code> (vulnerables a inyección o bugs de consulta), en CalcuSuiteIA cada cliente dispone de un esquema relacional propio dentro de PostgreSQL 16. La sesión de base de datos se bloquea con <code class="text-blue-400">SET search_path = tenant_xyz</code>, imposibilitando físicamente cualquier acceso cruzado de información.
+            CalcuSuiteIA aplica aislamiento obligatorio en el propio motor PostgreSQL 16 mediante políticas <code class="text-blue-400">FORCE ROW LEVEL SECURITY</code> validadas con restricciones <code class="text-blue-400">CHECK</code> sobre las 30 tablas multi-tenant, ejecutando las sesiones operativas bajo el rol de mínimo privilegio <code class="text-blue-400">calcu_app</code> (<code class="text-blue-400">NOSUPERUSER NOBYPASSRLS</code>). SQLite fue retirado por completo de producción y los respaldos se mantienen cifrados en reposo fuera de la carpeta activa.
           </p>
         </div>
       </div>
@@ -177,11 +178,11 @@
         </div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xl font-bold text-white">2. Bóveda Criptográfica AES-256 (Vault Interno)</h3>
-            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">PBKDF2 HMAC-SHA256</span>
+            <h3 class="text-xl font-bold text-white">2. Bóveda Vault v2 Encrypt-then-MAC &amp; Contraseñas PBKDF2 600k</h3>
+            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">PBKDF2 · 600.000 Iter</span>
           </div>
           <p class="text-sm text-slate-300 leading-relaxed">
-            Las credenciales de acceso a APIs (Mercado Libre, pasarelas de pago, tokens bancarios y certificados digitales de facturación electrónica CFE) se almacenan cifradas en reposo mediante el algoritmo AES-256 en modo GCM con vector de inicialización único y derivación de claves PBKDF2. Los secretos jamás se persisten en texto plano ni se imprimen en logs de aplicación.
+            Las credenciales externas (Mercado Libre, pasarelas de pago, tokens y certificados e-Factura CFE) se cifran en reposo con <strong>Vault v2 Encrypt-then-MAC</strong> y derivación PBKDF2-SHA256. Las contraseñas de usuario se protegen con <strong>PBKDF2-HMAC-SHA256 de 600.000 iteraciones</strong> (estándar OWASP), firma JWT fail-closed con <strong>revocación instantánea por <code class="text-purple-300">jti</code> (JWT ID)</strong>, eliminación total de claves por defecto o cuentas demo genéricas, y tokens volátiles exclusivamente en <code class="text-purple-300">sessionStorage</code>.
           </p>
         </div>
       </div>
@@ -193,11 +194,11 @@
         </div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xl font-bold text-white">3. Cloudflare Zero Trust & Mitigación CWE-350</h3>
-            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Zero Exposure</span>
+            <h3 class="text-xl font-bold text-white">3. CSP Estricto, Zero Trust &amp; Redis Circuit Breaker</h3>
+            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">OWASP ASVS · Zero Exposure</span>
           </div>
           <p class="text-sm text-slate-300 leading-relaxed">
-            Los servidores de CalcuSuiteIA no tienen puertos expuestos directamente a internet (cero riesgo de escaneo de puertos o ataques de denegación de servicio no mitigados). El tráfico externo hacia <code class="text-cyan-400">app.calcusuiteia.com</code> fluye a través de un túnel cifrado Cloudflare Zero Trust en HTTPS 443 estándar, con listas blancas de hosts estrictas para prevenir ataques de DNS Rebinding (CWE-350).
+            Los servidores operan tras túneles cifrados Cloudflare Zero Trust con allowlist estricta de orígenes HTTPS (CWE-350 safe), documentación OpenAPI/Swagger (<code class="text-cyan-400">/docs</code>) deshabilitada en producción, <strong>Redis Circuit Breaker</strong> anti-cascada y cabeceras <code class="text-cyan-400">Content-Security-Policy</code> estrictas sin scripts inline ni evaluación dinámica. La web pública elimina inyecciones <code class="text-cyan-400">innerHTML</code>, empaqueta activos localmente, genera códigos QR 100% offline/local y distribuye los paquetes móviles Android con checksum público <a href="https://github.com/sebar2/CalcusuiteIA/releases/download/v2026.11-security-hardened/SHA256SUMS.txt" target="_blank" rel="noopener noreferrer" class="text-cyan-400 underline font-mono">SHA256SUMS.txt</a> en GitHub Releases.
           </p>
         </div>
       </div>
@@ -209,11 +210,11 @@
         </div>
         <div class="flex-1">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xl font-bold text-white">4. 2FA TOTP (RFC 6238) & RBAC de 8 Roles</h3>
-            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Granular Security</span>
+            <h3 class="text-xl font-bold text-white">4. 2FA TOTP, Aislamiento Multi-Tenant &amp; Soporte JIT 60m</h3>
+            <span class="text-xs font-mono px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Chinese Wall · RLS</span>
           </div>
           <p class="text-sm text-slate-300 leading-relaxed">
-            Autenticación de doble factor obligatoria para perfiles administrativos y contables mediante contraseñas temporales TOTP (Google Authenticator / Authy). Modelo de permisos por roles estricto (RBAC) con 8 niveles segregados: Operario de Almacén, Chofer de Flota, Cajero de Cobranzas, Encargado WMS, Contador General, Auditor de Cumplimiento, Gerente de Operaciones y SuperAdministrador.
+            Autenticación de doble factor TOTP (RFC 6238) obligatoria para perfiles administrativos y contables. Modelo de permisos RBAC segregado con <strong>SuperAdmin Maestro (<code class="text-emerald-300">UID-0001</code>) en cuenta operativa aislada</strong>, <strong>Soporte Técnico JIT (Just-In-Time de 60 minutos)</strong> autorizado explícitamente por el Tenant, y <strong>Mesa Broker con Chinese Wall</strong> y trazabilidad SENACLAFT por tenant independiente (Operario, Chofer, Cajero, Encargado WMS, Contador, Auditor, Gerente y Tenant Owner).
           </p>
         </div>
       </div>
@@ -267,7 +268,7 @@
           <li><a href="index.html#gemelo3d" class="hover:text-cyan-400 transition-colors">Gemelo Digital 3D</a></li>
           <li><a href="index.html#modulos" class="hover:text-white transition-colors">Módulos Logísticos & ERP</a></li>
           <li><a href="index.html#pioneros" class="hover:text-emerald-400 transition-colors">Programa Pioneros (100% Gratis)</a></li>
-          <li><a href="https://app.calcusuiteia.com" target="_blank" class="hover:text-blue-400 font-semibold text-blue-300 transition-colors flex items-center gap-1"><i data-lucide="rocket" class="w-3.5 h-3.5"></i> Entrar a la App Web</a></li>
+          <li><a href="https://app.calcusuiteia.com" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 font-semibold text-blue-300 transition-colors flex items-center gap-1"><i data-lucide="rocket" class="w-3.5 h-3.5"></i> Entrar a la App Web</a></li>
         </ul>
       </div>
       <div>
@@ -284,7 +285,7 @@
         <h4 class="font-bold text-white uppercase tracking-wider mb-3">Contacto & Soporte</h4>
         <ul class="space-y-2 text-slate-400">
           <li><a href="mailto:contacto@calcusuiteia.com" class="hover:text-blue-400 transition-colors flex items-center gap-1.5"><i data-lucide="mail" class="w-3.5 h-3.5 text-blue-400"></i> contacto@calcusuiteia.com</a></li>
-          <li><a href="https://wa.me/59894858791" target="_blank" class="hover:text-emerald-400 transition-colors flex items-center gap-1.5"><i data-lucide="phone" class="w-3.5 h-3.5 text-emerald-400"></i> +598 94 858 791</a></li>
+          <li><a href="https://wa.me/59894858791" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors flex items-center gap-1.5"><i data-lucide="phone" class="w-3.5 h-3.5 text-emerald-400"></i> +598 94 858 791</a></li>
           <li class="pt-2 text-slate-500 font-mono text-[11px]">SLA 99.95% &bull; ISO 27001 Ready</li>
         </ul>
       </div>
@@ -292,7 +293,7 @@
     <div class="max-w-7xl mx-auto pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500">
       <div>&copy; 2026 CalcuSuiteIA &bull; Todos los derechos reservados.</div>
       <div class="flex items-center gap-4 text-[11px] font-mono">
-        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> FastAPI + React 18</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> FastAPI + React 19</span>
         <span>&bull;</span>
         <span>PostgreSQL 16 Multi-Tenant</span>
       </div>
@@ -302,8 +303,11 @@
   
 
   <!-- Telemetría y Chat IA Slot-Filling -->
-    <script src="./js/account-modal.js"></script>
+    <script src="./js/dom-safe.js"></script>
+  <script src="./js/csp-actions.js"></script>
+  <script src="./js/account-modal.js"></script>
   <script src="./js/webchat.js"></script>
   <script src="./js/main.js"></script>
+  <script src="./js/command-palette.js"></script>
 </body>
 </html>

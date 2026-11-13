@@ -119,23 +119,30 @@
     if (titleEl) titleEl.textContent = data.title;
     if (descEl) descEl.textContent = data.desc;
 
+    const { clear, el } = window.csiaDom;
     if (kpisEl) {
-      kpisEl.innerHTML = data.kpis.map(k => `
-        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center">
-          <span class="text-2xl font-black text-cyan-400 font-mono block">${k.val}</span>
-          <span class="text-xs font-bold text-white block mt-1">${k.label}</span>
-          <span class="text-[10px] text-slate-400 block">${k.desc}</span>
-        </div>
-      `).join('');
+      clear(kpisEl);
+      data.kpis.forEach(k => {
+        kpisEl.appendChild(
+          el('div', { className: 'p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-center' },
+            el('span', { className: 'text-2xl font-black text-cyan-400 font-mono block', text: k.val }),
+            el('span', { className: 'text-xs font-bold text-white block mt-1', text: k.label }),
+            el('span', { className: 'text-[10px] text-slate-400 block', text: k.desc })
+          )
+        );
+      });
     }
 
     if (pointsEl) {
-      pointsEl.innerHTML = data.points.map(p => `
-        <li class="flex items-start gap-2.5 text-xs text-slate-300">
-          <span class="text-cyan-400 font-bold shrink-0 mt-0.5">✓</span>
-          <span>${p}</span>
-        </li>
-      `).join('');
+      clear(pointsEl);
+      data.points.forEach(p => {
+        pointsEl.appendChild(
+          el('li', { className: 'flex items-start gap-2.5 text-xs text-slate-300' },
+            el('span', { className: 'text-cyan-400 font-bold shrink-0 mt-0.5', text: '✓' }),
+            el('span', { text: p })
+          )
+        );
+      });
     }
   };
 
@@ -146,16 +153,20 @@
     const occText = document.getElementById('wmsOccupancyText');
     const occBar = document.getElementById('wmsOccupancyBar');
     if (!slot) return;
+    const { clear, el } = window.csiaDom;
 
     const isOccupied = slot.dataset.occupied === 'true';
+    clear(slot);
     if (isOccupied) {
       slot.dataset.occupied = 'false';
       slot.className = 'wms-slot p-2 rounded-lg border border-dashed border-slate-700 bg-slate-950/60 text-center cursor-pointer transition-all hover:border-cyan-500';
-      slot.innerHTML = '<span class="text-[10px] text-slate-500 block">Vacío</span><span class="text-xs text-slate-600 font-mono">' + slotId + '</span>';
+      slot.appendChild(el('span', { className: 'text-[10px] text-slate-500 block', text: 'Vacío' }));
+      slot.appendChild(el('span', { className: 'text-xs text-slate-600 font-mono', text: slotId }));
     } else {
       slot.dataset.occupied = 'true';
       slot.className = 'wms-slot p-2 rounded-lg border border-cyan-500/80 bg-cyan-950/40 text-center cursor-pointer transition-all shadow-md shadow-cyan-950/40 hover:scale-105';
-      slot.innerHTML = '<span class="text-[10px] text-cyan-300 font-bold block">Pallet OK</span><span class="text-xs text-white font-mono font-bold">' + slotId + '</span>';
+      slot.appendChild(el('span', { className: 'text-[10px] text-cyan-300 font-bold block', text: 'Pallet OK' }));
+      slot.appendChild(el('span', { className: 'text-xs text-white font-mono font-bold', text: slotId }));
     }
 
     const allSlots = document.querySelectorAll('.wms-slot');
@@ -241,10 +252,12 @@
     }
 
     if (logList) {
+      const { el } = window.csiaDom;
       const time = new Date().toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const li = document.createElement('li');
-      li.className = 'text-[11px] text-slate-300 flex items-center justify-between py-1 border-b border-slate-800/80';
-      li.innerHTML = '<span>' + stageIcon + ' Orden #MLU-9842 &rarr; <strong>' + stageName + '</strong></span><span class="text-slate-500 font-mono text-[10px]">' + time + '</span>';
+      const li = el('li', { className: 'text-[11px] text-slate-300 flex items-center justify-between py-1 border-b border-slate-800/80' },
+        el('span', null, `${stageIcon} Orden #MLU-9842 → `, el('strong', { text: stageName })),
+        el('span', { className: 'text-slate-500 font-mono text-[10px]', text: time })
+      );
       logList.insertBefore(li, logList.firstChild);
       if (logList.children.length > 4) {
         logList.removeChild(logList.lastChild);
@@ -271,24 +284,71 @@
       botReply = '📊 **Facturación CFE Inmediata:** Emitimos e-Factura 111 con CAE oficial validado en el acto ante DGI y enviamos el PDF con Código QR fiscal al WhatsApp del cliente automáticamente.';
     }
 
-    const userDiv = document.createElement('div');
-    userDiv.className = 'flex justify-end mb-2.5 animate-in fade-in duration-200';
-    userDiv.innerHTML = '<div class="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm">' + userMsg + '</div>';
+    const { el, appendFormatted } = window.csiaDom;
+    const userDiv = el('div', { className: 'flex justify-end mb-2.5 animate-in fade-in duration-200' },
+      el('div', { className: 'bg-blue-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm', text: userMsg })
+    );
     box.appendChild(userDiv);
     box.scrollTop = box.scrollHeight;
 
     setTimeout(() => {
-      const botDiv = document.createElement('div');
-      botDiv.className = 'flex justify-start mb-2.5 animate-in fade-in duration-200';
-      botDiv.innerHTML = '<div class="bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm leading-relaxed">' + botReply + '<div class="text-[9px] text-cyan-400 font-semibold mt-1.5 flex items-center gap-1"><span>🤖 CalcuSuiteIA Copilot</span><span>•</span><span>Respuesta en 0.4s</span></div></div>';
+      const bubble = el('div', { className: 'bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-3.5 py-2 text-xs max-w-[85%] shadow-sm leading-relaxed' });
+      appendFormatted(bubble, botReply);
+      bubble.appendChild(
+        el('div', { className: 'text-[9px] text-cyan-400 font-semibold mt-1.5 flex items-center gap-1' },
+          el('span', { text: '🤖 CalcuSuiteIA Copilot' }),
+          el('span', { text: '•' }),
+          el('span', { text: 'Respuesta en 0.4s' })
+        )
+      );
+      const botDiv = el('div', { className: 'flex justify-start mb-2.5 animate-in fade-in duration-200' }, bubble);
       box.appendChild(botDiv);
       box.scrollTop = box.scrollHeight;
     }, 450);
   };
 
+  // 6. Simulador 3: Mesa de Dinero OTC & Spread Broker
+  const FIN_RATES = {
+    'USDT/UYU': { label: 'USDT / UYU', rateBps: 4235, unit: 'UYU' },
+    'USD/UYU': { label: 'USD / UYU e-BROU', rateBps: 4200, unit: 'UYU' },
+    'XAU/USD': { label: 'Oro Spot XAU / USD', rateBps: 268500, unit: 'USD (oz)' }
+  };
+
+  window.updateFinanzasSimulator = function () {
+    const pairEl = document.getElementById('finPair');
+    const amtEl = document.getElementById('finAmountUsd');
+    const spreadEl = document.getElementById('finSpreadBps');
+    if (!pairEl || !amtEl || !spreadEl) return;
+
+    const cfg = FIN_RATES[pairEl.value] || FIN_RATES['USDT/UYU'];
+    const amountUsd = Math.max(500, parseInt(amtEl.value, 10) || 15000);
+    const spreadBps = Math.max(5, parseInt(spreadEl.value, 10) || 45);
+
+    const grossLocalCents = Math.round(amountUsd * cfg.rateBps);
+    const feeUsdCents = Math.round(amountUsd * spreadBps / 100);
+    const netSpreadPct = (spreadBps / 100).toFixed(2);
+
+    const amtVal = document.getElementById('finAmountVal');
+    const sprVal = document.getElementById('finSpreadVal');
+    const refOut = document.getElementById('finOutRefRate');
+    const grossOut = document.getElementById('finOutGross');
+    const feeOut = document.getElementById('finOutFeeUsd');
+
+    if (amtVal) amtVal.textContent = '$' + amountUsd.toLocaleString('es-UY') + ' USD';
+    if (sprVal) sprVal.textContent = spreadBps + ' bps (' + netSpreadPct + '%)';
+    if (refOut) refOut.textContent = (cfg.rateBps / 100).toFixed(2) + ' ' + cfg.unit;
+    if (grossOut) {
+      grossOut.textContent = cfg.unit === 'UYU'
+        ? '$U ' + Math.round(grossLocalCents / 100).toLocaleString('es-UY')
+        : (amountUsd / (cfg.rateBps / 100)).toFixed(2) + ' oz';
+    }
+    if (feeOut) feeOut.textContent = 'USD ' + (feeUsdCents / 100).toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   // Inicialización
   document.addEventListener('DOMContentLoaded', () => {
     update3plSimulator();
+    window.updateFinanzasSimulator();
     if (typeof switchRoleView === 'function') {
       switchRoleView('ceo');
     }

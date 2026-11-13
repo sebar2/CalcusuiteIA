@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://app.calcusuiteia.com https://api.calcusuiteia.com https://calcusuiteia.com http://127.0.0.1:8000 http://localhost:8000; object-src 'none'; base-uri 'self'; form-action 'self' https://app.calcusuiteia.com;">
   <title>Facturación Electrónica CFE DGI & Liquidación Fiscal | CalcuSuiteIA</title>
   <meta name="description" content="Emisión de e-Facturas y e-Tickets homologados ante DGI Uruguay. Códigos QR reglamentarios, partida doble automática, CAE y liquidación mensual de IVA y BPS.">
   
@@ -11,13 +12,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/lucide.min.js"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
   <div id="uas-port" style="display:none;" data-id="csia-safe"></div>
 
   <!-- Drawer Lateral -->
-  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]">
     <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
       <div>
         <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
@@ -30,7 +31,7 @@
               <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
             </div>
           </div>
-          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
@@ -40,7 +41,7 @@
             <i data-lucide="home" class="w-4 h-4 text-purple-400"></i>
             <span>Volver a Inicio</span>
           </a>
-          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]],[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
             <i data-lucide="sparkles" class="w-4 h-4 text-purple-200"></i>
             <span>Crear Cuenta Pionero (Gratis)</span>
           </button>
@@ -140,7 +141,7 @@
   <!-- Header -->
   <header class="sticky top-0 z-40 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div onclick="openLogoDrawer()" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
+      <div data-on-click="[[&quot;call&quot;,&quot;openLogoDrawer&quot;,[]]]" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
         <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/25 group-hover:scale-105 transition-transform p-1.5">
           <i data-lucide="file-text" class="w-5 h-5 text-purple-200"></i>
         </div>
@@ -165,7 +166,7 @@
         <span class="hidden sm:inline">Entrar a la App</span>
         <span class="sm:hidden">App</span>
       </a>
-      <button onclick="openAccountModal('PIONERO')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
+      <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-200"></i>
         <span>Crear Cuenta</span>
       </button>
@@ -223,7 +224,7 @@
           <span class="text-[11px] font-mono text-purple-400 bg-purple-950 px-2.5 py-0.5 rounded-full border border-purple-800">CFE 111 &bull; CAE ACTIVO</span>
         </div>
 
-        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" onclick="openScreenshotModal('./screenshots/10_facturacion_b2b_listado.png', 'Facturación B2B CFE y Estado de Validación DGI')">
+        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/10_facturacion_b2b_listado.png&quot;,&quot;Facturación B2B CFE y Estado de Validación DGI&quot;]]]">
           <img src="./screenshots/10_facturacion_b2b_listado.png" alt="Facturación Electrónica CFE" class="w-full h-auto object-cover hover:scale-[1.01] transition-transform duration-300">
         </div>
         <p class="mt-3 text-xs text-slate-400 text-center font-mono">
@@ -232,7 +233,7 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/11_facturacion_emision_modal.png', 'Modal de Emisión de Factura CFE con Partida Doble')">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/11_facturacion_emision_modal.png&quot;,&quot;Modal de Emisión de Factura CFE con Partida Doble&quot;]]]">
           <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
             <img src="./screenshots/11_facturacion_emision_modal.png" alt="Emisión CFE" class="w-full h-full object-cover">
           </div>
@@ -241,7 +242,7 @@
           <p class="text-xs text-slate-400 mt-1">Cálculo desglosado de IVA básico (22%), IVA mínimo (10%) y retenciones IRPF/IRAE.</p>
         </div>
 
-        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/09_liquidacion_fiscal_dgi_bps.png', 'Liquidación Fiscal Formulario 2178 DGI y BPS')">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/09_liquidacion_fiscal_dgi_bps.png&quot;,&quot;Liquidación Fiscal Formulario 2178 DGI y BPS&quot;]]]">
           <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
             <img src="./screenshots/09_liquidacion_fiscal_dgi_bps.png" alt="Liquidación Fiscal DGI" class="w-full h-full object-cover">
           </div>
@@ -250,7 +251,7 @@
           <p class="text-xs text-slate-400 mt-1">Suma del débito fiscal vs crédito fiscal de compras con exportación para contadores.</p>
         </div>
 
-        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/07_libro_diario_partida_doble.png', 'Libro Diario Contable con Partida Doble')">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/07_libro_diario_partida_doble.png&quot;,&quot;Libro Diario Contable con Partida Doble&quot;]]]">
           <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
             <img src="./screenshots/07_libro_diario_partida_doble.png" alt="Libro Diario" class="w-full h-full object-cover">
           </div>
@@ -356,7 +357,7 @@
         </div>
       </div>
       <div class="mt-4 text-right">
-        <button onclick="openAccountModal('PIONERO')" class="text-xs font-bold text-purple-400 hover:text-purple-300 inline-flex items-center gap-1">
+        <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="text-xs font-bold text-purple-400 hover:text-purple-300 inline-flex items-center gap-1">
           <span>Automatizar mi facturación CFE y contabilidad &rarr;</span>
         </button>
       </div>
@@ -378,13 +379,13 @@
       </div>
 
       <div class="flex flex-wrap gap-2 mb-4">
-        <button onclick="askCopilot('¿Qué requisitos exige DGI para empezar a emitir e-Facturas?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿Qué requisitos exige DGI para empezar a emitir e-Facturas?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Requisitos DGI para e-Factura?
         </button>
-        <button onclick="askCopilot('¿Cómo se genera el CAE y cuánto tiempo tarda la homologación?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿Cómo se genera el CAE y cuánto tiempo tarda la homologación?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Cómo se tramita el CAE?
         </button>
-        <button onclick="askCopilot('¿El sistema exporta el Libro Diario para mi contador de confianza?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿El sistema exporta el Libro Diario para mi contador de confianza?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Exporta el Libro Diario a Excel?
         </button>
       </div>
@@ -400,7 +401,7 @@
         </div>
       </div>
 
-      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+      <form id="copilotForm" data-on-submit="[[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="flex gap-2">
         <input type="text" id="copilotInput" autocomplete="off" placeholder="Escribe tu consulta sobre e-Facturas, CAE o DGI..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-purple-400">
         <button type="submit" class="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
           <i data-lucide="send" class="w-4 h-4"></i>
@@ -423,7 +424,7 @@
           <a href="modulo-integraciones-hub.html" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold transition-all">
             &larr; Módulo Anterior (Hub)
           </a>
-          <button onclick="openAccountModal('PIONERO')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all cursor-pointer">
             Crear Cuenta Pionero
           </button>
         </div>
@@ -449,11 +450,11 @@
   </footer>
 
   <!-- Lightbox Modal para Screenshots -->
-  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]">
     <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
       <div class="flex items-center justify-between p-4 border-b border-slate-800">
         <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
-        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+        <button data-on-click="[[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -463,7 +464,9 @@
     </div>
   </div>
 
-    <script src="./js/account-modal.js"></script>
+    <script src="./js/dom-safe.js"></script>
+  <script src="./js/csp-actions.js"></script>
+  <script src="./js/account-modal.js"></script>
   <script src="./js/showcase.js"></script>
 </body>
 </html>

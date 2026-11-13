@@ -6,23 +6,20 @@
  * ==========================================================================
  */
 
-const isProduction =
-  window.location.hostname === "calcusuiteia.com" ||
-  window.location.hostname === "www.calcusuiteia.com" ||
-  window.location.hostname === "app.calcusuiteia.com";
+const isLocalDev =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 
 const LEADS_CONFIG = {
   directEmail: "contacto@calcusuiteia.com",
   directWhatsapp: "59894858791",
-  endpoints: isProduction
-    ? ["https://app.calcusuiteia.com/api/v1/public/leads"]
-    : [
-        "https://app.calcusuiteia.com/api/v1/public/leads",
-        "http://127.0.0.1:8080/api/v1/public/leads",
-        "http://localhost:8080/api/v1/public/leads",
+  endpoints: isLocalDev
+    ? [
         "http://127.0.0.1:8000/api/v1/public/leads",
-        "http://localhost:8000/api/v1/public/leads"
+        "http://localhost:8000/api/v1/public/leads",
+        "https://app.calcusuiteia.com/api/v1/public/leads"
       ]
+    : ["https://app.calcusuiteia.com/api/v1/public/leads"]
 };
 
 /**
@@ -42,7 +39,7 @@ async function handleLeadSubmit(event) {
   if (consentCheckbox && !consentCheckbox.checked) {
     if (alertBox) {
       alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 block';
-      alertBox.innerHTML = '⚠️ Debes aceptar la Política de Privacidad conforme a la Ley N° 18.331 para continuar.';
+      alertBox.textContent = '⚠️ Debes aceptar la Política de Privacidad conforme a la Ley N° 18.331 para continuar.';
       alertBox.classList.remove('hidden');
     }
     consentCheckbox.focus();
@@ -53,7 +50,7 @@ async function handleLeadSubmit(event) {
   const honeypotVal = document.getElementById('honeypot')?.value;
   if (honeypotVal) {
     alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 block';
-    alertBox.innerHTML = '&#9989; &#161;Gracias! Tu solicitud ha sido registrada correctamente.';
+    alertBox.textContent = '✅ ¡Gracias! Tu solicitud ha sido registrada correctamente.';
     form.reset();
     return;
   }
@@ -123,45 +120,45 @@ async function handleLeadSubmit(event) {
 
   alertBox.classList.remove('hidden');
 
-  // 6. Renderizado de feedback al usuario
+  // 6. Renderizado seguro (sin innerHTML) de feedback al usuario
+  const { el, clear, icon } = window.csiaDom;
+  clear(alertBox);
   if (apiSuccess) {
     alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 block';
-    alertBox.innerHTML = `
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div>
-          <strong class="text-sm font-bold text-white">&#127881; &#161;Excelente, ${payload.nombre}!</strong>
-          <p class="mt-1">Tu solicitud para <strong>${payload.empresa}</strong> se registro exitosamente en el sistema de auditoria.</p>
-        </div>
-        <a href="${waUrl}" target="_blank" rel="noopener noreferrer" 
-           class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap shadow-md transition-all">
-          <i data-lucide="message-circle" class="w-4 h-4"></i>
-          <span>Confirmar por WhatsApp</span>
-        </a>
-      </div>
-    `;
+    alertBox.appendChild(
+      el('div', { className: 'flex flex-col sm:flex-row items-center justify-between gap-3' },
+        el('div', null,
+          el('strong', { className: 'text-sm font-bold text-white', text: `🎉 ¡Excelente, ${payload.nombre}!` }),
+          el('p', { className: 'mt-1' },
+            'Tu solicitud para ', el('strong', { text: payload.empresa }), ' se registró exitosamente en el sistema de auditoría.')
+        ),
+        el('a', {
+          href: waUrl, target: '_blank', rel: 'noopener noreferrer',
+          className: 'px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap shadow-md transition-all'
+        }, icon('message-circle', 'w-4 h-4'), el('span', { text: 'Confirmar por WhatsApp' }))
+      )
+    );
   } else {
     // Modo estatico (ej: GitHub Pages publico)
     alertBox.className = 'mb-6 p-4 rounded-xl text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/40 block';
-    alertBox.innerHTML = `
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div>
-          <strong class="text-sm font-bold text-white">&#128640; &#161;Datos listos, ${payload.nombre}!</strong>
-          <p class="mt-1">Para recibir de inmediato tu usuario y contrasena de prueba, haz clic para sincronizar por WhatsApp o Correo:</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <a href="${waUrl}" target="_blank" rel="noopener noreferrer" 
-             class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap shadow">
-            <i data-lucide="message-circle" class="w-4 h-4"></i>
-            <span>WhatsApp</span>
-          </a>
-          <a href="${mailtoUrl}" 
-             class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap border border-slate-600 shadow">
-            <i data-lucide="mail" class="w-4 h-4"></i>
-            <span>Email</span>
-          </a>
-        </div>
-      </div>
-    `;
+    alertBox.appendChild(
+      el('div', { className: 'flex flex-col sm:flex-row items-center justify-between gap-3' },
+        el('div', null,
+          el('strong', { className: 'text-sm font-bold text-white', text: `🚀 ¡Datos listos, ${payload.nombre}!` }),
+          el('p', { className: 'mt-1', text: 'Para recibir de inmediato tu usuario y contraseña de prueba, haz clic para sincronizar por WhatsApp o Correo:' })
+        ),
+        el('div', { className: 'flex items-center gap-2' },
+          el('a', {
+            href: waUrl, target: '_blank', rel: 'noopener noreferrer',
+            className: 'px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap shadow'
+          }, icon('message-circle', 'w-4 h-4'), el('span', { text: 'WhatsApp' })),
+          el('a', {
+            href: mailtoUrl,
+            className: 'px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold flex items-center gap-1.5 whitespace-nowrap border border-slate-600 shadow'
+          }, icon('mail', 'w-4 h-4'), el('span', { text: 'Email' }))
+        )
+      )
+    );
   }
 
   // Re-inicializar iconos dinamicos

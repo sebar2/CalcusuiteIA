@@ -118,10 +118,10 @@ const GALLERY_DATA = {
   },
   'mobile': {
     image: './screenshots/26_mobile_redmi_note_9_pro_menu.png',
-    url: 'https://calcu.enterprise.app/mobile/redmi-note-9-pro',
+    url: 'https://calcu.enterprise.app/mobile/android-app',
     badge: 'Módulo UX Móvil & Android APK',
-    title: 'Experiencia Móvil Xiaomi Redmi Note 9 Pro (Menú Hamburguesa ☰)',
-    desc: 'Interfaz optimizada para pantallas con relación de aspecto 20:9 (393 x 873 px viewport) ejecutando Android 15 / LineageOS 22.2. Menú hamburguesa superior que despliega un panel lateral tipo drawer ergonómico para uso con una sola mano.',
+    title: 'Experiencia Móvil 20:9 (Menú Hamburguesa ☰)',
+    desc: 'Interfaz optimizada para dispositivos móviles panorámicos 20:9 bajo Android 10 a 15. Menú hamburguesa superior que despliega un panel lateral tipo drawer ergonómico para uso con una sola mano.',
     bullets: [
       'Menú hamburguesa ☰ accesible que oculta la barra lateral para maximizar el área de trabajo',
       'Diseño táctil ergonómico con botones y elementos adaptados al alcance del pulgar',
@@ -250,12 +250,13 @@ function switchTab(tabKey) {
   const data = GALLERY_DATA[tabKey];
   if (!data) return;
 
-  // Actualizar estilos de los botones de pestañas
+  // Actualizar estilos de los botones de pestañas (preservando filtro de categoría si está oculto)
   document.querySelectorAll('.tab-btn').forEach(btn => {
+    const isHidden = btn.classList.contains('hidden');
     if (btn.dataset.tab === tabKey) {
-      btn.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md';
+      btn.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-active transition-all shadow-md' + (isHidden ? ' hidden' : '');
     } else {
-      btn.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all';
+      btn.className = 'tab-btn px-4 py-2 rounded-xl text-xs font-semibold tab-inactive transition-all' + (isHidden ? ' hidden' : '');
     }
   });
 
@@ -274,12 +275,16 @@ function switchTab(tabKey) {
   if (descEl) descEl.textContent = data.desc;
 
   if (bulletsContainer) {
-    bulletsContainer.innerHTML = data.bullets.map(bullet => `
-      <div class="flex items-center gap-2 text-xs text-slate-300">
-        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
-        <span>${bullet}</span>
-      </div>
-    `).join('');
+    const { clear, el, icon } = window.csiaDom;
+    clear(bulletsContainer);
+    data.bullets.forEach(bullet => {
+      bulletsContainer.appendChild(
+        el('div', { className: 'flex items-center gap-2 text-xs text-slate-300' },
+          icon('check-circle-2', 'w-4 h-4 text-emerald-400'),
+          el('span', { text: bullet })
+        )
+      );
+    });
   }
 
   if (window.lucide) {
@@ -325,6 +330,48 @@ function closeScreenshotModal() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
 }
+
+function navigateScreenshotModal(delta) {
+  const keys = Object.keys(GALLERY_DATA);
+  if (!keys.length) return;
+  const idx = keys.indexOf(currentTabKey);
+  const nextIdx = idx === -1 ? 0 : (idx + delta + keys.length) % keys.length;
+  const nextKey = keys[nextIdx];
+  switchTab(nextKey);
+  const data = GALLERY_DATA[nextKey];
+  if (data) openScreenshotModal(data.image, data.title);
+}
+
+function switchGalleryCategory(category) {
+  document.querySelectorAll('.gallery-cat-btn').forEach(btn => {
+    if (btn.dataset.catFilter === category) {
+      btn.className = 'gallery-cat-btn px-3 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-600 text-white shadow-sm transition-all cursor-pointer';
+    } else {
+      btn.className = 'gallery-cat-btn px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-all cursor-pointer';
+    }
+  });
+  let firstVisible = null;
+  let activeStillVisible = false;
+  document.querySelectorAll('#galleryTabs .tab-btn').forEach(btn => {
+    const match = category === 'all' || btn.dataset.cat === category;
+    btn.classList.toggle('hidden', !match);
+    if (match) {
+      if (!firstVisible) firstVisible = btn.dataset.tab;
+      if (btn.dataset.tab === currentTabKey) activeStillVisible = true;
+    }
+  });
+  if (!activeStillVisible && firstVisible) {
+    switchTab(firstVisible);
+  }
+}
+
+document.addEventListener('keydown', (ev) => {
+  const modal = document.getElementById('imageModal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  if (ev.key === 'Escape') closeScreenshotModal();
+  else if (ev.key === 'ArrowRight') navigateScreenshotModal(1);
+  else if (ev.key === 'ArrowLeft') navigateScreenshotModal(-1);
+});
 
 // Inicializar Lucide Icons y pestaña por defecto al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
@@ -399,3 +446,12 @@ const CookieGuardian = {
   }
 };
 window.CookieGuardian = CookieGuardian;
+window.switchTab = switchTab;
+window.expandCurrentScreenshot = expandCurrentScreenshot;
+window.openScreenshotModal = openScreenshotModal;
+window.closeScreenshotModal = closeScreenshotModal;
+window.toggleMobileDrawer = toggleMobileDrawer;
+window.openLogoDrawer = openLogoDrawer;
+window.closeLogoDrawer = closeLogoDrawer;
+window.switchGalleryCategory = switchGalleryCategory;
+window.navigateScreenshotModal = navigateScreenshotModal;

@@ -277,8 +277,8 @@ const MODULE_KNOWLEDGE_BASES = {
         answer: '⏱️ **Recibos Congelados a 15 Minutos:** El cotizador bloquea el tipo de cambio pactado (ej. USDT/USD o BTC) por 15 minutos mediante un hash criptográfico, protegiendo a la mesa y al cliente contra la volatilidad durante la transferencia bancaria.',
       },
       {
-        keywords: ['chinese wall', 'privacidad', 'cartera', 'javier', 'alejandra', 'aislamiento'],
-        answer: '🔒 **Chinese Wall Estricto:** Cada broker (Javier, Alejandra, etc.) gestiona sus clientes, operaciones y márgenes en carteras privadas completamente herméticas. Solo la Dirección de Mesa tiene visión global consolidada.',
+        keywords: ['chinese wall', 'privacidad', 'cartera', 'broker', 'aislamiento'],
+        answer: '🔒 **Chinese Wall Estricto:** Cada operador autorizado de Mesa de Dinero gestiona sus clientes, operaciones y márgenes en carteras privadas completamente herméticas (tenants independientes con RLS).',
       },
       {
         keywords: ['radar', 'pfi', 'prediccion', 'noticias', 'sentimiento', 'delta p'],
@@ -390,6 +390,26 @@ function checkChannels() {
 }
 
 /**
+ * Verificador Interactivo de Controles ISO 27001 (Módulo Control Room)
+ */
+function checkIsoScore() {
+  const all = document.querySelectorAll('.chk-iso');
+  if (!all.length) return;
+  const checked = document.querySelectorAll('.chk-iso:checked').length;
+  const pct = Math.round((checked / all.length) * 100);
+  const txt = document.getElementById('txtIsoScore');
+  if (txt) {
+    if (pct === 100) {
+      txt.textContent = 'Nivel de Seguridad: MÁXIMO (100% Controles ISO 27001 Activos).';
+    } else if (pct >= 50) {
+      txt.textContent = `Nivel de Seguridad: INTERMEDIO (${pct}% controles activos • CalcuSuiteIA completa el ${100 - pct}% restante).`;
+    } else {
+      txt.textContent = `Riesgo Operativo Elevado (${pct}% controles activos • Activa blindaje ISO 27001 completo).`;
+    }
+  }
+}
+
+/**
  * Copiloto IA Temático: Pregunta Rápida desde Botones Sugeridos
  */
 function askCopilot(question) {
@@ -450,33 +470,38 @@ function appendMessage(sender, text) {
   };
 
   const c = colorMap[color] || colorMap.blue;
+  const { el, icon, appendFormatted } = window.csiaDom;
   const div = document.createElement('div');
   div.className = 'flex items-start gap-2.5 animate-in fade-in duration-200';
 
   if (sender === 'user') {
-    div.innerHTML = `
-      <div class="ml-auto ${c.bgUser} border ${c.borderUser} rounded-2xl rounded-tr-sm p-3 ${c.textUser} max-w-xl text-right">
-        ${escapeHTML(text)}
-      </div>
-      <div class="w-7 h-7 rounded-lg ${c.userAvatar} text-white flex items-center justify-center shrink-0">
-        <i data-lucide="user" class="w-4 h-4"></i>
-      </div>
-    `;
+    div.appendChild(
+      el('div', { className: `ml-auto ${c.bgUser} border ${c.borderUser} rounded-2xl rounded-tr-sm p-3 ${c.textUser} max-w-xl text-right`, text })
+    );
+    div.appendChild(
+      el('div', { className: `w-7 h-7 rounded-lg ${c.userAvatar} text-white flex items-center justify-center shrink-0` },
+        icon('user', 'w-4 h-4'))
+    );
   } else {
-    div.innerHTML = `
-      <div class="w-7 h-7 rounded-lg ${c.botIconBg} ${c.botIconColor} flex items-center justify-center shrink-0">
-        <i data-lucide="bot" class="w-4 h-4"></i>
-      </div>
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl">
-        <div>${text}</div>
-        <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-          <span class="text-[11px] ${c.badgeText}">${cfg.badge}</span>
-          <button onclick="openAccountModal('PIONERO')" class="text-[11px] ${c.ctaBg} ${c.ctaText} font-bold px-2.5 py-1 rounded-lg border ${c.ctaBorder} transition-colors">
-            Activar Plan Pionero Gratis &rarr;
-          </button>
-        </div>
-      </div>
-    `;
+    const bodyEl = el('div');
+    appendFormatted(bodyEl, text);
+    div.appendChild(
+      el('div', { className: `w-7 h-7 rounded-lg ${c.botIconBg} ${c.botIconColor} flex items-center justify-center shrink-0` },
+        icon('bot', 'w-4 h-4'))
+    );
+    div.appendChild(
+      el('div', { className: 'bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm p-3 text-slate-200 leading-relaxed max-w-xl' },
+        bodyEl,
+        el('div', { className: 'mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between' },
+          el('span', { className: `text-[11px] ${c.badgeText}`, text: cfg.badge }),
+          el('button', {
+            'data-on-click': '[["call","openAccountModal",["PIONERO"]]]',
+            className: `text-[11px] ${c.ctaBg} ${c.ctaText} font-bold px-2.5 py-1 rounded-lg border ${c.ctaBorder} transition-colors`,
+            text: 'Activar Plan Pionero Gratis →'
+          })
+        )
+      )
+    );
   }
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
@@ -485,19 +510,12 @@ function appendMessage(sender, text) {
   }
 }
 
-/**
- * Sanitizador Anti-XSS (CWE-79)
- */
-function escapeHTML(str) {
-  return str.replace(
-    /[&<>'"]/g,
-    (tag) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        "'": '&#39;',
-        '"': '&quot;',
-      }[tag] || tag)
-  );
-}
+window.openLogoDrawer = openLogoDrawer;
+window.closeLogoDrawer = closeLogoDrawer;
+window.toggleMobileDrawer = toggleMobileDrawer;
+window.openScreenshotModal = openScreenshotModal;
+window.closeScreenshotModal = closeScreenshotModal;
+window.checkChannels = checkChannels;
+window.checkIsoScore = checkIsoScore;
+window.askCopilot = askCopilot;
+window.handleCopilotSubmit = handleCopilotSubmit;

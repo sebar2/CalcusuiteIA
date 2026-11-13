@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://app.calcusuiteia.com https://api.calcusuiteia.com https://calcusuiteia.com http://127.0.0.1:8000 http://localhost:8000; object-src 'none'; base-uri 'self'; form-action 'self' https://app.calcusuiteia.com;">
   <title>Radar de Licitaciones Estatales ARCE & Compras Públicas | CalcuSuiteIA</title>
   <meta name="description" content="Monitoreo automatizado de compras públicas en Uruguay (ARCE). Detección de llamados, análisis de pliegos con IA, estimación de márgenes y alertas de apertura.">
   
@@ -11,13 +12,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/lucide.min.js"></script>
 </head>
 <body class="bg-[#0a0f1d] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-white flex flex-col font-sans relative overflow-x-hidden">
   <div id="uas-port" style="display:none;" data-id="csia-safe"></div>
 
   <!-- Drawer Lateral -->
-  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" onclick="if(event.target === this) closeLogoDrawer();">
+  <div id="logoSlideDrawer" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md hidden transition-opacity duration-300" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]">
     <div id="logoSlideDrawerContent" class="absolute top-0 left-0 w-full sm:w-[65vw] md:w-[55vw] max-w-2xl h-full bg-[#0a0f1d] border-r border-slate-800 shadow-2xl p-6 sm:p-8 flex flex-col justify-between overflow-y-auto transform -translate-x-full transition-transform duration-300 ease-in-out">
       <div>
         <div class="flex items-center justify-between pb-6 border-b border-slate-800/80">
@@ -30,7 +31,7 @@
               <p class="text-[11px] text-slate-400 font-medium">Catálogo Oficial de Módulos 2026</p>
             </div>
           </div>
-          <button onclick="closeLogoDrawer()" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]]]" class="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
@@ -40,7 +41,7 @@
             <i data-lucide="home" class="w-4 h-4 text-cyan-400"></i>
             <span>Volver a Inicio</span>
           </a>
-          <button onclick="closeLogoDrawer(); openAccountModal('PIONERO');" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;closeLogoDrawer&quot;,[]],[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
             <i data-lucide="sparkles" class="w-4 h-4 text-cyan-200"></i>
             <span>Crear Cuenta Pionero (Gratis)</span>
           </button>
@@ -140,7 +141,7 @@
   <!-- Header -->
   <header class="sticky top-0 z-40 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div onclick="openLogoDrawer()" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
+      <div data-on-click="[[&quot;call&quot;,&quot;openLogoDrawer&quot;,[]]]" class="flex items-center gap-2.5 cursor-pointer group" title="Abrir Menú de Módulos">
         <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 via-sky-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 group-hover:scale-105 transition-transform p-1.5">
           <i data-lucide="target" class="w-5 h-5 text-cyan-200"></i>
         </div>
@@ -165,7 +166,7 @@
         <span class="hidden sm:inline">Entrar a la App</span>
         <span class="sm:hidden">App</span>
       </a>
-      <button onclick="openAccountModal('PIONERO')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
+      <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 flex items-center gap-1.5 cursor-pointer transition-all">
         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-200"></i>
         <span>Crear Cuenta</span>
       </button>
@@ -223,7 +224,7 @@
           <span class="text-[11px] font-mono text-cyan-400 bg-cyan-950 px-2.5 py-0.5 rounded-full border border-cyan-800">FILTRADO IA EN VIVO</span>
         </div>
 
-        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" onclick="openScreenshotModal('./screenshots/19_licitaciones_radar_arce.png', 'Radar de Licitaciones ARCE y Oportunidades Estatales')">
+        <div class="mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/19_licitaciones_radar_arce.png&quot;,&quot;Radar de Licitaciones ARCE y Oportunidades Estatales&quot;]]]">
           <img src="./screenshots/19_licitaciones_radar_arce.png" alt="Radar Licitaciones ARCE" class="w-full h-auto object-cover hover:scale-[1.01] transition-transform duration-300">
         </div>
         <p class="mt-3 text-xs text-slate-400 text-center font-mono">
@@ -232,7 +233,7 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/16_tenders_radar.png', 'Dashboard de Oportunidades Licitatorias y Alertas')">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/16_tenders_radar.png&quot;,&quot;Dashboard de Oportunidades Licitatorias y Alertas&quot;]]]">
           <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
             <img src="./screenshots/16_tenders_radar.png" alt="Oportunidades Estatales" class="w-full h-full object-cover">
           </div>
@@ -241,7 +242,7 @@
           <p class="text-xs text-slate-400 mt-1">Descubre quién ganó la licitación anterior, a qué precio unitario y cuál fue la fórmula de ponderación aplicada.</p>
         </div>
 
-        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" onclick="openScreenshotModal('./screenshots/14_budget_variance.png', 'Control de Costos y Presupuesto de Oferta')">
+        <div class="glass-card glass-card-hover rounded-xl p-4 cursor-pointer" data-on-click="[[&quot;call&quot;,&quot;openScreenshotModal&quot;,[&quot;./screenshots/14_budget_variance.png&quot;,&quot;Control de Costos y Presupuesto de Oferta&quot;]]]">
           <div class="aspect-video rounded-lg overflow-hidden border border-slate-800 bg-slate-950 mb-3">
             <img src="./screenshots/14_budget_variance.png" alt="Costos de Licitación" class="w-full h-full object-cover">
           </div>
@@ -344,7 +345,7 @@
         </div>
       </div>
       <div class="mt-4 text-right">
-        <button onclick="openAccountModal('PIONERO')" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
+        <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
           <span>Configurar mis alertas ARCE con CalcuSuiteIA &rarr;</span>
         </button>
       </div>
@@ -366,13 +367,13 @@
       </div>
 
       <div class="flex flex-wrap gap-2 mb-4">
-        <button onclick="askCopilot('¿Qué organismos de Uruguay monitorea el radar de licitaciones?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿Qué organismos de Uruguay monitorea el radar de licitaciones?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Qué organismos monitorea?
         </button>
-        <button onclick="askCopilot('¿Es obligatorio estar inscripto en el RUPE para participar?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿Es obligatorio estar inscripto en el RUPE para participar?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Es obligatorio el RUPE?
         </button>
-        <button onclick="askCopilot('¿Cómo analiza la IA las cláusulas excluyentes de los pliegos?')" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
+        <button data-on-click="[[&quot;call&quot;,&quot;askCopilot&quot;,[&quot;¿Cómo analiza la IA las cláusulas excluyentes de los pliegos?&quot;]]]" class="text-xs bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80 px-3 py-1.5 rounded-xl transition-all">
           ¿Cómo detecta cláusulas excluyentes?
         </button>
       </div>
@@ -388,7 +389,7 @@
         </div>
       </div>
 
-      <form id="copilotForm" onsubmit="handleCopilotSubmit(event)" class="flex gap-2">
+      <form id="copilotForm" data-on-submit="[[&quot;call&quot;,&quot;handleCopilotSubmit&quot;,[{&quot;$&quot;:&quot;event&quot;}]]]" class="flex gap-2">
         <input type="text" id="copilotInput" autocomplete="off" placeholder="Escribe tu consulta sobre licitaciones ARCE o compras públicas..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400">
         <button type="submit" class="px-5 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-600/30 flex items-center gap-1.5 cursor-pointer transition-all shrink-0">
           <i data-lucide="send" class="w-4 h-4"></i>
@@ -411,7 +412,7 @@
           <a href="modulo-facturacion-cfe.html" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold transition-all">
             &larr; Módulo Anterior (CFE)
           </a>
-          <button onclick="openAccountModal('PIONERO')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 text-white text-xs font-bold shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
+          <button data-on-click="[[&quot;call&quot;,&quot;openAccountModal&quot;,[&quot;PIONERO&quot;]]]" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-sky-600 text-white text-xs font-bold shadow-lg shadow-cyan-600/30 transition-all cursor-pointer">
             Crear Cuenta Pionero
           </button>
         </div>
@@ -437,11 +438,11 @@
   </footer>
 
   <!-- Lightbox Modal para Screenshots -->
-  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" onclick="if(event.target === this) closeScreenshotModal();">
+  <div id="screenshotModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4" data-on-click="[[&quot;self&quot;],[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]">
     <div class="max-w-4xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl">
       <div class="flex items-center justify-between p-4 border-b border-slate-800">
         <h4 id="screenshotModalTitle" class="text-sm font-bold text-white"></h4>
-        <button onclick="closeScreenshotModal()" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
+        <button data-on-click="[[&quot;call&quot;,&quot;closeScreenshotModal&quot;,[]]]" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -451,7 +452,9 @@
     </div>
   </div>
 
-    <script src="./js/account-modal.js"></script>
+    <script src="./js/dom-safe.js"></script>
+  <script src="./js/csp-actions.js"></script>
+  <script src="./js/account-modal.js"></script>
   <script src="./js/showcase.js"></script>
 </body>
 </html>
