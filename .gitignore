@@ -1,6 +1,6 @@
 # ==============================================================================
 # CALCU ENTERPRISE SUITE 2026 - REGLAS ESTRICTAS DE BLINDAJE (.gitignore)
-# Repositorio Público Exclusivo para Presentación Web (docs/, project_docs/)
+# Repositorio Público Exclusivo para Presentación Web (docs/)
 # Protección de Propiedad Intelectual, Secretos y Código Fuente Privado
 # ==============================================================================
 
@@ -78,3 +78,4 @@ Calcu3PL-Logistica.apk
 Calcu-Enterprise-SuperAdmin.apk
 MANUAL_INSTRUCCIONES_GITHUB_WEB.md
 scripts/
+project_docs/

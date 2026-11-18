@@ -5,7 +5,7 @@
 [![GitHub Releases](https://img.shields.io/badge/Android_APK-GitHub_Releases-3DDC84?style=for-the-badge&logo=android)](https://github.com/sebar2/CalcusuiteIA/releases/latest)
 [![Manual PDF](https://img.shields.io/badge/Manual_Oficial-PDF_Descargar-E11D48?style=for-the-badge&logo=adobeacrobatreader)](docs/MANUAL_COMPLETO_CALCU_2026.pdf)
 
-> **Ecosistema Empresarial Multi-Tenant con PostgreSQL 16 (FORCE RLS), Abastecimiento ROP, Facturación Electrónica DGI, Logística 3PL Satelital, Gemelo Digital 3D (WebGL/AABB), Mesa de Dinero OTC/Forex MT5 con Chinese Wall y Hybrid AI Router (GPU Local RTX 3080 DeepSeek-R1 + Gemini).**
+> **Ecosistema Empresarial Multi-Tenant con PostgreSQL 16 (FORCE RLS), Abastecimiento ROP, Facturación Electrónica DGI, Logística 3PL Satelital, Gemelo Digital 3D (WebGL/AABB), Mesa de Dinero OTC/Forex MT5 con Chinese Wall y Motor de Inteligencia Artificial Empresarial con Copilotos Especializados.**
 
 ---
 
