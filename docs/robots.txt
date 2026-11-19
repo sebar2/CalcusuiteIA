@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://calcusuiteia.com/sitemap.xml
